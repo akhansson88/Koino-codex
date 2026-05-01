@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "KOINO",
+    "slug": "koino-mvp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "koino",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F7EFE4"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F7EFE4"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
