@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import { colors } from "@/ui/theme";
 
@@ -19,9 +20,36 @@ export default function TabLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Home", tabBarLabel: "Home" }} />
-      <Tabs.Screen name="journal" options={{ title: "Journal", tabBarLabel: "Journal" }} />
-      <Tabs.Screen name="settings" options={{ title: "Settings", tabBarLabel: "Settings" }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Home",
+          tabBarLabel: "Home",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="journal"
+        options={{
+          title: "Journal",
+          tabBarLabel: "Journal",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "book" : "book-outline"} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarLabel: "Settings",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "settings" : "settings-outline"} color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
