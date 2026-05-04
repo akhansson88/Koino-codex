@@ -17,6 +17,7 @@ export default function TabLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.cream },
         headerRight: () => <CurrentGroupIndicator />,
+        headerTintColor: colors.ink,
         headerShadowVisible: false,
         headerTitleStyle: { color: colors.ink, fontWeight: "700" },
         tabBarActiveTintColor: colors.olive,
@@ -27,6 +28,7 @@ export default function TabLayout() {
           height: 72,
           paddingTop: 8,
         },
+        tabBarLabelStyle: { fontWeight: "700" },
       }}
     >
       <Tabs.Screen
@@ -72,7 +74,7 @@ function CurrentGroupIndicator() {
   return (
     <View
       style={{
-        backgroundColor: colors.paper,
+        backgroundColor: colors.elevated,
         borderColor: colors.line,
         borderRadius: 999,
         borderWidth: 1,

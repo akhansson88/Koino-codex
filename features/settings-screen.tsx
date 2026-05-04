@@ -81,7 +81,7 @@ export function SettingsScreen() {
                   <View
                     key={joinedGroup.id}
                     style={{
-                      backgroundColor: isCurrent ? "#EEF1E4" : colors.white,
+                      backgroundColor: isCurrent ? colors.accentSubtle : colors.elevated,
                       borderColor: isCurrent ? colors.moss : colors.line,
                       borderCurve: "continuous",
                       borderRadius: 16,

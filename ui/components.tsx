@@ -12,7 +12,7 @@ export function Screen({ children }: PropsWithChildren) {
 }
 
 export function Card({ children, tone = "paper" }: PropsWithChildren<{ tone?: "paper" | "moss" | "rose" }>) {
-  const backgroundColor = tone === "paper" ? colors.paper : tone === "moss" ? "#EEF1E4" : "#F5E3DA";
+  const backgroundColor = tone === "paper" ? colors.paper : tone === "moss" ? colors.mossSurface : colors.roseSurface;
   return (
     <View
       style={{
@@ -32,7 +32,7 @@ export function Card({ children, tone = "paper" }: PropsWithChildren<{ tone?: "p
 
 export function Title({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "800", letterSpacing: -0.8 }}>
+    <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "800", letterSpacing: 0 }}>
       {children}
     </Text>
   );
@@ -60,23 +60,23 @@ export function PillButton({
   variant = "primary",
   disabled = false,
 }: PropsWithChildren<{ onPress: () => void; variant?: "primary" | "secondary" | "ghost"; disabled?: boolean }>) {
-  const backgroundColor = variant === "primary" ? colors.olive : variant === "secondary" ? colors.ink : "transparent";
-  const color = variant === "ghost" ? colors.olive : colors.white;
+  const backgroundColor = variant === "primary" ? colors.olive : variant === "secondary" ? colors.elevated : "transparent";
+  const color = variant === "primary" ? colors.onAccent : variant === "secondary" ? colors.ink : colors.olive;
   return (
     <Pressable
       disabled={disabled}
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: disabled ? colors.line : backgroundColor,
-        borderColor: variant === "ghost" ? colors.line : "transparent",
+        backgroundColor: disabled ? colors.disabled : backgroundColor,
+        borderColor: variant === "primary" ? "transparent" : colors.line,
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 18,
         paddingVertical: 13,
       }}
     >
-      <Text style={{ color: disabled ? colors.muted : color, fontSize: 15, fontWeight: "800" }}>{children}</Text>
+      <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "800" }}>{children}</Text>
     </Pressable>
   );
 }
@@ -88,7 +88,7 @@ export function Field(props: TextInputProps) {
       {...props}
       style={[
         {
-          backgroundColor: colors.white,
+          backgroundColor: colors.input,
           borderColor: colors.line,
           borderCurve: "continuous",
           borderRadius: radius.md,
@@ -126,7 +126,7 @@ export function Choice({
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? colors.white : colors.ink, fontWeight: "800" }}>{label}</Text>
+      <Text style={{ color: selected ? colors.onAccent : colors.ink, fontWeight: "800" }}>{label}</Text>
     </Pressable>
   );
 }

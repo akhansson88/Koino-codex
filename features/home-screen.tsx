@@ -90,7 +90,7 @@ export function HomeScreen() {
             <SectionTitle>Group members</SectionTitle>
             <View
               style={{
-                backgroundColor: "#EEF1E4",
+                backgroundColor: colors.accentSubtle,
                 borderColor: colors.moss,
                 borderRadius: 999,
                 borderWidth: 1,
@@ -116,7 +116,7 @@ export function HomeScreen() {
                     key={member.id}
                     style={{
                       alignItems: "center",
-                      backgroundColor: colors.white,
+                      backgroundColor: colors.elevated,
                       borderColor: colors.line,
                       borderCurve: "continuous",
                       borderRadius: 18,
@@ -129,7 +129,7 @@ export function HomeScreen() {
                     <View
                       style={{
                         alignItems: "center",
-                        backgroundColor: member.role === "owner" ? colors.olive : "#F5E3DA",
+                        backgroundColor: member.role === "owner" ? colors.olive : colors.roseSurface,
                         borderRadius: 999,
                         height: 44,
                         justifyContent: "center",
@@ -139,7 +139,7 @@ export function HomeScreen() {
                       <Text
                         selectable
                         style={{
-                          color: member.role === "owner" ? colors.white : colors.clay,
+                          color: member.role === "owner" ? colors.onAccent : colors.clay,
                           fontSize: 15,
                           fontWeight: "900",
                         }}
@@ -264,8 +264,8 @@ export function HomeScreen() {
                       }}
                       style={{
                         alignItems: "center",
-                        backgroundColor: "#FBE9E6",
-                        borderColor: "#E7B7AD",
+                        backgroundColor: colors.dangerSurface,
+                        borderColor: colors.dangerBorder,
                         borderRadius: 999,
                         borderWidth: 1,
                         height: 36,
@@ -277,7 +277,7 @@ export function HomeScreen() {
                         zIndex: 1,
                       }}
                     >
-                      <Feather name="trash-2" size={17} color="#C43D32" />
+                      <Feather name="trash-2" size={17} color={colors.danger} />
                     </Pressable>
                   ) : null}
                   <View style={{ gap: 5, paddingRight: ownsItem ? 44 : 0 }}>
@@ -381,12 +381,12 @@ function PrayerMoment({
 
   return (
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
-      <View style={{ flex: 1, justifyContent: "center", gap: 28, backgroundColor: "#263026", padding: 26 }}>
+      <View style={{ flex: 1, justifyContent: "center", gap: 28, backgroundColor: colors.cream, padding: 26 }}>
         <View
           style={{
             alignSelf: "center",
-            backgroundColor: "rgba(255,250,242,0.12)",
-            borderColor: "rgba(255,250,242,0.22)",
+            backgroundColor: "rgba(168,210,127,0.14)",
+            borderColor: "rgba(168,210,127,0.32)",
             borderRadius: 999,
             borderWidth: 1,
             height: 220 - secondsLeft * 2,
@@ -398,10 +398,10 @@ function PrayerMoment({
           }}
         />
         <View style={{ gap: 16 }}>
-          <Text selectable style={{ color: colors.paper, fontSize: 34, fontWeight: "900", textAlign: "center" }}>
+          <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "900", textAlign: "center" }}>
             Prayer moment
           </Text>
-          <Text selectable style={{ color: "#E9E0D2", fontSize: 18, lineHeight: 27, textAlign: "center" }}>
+          <Text selectable style={{ color: colors.muted, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
             Take a quiet breath. Hold this person before God, without hurry.
           </Text>
           <Text selectable style={{ color: colors.gold, fontSize: 44, fontVariant: ["tabular-nums"], fontWeight: "900", textAlign: "center" }}>
@@ -411,15 +411,15 @@ function PrayerMoment({
         <View style={{ gap: 12 }}>
           <Pressable
             onPress={() => onFinish("completed", startedAt)}
-            style={{ alignItems: "center", backgroundColor: colors.paper, borderRadius: 999, padding: 16 }}
+            style={{ alignItems: "center", backgroundColor: colors.olive, borderRadius: 999, padding: 16 }}
           >
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Done</Text>
+            <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Done</Text>
           </Pressable>
           <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
-            <Text style={{ color: "#E9E0D2", fontSize: 16, fontWeight: "800" }}>Skip for now</Text>
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "800" }}>Skip for now</Text>
           </Pressable>
           <Pressable onPress={onClose} style={{ alignItems: "center", padding: 8 }}>
-            <Text style={{ color: "rgba(233,224,210,0.72)", fontSize: 14 }}>Close</Text>
+            <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
           </Pressable>
         </View>
       </View>
