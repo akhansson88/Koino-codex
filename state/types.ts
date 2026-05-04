@@ -10,13 +10,17 @@ export type Group = {
   id: Id;
   name: string;
   inviteCode: string;
+  ownerId: Id;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type Membership = {
   id: Id;
   userId: Id;
   groupId: Id;
+  role: "owner" | "member";
+  userName: string;
   createdAt: string;
 };
 
@@ -93,6 +97,8 @@ export type KoinoState = {
   ready: boolean;
   currentUserId?: Id;
   currentGroupId?: Id;
+  authEmail?: string;
+  authError?: string;
   users: User[];
   groups: Group[];
   memberships: Membership[];

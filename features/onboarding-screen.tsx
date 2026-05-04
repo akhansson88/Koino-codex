@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -6,13 +6,27 @@ import { Body, Card, Choice, Field, PillButton, Screen, Title } from "@/ui/compo
 import { colors } from "@/ui/theme";
 
 export function OnboardingScreen() {
-  const { dispatch } = useKoino();
-  const [mode, setMode] = useState<"join" | "create">("join");
+  const { state, dispatch } = useKoino();
+  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [groupMode, setGroupMode] = useState<"join" | "create">("join");
   const [groupName, setGroupName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
 
-  const canContinue = name.trim().length > 1 && (mode === "create" ? groupName.trim().length > 1 : inviteCode.trim().length > 2);
+  useEffect(() => {
+    if (!name && state.users[0]?.name) {
+      setName(state.users[0].name);
+    }
+  }, [name, state.users]);
+
+  const canAuth =
+    email.trim().includes("@") && password.length >= 6 && (authMode === "signIn" || name.trim().length > 1);
+  const canContinue =
+    state.currentUserId &&
+    name.trim().length > 1 &&
+    (groupMode === "create" ? groupName.trim().length > 1 : inviteCode.trim().length > 2);
 
   return (
     <Screen>
@@ -22,42 +36,95 @@ export function OnboardingScreen() {
             <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900", letterSpacing: 2 }}>KOINO MVP</Text>
             <Title>A quieter rhythm for your small group.</Title>
             <Body muted>
-              Daily check-ins, sincere prayer, short replies, and a private journal. No public profiles, no streaks, no feed
-              treadmill.
+              Daily check-ins, sincere prayer, short replies, and a private journal. Sign in to sync your group through
+              Firebase.
             </Body>
           </View>
 
-          <Card>
-            <Body>What should your group call you?</Body>
-            <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
-          </Card>
+          {!state.currentUserId ? (
+            <>
+              <Card>
+                <Body>{authMode === "signIn" ? "Sign in with email and password." : "Create your KOINO account."}</Body>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <Choice label="Sign in" selected={authMode === "signIn"} onPress={() => setAuthMode("signIn")} />
+                  <Choice label="Create account" selected={authMode === "signUp"} onPress={() => setAuthMode("signUp")} />
+                </View>
+                {authMode === "signUp" ? (
+                  <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+                ) : null}
+                <Field
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <Field
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Password"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                {state.authError ? <Body muted>{state.authError}</Body> : null}
+              </Card>
 
-          <Card tone="moss">
-            <Body>Start by joining a group with a code, or create a small group and share its code manually.</Body>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Choice label="Join by code" selected={mode === "join"} onPress={() => setMode("join")} />
-              <Choice label="Create group" selected={mode === "create"} onPress={() => setMode("create")} />
-            </View>
-            {mode === "join" ? (
-              <Field value={inviteCode} onChangeText={setInviteCode} placeholder="Group code" autoCapitalize="characters" />
-            ) : (
-              <Field value={groupName} onChangeText={setGroupName} placeholder="Group name" />
-            )}
-          </Card>
+              <PillButton
+                disabled={!canAuth}
+                onPress={() =>
+                  dispatch(
+                    authMode === "signIn"
+                      ? { type: "signIn", email, password }
+                      : { type: "signUp", email, password, name },
+                  )
+                }
+              >
+                {authMode === "signIn" ? "Sign in" : "Create account"}
+              </PillButton>
+            </>
+          ) : (
+            <>
+              <Card>
+                <Body>What should your group call you?</Body>
+                <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+                <Body muted>Signed in as {state.authEmail ?? "your Firebase account"}.</Body>
+              </Card>
 
-          <PillButton
-            disabled={!canContinue}
-            onPress={() =>
-              dispatch({
-                type: "createSession",
-                name,
-                groupName: mode === "create" ? groupName : undefined,
-                inviteCode: mode === "join" ? inviteCode : undefined,
-              })
-            }
-          >
-            Enter KOINO
-          </PillButton>
+              <Card tone="moss">
+                <Body>Join a group with a code, or create a small group and share its code manually.</Body>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <Choice label="Join by code" selected={groupMode === "join"} onPress={() => setGroupMode("join")} />
+                  <Choice label="Create group" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
+                </View>
+                {groupMode === "join" ? (
+                  <Field value={inviteCode} onChangeText={setInviteCode} placeholder="Group code" autoCapitalize="characters" />
+                ) : (
+                  <Field value={groupName} onChangeText={setGroupName} placeholder="Group name" />
+                )}
+                {state.authError ? <Body muted>{state.authError}</Body> : null}
+              </Card>
+
+              <PillButton
+                disabled={!canContinue}
+                onPress={() =>
+                  dispatch({
+                    type: "createSession",
+                    name,
+                    groupName: groupMode === "create" ? groupName : undefined,
+                    inviteCode: groupMode === "join" ? inviteCode : undefined,
+                  })
+                }
+              >
+                Enter KOINO
+              </PillButton>
+
+              <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>
+                Log out
+              </PillButton>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

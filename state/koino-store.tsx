@@ -1,27 +1,64 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, PropsWithChildren, useContext, useEffect, useReducer } from "react";
+import { FirebaseError, initializeApp, getApp, getApps } from "firebase/app";
+import * as FirebaseAuth from "@firebase/auth";
+import type { Auth, User as FirebaseUser } from "@firebase/auth";
+import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/database";
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { CheckIn, Id, JournalEntry, KoinoState, PrayerSession, Reply, SupportIntent } from "@/state/types";
+import {
+  CheckIn,
+  Group,
+  Id,
+  JournalEntry,
+  KoinoState,
+  Membership,
+  PrayerReaction,
+  PrayerSession,
+  Reply,
+  SupportIntent,
+  User,
+} from "@/state/types";
 
-const STORAGE_KEY = "koino-mvp-state-v1";
+const firebaseConfig = {
+  apiKey: "AIzaSyCLLSGBYogHq7YqUx6an4JRTWRhU9Y950s",
+  authDomain: "koino-codex.firebaseapp.com",
+  databaseURL: "https://koino-codex-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "koino-codex",
+  storageBucket: "koino-codex.firebasestorage.app",
+  messagingSenderId: "181081151239",
+  appId: "1:181081151239:web:e598ebe4e6e4493eac57a2",
+  measurementId: "G-66WFNQ6Z29",
+};
 
-const initialState: KoinoState = {
-  ready: false,
-  users: [],
-  groups: [],
-  memberships: [],
-  checkIns: [],
-  posts: [],
-  prayerSessions: [],
-  prayerReactions: [],
-  replies: [],
-  journalEntries: [],
-  supportIntents: [],
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+let authInstance: Auth;
+try {
+  authInstance = FirebaseAuth.getReactNativePersistence
+    ? FirebaseAuth.initializeAuth(app, {
+        persistence: FirebaseAuth.getReactNativePersistence(AsyncStorage),
+      })
+    : FirebaseAuth.getAuth(app);
+} catch {
+  authInstance = FirebaseAuth.getAuth(app);
+}
+
+const auth = authInstance;
+const database = getDatabase(app);
+
+type Profile = User & {
+  email?: string | null;
+  currentGroupId?: Id | null;
 };
 
 type Action =
-  | { type: "hydrate"; state?: KoinoState }
+  | { type: "signIn"; email: string; password: string }
+  | { type: "signUp"; email: string; password: string; name: string }
+  | { type: "signOut" }
   | { type: "createSession"; name: string; groupName?: string; inviteCode?: string }
+  | { type: "createGroup"; name: string }
+  | { type: "updateGroup"; id: Id; name: string }
+  | { type: "deleteGroup"; id: Id }
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"] }
   | { type: "createPost"; body: string }
   | { type: "finishPrayer"; targetType: "post" | "check_in"; targetId: Id; status: PrayerSession["status"]; startedAt: string }
@@ -33,7 +70,7 @@ type Action =
 
 type KoinoContextValue = {
   state: KoinoState;
-  dispatch: React.Dispatch<Action>;
+  dispatch: (action: Action) => void;
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -50,180 +87,465 @@ function inviteCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function reducer(state: KoinoState, action: Action): KoinoState {
-  switch (action.type) {
-    case "hydrate":
-      return { ...(action.state ?? initialState), ready: true };
-    case "createSession": {
-      const timestamp = now();
-      const user = { id: id("user"), name: action.name.trim(), createdAt: timestamp };
-      const existingGroup = action.inviteCode
-        ? state.groups.find((group) => group.inviteCode.toUpperCase() === action.inviteCode?.trim().toUpperCase())
-        : undefined;
-      const group =
-        existingGroup ??
-        {
-          id: id("group"),
-          name: action.groupName?.trim() || "KOINO small group",
-          inviteCode: action.inviteCode?.trim().toUpperCase() || inviteCode(),
-          createdAt: timestamp,
-        };
+function asArray<T extends { id: string }>(value: unknown): T[] {
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value as Record<string, T>).map(([key, item]) => ({ ...item, id: item.id ?? key }));
+}
 
-      return {
-        ...state,
-        currentUserId: user.id,
-        currentGroupId: group.id,
-        users: [...state.users, user],
-        groups: existingGroup ? state.groups : [...state.groups, group],
-        memberships: [...state.memberships, { id: id("membership"), userId: user.id, groupId: group.id, createdAt: timestamp }],
-      };
-    }
-    case "submitCheckIn": {
-      if (!state.currentUserId || !state.currentGroupId) return state;
-      const timestamp = now();
-      const checkIn: CheckIn = {
-        id: id("checkin"),
-        userId: state.currentUserId,
-        groupId: state.currentGroupId,
-        mood: action.mood,
-        readToday: action.readToday,
-        reflectionText: action.reflectionText.trim(),
-        visibility: action.visibility,
-        createdAt: timestamp,
-      };
-      const privateEntry: JournalEntry | undefined =
-        action.visibility === "private"
-          ? {
-              id: id("journal"),
-              userId: state.currentUserId,
-              body: action.reflectionText.trim() || "Private check-in",
-              source: "private_check_in",
-              mood: action.mood,
-              createdAt: timestamp,
-              updatedAt: timestamp,
-            }
-          : undefined;
+function authMessage(error: unknown) {
+  if (!(error instanceof FirebaseError)) {
+    return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  }
 
-      return {
-        ...state,
-        checkIns: [checkIn, ...state.checkIns],
-        journalEntries: privateEntry ? [privateEntry, ...state.journalEntries] : state.journalEntries,
-      };
-    }
-    case "createPost": {
-      if (!state.currentUserId || !state.currentGroupId || !action.body.trim()) return state;
-      return {
-        ...state,
-        posts: [
-          { id: id("post"), userId: state.currentUserId, groupId: state.currentGroupId, body: action.body.trim(), createdAt: now() },
-          ...state.posts,
-        ],
-      };
-    }
-    case "finishPrayer": {
-      if (!state.currentUserId) return state;
-      const completedAt = now();
-      const session: PrayerSession = {
-        id: id("prayersession"),
-        userId: state.currentUserId,
-        targetType: action.targetType,
-        targetId: action.targetId,
-        startedAt: action.startedAt,
-        completedAt,
-        status: action.status,
-      };
-      const alreadyPrayed = state.prayerReactions.some(
-        (reaction) =>
-          reaction.userId === state.currentUserId &&
-          reaction.targetType === action.targetType &&
-          reaction.targetId === action.targetId,
-      );
-
-      return {
-        ...state,
-        prayerSessions: [session, ...state.prayerSessions],
-        prayerReactions:
-          action.status === "completed" && !alreadyPrayed
-            ? [
-                {
-                  id: id("prayer"),
-                  userId: state.currentUserId,
-                  targetType: action.targetType,
-                  targetId: action.targetId,
-                  createdAt: completedAt,
-                },
-                ...state.prayerReactions,
-              ]
-            : state.prayerReactions,
-      };
-    }
-    case "createReply": {
-      if (!state.currentUserId || !action.body.trim()) return state;
-      const reply: Reply = {
-        id: id("reply"),
-        userId: state.currentUserId,
-        targetType: action.targetType,
-        targetId: action.targetId,
-        body: action.body.trim().slice(0, 500),
-        createdAt: now(),
-      };
-      return { ...state, replies: [...state.replies, reply] };
-    }
-    case "createJournalEntry": {
-      if (!state.currentUserId || !action.body.trim()) return state;
-      const timestamp = now();
-      const entry: JournalEntry = {
-        id: id("journal"),
-        userId: state.currentUserId,
-        body: action.body.trim(),
-        source: "manual",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      return { ...state, journalEntries: [entry, ...state.journalEntries] };
-    }
-    case "updateJournalEntry":
-      return {
-        ...state,
-        journalEntries: state.journalEntries.map((entry) =>
-          entry.id === action.id ? { ...entry, body: action.body.trim(), updatedAt: now() } : entry,
-        ),
-      };
-    case "deleteJournalEntry":
-      return { ...state, journalEntries: state.journalEntries.filter((entry) => entry.id !== action.id) };
-    case "createSupportIntent": {
-      if (!state.currentUserId) return state;
-      const intent: SupportIntent = {
-        id: id("support"),
-        userId: state.currentUserId,
-        amount: action.amount,
-        currency: "SEK",
-        provider: "external_demo",
-        providerReference: `demo_${Date.now()}`,
-        status: "confirmed",
-        createdAt: now(),
-      };
-      return { ...state, supportIntents: [intent, ...state.supportIntents] };
-    }
+  switch (error.code) {
+    case "auth/email-already-in-use":
+      return "That email already has an account. Try signing in instead.";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "The email or password did not match.";
+    case "auth/weak-password":
+      return "Use a password with at least 6 characters.";
+    case "permission-denied":
+      return "Firebase blocked that change. Check the database rules for this project.";
     default:
-      return state;
+      return error.message;
   }
 }
 
+async function ensureProfile(user: FirebaseUser, name?: string) {
+  const timestamp = now();
+  const profileRef = ref(database, `profiles/${user.uid}`);
+  const snapshot = await get(profileRef);
+  const existing = snapshot.val() as Profile | null;
+  const resolvedName = name?.trim() || existing?.name || user.displayName || user.email?.split("@")[0] || "KOINO member";
+
+  await update(profileRef, {
+    id: user.uid,
+    name: resolvedName,
+    email: user.email ?? null,
+    createdAt: existing?.createdAt ?? timestamp,
+  });
+
+  if (name?.trim() && user.displayName !== resolvedName) {
+    await FirebaseAuth.updateProfile(user, { displayName: resolvedName });
+  }
+}
+
+async function createGroupForUser(user: FirebaseUser, name: string, userName?: string) {
+  if (!name.trim()) return;
+
+  await ensureProfile(user, userName);
+
+  const timestamp = now();
+  const groupId = id("group");
+  const code = inviteCode();
+  const group: Group = {
+    id: groupId,
+    name: name.trim(),
+    inviteCode: code,
+    ownerId: user.uid,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const membership: Membership = {
+    id: id("membership"),
+    userId: user.uid,
+    groupId,
+    role: "owner",
+    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
+    createdAt: timestamp,
+  };
+
+  await set(ref(database, `groups/${groupId}`), group);
+  await set(ref(database, `inviteCodes/${code}`), { groupId, createdAt: timestamp });
+  await update(ref(database), {
+    [`groupMembers/${groupId}/${user.uid}`]: membership,
+    [`userGroups/${user.uid}/${groupId}`]: membership,
+    [`profiles/${user.uid}/currentGroupId`]: groupId,
+  });
+}
+
+async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  if (!normalizedCode) throw new Error("Enter a group invite code.");
+
+  await ensureProfile(user, userName);
+
+  const inviteSnapshot = await get(ref(database, `inviteCodes/${normalizedCode}`));
+  const invite = inviteSnapshot.val() as { groupId?: string } | null;
+  if (!invite?.groupId) throw new Error("No group exists for that invite code.");
+
+  const timestamp = now();
+  const membership: Membership = {
+    id: id("membership"),
+    userId: user.uid,
+    groupId: invite.groupId,
+    role: "member",
+    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
+    createdAt: timestamp,
+  };
+
+  await update(ref(database), {
+    [`groupMembers/${invite.groupId}/${user.uid}`]: membership,
+    [`userGroups/${user.uid}/${invite.groupId}`]: membership,
+    [`profiles/${user.uid}/currentGroupId`]: invite.groupId,
+  });
+}
+
 export function KoinoProvider({ children }: PropsWithChildren) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [posts, setPosts] = useState<KoinoState["posts"]>([]);
+  const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
+  const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
+  const [replies, setReplies] = useState<Reply[]>([]);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
+  const [authError, setAuthError] = useState<string>();
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((value) => dispatch({ type: "hydrate", state: value ? JSON.parse(value) : undefined }))
-      .catch(() => dispatch({ type: "hydrate" }));
+    return FirebaseAuth.onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setAuthReady(true);
+      setAuthError(undefined);
+
+      if (!user) {
+        setProfile(null);
+        setProfileReady(true);
+        setGroup(null);
+        setMemberships([]);
+        setCheckIns([]);
+        setPosts([]);
+        setPrayerSessions([]);
+        setPrayerReactions([]);
+        setReplies([]);
+        setJournalEntries([]);
+        setSupportIntents([]);
+      }
+    });
   }, []);
 
   useEffect(() => {
-    if (state.ready) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!firebaseUser) return;
+
+    setProfileReady(false);
+    const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
+    const unsubscribe = onValue(profileRef, async (snapshot) => {
+      if (!snapshot.exists()) {
+        await ensureProfile(firebaseUser);
+        return;
+      }
+
+      setProfile(snapshot.val() as Profile);
+      setProfileReady(true);
+    });
+
+    return unsubscribe;
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
+    const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
+    const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
+
+    const unsubs = [
+      onValue(journalRef, (snapshot) => setJournalEntries(asArray<JournalEntry>(snapshot.val()))),
+      onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
+      onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
+    ];
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser || !profile?.currentGroupId) {
+      setGroup(null);
+      setMemberships([]);
+      setCheckIns([]);
+      setPosts([]);
+      setReplies([]);
+      setPrayerReactions([]);
+      return;
     }
-  }, [state]);
+
+    const groupId = profile.currentGroupId;
+    const groupRef = ref(database, `groups/${groupId}`);
+    const membersRef = ref(database, `groupMembers/${groupId}`);
+    const checkInsRef = ref(database, `checkIns/${groupId}`);
+    const postsRef = ref(database, `posts/${groupId}`);
+    const repliesRef = ref(database, `replies/${groupId}`);
+    const reactionsRef = ref(database, `prayerReactions/${groupId}`);
+
+    const unsubs = [
+      onValue(
+        groupRef,
+        async (snapshot) => {
+          if (!snapshot.exists()) {
+            await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
+            setGroup(null);
+            return;
+          }
+
+          setGroup(snapshot.val() as Group);
+        },
+        async (error) => {
+          setAuthError(authMessage(error));
+          await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
+        },
+      ),
+      onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
+      onValue(checkInsRef, (snapshot) => setCheckIns(asArray<CheckIn>(snapshot.val()))),
+      onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
+      onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
+      onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
+    ];
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+  }, [firebaseUser, profile?.currentGroupId]);
+
+  const state = useMemo<KoinoState>(() => {
+    const memberUsers = memberships.map<User>((membership) => ({
+      id: membership.userId,
+      name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
+      createdAt: membership.createdAt,
+    }));
+    const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
+
+    return {
+      ready: authReady && (!firebaseUser || profileReady),
+      currentUserId: firebaseUser?.uid,
+      currentGroupId: profile?.currentGroupId ?? undefined,
+      authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
+      authError,
+      users,
+      groups: group ? [group] : [],
+      memberships,
+      checkIns,
+      posts,
+      prayerSessions,
+      prayerReactions,
+      replies,
+      journalEntries,
+      supportIntents,
+    };
+  }, [
+    authError,
+    authReady,
+    checkIns,
+    firebaseUser,
+    group,
+    journalEntries,
+    memberships,
+    posts,
+    prayerReactions,
+    prayerSessions,
+    profile,
+    profileReady,
+    replies,
+    supportIntents,
+  ]);
+
+  const dispatch = useCallback(
+    (action: Action) => {
+      void (async () => {
+        setAuthError(undefined);
+
+        try {
+          switch (action.type) {
+            case "signIn":
+              await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
+              return;
+            case "signUp": {
+              const credential = await FirebaseAuth.createUserWithEmailAndPassword(auth, action.email.trim(), action.password);
+              await ensureProfile(credential.user, action.name);
+              return;
+            }
+            case "signOut":
+              await FirebaseAuth.signOut(auth);
+              return;
+            case "createSession":
+              if (!firebaseUser) return;
+              if (action.groupName?.trim()) {
+                await createGroupForUser(firebaseUser, action.groupName, action.name);
+              } else if (action.inviteCode?.trim()) {
+                await joinGroupByInvite(firebaseUser, action.inviteCode, action.name);
+              }
+              return;
+            case "createGroup":
+              if (!firebaseUser) return;
+              await createGroupForUser(firebaseUser, action.name, profile?.name);
+              return;
+            case "updateGroup":
+              await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
+              return;
+            case "deleteGroup": {
+              const groupSnapshot = await get(ref(database, `groups/${action.id}`));
+              const groupToDelete = groupSnapshot.val() as Group | null;
+              if (!firebaseUser || !groupToDelete || groupToDelete.ownerId !== firebaseUser.uid) return;
+
+              const memberSnapshot = await get(ref(database, `groupMembers/${action.id}`));
+              const members = asArray<Membership>(memberSnapshot.val());
+              const updates: Record<string, unknown> = {
+                [`groups/${action.id}`]: null,
+                [`inviteCodes/${groupToDelete.inviteCode}`]: null,
+                [`groupMembers/${action.id}`]: null,
+                [`checkIns/${action.id}`]: null,
+                [`posts/${action.id}`]: null,
+                [`replies/${action.id}`]: null,
+                [`prayerReactions/${action.id}`]: null,
+              };
+
+              members.forEach((member) => {
+                updates[`userGroups/${member.userId}/${action.id}`] = null;
+              });
+              updates[`profiles/${firebaseUser.uid}/currentGroupId`] = null;
+
+              await update(ref(database), updates);
+              return;
+            }
+            case "submitCheckIn": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const timestamp = now();
+              const checkIn: CheckIn = {
+                id: id("checkin"),
+                userId: firebaseUser.uid,
+                groupId: profile.currentGroupId,
+                mood: action.mood,
+                readToday: action.readToday,
+                reflectionText: action.reflectionText.trim(),
+                visibility: action.visibility,
+                createdAt: timestamp,
+              };
+
+              if (action.visibility === "group") {
+                await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
+              } else {
+                await set(ref(database, `privateCheckIns/${firebaseUser.uid}/${checkIn.id}`), checkIn);
+              }
+
+              if (action.visibility === "private") {
+                const entry: JournalEntry = {
+                  id: id("journal"),
+                  userId: firebaseUser.uid,
+                  body: action.reflectionText.trim() || "Private check-in",
+                  source: "private_check_in",
+                  mood: action.mood,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                };
+                await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+              }
+              return;
+            }
+            case "createPost": {
+              if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
+              const post = {
+                id: id("post"),
+                userId: firebaseUser.uid,
+                groupId: profile.currentGroupId,
+                body: action.body.trim(),
+                createdAt: now(),
+              };
+              await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
+              return;
+            }
+            case "finishPrayer": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const completedAt = now();
+              const session: PrayerSession = {
+                id: id("prayersession"),
+                userId: firebaseUser.uid,
+                targetType: action.targetType,
+                targetId: action.targetId,
+                startedAt: action.startedAt,
+                completedAt,
+                status: action.status,
+              };
+
+              await set(ref(database, `prayerSessions/${firebaseUser.uid}/${session.id}`), session);
+
+              if (action.status === "completed") {
+                const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
+                const reaction: PrayerReaction = {
+                  id: reactionId,
+                  userId: firebaseUser.uid,
+                  targetType: action.targetType,
+                  targetId: action.targetId,
+                  createdAt: completedAt,
+                };
+                await set(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`), reaction);
+              }
+              return;
+            }
+            case "createReply": {
+              if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
+              const reply: Reply = {
+                id: id("reply"),
+                userId: firebaseUser.uid,
+                targetType: action.targetType,
+                targetId: action.targetId,
+                body: action.body.trim().slice(0, 500),
+                createdAt: now(),
+              };
+              await set(ref(database, `replies/${profile.currentGroupId}/${reply.id}`), reply);
+              return;
+            }
+            case "createJournalEntry": {
+              if (!firebaseUser || !action.body.trim()) return;
+              const timestamp = now();
+              const entry: JournalEntry = {
+                id: id("journal"),
+                userId: firebaseUser.uid,
+                body: action.body.trim(),
+                source: "manual",
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+              return;
+            }
+            case "updateJournalEntry":
+              if (!firebaseUser) return;
+              await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
+                body: action.body.trim(),
+                updatedAt: now(),
+              });
+              return;
+            case "deleteJournalEntry":
+              if (!firebaseUser) return;
+              await remove(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`));
+              return;
+            case "createSupportIntent": {
+              if (!firebaseUser) return;
+              const intent: SupportIntent = {
+                id: id("support"),
+                userId: firebaseUser.uid,
+                amount: action.amount,
+                currency: "SEK",
+                provider: "external_demo",
+                providerReference: `demo_${Date.now()}`,
+                status: "confirmed",
+                createdAt: now(),
+              };
+              await set(ref(database, `supportIntents/${firebaseUser.uid}/${intent.id}`), intent);
+              return;
+            }
+          }
+        } catch (error) {
+          setAuthError(authMessage(error));
+        }
+      })();
+    },
+    [firebaseUser, profile?.currentGroupId, profile?.name],
+  );
 
   return <KoinoContext.Provider value={{ state, dispatch }}>{children}</KoinoContext.Provider>;
 }

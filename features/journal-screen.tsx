@@ -99,7 +99,7 @@ export function JournalScreen() {
                 <Body>{entry.body}</Body>
                 <Pressable
                   onPress={() =>
-                    Alert.alert("Delete entry?", "This private journal entry will be removed from this device.", [
+                    Alert.alert("Delete entry?", "This private journal entry will be removed from Firebase.", [
                       { text: "Cancel", style: "cancel" },
                       { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteJournalEntry", id: entry.id }) },
                     ])

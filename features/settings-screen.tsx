@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Linking, ScrollView, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, Linking, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
@@ -9,21 +9,73 @@ export function SettingsScreen() {
   const { state, dispatch } = useKoino();
   const [amount, setAmount] = useState(25);
   const [customAmount, setCustomAmount] = useState("");
+  const [currentGroupName, setCurrentGroupName] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const resolvedAmount = amount === 0 ? Number(customAmount) : amount;
+  const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
+
+  useEffect(() => {
+    setCurrentGroupName(group?.name ?? "");
+  }, [group?.name]);
 
   return (
     <Screen>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 18, padding: 18, paddingBottom: 110 }}>
         <Card>
           <SectionTitle>Session</SectionTitle>
+          <Body>Email: {state.authEmail ?? "Unknown"}</Body>
           <Body>Name: {user?.name ?? "Unknown"}</Body>
           <Body>Group: {group?.name ?? "No group"}</Body>
           <Text selectable style={{ color: colors.olive, fontSize: 18, fontWeight: "900" }}>
             Invite code: {group?.inviteCode ?? "..."}
           </Text>
           <Body muted>Share this code manually with people in your small group.</Body>
+          <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>
+            Log out
+          </PillButton>
+        </Card>
+
+        <Card tone="moss">
+          <SectionTitle>Group management</SectionTitle>
+          {group ? (
+            <>
+              <Field value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Group name" />
+              <PillButton
+                disabled={!ownsGroup || !currentGroupName.trim() || currentGroupName.trim() === group.name}
+                onPress={() => dispatch({ type: "updateGroup", id: group.id, name: currentGroupName })}
+              >
+                Save group name
+              </PillButton>
+              <PillButton
+                variant="ghost"
+                disabled={!ownsGroup}
+                onPress={() =>
+                  Alert.alert("Delete group?", "This removes the group, shared check-ins, posts, replies, and reactions.", [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteGroup", id: group.id }) },
+                  ])
+                }
+              >
+                Delete group
+              </PillButton>
+              {!ownsGroup ? <Body muted>Only the group owner can rename or delete this group.</Body> : null}
+            </>
+          ) : (
+            <Body muted>You are not in a group yet.</Body>
+          )}
+          <Field value={newGroupName} onChangeText={setNewGroupName} placeholder="New group name" />
+          <PillButton
+            disabled={!newGroupName.trim()}
+            onPress={() => {
+              dispatch({ type: "createGroup", name: newGroupName });
+              setNewGroupName("");
+            }}
+          >
+            Create new group
+          </PillButton>
+          {state.authError ? <Body muted>{state.authError}</Body> : null}
         </Card>
 
         <Card tone="rose">
