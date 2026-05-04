@@ -160,7 +160,7 @@ export function SettingsScreen() {
           {state.authError ? <Body muted>{state.authError}</Body> : null}
         </Card>
 
-        <Card tone="rose">
+        <Card>
           <SectionTitle>Support the journey</SectionTitle>
           <Body muted>
             KOINO keeps prayer free. If this little rhythm helps your group, you can make a voluntary support intent here.
@@ -190,14 +190,6 @@ export function SettingsScreen() {
             Continue externally
           </PillButton>
           {state.supportIntents[0] ? <Body muted>Latest support intent: {state.supportIntents[0].amount} SEK confirmed.</Body> : null}
-        </Card>
-
-        <Card tone="moss">
-          <SectionTitle>Product boundaries</SectionTitle>
-          <Body muted>
-            This MVP intentionally excludes public profiles, followers, discovery, chat, streaks, badges, rankings, and visible
-            prayer statistics.
-          </Body>
         </Card>
       </ScrollView>
     </Screen>
