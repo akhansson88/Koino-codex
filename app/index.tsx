@@ -16,8 +16,8 @@ export default function Index() {
     );
   }
 
-  if (state.currentUserId && state.currentGroupId) {
-    return <Redirect href="/(tabs)" />;
+  if (state.currentUserId) {
+    return <Redirect href={state.currentGroupId ? "/(tabs)" : "/(tabs)/settings"} />;
   }
 
   return <OnboardingScreen />;

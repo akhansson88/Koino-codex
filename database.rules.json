@@ -7,6 +7,22 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
+        "currentGroupId": {
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "email": {
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isString()"
+        },
+        "id": {
+          ".validate": "newData.val() == $uid"
+        },
+        "name": {
+          ".validate": "newData.isString()"
+        },
         ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString())"
       }
     },
@@ -32,7 +48,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && newData.val() == null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
         "$uid": {
-          ".write": "auth != null && (auth.uid == $uid || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
+          ".write": "auth != null && ((auth.uid == $uid && (newData.val() == null || newData.child('userId').val() == auth.uid)) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
           ".validate": "newData.val() == null || (newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && newData.child('userName').isString())"
         }
       }
@@ -53,7 +69,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && newData.val() == null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
         "$checkInId": {
-          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && (newData.val() == null || newData.child('userId').val() == auth.uid)",
+          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((newData.val() == null && data.child('userId').val() == auth.uid) || (newData.val() != null && newData.child('userId').val() == auth.uid))",
           ".validate": "newData.val() == null || (newData.child('id').val() == $checkInId && newData.child('groupId').val() == $groupId && newData.child('visibility').val() == 'group')"
         }
       }
@@ -74,7 +90,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && newData.val() == null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
         "$postId": {
-          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && (newData.val() == null || newData.child('userId').val() == auth.uid)",
+          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((newData.val() == null && data.child('userId').val() == auth.uid) || (newData.val() != null && newData.child('userId').val() == auth.uid))",
           ".validate": "newData.val() == null || (newData.child('id').val() == $postId && newData.child('groupId').val() == $groupId && newData.child('body').isString())"
         }
       }
@@ -85,7 +101,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && newData.val() == null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
         "$replyId": {
-          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && (newData.val() == null || newData.child('userId').val() == auth.uid)",
+          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((newData.val() == null && (data.child('userId').val() == auth.uid || (data.child('targetType').val() == 'post' && root.child('posts').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid) || (data.child('targetType').val() == 'check_in' && root.child('checkIns').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid))) || (newData.val() != null && newData.child('userId').val() == auth.uid))",
           ".validate": "newData.val() == null || (newData.child('id').val() == $replyId && newData.child('body').isString())"
         }
       }
@@ -96,7 +112,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && newData.val() == null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
         "$reactionId": {
-          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && (newData.val() == null || newData.child('userId').val() == auth.uid)",
+          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((newData.val() == null && (data.child('userId').val() == auth.uid || (data.child('targetType').val() == 'post' && root.child('posts').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid) || (data.child('targetType').val() == 'check_in' && root.child('checkIns').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid))) || (newData.val() != null && newData.child('userId').val() == auth.uid))",
           ".validate": "newData.val() == null || newData.child('userId').val() == auth.uid"
         }
       }

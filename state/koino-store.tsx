@@ -57,12 +57,18 @@ type Action =
   | { type: "signOut" }
   | { type: "createSession"; name: string; groupName?: string; inviteCode?: string }
   | { type: "createGroup"; name: string }
+  | { type: "joinGroup"; inviteCode: string }
+  | { type: "switchGroup"; id: Id }
+  | { type: "leaveGroup"; id: Id }
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "deleteGroup"; id: Id }
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"] }
+  | { type: "deleteCheckIn"; id: Id }
   | { type: "createPost"; body: string }
+  | { type: "deletePost"; id: Id }
   | { type: "finishPrayer"; targetType: "post" | "check_in"; targetId: Id; status: PrayerSession["status"]; startedAt: string }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
+  | { type: "deleteReply"; id: Id }
   | { type: "createJournalEntry"; body: string }
   | { type: "updateJournalEntry"; id: Id; body: string }
   | { type: "deleteJournalEntry"; id: Id }
@@ -197,8 +203,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
+  const [userGroupsReady, setUserGroupsReady] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [group, setGroup] = useState<Group | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [posts, setPosts] = useState<KoinoState["posts"]>([]);
@@ -218,7 +226,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       if (!user) {
         setProfile(null);
         setProfileReady(true);
-        setGroup(null);
+        setUserGroupsReady(true);
+        setGroups([]);
+        setUserMemberships([]);
         setMemberships([]);
         setCheckIns([]);
         setPosts([]);
@@ -252,6 +262,67 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!firebaseUser) return;
 
+    setUserGroupsReady(false);
+    const userGroupsRef = ref(database, `userGroups/${firebaseUser.uid}`);
+    const unsubscribe = onValue(userGroupsRef, (snapshot) => {
+      setUserMemberships(asArray<Membership>(snapshot.val()));
+      setUserGroupsReady(true);
+    });
+
+    return unsubscribe;
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    if (userMemberships.length === 0) {
+      setGroups([]);
+      return;
+    }
+
+    const groupById = new Map<Id, Group>();
+    const syncGroups = () => {
+      setGroups(
+        Array.from(groupById.values()).sort((a, b) => {
+          const createdOrder = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+          return createdOrder || a.name.localeCompare(b.name);
+        }),
+      );
+    };
+
+    const unsubs = userMemberships.map((membership) =>
+      onValue(ref(database, `groups/${membership.groupId}`), (snapshot) => {
+        if (snapshot.exists()) {
+          groupById.set(membership.groupId, snapshot.val() as Group);
+        } else {
+          groupById.delete(membership.groupId);
+        }
+        syncGroups();
+      }),
+    );
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+  }, [firebaseUser, userMemberships]);
+
+  useEffect(() => {
+    if (!firebaseUser || !profileReady || !userGroupsReady) return;
+
+    const joinedGroupIds = userMemberships.map((membership) => membership.groupId);
+    if (joinedGroupIds.length === 0) {
+      if (profile?.currentGroupId) {
+        void update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
+      }
+      return;
+    }
+
+    if (!profile?.currentGroupId || !joinedGroupIds.includes(profile.currentGroupId)) {
+      void update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: joinedGroupIds[0] });
+    }
+  }, [firebaseUser, profile?.currentGroupId, profileReady, userGroupsReady, userMemberships]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
@@ -267,7 +338,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!firebaseUser || !profile?.currentGroupId) {
-      setGroup(null);
       setMemberships([]);
       setCheckIns([]);
       setPosts([]);
@@ -277,7 +347,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     }
 
     const groupId = profile.currentGroupId;
-    const groupRef = ref(database, `groups/${groupId}`);
     const membersRef = ref(database, `groupMembers/${groupId}`);
     const checkInsRef = ref(database, `checkIns/${groupId}`);
     const postsRef = ref(database, `posts/${groupId}`);
@@ -285,22 +354,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
 
     const unsubs = [
-      onValue(
-        groupRef,
-        async (snapshot) => {
-          if (!snapshot.exists()) {
-            await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
-            setGroup(null);
-            return;
-          }
-
-          setGroup(snapshot.val() as Group);
-        },
-        async (error) => {
-          setAuthError(authMessage(error));
-          await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
-        },
-      ),
       onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
       onValue(checkInsRef, (snapshot) => setCheckIns(asArray<CheckIn>(snapshot.val()))),
       onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
@@ -320,13 +373,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
 
     return {
-      ready: authReady && (!firebaseUser || profileReady),
+      ready: authReady && (!firebaseUser || (profileReady && userGroupsReady)),
       currentUserId: firebaseUser?.uid,
       currentGroupId: profile?.currentGroupId ?? undefined,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
       authError,
       users,
-      groups: group ? [group] : [],
+      groups,
       memberships,
       checkIns,
       posts,
@@ -341,7 +394,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     authReady,
     checkIns,
     firebaseUser,
-    group,
+    groups,
     journalEntries,
     memberships,
     posts,
@@ -351,6 +404,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     profileReady,
     replies,
     supportIntents,
+    userGroupsReady,
   ]);
 
   const dispatch = useCallback(
@@ -383,6 +437,32 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser) return;
               await createGroupForUser(firebaseUser, action.name, profile?.name);
               return;
+            case "joinGroup":
+              if (!firebaseUser) return;
+              await joinGroupByInvite(firebaseUser, action.inviteCode, profile?.name);
+              return;
+            case "switchGroup":
+              if (!firebaseUser || !userMemberships.some((membership) => membership.groupId === action.id)) return;
+              await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: action.id });
+              return;
+            case "leaveGroup": {
+              if (!firebaseUser) return;
+              const groupToLeave = groups.find((item) => item.id === action.id);
+              if (!groupToLeave || groupToLeave.ownerId === firebaseUser.uid) return;
+
+              const remainingMembership = userMemberships.find((membership) => membership.groupId !== action.id);
+              const updates: Record<string, unknown> = {
+                [`groupMembers/${action.id}/${firebaseUser.uid}`]: null,
+                [`userGroups/${firebaseUser.uid}/${action.id}`]: null,
+              };
+
+              if (profile?.currentGroupId === action.id) {
+                updates[`profiles/${firebaseUser.uid}/currentGroupId`] = remainingMembership?.groupId ?? null;
+              }
+
+              await update(ref(database), updates);
+              return;
+            }
             case "updateGroup":
               await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
               return;
@@ -406,7 +486,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               members.forEach((member) => {
                 updates[`userGroups/${member.userId}/${action.id}`] = null;
               });
-              updates[`profiles/${firebaseUser.uid}/currentGroupId`] = null;
+              updates[`profiles/${firebaseUser.uid}/currentGroupId`] =
+                userMemberships.find((membership) => membership.groupId !== action.id)?.groupId ?? null;
 
               await update(ref(database), updates);
               return;
@@ -457,6 +538,52 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
               return;
             }
+            case "deleteCheckIn": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const checkIn = checkIns.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!checkIn || checkIn.userId !== firebaseUser.uid) return;
+
+              const updates: Record<string, null> = {
+                [`checkIns/${profile.currentGroupId}/${action.id}`]: null,
+              };
+
+              replies
+                .filter((reply) => reply.targetType === "check_in" && reply.targetId === action.id)
+                .forEach((reply) => {
+                  updates[`replies/${profile.currentGroupId}/${reply.id}`] = null;
+                });
+              prayerReactions
+                .filter((reaction) => reaction.targetType === "check_in" && reaction.targetId === action.id)
+                .forEach((reaction) => {
+                  updates[`prayerReactions/${profile.currentGroupId}/${reaction.id}`] = null;
+                });
+
+              await update(ref(database), updates);
+              return;
+            }
+            case "deletePost": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!post || post.userId !== firebaseUser.uid) return;
+
+              const updates: Record<string, null> = {
+                [`posts/${profile.currentGroupId}/${action.id}`]: null,
+              };
+
+              replies
+                .filter((reply) => reply.targetType === "post" && reply.targetId === action.id)
+                .forEach((reply) => {
+                  updates[`replies/${profile.currentGroupId}/${reply.id}`] = null;
+                });
+              prayerReactions
+                .filter((reaction) => reaction.targetType === "post" && reaction.targetId === action.id)
+                .forEach((reaction) => {
+                  updates[`prayerReactions/${profile.currentGroupId}/${reaction.id}`] = null;
+                });
+
+              await update(ref(database), updates);
+              return;
+            }
             case "finishPrayer": {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const completedAt = now();
@@ -496,6 +623,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: now(),
               };
               await set(ref(database, `replies/${profile.currentGroupId}/${reply.id}`), reply);
+              return;
+            }
+            case "deleteReply": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const reply = replies.find((item) => item.id === action.id);
+              if (!reply || reply.userId !== firebaseUser.uid) return;
+              await remove(ref(database, `replies/${profile.currentGroupId}/${action.id}`));
               return;
             }
             case "createJournalEntry": {
@@ -544,7 +678,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
       })();
     },
-    [firebaseUser, profile?.currentGroupId, profile?.name],
+    [checkIns, firebaseUser, groups, posts, prayerReactions, profile?.currentGroupId, profile?.name, replies, userMemberships],
   );
 
   return <KoinoContext.Provider value={{ state, dispatch }}>{children}</KoinoContext.Provider>;

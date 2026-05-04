@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { FeedItem } from "@/state/types";
@@ -121,10 +122,52 @@ export function HomeScreen() {
               const prayed = state.prayerReactions.some(
                 (reaction) => reaction.userId === state.currentUserId && reaction.targetType === targetType && reaction.targetId === item.id,
               );
+              const ownsItem = item.userId === state.currentUserId;
               const draftKey = `${targetType}:${item.id}`;
               return (
                 <Card key={`${item.type}-${item.id}`}>
-                  <View style={{ gap: 5 }}>
+                  {ownsItem ? (
+                    <Pressable
+                      accessibilityLabel={item.type === "check_in" ? "Delete check-in" : "Delete post"}
+                      accessibilityRole="button"
+                      hitSlop={10}
+                      onPress={() => {
+                        Alert.alert(
+                          item.type === "check_in" ? "Delete check-in?" : "Delete post?",
+                          "This will remove it from the group feed.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: () =>
+                                dispatch({
+                                  type: item.type === "check_in" ? "deleteCheckIn" : "deletePost",
+                                  id: item.id,
+                                }),
+                            },
+                          ],
+                        );
+                      }}
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: "#FBE9E6",
+                        borderColor: "#E7B7AD",
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        height: 36,
+                        justifyContent: "center",
+                        position: "absolute",
+                        right: 12,
+                        top: 12,
+                        width: 36,
+                        zIndex: 1,
+                      }}
+                    >
+                      <Feather name="trash-2" size={17} color="#C43D32" />
+                    </Pressable>
+                  ) : null}
+                  <View style={{ gap: 5, paddingRight: ownsItem ? 44 : 0 }}>
                     <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
                       {userById.get(item.userId) ?? "Someone"}
                     </Text>
@@ -150,6 +193,19 @@ export function HomeScreen() {
                           <Body>
                             {userById.get(reply.userId) ?? "Someone"}: {reply.body}
                           </Body>
+                          {reply.userId === state.currentUserId ? (
+                            <Pressable
+                              onPress={() => {
+                                Alert.alert("Delete reply?", "This comment will be removed from the group feed.", [
+                                  { text: "Cancel", style: "cancel" },
+                                  { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteReply", id: reply.id }) },
+                                ]);
+                              }}
+                              style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+                            >
+                              <Text style={{ color: colors.clay, fontWeight: "900" }}>Delete</Text>
+                            </Pressable>
+                          ) : null}
                         </View>
                       ))}
                     </View>
