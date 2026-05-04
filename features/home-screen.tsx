@@ -13,6 +13,20 @@ function formatDay(value: string) {
   );
 }
 
+function formatJoinedDay(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function initials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 function moodLabel(mood: number) {
   return ["Heavy", "Tender", "Steady", "Hopeful", "Light"][mood - 1] ?? "Steady";
 }
@@ -28,6 +42,18 @@ export function HomeScreen() {
   const [prayerTarget, setPrayerTarget] = useState<{ targetType: "post" | "check_in"; targetId: string; body: string }>();
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const groupMembers = useMemo(
+    () =>
+      state.memberships
+        .filter((membership) => membership.groupId === state.currentGroupId)
+        .sort((a, b) => {
+          if (a.role !== b.role) return a.role === "owner" ? -1 : 1;
+          if (a.userId === state.currentUserId) return -1;
+          if (b.userId === state.currentUserId) return 1;
+          return a.userName.localeCompare(b.userName);
+        }),
+    [state.currentGroupId, state.currentUserId, state.memberships],
+  );
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const feedItems = useMemo<FeedItem[]>(() => {
     const sharedCheckIns: FeedItem[] = state.checkIns
@@ -57,6 +83,93 @@ export function HomeScreen() {
           </Text>
           <SectionTitle>{group?.name ?? "Your group"}</SectionTitle>
           <Body muted>Invite code: {group?.inviteCode ?? "..."}</Body>
+        </Card>
+
+        <Card>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <SectionTitle>Group members</SectionTitle>
+            <View
+              style={{
+                backgroundColor: "#EEF1E4",
+                borderColor: colors.moss,
+                borderRadius: 999,
+                borderWidth: 1,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+              }}
+            >
+              <Text selectable style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>
+                {groupMembers.length} {groupMembers.length === 1 ? "member" : "members"}
+              </Text>
+            </View>
+          </View>
+          {groupMembers.length === 0 ? (
+            <Body muted>No members are visible for this group yet.</Body>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {groupMembers.map((member) => {
+                const memberName = member.userName || userById.get(member.userId) || "Someone";
+                const isCurrentUser = member.userId === state.currentUserId;
+
+                return (
+                  <View
+                    key={member.id}
+                    style={{
+                      alignItems: "center",
+                      backgroundColor: colors.white,
+                      borderColor: colors.line,
+                      borderCurve: "continuous",
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      flexDirection: "row",
+                      gap: 12,
+                      padding: 12,
+                    }}
+                  >
+                    <View
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: member.role === "owner" ? colors.olive : "#F5E3DA",
+                        borderRadius: 999,
+                        height: 44,
+                        justifyContent: "center",
+                        width: 44,
+                      }}
+                    >
+                      <Text
+                        selectable
+                        style={{
+                          color: member.role === "owner" ? colors.white : colors.clay,
+                          fontSize: 15,
+                          fontWeight: "900",
+                        }}
+                      >
+                        {initials(memberName) || "?"}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text selectable style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>
+                        {memberName}
+                        {isCurrentUser ? " (you)" : ""}
+                      </Text>
+                      <Body muted>Joined {formatJoinedDay(member.createdAt)}</Body>
+                    </View>
+                    <Text
+                      selectable
+                      style={{
+                        color: member.role === "owner" ? colors.olive : colors.muted,
+                        fontSize: 13,
+                        fontWeight: "900",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {member.role}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </Card>
 
         <Card>
