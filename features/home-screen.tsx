@@ -208,7 +208,7 @@ export function HomeScreen() {
           </PillButton>
         </Card>
 
-        <Card tone="rose">
+        <Card>
           <SectionTitle>Share with group</SectionTitle>
           <Field multiline value={postBody} onChangeText={setPostBody} placeholder="Text only. Keep it simple and sincere." />
           <PillButton
