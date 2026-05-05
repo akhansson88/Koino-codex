@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import type { ImageSourcePropType } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { FeedItem } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { colors } from "@/ui/theme";
+
+const moodOptions: { value: number; label: string; image: ImageSourcePropType }[] = [
+  { value: 1, label: "Struggling", image: require("../emoji1-transparent.png") },
+  { value: 2, label: "Okay", image: require("../emoji2-transparent.png") },
+  { value: 3, label: "Good", image: require("../emoji3-transparent.png") },
+  { value: 4, label: "Great", image: require("../emoji4-transparent.png") },
+];
 
 function formatDay(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(
@@ -28,7 +36,7 @@ function initials(name: string) {
 }
 
 function moodLabel(mood: number) {
-  return ["Heavy", "Tender", "Steady", "Hopeful", "Light"][mood - 1] ?? "Steady";
+  return moodOptions.find((option) => option.value === mood)?.label ?? moodOptions[moodOptions.length - 1].label;
 }
 
 export function HomeScreen() {
@@ -180,11 +188,65 @@ export function HomeScreen() {
             <Choice label="Yes" selected={readToday} onPress={() => setReadToday(true)} />
             <Choice label="Not yet" selected={!readToday} onPress={() => setReadToday(false)} />
           </View>
-          <Body>Mood</Body>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <Choice key={value} label={`${value}`} selected={mood === value} onPress={() => setMood(value)} />
-            ))}
+          <View
+            style={{
+              alignSelf: "stretch",
+              gap: 18,
+              width: "100%",
+            }}
+          >
+            <SectionTitle>How&apos;s your heart?</SectionTitle>
+            <View style={{ alignSelf: "stretch", flexDirection: "row", width: "100%" }}>
+              {moodOptions.map((option) => {
+                const selected = mood === option.value;
+
+                return (
+                  <Pressable
+                    accessibilityLabel={`Mood ${option.value}: ${option.label}`}
+                    accessibilityRole="button"
+                    key={option.value}
+                    onPress={() => setMood(option.value)}
+                    style={{
+                      alignItems: "center",
+                      borderColor: selected ? "rgba(245, 243, 240, 0.72)" : "transparent",
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      flex: 1,
+                      gap: 8,
+                      minWidth: 0,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <View
+                      style={{
+                        alignSelf: "stretch",
+                        aspectRatio: 1,
+                        overflow: "hidden",
+                        paddingHorizontal: 3,
+                        width: "100%",
+                      }}
+                    >
+                      <Image
+                        source={option.image}
+                        style={{
+                          height: "100%",
+                          objectFit: "contain",
+                          width: "100%",
+                        }}
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      style={{ color: selected ? colors.ink : colors.muted, fontSize: 13, fontWeight: "800", textAlign: "center", width: "100%" }}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
           <Field
             multiline
