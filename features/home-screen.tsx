@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Alert, Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Animated, Easing, Image, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import type { ImageSourcePropType } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -421,6 +421,8 @@ export function HomeScreen() {
   );
 }
 
+const BREATH_PHASE_MS = 3800;
+
 function PrayerMoment({
   target,
   onClose,
@@ -430,44 +432,131 @@ function PrayerMoment({
   onClose: () => void;
   onFinish: (status: "completed" | "skipped", startedAt: string) => void;
 }) {
-  const [secondsLeft, setSecondsLeft] = useState(25);
+  const breathAnimation = useRef(new Animated.Value(0)).current;
   const [startedAt, setStartedAt] = useState(new Date().toISOString());
+
+  const breathScale = breathAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.78, 1.08],
+  });
+  const haloScale = breathAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1.28],
+  });
+  const haloOpacity = breathAnimation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.34, 0.16, 0.3],
+  });
+  const coreOpacity = breathAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.66, 0.95],
+  });
 
   useEffect(() => {
     if (!target) return;
-    setSecondsLeft(25);
     setStartedAt(new Date().toISOString());
-    const timer = setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [target]);
+    breathAnimation.setValue(0);
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathAnimation, {
+          toValue: 1,
+          duration: BREATH_PHASE_MS,
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(breathAnimation, {
+          toValue: 0,
+          duration: BREATH_PHASE_MS,
+          easing: Easing.bezier(0.37, 0, 0.63, 1),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [breathAnimation, target]);
 
   return (
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
-      <View style={{ flex: 1, justifyContent: "center", gap: 28, backgroundColor: colors.cream, padding: 26 }}>
+      <View style={{ flex: 1, justifyContent: "center", gap: 26, backgroundColor: colors.cream, padding: 26 }}>
+        <View style={{ alignItems: "center", gap: 16 }}>
+          <View
+            accessible
+            accessibilityLabel="Prayer breathing guide. Pray now."
+            accessibilityRole="image"
+            style={{ alignItems: "center", height: 280, justifyContent: "center", width: "100%" }}
+          >
+            <Animated.View
+              style={{
+                backgroundColor: "rgba(168,216,216,0.16)",
+                borderColor: "rgba(168,216,216,0.24)",
+                borderRadius: 999,
+                borderWidth: 1,
+                height: 238,
+                opacity: haloOpacity,
+                position: "absolute",
+                transform: [{ scale: haloScale }],
+                width: 238,
+              }}
+            />
+            <Animated.View
+              style={{
+                alignItems: "center",
+                backgroundColor: "rgba(232,166,128,0.16)",
+                borderColor: "rgba(245,243,240,0.2)",
+                borderRadius: 999,
+                borderWidth: 1,
+                height: 210,
+                justifyContent: "center",
+                opacity: coreOpacity,
+                transform: [{ scale: breathScale }],
+                width: 210,
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "center",
+                position: "absolute",
+              }}
+            >
+              <Text
+                selectable
+                style={{
+                  color: colors.gold,
+                  fontSize: 28,
+                  fontWeight: "900",
+                  textAlign: "center",
+                }}
+              >
+                Pray Now
+              </Text>
+            </View>
+          </View>
+        </View>
         <View
           style={{
-            alignSelf: "center",
-            backgroundColor: "rgba(168,210,127,0.14)",
-            borderColor: "rgba(168,210,127,0.32)",
-            borderRadius: 999,
+            backgroundColor: "rgba(245,243,240,0.05)",
+            borderColor: colors.line,
+            borderCurve: "continuous",
+            borderRadius: 24,
             borderWidth: 1,
-            height: 220 - secondsLeft * 2,
-            maxHeight: 220,
-            minHeight: 160,
-            width: 220 - secondsLeft * 2,
-            maxWidth: 220,
-            minWidth: 160,
+            gap: 12,
+            padding: 18,
           }}
-        />
-        <View style={{ gap: 16 }}>
+        >
           <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "900", textAlign: "center" }}>
             Prayer moment
           </Text>
           <Text selectable style={{ color: colors.muted, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
             Take a quiet breath. Hold this person before God, without hurry.
-          </Text>
-          <Text selectable style={{ color: colors.gold, fontSize: 44, fontVariant: ["tabular-nums"], fontWeight: "900", textAlign: "center" }}>
-            {secondsLeft}s
           </Text>
         </View>
         <View style={{ gap: 12 }}>
@@ -475,7 +564,7 @@ function PrayerMoment({
             onPress={() => onFinish("completed", startedAt)}
             style={{ alignItems: "center", backgroundColor: colors.olive, borderRadius: 999, padding: 16 }}
           >
-            <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Done</Text>
+            <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Complete prayer</Text>
           </Pressable>
           <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
             <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "800" }}>Skip for now</Text>
