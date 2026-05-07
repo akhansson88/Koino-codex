@@ -14,6 +14,7 @@ const moodOptions: { value: number; label: string; image: ImageSourcePropType }[
   { value: 3, label: "Good", image: require("../emoji3-transparent.png") },
   { value: 4, label: "Great", image: require("../emoji4-transparent.png") },
 ];
+const PRAYER_COMPLETE_DELAY_MS = 15_000;
 
 function formatDay(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(
@@ -297,6 +298,12 @@ export function HomeScreen() {
               const prayed = state.prayerReactions.some(
                 (reaction) => reaction.userId === state.currentUserId && reaction.targetType === targetType && reaction.targetId === item.id,
               );
+              const prayerCount = new Set(
+                state.prayerReactions
+                  .filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id)
+                  .map((reaction) => reaction.userId),
+              ).size;
+              const prayerCountLabel = prayerCount === 1 ? "1 person prayed" : `${prayerCount} people prayed`;
               const ownsItem = item.userId === state.currentUserId;
               const draftKey = `${targetType}:${item.id}`;
               return (
@@ -353,13 +360,22 @@ export function HomeScreen() {
                   </View>
                   {item.type === "check_in" ? <Body muted>{item.readToday ? "Read/reflected today" : "Not yet today"}</Body> : null}
                   <Body>{item.body || "No words today, just presence."}</Body>
-                  <View style={{ flexDirection: "row", gap: 10 }}>
+                  <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                     <PillButton
                       variant={prayed ? "secondary" : "primary"}
-                      onPress={() => setPrayerTarget({ targetType, targetId: item.id, body: item.body })}
+                      onPress={() => {
+                        if (prayed) {
+                          dispatch({ type: "unpray", targetType, targetId: item.id });
+                          return;
+                        }
+                        setPrayerTarget({ targetType, targetId: item.id, body: item.body });
+                      }}
                     >
                       {prayed ? "Prayed" : "Pray"}
                     </PillButton>
+                    <Text selectable style={{ color: colors.muted, fontSize: 14, fontWeight: "800" }}>
+                      {prayerCountLabel}
+                    </Text>
                   </View>
                   {replies.length > 0 ? (
                     <View style={{ gap: 8 }}>
@@ -433,7 +449,9 @@ function PrayerMoment({
   onFinish: (status: "completed" | "skipped", startedAt: string) => void;
 }) {
   const breathAnimation = useRef(new Animated.Value(0)).current;
+  const completeProgressAnimation = useRef(new Animated.Value(0)).current;
   const [startedAt, setStartedAt] = useState(new Date().toISOString());
+  const [canCompletePrayer, setCanCompletePrayer] = useState(false);
 
   const breathScale = breathAnimation.interpolate({
     inputRange: [0, 1],
@@ -451,13 +469,24 @@ function PrayerMoment({
     inputRange: [0, 1],
     outputRange: [0.66, 0.95],
   });
+  const completeProgressWidth = completeProgressAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
 
   useEffect(() => {
-    if (!target) return;
-    setStartedAt(new Date().toISOString());
-    breathAnimation.setValue(0);
+    if (!target) {
+      setCanCompletePrayer(false);
+      completeProgressAnimation.setValue(0);
+      return;
+    }
 
-    const animation = Animated.loop(
+    setStartedAt(new Date().toISOString());
+    setCanCompletePrayer(false);
+    breathAnimation.setValue(0);
+    completeProgressAnimation.setValue(0);
+
+    const breathLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(breathAnimation, {
           toValue: 1,
@@ -473,13 +502,25 @@ function PrayerMoment({
         }),
       ]),
     );
+    const completeProgress = Animated.timing(completeProgressAnimation, {
+      toValue: 1,
+      duration: PRAYER_COMPLETE_DELAY_MS,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    });
 
-    animation.start();
+    breathLoop.start();
+    completeProgress.start(({ finished }) => {
+      if (finished) {
+        setCanCompletePrayer(true);
+      }
+    });
 
     return () => {
-      animation.stop();
+      breathLoop.stop();
+      completeProgress.stop();
     };
-  }, [breathAnimation, target]);
+  }, [breathAnimation, completeProgressAnimation, target]);
 
   return (
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
@@ -561,10 +602,33 @@ function PrayerMoment({
         </View>
         <View style={{ gap: 12 }}>
           <Pressable
+            accessibilityState={{ disabled: !canCompletePrayer }}
+            disabled={!canCompletePrayer}
             onPress={() => onFinish("completed", startedAt)}
-            style={{ alignItems: "center", backgroundColor: colors.olive, borderRadius: 999, padding: 16 }}
+            style={{
+              alignItems: "center",
+              backgroundColor: canCompletePrayer ? colors.olive : colors.disabled,
+              borderRadius: 999,
+              overflow: "hidden",
+              padding: 16,
+              position: "relative",
+            }}
           >
-            <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Complete prayer</Text>
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                backgroundColor: colors.olive,
+                bottom: 0,
+                left: 0,
+                opacity: canCompletePrayer ? 1 : 0.72,
+                position: "absolute",
+                top: 0,
+                width: completeProgressWidth,
+              }}
+            />
+            <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.ink, fontSize: 16, fontWeight: "900", zIndex: 1 }}>
+              Complete prayer
+            </Text>
           </Pressable>
           <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
             <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "800" }}>Skip for now</Text>

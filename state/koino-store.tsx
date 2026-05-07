@@ -67,6 +67,7 @@ type Action =
   | { type: "createPost"; body: string }
   | { type: "deletePost"; id: Id }
   | { type: "finishPrayer"; targetType: "post" | "check_in"; targetId: Id; status: PrayerSession["status"]; startedAt: string }
+  | { type: "unpray"; targetType: "post" | "check_in"; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
   | { type: "createJournalEntry"; body: string }
@@ -610,6 +611,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 };
                 await set(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`), reaction);
               }
+              return;
+            }
+            case "unpray": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
+              await remove(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`));
               return;
             }
             case "createReply": {
