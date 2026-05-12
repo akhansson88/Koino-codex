@@ -39,7 +39,11 @@ export type Post = {
   id: Id;
   userId: Id;
   groupId: Id;
+  kind: "reflection" | "post" | "prayer_request";
   body: string;
+  images?: string[];
+  answeredAt?: string;
+  answeredMarkedAt?: string;
   createdAt: string;
 };
 
@@ -76,6 +80,7 @@ export type JournalEntry = {
   id: Id;
   userId: Id;
   body: string;
+  images?: string[];
   source: "manual" | "private_check_in";
   mood?: number;
   createdAt: string;
@@ -103,6 +108,7 @@ export type KoinoState = {
   groups: Group[];
   memberships: Membership[];
   checkIns: CheckIn[];
+  privateCheckIns: CheckIn[];
   posts: Post[];
   prayerSessions: PrayerSession[];
   prayerReactions: PrayerReaction[];
@@ -112,7 +118,18 @@ export type KoinoState = {
 };
 
 export type FeedItem =
-  | { type: "post"; id: Id; userId: Id; groupId: Id; body: string; createdAt: string }
+  | {
+      type: "post";
+      id: Id;
+      userId: Id;
+      groupId: Id;
+      kind: Post["kind"];
+      body: string;
+      images?: string[];
+      answeredAt?: string;
+      answeredMarkedAt?: string;
+      createdAt: string;
+    }
   | {
       type: "check_in";
       id: Id;

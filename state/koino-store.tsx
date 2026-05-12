@@ -12,6 +12,7 @@ import {
   JournalEntry,
   KoinoState,
   Membership,
+  Post,
   PrayerReaction,
   PrayerSession,
   Reply,
@@ -45,11 +46,14 @@ try {
 
 const auth = authInstance;
 const database = getDatabase(app);
+const pendingCheckInKeys = new Set<string>();
 
 type Profile = User & {
   email?: string | null;
   currentGroupId?: Id | null;
 };
+
+type CreatePostKind = "reflection" | "prayer_request";
 
 type Action =
   | { type: "signIn"; email: string; password: string }
@@ -64,14 +68,16 @@ type Action =
   | { type: "deleteGroup"; id: Id }
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string }
+  | { type: "createPost"; body: string; kind: CreatePostKind; images?: string[] }
   | { type: "deletePost"; id: Id }
+  | { type: "markPrayerAnswered"; id: Id }
+  | { type: "unmarkPrayerAnswered"; id: Id }
   | { type: "finishPrayer"; targetType: "post" | "check_in"; targetId: Id; status: PrayerSession["status"]; startedAt: string }
   | { type: "unpray"; targetType: "post" | "check_in"; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
-  | { type: "createJournalEntry"; body: string }
-  | { type: "updateJournalEntry"; id: Id; body: string }
+  | { type: "createJournalEntry"; body: string; images?: string[] }
+  | { type: "updateJournalEntry"; id: Id; body: string; images?: string[] }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createSupportIntent"; amount: number };
 
@@ -84,6 +90,15 @@ const KoinoContext = createContext<KoinoContextValue | null>(null);
 
 function now() {
   return new Date().toISOString();
+}
+
+function localDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function id(prefix: string) {
@@ -210,6 +225,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [privateCheckIns, setPrivateCheckIns] = useState<CheckIn[]>([]);
   const [posts, setPosts] = useState<KoinoState["posts"]>([]);
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
@@ -232,6 +248,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         setUserMemberships([]);
         setMemberships([]);
         setCheckIns([]);
+        setPrivateCheckIns([]);
         setPosts([]);
         setPrayerSessions([]);
         setPrayerReactions([]);
@@ -325,11 +342,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     if (!firebaseUser) return;
 
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
+    const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     const unsubs = [
       onValue(journalRef, (snapshot) => setJournalEntries(asArray<JournalEntry>(snapshot.val()))),
+      onValue(privateCheckInsRef, (snapshot) => setPrivateCheckIns(asArray<CheckIn>(snapshot.val()))),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
@@ -383,6 +402,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       groups,
       memberships,
       checkIns,
+      privateCheckIns,
       posts,
       prayerSessions,
       prayerReactions,
@@ -399,6 +419,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     journalEntries,
     memberships,
     posts,
+    privateCheckIns,
     prayerReactions,
     prayerSessions,
     profile,
@@ -496,47 +517,89 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "submitCheckIn": {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const timestamp = now();
-              const checkIn: CheckIn = {
-                id: id("checkin"),
-                userId: firebaseUser.uid,
-                groupId: profile.currentGroupId,
-                mood: action.mood,
-                readToday: action.readToday,
-                reflectionText: action.reflectionText.trim(),
-                visibility: action.visibility,
-                createdAt: timestamp,
-              };
+              const todayKey = localDayKey(timestamp);
+              const pendingKey = `${firebaseUser.uid}:${profile.currentGroupId}:${todayKey}`;
+              if (pendingCheckInKeys.has(pendingKey)) return;
 
-              if (action.visibility === "group") {
-                await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
-              } else {
-                await set(ref(database, `privateCheckIns/${firebaseUser.uid}/${checkIn.id}`), checkIn);
-              }
+              const hasCheckInToday = [...checkIns, ...privateCheckIns].some(
+                (item) =>
+                  item.userId === firebaseUser.uid &&
+                  item.groupId === profile.currentGroupId &&
+                  localDayKey(item.createdAt) === todayKey,
+              );
+              if (hasCheckInToday) return;
+              pendingCheckInKeys.add(pendingKey);
 
-              if (action.visibility === "private") {
-                const entry: JournalEntry = {
-                  id: id("journal"),
+              try {
+                const checkIn: CheckIn = {
+                  id: id("checkin"),
                   userId: firebaseUser.uid,
-                  body: action.reflectionText.trim() || "Private check-in",
-                  source: "private_check_in",
+                  groupId: profile.currentGroupId,
                   mood: action.mood,
+                  readToday: action.readToday,
+                  reflectionText: action.reflectionText.trim(),
+                  visibility: action.visibility,
                   createdAt: timestamp,
-                  updatedAt: timestamp,
                 };
-                await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+
+                if (action.visibility === "group") {
+                  await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
+                } else {
+                  await set(ref(database, `privateCheckIns/${firebaseUser.uid}/${checkIn.id}`), checkIn);
+                }
+
+                if (action.visibility === "private") {
+                  const entry: JournalEntry = {
+                    id: id("journal"),
+                    userId: firebaseUser.uid,
+                    body: action.reflectionText.trim() || "Private check-in",
+                    source: "private_check_in",
+                    mood: action.mood,
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                  };
+                  await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+                }
+              } finally {
+                pendingCheckInKeys.delete(pendingKey);
               }
               return;
             }
             case "createPost": {
-              if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
-              const post = {
+              const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
+              if (!firebaseUser || !profile?.currentGroupId || (!action.body.trim() && images.length === 0)) return;
+              const post: Post = {
                 id: id("post"),
                 userId: firebaseUser.uid,
                 groupId: profile.currentGroupId,
+                kind: action.kind,
                 body: action.body.trim(),
                 createdAt: now(),
               };
+              if (images.length > 0) {
+                post.images = images;
+              }
               await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
+              return;
+            }
+            case "markPrayerAnswered": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!post || post.userId !== firebaseUser.uid || post.kind !== "prayer_request") return;
+              await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
+                answeredAt: now(),
+                answeredMarkedAt: now(),
+              });
+              return;
+            }
+            case "unmarkPrayerAnswered": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!post || post.userId !== firebaseUser.uid || post.kind !== "prayer_request") return;
+              await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
+                answeredAt: null,
+                answeredMarkedAt: null,
+              });
               return;
             }
             case "deleteCheckIn": {
@@ -587,6 +650,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "finishPrayer": {
               if (!firebaseUser || !profile?.currentGroupId) return;
+              if (action.targetType !== "post") return;
+              const post = posts.find((item) => item.id === action.targetId && item.groupId === profile.currentGroupId);
+              if (!post) return;
               const completedAt = now();
               const session: PrayerSession = {
                 id: id("prayersession"),
@@ -640,7 +706,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createJournalEntry": {
-              if (!firebaseUser || !action.body.trim()) return;
+              const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
+              if (!firebaseUser || (!action.body.trim() && images.length === 0)) return;
               const timestamp = now();
               const entry: JournalEntry = {
                 id: id("journal"),
@@ -650,13 +717,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: timestamp,
                 updatedAt: timestamp,
               };
+              if (images.length > 0) {
+                entry.images = images;
+              }
               await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
               return;
             }
             case "updateJournalEntry":
               if (!firebaseUser) return;
+              const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
+                images: images.length > 0 ? images : null,
                 updatedAt: now(),
               });
               return;
@@ -685,7 +757,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
       })();
     },
-    [checkIns, firebaseUser, groups, posts, prayerReactions, profile?.currentGroupId, profile?.name, replies, userMemberships],
+    [checkIns, firebaseUser, groups, posts, prayerReactions, privateCheckIns, profile?.currentGroupId, profile?.name, replies, userMemberships],
   );
 
   return <KoinoContext.Provider value={{ state, dispatch }}>{children}</KoinoContext.Provider>;

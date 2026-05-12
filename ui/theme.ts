@@ -39,6 +39,6 @@ export const radius = {
 };
 
 export const copy = {
-  checkInQuestion: "Have you read or reflected today?",
+  checkInQuestion: "Have you read the Bible today?",
   prayerInvitation: "Take a quiet breath. Hold this person before God, without hurry.",
 };

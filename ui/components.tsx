@@ -1,5 +1,5 @@
 import { PropsWithChildren } from "react";
-import { Pressable, Text, TextInput, TextInputProps, View } from "react-native";
+import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
 import { colors, radius } from "@/ui/theme";
 
@@ -11,19 +11,26 @@ export function Screen({ children }: PropsWithChildren) {
   );
 }
 
-export function Card({ children, tone = "paper" }: PropsWithChildren<{ tone?: "paper" | "moss" | "rose" }>) {
+export function Card({
+  children,
+  tone = "paper",
+  style,
+}: PropsWithChildren<{ tone?: "paper" | "moss" | "rose"; style?: StyleProp<ViewStyle> }>) {
   const backgroundColor = tone === "paper" ? colors.paper : tone === "moss" ? colors.mossSurface : colors.roseSurface;
   return (
     <View
-      style={{
-        backgroundColor,
-        borderColor: colors.line,
-        borderCurve: "continuous",
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        gap: 12,
-        padding: 18,
-      }}
+      style={[
+        {
+          backgroundColor,
+          borderColor: colors.line,
+          borderCurve: "continuous",
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          gap: 12,
+          padding: 18,
+        },
+        style,
+      ]}
     >
       {children}
     </View>
