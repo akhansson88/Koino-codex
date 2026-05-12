@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Alert, Linking, ScrollView, Text, View } from "react-native";
+import { Linking, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
+import { confirmAction } from "@/ui/confirm";
 import { colors } from "@/ui/theme";
 
 export function SettingsScreen() {
@@ -54,10 +55,13 @@ export function SettingsScreen() {
                 variant="ghost"
                 disabled={!ownsGroup}
                 onPress={() =>
-                  Alert.alert("Delete group?", "This removes the group, shared check-ins, posts, replies, and reactions.", [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteGroup", id: group.id }) },
-                  ])
+                  confirmAction({
+                    title: "Delete group?",
+                    message: "This removes the group, shared check-ins, posts, replies, and reactions.",
+                    confirmText: "Delete",
+                    destructive: true,
+                    onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
+                  })
                 }
               >
                 Delete group
@@ -110,14 +114,13 @@ export function SettingsScreen() {
                         <PillButton
                           variant="ghost"
                           onPress={() =>
-                            Alert.alert("Leave group?", `You will leave ${joinedGroup.name}, but your account will stay signed in.`, [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Leave",
-                                style: "destructive",
-                                onPress: () => dispatch({ type: "leaveGroup", id: joinedGroup.id }),
-                              },
-                            ])
+                            confirmAction({
+                              title: "Leave group?",
+                              message: `You will leave ${joinedGroup.name}, but your account will stay signed in.`,
+                              confirmText: "Leave",
+                              destructive: true,
+                              onConfirm: () => dispatch({ type: "leaveGroup", id: joinedGroup.id }),
+                            })
                           }
                         >
                           Leave

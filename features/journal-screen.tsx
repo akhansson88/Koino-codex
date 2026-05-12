@@ -5,6 +5,7 @@ import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { Body, Card, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
+import { confirmAction } from "@/ui/confirm";
 import { colors } from "@/ui/theme";
 
 const MAX_JOURNAL_IMAGES = 6;
@@ -209,10 +210,13 @@ export function JournalScreen() {
                 <JournalImages images={entry.images} />
                 <Pressable
                   onPress={() =>
-                    Alert.alert("Delete entry?", "This private journal entry will be removed from Firebase.", [
-                      { text: "Cancel", style: "cancel" },
-                      { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteJournalEntry", id: entry.id }) },
-                    ])
+                    confirmAction({
+                      title: "Delete entry?",
+                      message: "This private journal entry will be removed from Firebase.",
+                      confirmText: "Delete",
+                      destructive: true,
+                      onConfirm: () => dispatch({ type: "deleteJournalEntry", id: entry.id }),
+                    })
                   }
                   style={{ alignSelf: "flex-start", paddingVertical: 8 }}
                 >

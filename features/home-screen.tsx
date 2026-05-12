@@ -8,6 +8,7 @@ import type { ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent } fro
 import { useKoino } from "@/state/koino-store";
 import { FeedItem, Post } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
+import { confirmAction } from "@/ui/confirm";
 import { colors } from "@/ui/theme";
 
 const moodOptions: { value: number; label: string; image: ImageSourcePropType }[] = [
@@ -77,10 +78,14 @@ function normalizePostKind(kind: Post["kind"]): ComposerKind {
 }
 
 function showDailyPostFriction(onShareAnyway: () => void, onKeepPrivate?: () => void) {
-  Alert.alert("A calm rhythm", DAILY_SHARED_POST_FRICTION_MESSAGE, [
-    { text: "Keep private", style: "cancel", onPress: onKeepPrivate },
-    { text: "Share anyway", onPress: onShareAnyway },
-  ]);
+  confirmAction({
+    title: "A calm rhythm",
+    message: DAILY_SHARED_POST_FRICTION_MESSAGE,
+    cancelText: "Keep private",
+    confirmText: "Share anyway",
+    onCancel: onKeepPrivate,
+    onConfirm: onShareAnyway,
+  });
 }
 
 function FeedActionButton({
@@ -982,22 +987,17 @@ export function HomeScreen() {
                         accessibilityRole="button"
                         onPress={() => {
                           setOpenMenuKey(undefined);
-                          Alert.alert(
-                            `Delete ${itemLabel}?`,
-                            "This will remove it from the group feed.",
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Delete",
-                                style: "destructive",
-                                onPress: () =>
-                                  dispatch({
-                                    type: item.type === "check_in" ? "deleteCheckIn" : "deletePost",
-                                    id: item.id,
-                                  }),
-                              },
-                            ],
-                          );
+                          confirmAction({
+                            title: `Delete ${itemLabel}?`,
+                            message: "This will remove it from the group feed.",
+                            confirmText: "Delete",
+                            destructive: true,
+                            onConfirm: () =>
+                              dispatch({
+                                type: item.type === "check_in" ? "deleteCheckIn" : "deletePost",
+                                id: item.id,
+                              }),
+                          });
                         }}
                         style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 }}
                       >
@@ -1107,10 +1107,13 @@ export function HomeScreen() {
                           {reply.userId === state.currentUserId ? (
                             <Pressable
                               onPress={() => {
-                                Alert.alert("Delete reply?", "This comment will be removed from the group feed.", [
-                                  { text: "Cancel", style: "cancel" },
-                                  { text: "Delete", style: "destructive", onPress: () => dispatch({ type: "deleteReply", id: reply.id }) },
-                                ]);
+                                confirmAction({
+                                  title: "Delete reply?",
+                                  message: "This comment will be removed from the group feed.",
+                                  confirmText: "Delete",
+                                  destructive: true,
+                                  onConfirm: () => dispatch({ type: "deleteReply", id: reply.id }),
+                                });
                               }}
                               style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                             >
