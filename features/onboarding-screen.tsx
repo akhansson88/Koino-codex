@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
-import { Body, Card, Choice, Field, PillButton, Screen, Title } from "@/ui/components";
+import { Body, Card, Choice, Field, PillButton, Screen } from "@/ui/components";
+import { KoinoLogo } from "@/ui/koino-logo";
 import { colors } from "@/ui/theme";
 
 export function OnboardingScreen() {
@@ -14,6 +15,8 @@ export function OnboardingScreen() {
   const [groupMode, setGroupMode] = useState<"join" | "create">("join");
   const [groupName, setGroupName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     if (!name && state.users[0]?.name) {
@@ -28,17 +31,40 @@ export function OnboardingScreen() {
     name.trim().length > 1 &&
     (groupMode === "create" ? groupName.trim().length > 1 : inviteCode.trim().length > 2);
 
+  async function handlePasswordReset() {
+    const resetEmail = email.trim();
+    setResetMessage("");
+
+    if (!resetEmail.includes("@")) {
+      setResetMessage("Enter your email above, then request a reset link.");
+      return;
+    }
+
+    setIsSendingReset(true);
+    try {
+      await dispatch({ type: "requestPasswordReset", email: resetEmail });
+      setResetMessage(`A reset link was sent to ${resetEmail}. Open it to choose a new password.`);
+    } catch {
+      setResetMessage("");
+    } finally {
+      setIsSendingReset(false);
+    }
+  }
+
   return (
     <Screen>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 72 }}>
-          <View style={{ gap: 10 }}>
+        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 48 }}>
+          <View style={{ alignItems: "center", gap: 12 }}>
+            <KoinoLogo size={164} />
             <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900", letterSpacing: 2 }}>KOINO MVP</Text>
-            <Title>A quieter rhythm for your small group.</Title>
-            <Body muted>
+            <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "800", letterSpacing: 0, textAlign: "center" }}>
+              A quieter rhythm for your small group.
+            </Text>
+            <Text selectable style={{ color: colors.muted, fontSize: 16, lineHeight: 23, maxWidth: 380, textAlign: "center" }}>
               Daily check-ins, sincere prayer, short replies, and a private journal. Sign in to sync your group through
               Firebase.
-            </Body>
+            </Text>
           </View>
 
           {!state.currentUserId ? (
@@ -58,7 +84,7 @@ export function OnboardingScreen() {
                   placeholder="Email"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  keyboardType="email-address"
+                  keyboardType={Platform.OS === "web" ? "default" : "email-address"}
                 />
                 <Field
                   value={password}
@@ -69,6 +95,7 @@ export function OnboardingScreen() {
                   secureTextEntry
                 />
                 {state.authError ? <Body muted>{state.authError}</Body> : null}
+                {authMode === "signIn" && resetMessage ? <Body muted>{resetMessage}</Body> : null}
               </Card>
 
               <PillButton
@@ -83,6 +110,11 @@ export function OnboardingScreen() {
               >
                 {authMode === "signIn" ? "Sign in" : "Create account"}
               </PillButton>
+              {authMode === "signIn" ? (
+                <PillButton variant="ghost" disabled={isSendingReset} onPress={handlePasswordReset}>
+                  {isSendingReset ? "Sending reset link..." : "Forgot my password"}
+                </PillButton>
+              ) : null}
             </>
           ) : (
             <>

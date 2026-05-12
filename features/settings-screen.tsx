@@ -13,10 +13,17 @@ export function SettingsScreen() {
   const [currentGroupName, setCurrentGroupName] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [joinInviteCode, setJoinInviteCode] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const resolvedAmount = amount === 0 ? Number(customAmount) : amount;
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
+  const canChangePassword =
+    currentPassword.length > 0 && newPassword.length >= 6 && newPassword === confirmPassword && !isChangingPassword;
 
   useEffect(() => {
     setCurrentGroupName(group?.name ?? "");
@@ -33,6 +40,68 @@ export function SettingsScreen() {
           <Body muted>{state.groups.length} joined {state.groups.length === 1 ? "group" : "groups"}.</Body>
           <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>
             Log out
+          </PillButton>
+        </Card>
+
+        <Card>
+          <SectionTitle>Password</SectionTitle>
+          <Body muted>Change the password for the account you are currently signed into.</Body>
+          <Field
+            value={currentPassword}
+            onChangeText={(value) => {
+              setCurrentPassword(value);
+              setPasswordMessage("");
+            }}
+            placeholder="Current password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Field
+            value={newPassword}
+            onChangeText={(value) => {
+              setNewPassword(value);
+              setPasswordMessage("");
+            }}
+            placeholder="New password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Field
+            value={confirmPassword}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+              setPasswordMessage("");
+            }}
+            placeholder="Confirm new password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          {newPassword && newPassword.length < 6 ? <Body muted>Use at least 6 characters.</Body> : null}
+          {confirmPassword && newPassword !== confirmPassword ? <Body muted>The new passwords do not match.</Body> : null}
+          {passwordMessage ? <Body muted>{passwordMessage}</Body> : null}
+          {state.authError ? <Body muted>{state.authError}</Body> : null}
+          <PillButton
+            disabled={!canChangePassword}
+            onPress={async () => {
+              setIsChangingPassword(true);
+              setPasswordMessage("");
+              try {
+                await dispatch({ type: "changePassword", currentPassword, newPassword });
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setPasswordMessage("Password updated.");
+              } catch {
+                setPasswordMessage("");
+              } finally {
+                setIsChangingPassword(false);
+              }
+            }}
+          >
+            {isChangingPassword ? "Updating..." : "Update password"}
           </PillButton>
         </Card>
 

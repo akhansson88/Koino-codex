@@ -884,6 +884,11 @@ export function HomeScreen() {
               onPress={() => setFeedFilter("my_prayer_requests")}
             />
           </View>
+          {state.authError ? (
+            <Card>
+              <Body muted>{state.authError}</Body>
+            </Card>
+          ) : null}
           {feedItems.length === 0 ? (
             <Card>
               <Body muted>No shared items match this feed yet. This room can stay quiet until someone is ready.</Body>

@@ -47,6 +47,7 @@ try {
 const auth = authInstance;
 const database = getDatabase(app);
 const pendingCheckInKeys = new Set<string>();
+const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
 
 type Profile = User & {
   email?: string | null;
@@ -59,6 +60,9 @@ type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
   | { type: "signOut" }
+  | { type: "requestPasswordReset"; email: string }
+  | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
+  | { type: "changePassword"; currentPassword: string; newPassword: string }
   | { type: "createSession"; name: string; groupName?: string; inviteCode?: string }
   | { type: "createGroup"; name: string }
   | { type: "joinGroup"; inviteCode: string }
@@ -83,7 +87,7 @@ type Action =
 
 type KoinoContextValue = {
   state: KoinoState;
-  dispatch: (action: Action) => void;
+  dispatch: (action: Action) => Promise<void>;
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -122,12 +126,25 @@ function authMessage(error: unknown) {
   switch (error.code) {
     case "auth/email-already-in-use":
       return "That email already has an account. Try signing in instead.";
+    case "auth/invalid-email":
+      return "Enter a valid email address.";
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
       return "The email or password did not match.";
     case "auth/weak-password":
       return "Use a password with at least 6 characters.";
+    case "auth/expired-action-code":
+      return "That reset link has expired. Request a new one from sign in.";
+    case "auth/invalid-action-code":
+      return "That reset link is invalid or has already been used. Request a new one from sign in.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please wait a bit and try again.";
+    case "auth/invalid-continue-uri":
+    case "auth/unauthorized-continue-uri":
+      return "The reset link URL needs to be authorized in Firebase.";
+    case "auth/requires-recent-login":
+      return "Please sign out and back in, then try changing your password again.";
     case "permission-denied":
       return "Firebase blocked that change. Check the database rules for this project.";
     default:
@@ -213,6 +230,46 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
     [`userGroups/${user.uid}/${invite.groupId}`]: membership,
     [`profiles/${user.uid}/currentGroupId`]: invite.groupId,
   });
+}
+
+async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
+  const [replySnapshot, reactionSnapshot] = await Promise.all([
+    get(ref(database, `replies/${groupId}`)),
+    get(ref(database, `prayerReactions/${groupId}`)),
+  ]);
+  const childDeletes: Record<string, null> = {};
+  const ownedChildDeletes: Record<string, null> = {};
+
+  asArray<Reply>(replySnapshot.val())
+    .filter((reply) => reply.targetType === targetType && reply.targetId === targetId)
+    .forEach((reply) => {
+      childDeletes[`replies/${groupId}/${reply.id}`] = null;
+      if (reply.userId === ownerId) {
+        ownedChildDeletes[`replies/${groupId}/${reply.id}`] = null;
+      }
+    });
+
+  asArray<PrayerReaction>(reactionSnapshot.val())
+    .filter((reaction) => reaction.targetType === targetType && reaction.targetId === targetId)
+    .forEach((reaction) => {
+      childDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
+      if (reaction.userId === ownerId) {
+        ownedChildDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
+      }
+    });
+
+  if (Object.keys(childDeletes).length > 0) {
+    try {
+      await update(ref(database), childDeletes);
+    } catch (error) {
+      if (Object.keys(ownedChildDeletes).length === 0) {
+        throw error;
+      }
+      await update(ref(database), ownedChildDeletes);
+    }
+  }
+
+  await remove(ref(database, `${targetType === "post" ? "posts" : "checkIns"}/${groupId}/${targetId}`));
 }
 
 export function KoinoProvider({ children }: PropsWithChildren) {
@@ -430,12 +487,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   ]);
 
   const dispatch = useCallback(
-    (action: Action) => {
-      void (async () => {
-        setAuthError(undefined);
+    async (action: Action) => {
+      setAuthError(undefined);
 
-        try {
-          switch (action.type) {
+      try {
+        switch (action.type) {
             case "signIn":
               await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
               return;
@@ -447,6 +503,30 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "signOut":
               await FirebaseAuth.signOut(auth);
               return;
+            case "requestPasswordReset": {
+              const resetEmail = action.email.trim();
+              if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
+
+              await FirebaseAuth.sendPasswordResetEmail(auth, resetEmail, {
+                url: passwordResetUrl,
+                handleCodeInApp: true,
+              });
+              return;
+            }
+            case "confirmPasswordReset":
+              if (!action.oobCode.trim()) throw new Error("Open the reset link from your email again.");
+              if (action.newPassword.length < 6) throw new Error("Use a password with at least 6 characters.");
+              await FirebaseAuth.confirmPasswordReset(auth, action.oobCode, action.newPassword);
+              return;
+            case "changePassword": {
+              if (!firebaseUser?.email) throw new Error("Sign in again before changing your password.");
+              if (action.newPassword.length < 6) throw new Error("Use a password with at least 6 characters.");
+
+              const credential = FirebaseAuth.EmailAuthProvider.credential(firebaseUser.email, action.currentPassword);
+              await FirebaseAuth.reauthenticateWithCredential(firebaseUser, credential);
+              await FirebaseAuth.updatePassword(firebaseUser, action.newPassword);
+              return;
+            }
             case "createSession":
               if (!firebaseUser) return;
               if (action.groupName?.trim()) {
@@ -606,46 +686,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const checkIn = checkIns.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!checkIn || checkIn.userId !== firebaseUser.uid) return;
-
-              const updates: Record<string, null> = {
-                [`checkIns/${profile.currentGroupId}/${action.id}`]: null,
-              };
-
-              replies
-                .filter((reply) => reply.targetType === "check_in" && reply.targetId === action.id)
-                .forEach((reply) => {
-                  updates[`replies/${profile.currentGroupId}/${reply.id}`] = null;
-                });
-              prayerReactions
-                .filter((reaction) => reaction.targetType === "check_in" && reaction.targetId === action.id)
-                .forEach((reaction) => {
-                  updates[`prayerReactions/${profile.currentGroupId}/${reaction.id}`] = null;
-                });
-
-              await update(ref(database), updates);
+              await deleteFeedItemWithChildren(profile.currentGroupId, "check_in", action.id, firebaseUser.uid);
               return;
             }
             case "deletePost": {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!post || post.userId !== firebaseUser.uid) return;
-
-              const updates: Record<string, null> = {
-                [`posts/${profile.currentGroupId}/${action.id}`]: null,
-              };
-
-              replies
-                .filter((reply) => reply.targetType === "post" && reply.targetId === action.id)
-                .forEach((reply) => {
-                  updates[`replies/${profile.currentGroupId}/${reply.id}`] = null;
-                });
-              prayerReactions
-                .filter((reaction) => reaction.targetType === "post" && reaction.targetId === action.id)
-                .forEach((reaction) => {
-                  updates[`prayerReactions/${profile.currentGroupId}/${reaction.id}`] = null;
-                });
-
-              await update(ref(database), updates);
+              await deleteFeedItemWithChildren(profile.currentGroupId, "post", action.id, firebaseUser.uid);
               return;
             }
             case "finishPrayer": {
@@ -752,10 +800,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
           }
-        } catch (error) {
-          setAuthError(authMessage(error));
+      } catch (error) {
+        setAuthError(authMessage(error));
+        if (
+          action.type === "requestPasswordReset" ||
+          action.type === "confirmPasswordReset" ||
+          action.type === "changePassword"
+        ) {
+          throw error;
         }
-      })();
+      }
     },
     [checkIns, firebaseUser, groups, posts, prayerReactions, privateCheckIns, profile?.currentGroupId, profile?.name, replies, userMemberships],
   );

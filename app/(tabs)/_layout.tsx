@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { KoinoLogo } from "@/ui/koino-logo";
 import { colors } from "@/ui/theme";
 
 export default function TabLayout() {
@@ -16,6 +17,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.cream },
+        headerLeft: () => <KoinoHeaderLogo />,
         headerRight: () => <CurrentGroupIndicator />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
@@ -63,6 +65,10 @@ export default function TabLayout() {
       />
     </Tabs>
   );
+}
+
+function KoinoHeaderLogo() {
+  return <KoinoLogo size={40} style={{ marginLeft: 16 }} />;
 }
 
 function CurrentGroupIndicator() {

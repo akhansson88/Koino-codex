@@ -178,6 +178,11 @@ export function JournalScreen() {
 
         <View style={{ gap: 12 }}>
           <SectionTitle>Your entries</SectionTitle>
+          {state.authError ? (
+            <Card>
+              <Body muted>{state.authError}</Body>
+            </Card>
+          ) : null}
           {entries.length === 0 ? (
             <Card>
               <Body muted>No private entries yet. The journal is here for the days you do not want to share.</Body>
