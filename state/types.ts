@@ -47,12 +47,15 @@ export type Post = {
   createdAt: string;
 };
 
-export type TargetType = "post" | "check_in" | "journal_entry";
+export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply";
+export type PrayerReactionTargetType = "post" | "check_in" | "reply";
+export type ReplyTargetType = "post" | "check_in";
+export type CommentReactionKind = "amen" | "with_you" | "encouraged";
 
 export type PrayerSession = {
   id: Id;
   userId: Id;
-  targetType: TargetType;
+  targetType: PrayerSessionTargetType;
   targetId: Id;
   startedAt: string;
   completedAt?: string;
@@ -62,7 +65,7 @@ export type PrayerSession = {
 export type PrayerReaction = {
   id: Id;
   userId: Id;
-  targetType: TargetType;
+  targetType: PrayerReactionTargetType;
   targetId: Id;
   createdAt: string;
 };
@@ -70,9 +73,17 @@ export type PrayerReaction = {
 export type Reply = {
   id: Id;
   userId: Id;
-  targetType: TargetType;
+  targetType: ReplyTargetType;
   targetId: Id;
   body: string;
+  createdAt: string;
+};
+
+export type CommentReaction = {
+  id: Id;
+  userId: Id;
+  replyId: Id;
+  kind: CommentReactionKind;
   createdAt: string;
 };
 
@@ -113,6 +124,7 @@ export type KoinoState = {
   prayerSessions: PrayerSession[];
   prayerReactions: PrayerReaction[];
   replies: Reply[];
+  commentReactions: CommentReaction[];
   journalEntries: JournalEntry[];
   supportIntents: SupportIntent[];
 };

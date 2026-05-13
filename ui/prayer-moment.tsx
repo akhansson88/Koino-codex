@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
 
-import type { TargetType } from "@/state/types";
+import type { PrayerSessionTargetType } from "@/state/types";
 import { colors } from "@/ui/theme";
 
 const BREATH_PHASE_MS = 3800;
 const PRAYER_COMPLETE_DELAY_MS = 15_000;
 
-export type PrayerMomentTarget = { targetType: TargetType; targetId: string; body: string };
+export type PrayerMomentTarget = { targetType: PrayerSessionTargetType; targetId: string; body: string };
 
 export function PrayerMoment({
   target,

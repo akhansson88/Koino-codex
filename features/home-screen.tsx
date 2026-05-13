@@ -6,7 +6,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, Text, useWindowDimensions, 
 import type { ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
-import { FeedItem, Post } from "@/state/types";
+import { CommentReactionKind, FeedItem, Post } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
@@ -26,6 +26,11 @@ const DAILY_SHARED_POST_FRICTION_MESSAGE =
 type FeedFilter = "all" | "my_reflections" | "my_prayer_requests";
 type ComposerKind = "reflection" | "prayer_request";
 type ImageGalleryState = { images: string[]; index: number };
+const commentReactionOptions: { kind: CommentReactionKind; label: string }[] = [
+  { kind: "amen", label: "Amen" },
+  { kind: "with_you", label: "With you" },
+  { kind: "encouraged", label: "Encouraged" },
+];
 
 function formatJoinedDay(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
@@ -559,6 +564,7 @@ export function HomeScreen() {
   const [openMenuKey, setOpenMenuKey] = useState<string>();
   const [imageGallery, setImageGallery] = useState<ImageGalleryState>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [pendingCommentReactions, setPendingCommentReactions] = useState<Record<string, boolean>>({});
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const groupMembers = useMemo(
@@ -1110,25 +1116,98 @@ export function HomeScreen() {
                     <View style={{ gap: 8 }}>
                       {replies.map((reply) => (
                         <View key={reply.id} style={{ borderLeftColor: colors.moss, borderLeftWidth: 3, paddingLeft: 10 }}>
-                          <Body>
-                            {userById.get(reply.userId) ?? "Someone"}: {reply.body}
-                          </Body>
-                          {reply.userId === state.currentUserId ? (
-                            <Pressable
-                              onPress={() => {
-                                confirmAction({
-                                  title: "Delete reply?",
-                                  message: "This comment will be removed from the group feed.",
-                                  confirmText: "Delete",
-                                  destructive: true,
-                                  onConfirm: () => dispatch({ type: "deleteReply", id: reply.id }),
-                                });
-                              }}
-                              style={{ alignSelf: "flex-start", paddingVertical: 6 }}
-                            >
-                              <Text style={{ color: colors.clay, fontWeight: "900" }}>Delete</Text>
-                            </Pressable>
-                          ) : null}
+                          {(() => {
+                            const replyPrayed = state.prayerReactions.some(
+                              (reaction) =>
+                                reaction.targetType === "reply" && reaction.targetId === reply.id && reaction.userId === state.currentUserId,
+                            );
+                            const replyPrayerCount = new Set(
+                              state.prayerReactions
+                                .filter((reaction) => reaction.targetType === "reply" && reaction.targetId === reply.id)
+                                .map((reaction) => reaction.userId),
+                            ).size;
+                            const replyPrayerCountLabel =
+                              replyPrayerCount === 1 ? "1 person prayed" : `${replyPrayerCount} people prayed`;
+                            const replyCommentReactions = state.commentReactions.filter((reaction) => reaction.replyId === reply.id);
+
+                            return (
+                              <>
+                                <Body>
+                                  {userById.get(reply.userId) ?? "Someone"}: {reply.body}
+                                </Body>
+                                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+                                  <Pressable
+                                    onPress={() => {
+                                      if (replyPrayed) {
+                                        dispatch({ type: "unpray", targetType: "reply", targetId: reply.id });
+                                        return;
+                                      }
+                                      setPrayerTarget({ targetType: "reply", targetId: reply.id, body: reply.body });
+                                    }}
+                                    style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+                                  >
+                                    <Text style={{ color: replyPrayed ? colors.moss : colors.clay, fontWeight: "900" }}>
+                                      {replyPrayed ? "Prayed" : "Pray"}
+                                    </Text>
+                                  </Pressable>
+                                  {commentReactionOptions.map((option) => {
+                                    const reactionKey = `${reply.id}:${option.kind}`;
+                                    const serverSelected = replyCommentReactions.some(
+                                      (reaction) => reaction.kind === option.kind && reaction.userId === state.currentUserId,
+                                    );
+                                    const selected = pendingCommentReactions[reactionKey] ?? serverSelected;
+                                    const serverCount = new Set(
+                                      replyCommentReactions
+                                        .filter((reaction) => reaction.kind === option.kind)
+                                        .map((reaction) => reaction.userId),
+                                    ).size;
+                                    const count = serverCount + (selected && !serverSelected ? 1 : 0) - (!selected && serverSelected ? 1 : 0);
+                                    const label = count > 0 ? `${option.label} ${count}` : option.label;
+
+                                    return (
+                                      <Pressable
+                                        key={option.kind}
+                                        onPress={() => {
+                                          setPendingCommentReactions((pending) => ({ ...pending, [reactionKey]: !selected }));
+                                          void dispatch({ type: "toggleCommentReaction", replyId: reply.id, kind: option.kind }).finally(() => {
+                                            setPendingCommentReactions((pending) => {
+                                              const next = { ...pending };
+                                              delete next[reactionKey];
+                                              return next;
+                                            });
+                                          });
+                                        }}
+                                        style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+                                      >
+                                        <Text style={{ color: selected ? colors.moss : colors.clay, fontWeight: "900" }}>{label}</Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                  {reply.userId === state.currentUserId ? (
+                                    <Pressable
+                                      onPress={() => {
+                                        confirmAction({
+                                          title: "Delete reply?",
+                                          message: "This comment will be removed from the group feed.",
+                                          confirmText: "Delete",
+                                          destructive: true,
+                                          onConfirm: () => dispatch({ type: "deleteReply", id: reply.id }),
+                                        });
+                                      }}
+                                      style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+                                    >
+                                      <Text style={{ color: colors.clay, fontWeight: "900" }}>Delete</Text>
+                                    </Pressable>
+                                  ) : null}
+                                </View>
+                                {replyPrayerCount > 0 ? (
+                                  <Text selectable style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>
+                                    {replyPrayerCountLabel}
+                                  </Text>
+                                ) : null}
+                              </>
+                            );
+                          })()}
                         </View>
                       ))}
                     </View>

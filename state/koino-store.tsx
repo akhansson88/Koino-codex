@@ -7,6 +7,8 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 
 import {
   CheckIn,
+  CommentReaction,
+  CommentReactionKind,
   Group,
   Id,
   JournalEntry,
@@ -77,9 +79,10 @@ type Action =
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
   | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string }
-  | { type: "unpray"; targetType: "post" | "check_in"; targetId: Id }
+  | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
+  | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
   | { type: "createJournalEntry"; body: string; images?: string[] }
   | { type: "updateJournalEntry"; id: Id; body: string; images?: string[] }
   | { type: "deleteJournalEntry"; id: Id }
@@ -233,19 +236,40 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
-  const [replySnapshot, reactionSnapshot] = await Promise.all([
+  const [replySnapshot, reactionSnapshot, commentReactionSnapshot] = await Promise.all([
     get(ref(database, `replies/${groupId}`)),
     get(ref(database, `prayerReactions/${groupId}`)),
+    get(ref(database, `commentReactions/${groupId}`)),
   ]);
   const childDeletes: Record<string, null> = {};
   const ownedChildDeletes: Record<string, null> = {};
+  const childReplyIds = new Set<string>();
 
   asArray<Reply>(replySnapshot.val())
     .filter((reply) => reply.targetType === targetType && reply.targetId === targetId)
     .forEach((reply) => {
+      childReplyIds.add(reply.id);
       childDeletes[`replies/${groupId}/${reply.id}`] = null;
       if (reply.userId === ownerId) {
         ownedChildDeletes[`replies/${groupId}/${reply.id}`] = null;
+      }
+    });
+
+  asArray<PrayerReaction>(reactionSnapshot.val())
+    .filter((reaction) => reaction.targetType === "reply" && childReplyIds.has(reaction.targetId))
+    .forEach((reaction) => {
+      childDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
+      if (reaction.userId === ownerId) {
+        ownedChildDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
+      }
+    });
+
+  asArray<CommentReaction>(commentReactionSnapshot.val())
+    .filter((reaction) => childReplyIds.has(reaction.replyId))
+    .forEach((reaction) => {
+      childDeletes[`commentReactions/${groupId}/${reaction.id}`] = null;
+      if (reaction.userId === ownerId) {
+        ownedChildDeletes[`commentReactions/${groupId}/${reaction.id}`] = null;
       }
     });
 
@@ -287,6 +311,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
+  const [commentReactions, setCommentReactions] = useState<CommentReaction[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
@@ -310,6 +335,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         setPrayerSessions([]);
         setPrayerReactions([]);
         setReplies([]);
+        setCommentReactions([]);
         setJournalEntries([]);
         setSupportIntents([]);
       }
@@ -420,6 +446,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setPosts([]);
       setReplies([]);
       setPrayerReactions([]);
+      setCommentReactions([]);
       return;
     }
 
@@ -429,6 +456,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const postsRef = ref(database, `posts/${groupId}`);
     const repliesRef = ref(database, `replies/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
+    const commentReactionsRef = ref(database, `commentReactions/${groupId}`);
 
     const unsubs = [
       onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
@@ -436,6 +464,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
+      onValue(commentReactionsRef, (snapshot) => setCommentReactions(asArray<CommentReaction>(snapshot.val()))),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
@@ -464,6 +493,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerSessions,
       prayerReactions,
       replies,
+      commentReactions,
       journalEntries,
       supportIntents,
     };
@@ -478,6 +508,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     posts,
     privateCheckIns,
     prayerReactions,
+    commentReactions,
     prayerSessions,
     profile,
     profileReady,
@@ -583,6 +614,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 [`posts/${action.id}`]: null,
                 [`replies/${action.id}`]: null,
                 [`prayerReactions/${action.id}`]: null,
+                [`commentReactions/${action.id}`]: null,
               };
 
               members.forEach((member) => {
@@ -702,6 +734,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 if (!profile?.currentGroupId || !posts.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) return;
               } else if (action.targetType === "check_in") {
                 if (!profile?.currentGroupId || !checkIns.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) return;
+              } else if (action.targetType === "reply") {
+                if (!profile?.currentGroupId || !replies.some((item) => item.id === action.targetId)) return;
               } else {
                 if (!journalEntries.some((item) => item.id === action.targetId && item.userId === firebaseUser.uid)) return;
               }
@@ -754,7 +788,42 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const reply = replies.find((item) => item.id === action.id);
               if (!reply || reply.userId !== firebaseUser.uid) return;
-              await remove(ref(database, `replies/${profile.currentGroupId}/${action.id}`));
+              const reactionDeletes = prayerReactions
+                .filter((reaction) => reaction.targetType === "reply" && reaction.targetId === action.id)
+                .reduce<Record<string, null>>((deletes, reaction) => {
+                  deletes[`prayerReactions/${profile.currentGroupId}/${reaction.id}`] = null;
+                  return deletes;
+                }, {});
+              await update(ref(database), {
+                ...reactionDeletes,
+                ...commentReactions
+                  .filter((reaction) => reaction.replyId === action.id)
+                  .reduce<Record<string, null>>((deletes, reaction) => {
+                    deletes[`commentReactions/${profile.currentGroupId}/${reaction.id}`] = null;
+                    return deletes;
+                  }, {}),
+                [`replies/${profile.currentGroupId}/${action.id}`]: null,
+              });
+              return;
+            }
+            case "toggleCommentReaction": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              if (!replies.some((reply) => reply.id === action.replyId)) return;
+              const reactionId = `${firebaseUser.uid}_${action.replyId}_${action.kind}`;
+              const reactionRef = ref(database, `commentReactions/${profile.currentGroupId}/${reactionId}`);
+              const existing = commentReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid);
+              if (existing) {
+                await remove(reactionRef);
+                return;
+              }
+              const reaction: CommentReaction = {
+                id: reactionId,
+                userId: firebaseUser.uid,
+                replyId: action.replyId,
+                kind: action.kind,
+                createdAt: now(),
+              };
+              await set(reactionRef, reaction);
               return;
             }
             case "createJournalEntry": {
@@ -815,7 +884,19 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
       }
     },
-    [checkIns, firebaseUser, groups, posts, prayerReactions, privateCheckIns, profile?.currentGroupId, profile?.name, replies, userMemberships],
+    [
+      checkIns,
+      commentReactions,
+      firebaseUser,
+      groups,
+      posts,
+      prayerReactions,
+      privateCheckIns,
+      profile?.currentGroupId,
+      profile?.name,
+      replies,
+      userMemberships,
+    ],
   );
 
   return <KoinoContext.Provider value={{ state, dispatch }}>{children}</KoinoContext.Provider>;
