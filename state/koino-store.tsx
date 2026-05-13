@@ -76,7 +76,7 @@ type Action =
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
-  | { type: "finishPrayer"; targetType: "post" | "check_in"; targetId: Id; status: PrayerSession["status"]; startedAt: string }
+  | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string }
   | { type: "unpray"; targetType: "post" | "check_in"; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
@@ -697,10 +697,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "finishPrayer": {
-              if (!firebaseUser || !profile?.currentGroupId) return;
-              if (action.targetType !== "post") return;
-              const post = posts.find((item) => item.id === action.targetId && item.groupId === profile.currentGroupId);
-              if (!post) return;
+              if (!firebaseUser) return;
+              if (action.targetType === "post") {
+                if (!profile?.currentGroupId || !posts.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) return;
+              } else if (action.targetType === "check_in") {
+                if (!profile?.currentGroupId || !checkIns.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) return;
+              } else {
+                if (!journalEntries.some((item) => item.id === action.targetId && item.userId === firebaseUser.uid)) return;
+              }
               const completedAt = now();
               const session: PrayerSession = {
                 id: id("prayersession"),
@@ -714,7 +718,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
               await set(ref(database, `prayerSessions/${firebaseUser.uid}/${session.id}`), session);
 
-              if (action.status === "completed") {
+              if (action.status === "completed" && action.targetType !== "journal_entry" && profile?.currentGroupId) {
                 const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
                 const reaction: PrayerReaction = {
                   id: reactionId,

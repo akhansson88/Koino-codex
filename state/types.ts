@@ -47,7 +47,7 @@ export type Post = {
   createdAt: string;
 };
 
-export type TargetType = "post" | "check_in";
+export type TargetType = "post" | "check_in" | "journal_entry";
 
 export type PrayerSession = {
   id: Id;

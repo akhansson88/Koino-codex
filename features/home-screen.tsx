@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Alert, Animated, Easing, Image, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import type { ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { FeedItem, Post } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { confirmAction } from "@/ui/confirm";
+import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
 const moodOptions: { value: number; label: string; image: ImageSourcePropType }[] = [
@@ -17,7 +18,6 @@ const moodOptions: { value: number; label: string; image: ImageSourcePropType }[
   { value: 3, label: "Good", image: require("../emoji3-transparent.png") },
   { value: 4, label: "Great", image: require("../emoji4-transparent.png") },
 ];
-const PRAYER_COMPLETE_DELAY_MS = 15_000;
 const MAX_POST_BODY_LENGTH = 500;
 const MAX_POST_IMAGES = 6;
 const DAILY_SHARED_POST_FRICTION_THRESHOLD = 3;
@@ -132,6 +132,39 @@ function FeedActionButton({
       ) : null}
       <Text style={{ color: disabled ? colors.disabledText : colors.ink, fontSize: 16, fontWeight: "900" }}>{label}</Text>
     </Pressable>
+  );
+}
+
+function FeedTypeBadge({
+  iconName,
+  label,
+  tone,
+}: {
+  iconName: ComponentProps<typeof Feather>["name"];
+  label: string;
+  tone: "moss" | "rose" | "gold";
+}) {
+  const tint = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.gold;
+  const backgroundColor = tone === "moss" ? colors.mossSurface : colors.roseSurface;
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        alignSelf: "flex-start",
+        backgroundColor,
+        borderColor: tone === "moss" ? colors.moss : colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      }}
+    >
+      <Feather name={iconName} size={14} color={tint} />
+      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>{label}</Text>
+    </View>
   );
 }
 
@@ -525,7 +558,7 @@ export function HomeScreen() {
   const [replyComposerKey, setReplyComposerKey] = useState<string>();
   const [openMenuKey, setOpenMenuKey] = useState<string>();
   const [imageGallery, setImageGallery] = useState<ImageGalleryState>();
-  const [prayerTarget, setPrayerTarget] = useState<{ targetType: "post" | "check_in"; targetId: string; body: string }>();
+  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const groupMembers = useMemo(
@@ -900,15 +933,14 @@ export function HomeScreen() {
               const replies = state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
               const isPost = item.type === "post";
               const isPrayerRequest = item.type === "post" && item.kind === "prayer_request";
+              const isReflection = item.type === "post" && item.kind === "reflection";
               const itemImages = item.type === "post" ? item.images ?? [] : [];
-              const prayed =
-                isPost &&
-                state.prayerReactions.some(
-                  (reaction) => reaction.userId === state.currentUserId && reaction.targetType === targetType && reaction.targetId === item.id,
-                );
+              const prayed = state.prayerReactions.some(
+                (reaction) => reaction.userId === state.currentUserId && reaction.targetType === targetType && reaction.targetId === item.id,
+              );
               const prayerCount = new Set(
                 state.prayerReactions
-                  .filter((reaction) => isPost && reaction.targetType === targetType && reaction.targetId === item.id)
+                  .filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id)
                   .map((reaction) => reaction.userId),
               ).size;
               const prayerCountLabel = prayerCount === 1 ? "1 person prayed" : `${prayerCount} people prayed`;
@@ -1012,47 +1044,21 @@ export function HomeScreen() {
                     </View>
                   ) : null}
 
-                  {item.type === "check_in" ? <Body muted>{item.readToday ? "Read the Bible today" : "Not yet today"}</Body> : null}
-                  {isPrayerRequest ? (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      <View
-                        style={{
-                          alignItems: "center",
-                          alignSelf: "flex-start",
-                          backgroundColor: colors.roseSurface,
-                          borderColor: colors.line,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          flexDirection: "row",
-                          gap: 6,
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                        }}
-                      >
-                        <Feather name="heart" size={14} color={colors.rose} />
-                        <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>Prayer request</Text>
-                      </View>
-                      {item.answeredAt ? (
-                        <View
-                          style={{
-                            alignItems: "center",
-                            alignSelf: "flex-start",
-                            backgroundColor: colors.mossSurface,
-                            borderColor: colors.moss,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            flexDirection: "row",
-                            gap: 6,
-                            paddingHorizontal: 10,
-                            paddingVertical: 6,
-                          }}
-                        >
-                          <Feather name="check-circle" size={14} color={colors.moss} />
-                          <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>Answered by God{"\u2019"}s grace.</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {item.type === "check_in" ? (
+                      <FeedTypeBadge iconName="check-circle" label="Check-in" tone="moss" />
+                    ) : isPrayerRequest ? (
+                      <FeedTypeBadge iconName="heart" label="Prayer request" tone="rose" />
+                    ) : isReflection ? (
+                      <FeedTypeBadge iconName="book-open" label="Reflection" tone="moss" />
+                    ) : null}
+                    {item.type === "check_in" ? (
+                      <FeedTypeBadge iconName={item.readToday ? "book-open" : "clock"} label={item.readToday ? "Read today" : "Not yet today"} tone="gold" />
+                    ) : null}
+                    {isPrayerRequest && item.answeredAt ? (
+                      <FeedTypeBadge iconName="check-circle" label={"Answered by God's grace."} tone="moss" />
+                    ) : null}
+                  </View>
 
                   {item.body || itemImages.length === 0 ? (
                     <Text selectable style={{ color: colors.ink, fontSize: 22, fontWeight: "500", lineHeight: 34 }}>
@@ -1063,20 +1069,18 @@ export function HomeScreen() {
                   {isPost ? <PostImages images={itemImages} onOpen={(index) => setImageGallery({ images: itemImages, index })} /> : null}
 
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                    {isPost ? (
-                      <FeedActionButton
-                        emoji={prayed ? "\u{1F64F}" : "\u{1F64F}"}
-                        label={prayed ? "Prayed" : "Pray"}
-                        selected={prayed}
-                        onPress={() => {
-                          if (prayed) {
-                            dispatch({ type: "unpray", targetType, targetId: item.id });
-                            return;
-                          }
-                          setPrayerTarget({ targetType, targetId: item.id, body: item.body });
-                        }}
-                      />
-                    ) : null}
+                    <FeedActionButton
+                      emoji={prayed ? "\u{1F64F}" : "\u{1F64F}"}
+                      label={prayed ? "Prayed" : "Pray"}
+                      selected={prayed}
+                      onPress={() => {
+                        if (prayed) {
+                          dispatch({ type: "unpray", targetType, targetId: item.id });
+                          return;
+                        }
+                        setPrayerTarget({ targetType, targetId: item.id, body: item.body });
+                      }}
+                    />
                     <FeedActionButton
                       iconName="message-circle"
                       label="Reply"
@@ -1085,7 +1089,7 @@ export function HomeScreen() {
                     />
                   </View>
 
-                  {isPost && prayerCount > 0 ? (
+                  {prayerCount > 0 ? (
                     <Text selectable style={{ color: colors.muted, fontSize: 14, fontWeight: "800" }}>
                       {prayerCountLabel}
                     </Text>
@@ -1194,207 +1198,3 @@ export function HomeScreen() {
   );
 }
 
-const BREATH_PHASE_MS = 3800;
-
-function PrayerMoment({
-  target,
-  onClose,
-  onFinish,
-}: {
-  target?: { targetType: "post" | "check_in"; targetId: string; body: string };
-  onClose: () => void;
-  onFinish: (status: "completed" | "skipped", startedAt: string) => void;
-}) {
-  const breathAnimation = useRef(new Animated.Value(0)).current;
-  const completeProgressAnimation = useRef(new Animated.Value(0)).current;
-  const [startedAt, setStartedAt] = useState(new Date().toISOString());
-  const [canCompletePrayer, setCanCompletePrayer] = useState(false);
-
-  const breathScale = breathAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.78, 1.08],
-  });
-  const haloScale = breathAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.92, 1.28],
-  });
-  const haloOpacity = breathAnimation.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.34, 0.16, 0.3],
-  });
-  const coreOpacity = breathAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.66, 0.95],
-  });
-  const completeProgressWidth = completeProgressAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0%", "100%"],
-  });
-
-  useEffect(() => {
-    if (!target) {
-      setCanCompletePrayer(false);
-      completeProgressAnimation.setValue(0);
-      return;
-    }
-
-    setStartedAt(new Date().toISOString());
-    setCanCompletePrayer(false);
-    breathAnimation.setValue(0);
-    completeProgressAnimation.setValue(0);
-
-    const breathLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breathAnimation, {
-          toValue: 1,
-          duration: BREATH_PHASE_MS,
-          easing: Easing.bezier(0.37, 0, 0.63, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(breathAnimation, {
-          toValue: 0,
-          duration: BREATH_PHASE_MS,
-          easing: Easing.bezier(0.37, 0, 0.63, 1),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    const completeProgress = Animated.timing(completeProgressAnimation, {
-      toValue: 1,
-      duration: PRAYER_COMPLETE_DELAY_MS,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    });
-
-    breathLoop.start();
-    completeProgress.start(({ finished }) => {
-      if (finished) {
-        setCanCompletePrayer(true);
-      }
-    });
-
-    return () => {
-      breathLoop.stop();
-      completeProgress.stop();
-    };
-  }, [breathAnimation, completeProgressAnimation, target]);
-
-  return (
-    <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
-      <View style={{ flex: 1, justifyContent: "center", gap: 26, backgroundColor: colors.cream, padding: 26 }}>
-        <View style={{ alignItems: "center", gap: 16 }}>
-          <View
-            accessible
-            accessibilityLabel="Prayer breathing guide. Pray now."
-            accessibilityRole="image"
-            style={{ alignItems: "center", height: 280, justifyContent: "center", width: "100%" }}
-          >
-            <Animated.View
-              style={{
-                backgroundColor: "rgba(168,216,216,0.16)",
-                borderColor: "rgba(168,216,216,0.24)",
-                borderRadius: 999,
-                borderWidth: 1,
-                height: 238,
-                opacity: haloOpacity,
-                position: "absolute",
-                transform: [{ scale: haloScale }],
-                width: 238,
-              }}
-            />
-            <Animated.View
-              style={{
-                alignItems: "center",
-                backgroundColor: "rgba(232,166,128,0.16)",
-                borderColor: "rgba(245,243,240,0.2)",
-                borderRadius: 999,
-                borderWidth: 1,
-                height: 210,
-                justifyContent: "center",
-                opacity: coreOpacity,
-                transform: [{ scale: breathScale }],
-                width: 210,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                alignItems: "center",
-                gap: 8,
-                justifyContent: "center",
-                position: "absolute",
-              }}
-            >
-              <Text
-                selectable
-                style={{
-                  color: colors.gold,
-                  fontSize: 28,
-                  fontWeight: "900",
-                  textAlign: "center",
-                }}
-              >
-                Pray Now
-              </Text>
-            </View>
-          </View>
-        </View>
-        <View
-          style={{
-            backgroundColor: "rgba(245,243,240,0.05)",
-            borderColor: colors.line,
-            borderCurve: "continuous",
-            borderRadius: 24,
-            borderWidth: 1,
-            gap: 12,
-            padding: 18,
-          }}
-        >
-          <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "900", textAlign: "center" }}>
-            Prayer moment
-          </Text>
-          <Text selectable style={{ color: colors.muted, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
-            Take a quiet breath. Hold this person before God, without hurry.
-          </Text>
-        </View>
-        <View style={{ gap: 12 }}>
-          <Pressable
-            accessibilityState={{ disabled: !canCompletePrayer }}
-            disabled={!canCompletePrayer}
-            onPress={() => onFinish("completed", startedAt)}
-            style={{
-              alignItems: "center",
-              backgroundColor: canCompletePrayer ? colors.olive : colors.disabled,
-              borderRadius: 999,
-              overflow: "hidden",
-              padding: 16,
-              position: "relative",
-            }}
-          >
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                backgroundColor: colors.olive,
-                bottom: 0,
-                left: 0,
-                opacity: canCompletePrayer ? 1 : 0.72,
-                position: "absolute",
-                top: 0,
-                width: completeProgressWidth,
-              }}
-            />
-            <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.ink, fontSize: 16, fontWeight: "900", zIndex: 1 }}>
-              Complete prayer
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "800" }}>Skip for now</Text>
-          </Pressable>
-          <Pressable onPress={onClose} style={{ alignItems: "center", padding: 8 }}>
-            <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}

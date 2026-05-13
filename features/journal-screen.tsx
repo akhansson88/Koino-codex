@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { Body, Card, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { confirmAction } from "@/ui/confirm";
+import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
 const MAX_JOURNAL_IMAGES = 6;
@@ -66,11 +68,75 @@ function JournalImages({
   );
 }
 
+function JournalTypeBadge({
+  iconName,
+  label,
+}: {
+  iconName: ComponentProps<typeof Feather>["name"];
+  label: string;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        alignSelf: "flex-start",
+        backgroundColor: colors.mossSurface,
+        borderColor: colors.moss,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      }}
+    >
+      <Feather name={iconName} size={14} color={colors.moss} />
+      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>{label}</Text>
+    </View>
+  );
+}
+
+function JournalActionButton({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: selected ? colors.accentSubtle : colors.elevated,
+        borderColor: selected ? colors.moss : colors.line,
+        borderRadius: 12,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 10,
+        justifyContent: "center",
+        minHeight: 54,
+        minWidth: 132,
+        paddingHorizontal: 18,
+        paddingVertical: 13,
+      }}
+    >
+      <Text style={{ fontSize: 20 }}>{"\u{1F64F}"}</Text>
+      <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function JournalScreen() {
   const { state, dispatch } = useKoino();
   const [body, setBody] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string>();
+  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const entries = useMemo(
     () =>
       state.journalEntries
@@ -196,7 +262,7 @@ export function JournalScreen() {
                       {formatDate(entry.createdAt)}
                     </Text>
                     <Body muted>
-                      {entry.source === "private_check_in" ? "Private check-in" : "Manual entry"}
+                      Private journal
                       {entry.mood ? ` · Mood ${entry.mood}` : ""}
                     </Body>
                   </View>
@@ -211,8 +277,25 @@ export function JournalScreen() {
                     <Text style={{ color: colors.olive, fontWeight: "900" }}>Edit</Text>
                   </Pressable>
                 </View>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <JournalTypeBadge iconName="lock" label="Private journal" />
+                  {entry.source === "private_check_in" ? <JournalTypeBadge iconName="check-circle" label="Check-in" /> : null}
+                </View>
                 <Body>{entry.body}</Body>
                 <JournalImages images={entry.images} />
+                <JournalActionButton
+                  label={
+                    state.prayerSessions.some(
+                      (session) => session.targetType === "journal_entry" && session.targetId === entry.id && session.status === "completed",
+                    )
+                      ? "Prayed"
+                      : "Pray"
+                  }
+                  selected={state.prayerSessions.some(
+                    (session) => session.targetType === "journal_entry" && session.targetId === entry.id && session.status === "completed",
+                  )}
+                  onPress={() => setPrayerTarget({ targetType: "journal_entry", targetId: entry.id, body: entry.body })}
+                />
                 <Pressable
                   onPress={() =>
                     confirmAction({
@@ -232,6 +315,16 @@ export function JournalScreen() {
           )}
         </View>
       </ScrollView>
+      <PrayerMoment
+        target={prayerTarget}
+        onClose={() => setPrayerTarget(undefined)}
+        onFinish={(status, startedAt) => {
+          if (prayerTarget) {
+            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt });
+          }
+          setPrayerTarget(undefined);
+        }}
+      />
     </Screen>
   );
 }
