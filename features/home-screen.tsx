@@ -800,7 +800,7 @@ export function HomeScreen() {
           <Body muted>Offer a reflection or ask your people to pray. No pressure to make every thought shared.</Body>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <FeedActionButton
-              iconName="book-open"
+              iconName="edit-3"
               label="Share reflection"
               onPress={() => {
                 setPostBody("");
@@ -984,7 +984,7 @@ export function HomeScreen() {
 
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                     <FeedActionButton
-                      emoji={prayed ? "\u{1F64F}" : "\u{1F64F}"}
+                      iconName="heart"
                       label={prayed ? "Prayed" : "Pray with this"}
                       selected={prayed}
                       onPress={() => {

@@ -125,7 +125,7 @@ function JournalActionButton({
         paddingVertical: 13,
       }}
     >
-      <Text style={{ fontSize: 20 }}>{"\u{1F64F}"}</Text>
+      <Feather name="heart" size={20} color={selected ? colors.moss : colors.ink} />
       <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
