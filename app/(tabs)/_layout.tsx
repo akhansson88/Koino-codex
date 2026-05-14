@@ -68,7 +68,7 @@ export default function TabLayout() {
 }
 
 function KoinoHeaderLogo() {
-  return <KoinoLogo size={40} />;
+  return <KoinoLogo size={48} />;
 }
 
 function CurrentGroupIndicator() {
