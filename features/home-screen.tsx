@@ -220,7 +220,7 @@ function ComposerKindButton({
         padding: 14,
       }}
     >
-      <Text style={{ fontSize: 30 }}>{isPrayer ? "\u{1F64F}" : "\u{1F33F}"}</Text>
+      <Feather name={isPrayer ? "heart" : "edit-3"} size={30} color={accent} />
       <Text style={{ color: accent, fontSize: 18, fontWeight: "700", textAlign: "center" }}>
         {isPrayer ? "Ask for prayer" : "Share reflection"}
       </Text>
