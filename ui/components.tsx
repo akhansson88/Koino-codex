@@ -26,7 +26,7 @@ export function Card({
           borderCurve: "continuous",
           borderRadius: radius.lg,
           borderWidth: 1,
-          gap: 12,
+          gap: 14,
           padding: 18,
         },
         style,
@@ -39,7 +39,7 @@ export function Card({
 
 export function Title({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "800", letterSpacing: 0 }}>
+    <Text selectable style={{ color: colors.ink, fontSize: 32, fontWeight: "700", letterSpacing: 0, lineHeight: 39 }}>
       {children}
     </Text>
   );
@@ -47,7 +47,7 @@ export function Title({ children }: PropsWithChildren) {
 
 export function SectionTitle({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "800" }}>
+    <Text selectable style={{ color: colors.ink, fontSize: 19, fontWeight: "700", lineHeight: 25 }}>
       {children}
     </Text>
   );
@@ -80,10 +80,10 @@ export function PillButton({
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 18,
-        paddingVertical: 13,
+        paddingVertical: 12,
       }}
     >
-      <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "800" }}>{children}</Text>
+      <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "700" }}>{children}</Text>
     </Pressable>
   );
 }
@@ -125,7 +125,7 @@ export function Choice({
     <Pressable
       onPress={onPress}
       style={{
-        backgroundColor: selected ? colors.olive : colors.paper,
+        backgroundColor: selected ? colors.accentSubtle : colors.paper,
         borderColor: selected ? colors.olive : colors.line,
         borderRadius: 999,
         borderWidth: 1,
@@ -133,7 +133,7 @@ export function Choice({
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? colors.onAccent : colors.ink, fontWeight: "800" }}>{label}</Text>
+      <Text style={{ color: selected ? colors.ink : colors.muted, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }

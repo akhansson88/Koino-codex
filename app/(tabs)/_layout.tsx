@@ -27,7 +27,7 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.paper,
           borderTopColor: colors.line,
-          height: 72,
+          height: 70,
           paddingTop: 8,
         },
         tabBarLabelStyle: { fontWeight: "700" },
@@ -36,10 +36,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarLabel: "Home",
+          title: "Today",
+          tabBarLabel: "Today",
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} color={color} size={size} />
+            <Ionicons name={focused ? "leaf" : "leaf-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -56,10 +56,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarLabel: "Settings",
+          title: "Room",
+          tabBarLabel: "Room",
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "settings" : "settings-outline"} color={color} size={size} />
+            <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
           ),
         }}
       />
@@ -89,7 +89,7 @@ function CurrentGroupIndicator() {
         paddingVertical: 6,
       }}
     >
-      <Text numberOfLines={1} selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>
+      <Text numberOfLines={1} selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700" }}>
         {group?.name ?? "No group"}
       </Text>
     </View>

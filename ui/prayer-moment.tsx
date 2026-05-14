@@ -98,7 +98,7 @@ export function PrayerMoment({
         <View style={{ alignItems: "center", gap: 16 }}>
           <View
             accessible
-            accessibilityLabel="Prayer breathing guide. Pray now."
+            accessibilityLabel="Prayer breathing guide."
             accessibilityRole="image"
             style={{ alignItems: "center", height: 280, justifyContent: "center", width: "100%" }}
           >
@@ -143,11 +143,11 @@ export function PrayerMoment({
                 style={{
                   color: colors.gold,
                   fontSize: 28,
-                  fontWeight: "900",
+                  fontWeight: "700",
                   textAlign: "center",
                 }}
               >
-                Pray Now
+                Pray now
               </Text>
             </View>
           </View>
@@ -157,13 +157,13 @@ export function PrayerMoment({
             backgroundColor: "rgba(245,243,240,0.05)",
             borderColor: colors.line,
             borderCurve: "continuous",
-            borderRadius: 24,
+            borderRadius: 8,
             borderWidth: 1,
             gap: 12,
             padding: 18,
           }}
         >
-          <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "900", textAlign: "center" }}>
+          <Text selectable style={{ color: colors.ink, fontSize: 32, fontWeight: "700", textAlign: "center" }}>
             Prayer moment
           </Text>
           <Text selectable style={{ color: colors.muted, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
@@ -196,12 +196,12 @@ export function PrayerMoment({
                 width: completeProgressWidth,
               }}
             />
-            <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.ink, fontSize: 16, fontWeight: "900", zIndex: 1 }}>
-              Complete prayer
+            <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.ink, fontSize: 16, fontWeight: "700", zIndex: 1 }}>
+              I have prayed
             </Text>
           </Pressable>
           <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "800" }}>Skip for now</Text>
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>Skip for now</Text>
           </Pressable>
           <Pressable onPress={onClose} style={{ alignItems: "center", padding: 8 }}>
             <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>

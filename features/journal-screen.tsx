@@ -33,7 +33,7 @@ function JournalImages({
           style={{
             backgroundColor: colors.input,
             borderColor: colors.line,
-            borderRadius: 14,
+            borderRadius: 8,
             borderWidth: 1,
             height: images.length === 1 ? 190 : 132,
             overflow: "hidden",
@@ -91,7 +91,7 @@ function JournalTypeBadge({
       }}
     >
       <Feather name={iconName} size={14} color={colors.moss} />
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>{label}</Text>
+      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700" }}>{label}</Text>
     </View>
   );
 }
@@ -112,9 +112,9 @@ function JournalActionButton({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: selected ? colors.accentSubtle : colors.elevated,
+        backgroundColor: selected ? colors.accentSubtle : colors.paper,
         borderColor: selected ? colors.moss : colors.line,
-        borderRadius: 12,
+        borderRadius: 8,
         borderWidth: 1,
         flexDirection: "row",
         gap: 10,
@@ -126,7 +126,7 @@ function JournalActionButton({
       }}
     >
       <Text style={{ fontSize: 20 }}>{"\u{1F64F}"}</Text>
-      <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+      <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }
@@ -189,12 +189,12 @@ export function JournalScreen() {
     <Screen>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 18, padding: 18, paddingBottom: 110 }}>
         <Card tone="moss">
-          <SectionTitle>Private Journal</SectionTitle>
-          <Body muted>Only you can see this space. Private check-ins are saved here automatically.</Body>
+          <SectionTitle>Private journal</SectionTitle>
+          <Body muted>Only you can see this space. Private check-ins are kept here automatically.</Body>
         </Card>
 
         <Card>
-          <SectionTitle>{editingEntry ? "Edit entry" : "New entry"}</SectionTitle>
+          <SectionTitle>{editingEntry ? "Edit entry" : "Write privately"}</SectionTitle>
           <View style={{ position: "relative" }}>
             <Field
               multiline
@@ -243,7 +243,7 @@ export function JournalScreen() {
         </Card>
 
         <View style={{ gap: 12 }}>
-          <SectionTitle>Your entries</SectionTitle>
+          <SectionTitle>Kept with God</SectionTitle>
           {state.authError ? (
             <Card>
               <Body muted>{state.authError}</Body>
@@ -258,12 +258,12 @@ export function JournalScreen() {
               <Card key={entry.id}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
+                    <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "700" }}>
                       {formatDate(entry.createdAt)}
                     </Text>
                     <Body muted>
                       Private journal
-                      {entry.mood ? ` · Mood ${entry.mood}` : ""}
+                      {entry.source === "private_check_in" ? " - from check-in" : ""}
                     </Body>
                   </View>
                   <Pressable
@@ -274,7 +274,7 @@ export function JournalScreen() {
                     }}
                     style={{ padding: 8 }}
                   >
-                    <Text style={{ color: colors.olive, fontWeight: "900" }}>Edit</Text>
+                    <Text style={{ color: colors.olive, fontWeight: "700" }}>Edit</Text>
                   </Pressable>
                 </View>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -300,7 +300,7 @@ export function JournalScreen() {
                   onPress={() =>
                     confirmAction({
                       title: "Delete entry?",
-                      message: "This private journal entry will be removed from Firebase.",
+                      message: "This private journal entry will be removed.",
                       confirmText: "Delete",
                       destructive: true,
                       onConfirm: () => dispatch({ type: "deleteJournalEntry", id: entry.id }),
@@ -308,7 +308,7 @@ export function JournalScreen() {
                   }
                   style={{ alignSelf: "flex-start", paddingVertical: 8 }}
                 >
-                  <Text style={{ color: colors.clay, fontWeight: "900" }}>Delete</Text>
+                  <Text style={{ color: colors.clay, fontWeight: "700" }}>Delete</Text>
                 </Pressable>
               </Card>
             ))

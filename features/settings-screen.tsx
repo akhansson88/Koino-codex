@@ -33,11 +33,11 @@ export function SettingsScreen() {
     <Screen>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 18, padding: 18, paddingBottom: 110 }}>
         <Card>
-          <SectionTitle>Session</SectionTitle>
+          <SectionTitle>Account</SectionTitle>
           <Body>Email: {state.authEmail ?? "Unknown"}</Body>
           <Body>Name: {user?.name ?? "Unknown"}</Body>
-          <Body>Current group: {group?.name ?? "No group selected"}</Body>
-          <Body muted>{state.groups.length} joined {state.groups.length === 1 ? "group" : "groups"}.</Body>
+          <Body>Current room: {group?.name ?? "No room selected"}</Body>
+          <Body muted>{state.groups.length} joined {state.groups.length === 1 ? "room" : "rooms"}.</Body>
           <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>
             Log out
           </PillButton>
@@ -106,44 +106,44 @@ export function SettingsScreen() {
         </Card>
 
         <Card tone="moss">
-          <SectionTitle>Current group</SectionTitle>
+          <SectionTitle>Current prayer room</SectionTitle>
           {group ? (
             <>
-              <Text selectable style={{ color: colors.olive, fontSize: 18, fontWeight: "900" }}>
-                Invite code: {group.inviteCode}
+              <Text selectable style={{ color: colors.olive, fontSize: 18, fontWeight: "700" }}>
+                Room code: {group.inviteCode}
               </Text>
-              <Body muted>Share this code manually with people in your small group.</Body>
-              <Field value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Group name" />
+              <Body muted>Share this code with the people you want in this prayer room.</Body>
+              <Field value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Room name" />
               <PillButton
                 disabled={!ownsGroup || !currentGroupName.trim() || currentGroupName.trim() === group.name}
                 onPress={() => dispatch({ type: "updateGroup", id: group.id, name: currentGroupName })}
               >
-                Save group name
+                Save room name
               </PillButton>
               <PillButton
                 variant="ghost"
                 disabled={!ownsGroup}
                 onPress={() =>
                   confirmAction({
-                    title: "Delete group?",
-                    message: "This removes the group, shared check-ins, posts, replies, and reactions.",
+                    title: "Delete room?",
+                    message: "This removes the room, shared check-ins, reflections, replies, and prayers.",
                     confirmText: "Delete",
                     destructive: true,
                     onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
                   })
                 }
               >
-                Delete group
+                Delete room
               </PillButton>
-              {!ownsGroup ? <Body muted>Only the group owner can rename or delete this group.</Body> : null}
+              {!ownsGroup ? <Body muted>Only the room owner can rename or delete this room.</Body> : null}
             </>
           ) : (
-            <Body muted>Join or create a group below to start using the group feed.</Body>
+            <Body muted>Join or create a room below to begin sharing and praying together.</Body>
           )}
         </Card>
 
         <Card>
-          <SectionTitle>Group switcher</SectionTitle>
+          <SectionTitle>Prayer rooms</SectionTitle>
           {state.groups.length > 0 ? (
             <View style={{ gap: 10 }}>
               {state.groups.map((joinedGroup) => {
@@ -157,18 +157,18 @@ export function SettingsScreen() {
                       backgroundColor: isCurrent ? colors.accentSubtle : colors.elevated,
                       borderColor: isCurrent ? colors.moss : colors.line,
                       borderCurve: "continuous",
-                      borderRadius: 16,
+                      borderRadius: 8,
                       borderWidth: 1,
                       gap: 10,
                       padding: 12,
                     }}
                   >
                     <View style={{ gap: 3 }}>
-                      <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
+                      <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "700" }}>
                         {joinedGroup.name}
                       </Text>
                       <Body muted>
-                        {isOwner ? "Created by you" : "Joined group"} - Invite code {joinedGroup.inviteCode}
+                        {isOwner ? "Created by you" : "Joined room"} - code {joinedGroup.inviteCode}
                       </Body>
                     </View>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -177,14 +177,14 @@ export function SettingsScreen() {
                         disabled={isCurrent}
                         onPress={() => dispatch({ type: "switchGroup", id: joinedGroup.id })}
                       >
-                        {isCurrent ? "Current" : "Switch"}
+                        {isCurrent ? "Current" : "Enter"}
                       </PillButton>
                       {!isOwner ? (
                         <PillButton
                           variant="ghost"
                           onPress={() =>
                             confirmAction({
-                              title: "Leave group?",
+                              title: "Leave room?",
                               message: `You will leave ${joinedGroup.name}, but your account will stay signed in.`,
                               confirmText: "Leave",
                               destructive: true,
@@ -195,7 +195,7 @@ export function SettingsScreen() {
                           Leave
                         </PillButton>
                       ) : (
-                        <Body muted>Owned groups can be deleted, not left.</Body>
+                        <Body muted>Rooms you created can be deleted, not left.</Body>
                       )}
                     </View>
                   </View>
@@ -203,13 +203,13 @@ export function SettingsScreen() {
               })}
             </View>
           ) : (
-            <Body muted>You have not joined any groups yet.</Body>
+            <Body muted>You have not joined any rooms yet.</Body>
           )}
         </Card>
 
         <Card tone="moss">
-          <SectionTitle>Join or create</SectionTitle>
-          <Field value={joinInviteCode} onChangeText={setJoinInviteCode} placeholder="Group code" autoCapitalize="characters" />
+          <SectionTitle>Join or create a room</SectionTitle>
+          <Field value={joinInviteCode} onChangeText={setJoinInviteCode} placeholder="Room code" autoCapitalize="characters" />
           <PillButton
             disabled={joinInviteCode.trim().length < 3}
             onPress={() => {
@@ -219,7 +219,7 @@ export function SettingsScreen() {
           >
             Join by code
           </PillButton>
-          <Field value={newGroupName} onChangeText={setNewGroupName} placeholder="New group name" />
+          <Field value={newGroupName} onChangeText={setNewGroupName} placeholder="New room name" />
           <PillButton
             disabled={!newGroupName.trim()}
             onPress={() => {
@@ -227,7 +227,7 @@ export function SettingsScreen() {
               setNewGroupName("");
             }}
           >
-            Create new group
+            Create new room
           </PillButton>
           {state.authError ? <Body muted>{state.authError}</Body> : null}
         </Card>
@@ -235,8 +235,8 @@ export function SettingsScreen() {
         <Card>
           <SectionTitle>Support the journey</SectionTitle>
           <Body muted>
-            KOINO keeps prayer free. If this little rhythm helps your group, you can make a voluntary support intent here.
-            Payment is represented as an external provider demo, so no card data is stored in KOINO.
+            KOINO keeps prayer free. If this little rhythm helps your group, you can make a voluntary gift here.
+            Payment opens outside KOINO, so no card data is stored here.
           </Body>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             {[10, 25, 50].map((value) => (
@@ -261,7 +261,7 @@ export function SettingsScreen() {
           >
             Continue externally
           </PillButton>
-          {state.supportIntents[0] ? <Body muted>Latest support intent: {state.supportIntents[0].amount} SEK confirmed.</Body> : null}
+          {state.supportIntents[0] ? <Body muted>Latest support: {state.supportIntents[0].amount} SEK confirmed.</Body> : null}
         </Card>
       </ScrollView>
     </Screen>

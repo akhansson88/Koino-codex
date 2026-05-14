@@ -57,20 +57,19 @@ export function OnboardingScreen() {
         <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 48 }}>
           <View style={{ alignItems: "center", gap: 12 }}>
             <KoinoLogo size={164} />
-            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900", letterSpacing: 2 }}>KOINO MVP</Text>
-            <Text selectable style={{ color: colors.ink, fontSize: 34, fontWeight: "800", letterSpacing: 0, textAlign: "center" }}>
-              A quieter rhythm for your small group.
+            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "700", letterSpacing: 1 }}>KOINO</Text>
+            <Text selectable style={{ color: colors.ink, fontSize: 33, fontWeight: "700", letterSpacing: 0, textAlign: "center" }}>
+              A quiet rhythm for prayer and honest reflection.
             </Text>
             <Text selectable style={{ color: colors.muted, fontSize: 16, lineHeight: 23, maxWidth: 380, textAlign: "center" }}>
-              Daily check-ins, sincere prayer, short replies, and a private journal. Sign in to sync your group through
-              Firebase.
+              Check in, share honestly when you are ready, pray for your people, and leave encouraged.
             </Text>
           </View>
 
           {!state.currentUserId ? (
             <>
               <Card>
-                <Body>{authMode === "signIn" ? "Sign in with email and password." : "Create your KOINO account."}</Body>
+                <Body>{authMode === "signIn" ? "Welcome back." : "Create a quiet account for KOINO."}</Body>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <Choice label="Sign in" selected={authMode === "signIn"} onPress={() => setAuthMode("signIn")} />
                   <Choice label="Create account" selected={authMode === "signUp"} onPress={() => setAuthMode("signUp")} />
@@ -121,14 +120,14 @@ export function OnboardingScreen() {
               <Card>
                 <Body>What should your group call you?</Body>
                 <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
-                <Body muted>Signed in as {state.authEmail ?? "your Firebase account"}.</Body>
+                <Body muted>Signed in as {state.authEmail ?? "your account"}.</Body>
               </Card>
 
               <Card tone="moss">
-                <Body>Join a group with a code, or create a small group and share its code manually.</Body>
+                <Body>Join a prayer room with a code, or create one for your small group.</Body>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <Choice label="Join by code" selected={groupMode === "join"} onPress={() => setGroupMode("join")} />
-                  <Choice label="Create group" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
+                  <Choice label="Create room" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
                 </View>
                 {groupMode === "join" ? (
                   <Field value={inviteCode} onChangeText={setInviteCode} placeholder="Group code" autoCapitalize="characters" />
@@ -149,7 +148,7 @@ export function OnboardingScreen() {
                   })
                 }
               >
-                Enter KOINO
+                Enter the rhythm
               </PillButton>
 
               <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>

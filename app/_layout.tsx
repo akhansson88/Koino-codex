@@ -7,7 +7,7 @@ import { colors } from "@/ui/theme";
 export default function RootLayout() {
   return (
     <KoinoProvider>
-      <StatusBar style="light" backgroundColor={colors.cream} />
+      <StatusBar style="dark" backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.cream },

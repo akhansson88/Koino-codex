@@ -21,8 +21,9 @@ const moodOptions: { value: number; label: string; image: ImageSourcePropType }[
 const MAX_POST_BODY_LENGTH = 500;
 const MAX_POST_IMAGES = 6;
 const DAILY_SHARED_POST_FRICTION_THRESHOLD = 3;
+const INITIAL_SHARED_ITEMS = 4;
 const DAILY_SHARED_POST_FRICTION_MESSAGE =
-  "KOINO is built for a calm rhythm and meaningful sharing. If it's important, feel free to share it - otherwise, you can keep it private.";
+  "KOINO is built for a calm rhythm and meaningful sharing. If this still feels important, share it. Otherwise, you can keep it private with God.";
 type FeedFilter = "all" | "my_reflections" | "my_prayer_requests";
 type ComposerKind = "reflection" | "prayer_request";
 type ImageGalleryState = { images: string[]; index: number };
@@ -116,9 +117,9 @@ function FeedActionButton({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: selected ? colors.accentSubtle : colors.elevated,
+        backgroundColor: selected ? colors.accentSubtle : colors.paper,
         borderColor: selected ? colors.moss : colors.line,
-        borderRadius: 12,
+        borderRadius: 8,
         borderWidth: 1,
         flex: 1,
         flexDirection: "row",
@@ -135,7 +136,7 @@ function FeedActionButton({
       ) : iconName ? (
         <Feather name={iconName} size={20} color={selected ? colors.moss : colors.ink} />
       ) : null}
-      <Text style={{ color: disabled ? colors.disabledText : colors.ink, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+      <Text style={{ color: disabled ? colors.disabledText : colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }
@@ -150,7 +151,7 @@ function FeedTypeBadge({
   tone: "moss" | "rose" | "gold";
 }) {
   const tint = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.gold;
-  const backgroundColor = tone === "moss" ? colors.mossSurface : colors.roseSurface;
+  const backgroundColor = tone === "moss" ? colors.mossSurface : tone === "rose" ? colors.roseSurface : colors.elevated;
 
   return (
     <View
@@ -158,7 +159,7 @@ function FeedTypeBadge({
         alignItems: "center",
         alignSelf: "flex-start",
         backgroundColor,
-        borderColor: tone === "moss" ? colors.moss : colors.line,
+        borderColor: colors.line,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -168,7 +169,7 @@ function FeedTypeBadge({
       }}
     >
       <Feather name={iconName} size={14} color={tint} />
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "900" }}>{label}</Text>
+      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700" }}>{label}</Text>
     </View>
   );
 }
@@ -209,8 +210,8 @@ function ComposerKindButton({
         alignItems: "center",
         backgroundColor: selected ? (isPrayer ? composerPalette.prayerSoft : composerPalette.reflectionSoft) : composerPalette.surface,
         borderColor: selected ? accent : composerPalette.line,
-        borderRadius: 14,
-        borderWidth: selected ? 2 : 1,
+        borderRadius: 8,
+        borderWidth: 1,
         flex: 1,
         gap: 12,
         justifyContent: "center",
@@ -220,8 +221,8 @@ function ComposerKindButton({
       }}
     >
       <Text style={{ fontSize: 30 }}>{isPrayer ? "\u{1F64F}" : "\u{1F33F}"}</Text>
-      <Text style={{ color: accent, fontSize: 18, fontWeight: "900", textAlign: "center" }}>
-        {isPrayer ? "Prayer request" : "Reflection"}
+      <Text style={{ color: accent, fontSize: 18, fontWeight: "700", textAlign: "center" }}>
+        {isPrayer ? "Ask for prayer" : "Share reflection"}
       </Text>
     </Pressable>
   );
@@ -248,7 +249,7 @@ function ComposerImages({
           onPress={() => onOpen(index)}
           style={{
             borderColor: composerPalette.line,
-            borderRadius: 14,
+            borderRadius: 8,
             borderWidth: 1,
             height: 86,
             overflow: "hidden",
@@ -288,14 +289,14 @@ function PostImages({ images, onOpen }: { images?: string[]; onOpen: (index: num
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
       {images.map((image, index) => (
         <Pressable
-          accessibilityLabel={`Open post image ${index + 1}`}
+          accessibilityLabel={`Open shared image ${index + 1}`}
           accessibilityRole="imagebutton"
           key={`${index}-${image.slice(0, 24)}`}
           onPress={() => onOpen(index)}
           style={{
             backgroundColor: colors.input,
             borderColor: colors.line,
-            borderRadius: 14,
+            borderRadius: 8,
             borderWidth: 1,
             height: images.length === 1 ? 190 : 132,
             overflow: "hidden",
@@ -338,13 +339,13 @@ function CreatePostModal({
   async function pickImages() {
     const remainingSlots = MAX_POST_IMAGES - images.length;
     if (remainingSlots <= 0) {
-      Alert.alert("Image limit reached", `You can add up to ${MAX_POST_IMAGES} images to a post.`);
+      Alert.alert("Image limit reached", `You can add up to ${MAX_POST_IMAGES} images.`);
       return;
     }
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Photos permission needed", "Allow photo access to add images to your post.");
+      Alert.alert("Photos permission needed", "Allow photo access to add images.");
       return;
     }
 
@@ -375,7 +376,7 @@ function CreatePostModal({
             alignSelf: "center",
             backgroundColor: composerPalette.panel,
             borderColor: composerPalette.line,
-            borderRadius: 18,
+            borderRadius: 8,
             borderWidth: 1,
             maxWidth: 540,
             overflow: "hidden",
@@ -394,7 +395,7 @@ function CreatePostModal({
             }}
           >
             <Pressable
-              accessibilityLabel="Close create post"
+              accessibilityLabel="Close sharing form"
               accessibilityRole="button"
               hitSlop={10}
               onPress={onClose}
@@ -402,7 +403,9 @@ function CreatePostModal({
             >
               <Feather name="x" size={26} color={composerPalette.text} />
             </Pressable>
-            <Text style={{ color: composerPalette.text, fontSize: 20, fontWeight: "900" }}>Create post</Text>
+            <Text style={{ color: composerPalette.text, fontSize: 20, fontWeight: "700" }}>
+              {isPrayer ? "Ask for prayer" : "Share reflection"}
+            </Text>
           </View>
 
           <View style={{ gap: 20, padding: 22 }}>
@@ -416,7 +419,7 @@ function CreatePostModal({
                 multiline
                 maxLength={MAX_POST_BODY_LENGTH}
                 onChangeText={(value) => onBodyChange(value.slice(0, MAX_POST_BODY_LENGTH))}
-                placeholder={isPrayer ? "What would you like your group to pray for?" : "What would you like to reflect on?"}
+                placeholder={isPrayer ? "What would you like your group to hold in prayer?" : "What are you noticing with God today?"}
                 placeholderTextColor={composerPalette.muted}
                 style={{
                   backgroundColor: composerPalette.surface,
@@ -466,8 +469,8 @@ function CreatePostModal({
               }}
             >
               <Feather name={isPrayer ? "heart" : "book-open"} size={21} color={canSubmit ? composerPalette.onAccent : colors.disabledText} />
-              <Text style={{ color: canSubmit ? composerPalette.onAccent : colors.disabledText, fontSize: 20, fontWeight: "900" }}>
-                {isPrayer ? "Ask for prayer" : "Share reflection"}
+              <Text style={{ color: canSubmit ? composerPalette.onAccent : colors.disabledText, fontSize: 18, fontWeight: "700" }}>
+                {isPrayer ? "Share for prayer" : "Share gently"}
               </Text>
             </Pressable>
           </View>
@@ -537,7 +540,7 @@ function ImageGalleryModal({ gallery, onClose }: { gallery?: ImageGalleryState; 
               >
                 <Feather name="x" size={24} color={colors.white} />
               </Pressable>
-              <Text style={{ color: colors.white, fontSize: 15, fontWeight: "900" }}>
+              <Text style={{ color: colors.white, fontSize: 15, fontWeight: "700" }}>
                 {page + 1}/{gallery.images.length}
               </Text>
             </View>
@@ -553,12 +556,13 @@ export function HomeScreen() {
   const [mood, setMood] = useState(3);
   const [readToday, setReadToday] = useState(true);
   const [reflectionText, setReflectionText] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "group">("group");
+  const [visibility, setVisibility] = useState<"private" | "group">("private");
   const [postBody, setPostBody] = useState("");
   const [postKind, setPostKind] = useState<ComposerKind>("reflection");
   const [postImages, setPostImages] = useState<string[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
+  const [showOlderSharedItems, setShowOlderSharedItems] = useState(false);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyComposerKey, setReplyComposerKey] = useState<string>();
   const [openMenuKey, setOpenMenuKey] = useState<string>();
@@ -567,18 +571,6 @@ export function HomeScreen() {
   const [pendingCommentReactions, setPendingCommentReactions] = useState<Record<string, boolean>>({});
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const groupMembers = useMemo(
-    () =>
-      state.memberships
-        .filter((membership) => membership.groupId === state.currentGroupId)
-        .sort((a, b) => {
-          if (a.role !== b.role) return a.role === "owner" ? -1 : 1;
-          if (a.userId === state.currentUserId) return -1;
-          if (b.userId === state.currentUserId) return 1;
-          return a.userName.localeCompare(b.userName);
-        }),
-    [state.currentGroupId, state.currentUserId, state.memberships],
-  );
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const feedItems = useMemo<FeedItem[]>(() => {
     const sharedCheckIns: FeedItem[] = state.checkIns
@@ -646,12 +638,18 @@ export function HomeScreen() {
     return sharedCheckIns.length + posts.length;
   }, [state.checkIns, state.currentGroupId, state.currentUserId, state.posts]);
   const shouldShowDailyPostFriction = sharedPostsToday >= DAILY_SHARED_POST_FRICTION_THRESHOLD;
+  const visibleFeedItems = showOlderSharedItems ? feedItems : feedItems.slice(0, INITIAL_SHARED_ITEMS);
+
+  useEffect(() => {
+    setShowOlderSharedItems(false);
+  }, [feedFilter, state.currentGroupId]);
 
   function submitCheckIn(nextVisibility = visibility) {
     dispatch({ type: "submitCheckIn", mood, readToday, reflectionText, visibility: nextVisibility });
     setReflectionText("");
     setMood(3);
     setReadToday(true);
+    setVisibility("private");
   }
 
   function handleSubmitCheckIn() {
@@ -684,98 +682,11 @@ export function HomeScreen() {
     <Screen>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 18, padding: 18, paddingBottom: 110 }}>
         <Card tone="moss">
-          <Text selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "900", letterSpacing: 1.5 }}>
-            SMALL GROUP
+          <Text selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700", letterSpacing: 1 }}>
+            TODAY'S RHYTHM
           </Text>
           <SectionTitle>{group?.name ?? "Your group"}</SectionTitle>
-          <Body muted>Invite code: {group?.inviteCode ?? "..."}</Body>
-        </Card>
-
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <SectionTitle>Group members</SectionTitle>
-            <View
-              style={{
-                backgroundColor: colors.accentSubtle,
-                borderColor: colors.moss,
-                borderRadius: 999,
-                borderWidth: 1,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-              }}
-            >
-              <Text selectable style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>
-                {groupMembers.length} {groupMembers.length === 1 ? "member" : "members"}
-              </Text>
-            </View>
-          </View>
-          {groupMembers.length === 0 ? (
-            <Body muted>No members are visible for this group yet.</Body>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {groupMembers.map((member) => {
-                const memberName = member.userName || userById.get(member.userId) || "Someone";
-                const isCurrentUser = member.userId === state.currentUserId;
-
-                return (
-                  <View
-                    key={member.id}
-                    style={{
-                      alignItems: "center",
-                      backgroundColor: colors.elevated,
-                      borderColor: colors.line,
-                      borderCurve: "continuous",
-                      borderRadius: 18,
-                      borderWidth: 1,
-                      flexDirection: "row",
-                      gap: 12,
-                      padding: 12,
-                    }}
-                  >
-                    <View
-                      style={{
-                        alignItems: "center",
-                        backgroundColor: member.role === "owner" ? colors.olive : colors.roseSurface,
-                        borderRadius: 999,
-                        height: 44,
-                        justifyContent: "center",
-                        width: 44,
-                      }}
-                    >
-                      <Text
-                        selectable
-                        style={{
-                          color: member.role === "owner" ? colors.onAccent : colors.clay,
-                          fontSize: 15,
-                          fontWeight: "900",
-                        }}
-                      >
-                        {initials(memberName) || "?"}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <Text selectable style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>
-                        {memberName}
-                        {isCurrentUser ? " (you)" : ""}
-                      </Text>
-                      <Body muted>Joined {formatJoinedDay(member.createdAt)}</Body>
-                    </View>
-                    <Text
-                      selectable
-                      style={{
-                        color: member.role === "owner" ? colors.olive : colors.muted,
-                        fontSize: 13,
-                        fontWeight: "900",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {member.role}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          <Body muted>Check in, share honestly when you are ready, pray, and leave encouraged.</Body>
         </Card>
 
         {todaysCheckIn ? (
@@ -794,9 +705,9 @@ export function HomeScreen() {
                 <Feather name="check" size={22} color={colors.onAccent} />
               </View>
               <View style={{ flex: 1, gap: 3 }}>
-                <SectionTitle>Check-in posted</SectionTitle>
+                <SectionTitle>Today's check-in is held</SectionTitle>
                 <Body muted>
-                  You&apos;ve already posted today&apos;s {todaysCheckIn.visibility === "private" ? "private " : ""}check-in.
+                  You have already saved today's {todaysCheckIn.visibility === "private" ? "private " : ""}check-in.
                 </Body>
               </View>
             </View>
@@ -804,7 +715,7 @@ export function HomeScreen() {
         ) : (
           <Card>
             <SectionTitle>Daily check-in</SectionTitle>
-            <Body muted>A gentle entry point, not a productivity score.</Body>
+            <Body muted>A gentle entry point, not a score to keep.</Body>
             <Body>Have you read the Bible today?</Body>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Choice label="Yes" selected={readToday} onPress={() => setReadToday(true)} />
@@ -817,7 +728,7 @@ export function HomeScreen() {
                 width: "100%",
               }}
             >
-              <SectionTitle>How&apos;s your heart?</SectionTitle>
+              <SectionTitle>How is your heart?</SectionTitle>
               <View style={{ alignSelf: "stretch", flexDirection: "row", width: "100%" }}>
                 {moodOptions.map((option) => {
                   const selected = mood === option.value;
@@ -830,8 +741,8 @@ export function HomeScreen() {
                       onPress={() => setMood(option.value)}
                       style={{
                         alignItems: "center",
-                        borderColor: selected ? "rgba(245, 243, 240, 0.72)" : "transparent",
-                        borderRadius: 18,
+                        borderColor: selected ? colors.olive : "transparent",
+                        borderRadius: 8,
                         borderWidth: 1,
                         flex: 1,
                         gap: 8,
@@ -877,21 +788,20 @@ export function HomeScreen() {
               placeholder="Optional reflection. A sentence is enough."
             />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Choice label="Share with group" selected={visibility === "group"} onPress={() => setVisibility("group")} />
               <Choice label="Save privately" selected={visibility === "private"} onPress={() => setVisibility("private")} />
+              <Choice label="Share gently" selected={visibility === "group"} onPress={() => setVisibility("group")} />
             </View>
-            <PillButton onPress={handleSubmitCheckIn}>
-              Submit check-in
-            </PillButton>
+            <PillButton onPress={handleSubmitCheckIn}>{visibility === "private" ? "Save today's check-in" : "Share today's check-in"}</PillButton>
           </Card>
         )}
 
         <Card>
-          <SectionTitle>Share with group</SectionTitle>
+          <SectionTitle>When you want to be known</SectionTitle>
+          <Body muted>Offer a reflection or ask your people to pray. No pressure to make every thought shared.</Body>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <FeedActionButton
               iconName="book-open"
-              label="Create reflection"
+              label="Share reflection"
               onPress={() => {
                 setPostBody("");
                 setPostImages([]);
@@ -901,7 +811,7 @@ export function HomeScreen() {
             />
             <FeedActionButton
               iconName="heart"
-              label="Create prayer request"
+              label="Ask for prayer"
               onPress={() => {
                 setPostBody("");
                 setPostImages([]);
@@ -913,12 +823,13 @@ export function HomeScreen() {
         </Card>
 
         <View style={{ gap: 12 }}>
-          <SectionTitle>Group feed</SectionTitle>
+          <SectionTitle>Shared prayer room</SectionTitle>
+          <Body muted>Recent shares for prayer. Older ones can wait until you need them.</Body>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <Choice label="All" selected={feedFilter === "all"} onPress={() => setFeedFilter("all")} />
+            <Choice label="Everything" selected={feedFilter === "all"} onPress={() => setFeedFilter("all")} />
             <Choice label="My reflections" selected={feedFilter === "my_reflections"} onPress={() => setFeedFilter("my_reflections")} />
             <Choice
-              label="My prayer requests"
+              label="My prayers"
               selected={feedFilter === "my_prayer_requests"}
               onPress={() => setFeedFilter("my_prayer_requests")}
             />
@@ -930,10 +841,10 @@ export function HomeScreen() {
           ) : null}
           {feedItems.length === 0 ? (
             <Card>
-              <Body muted>No shared items match this feed yet. This room can stay quiet until someone is ready.</Body>
+              <Body muted>Nothing is shared here yet. This room can stay quiet until someone is ready.</Body>
             </Card>
           ) : (
-            feedItems.map((item) => {
+            visibleFeedItems.map((item) => {
               const targetType = item.type === "post" ? "post" : "check_in";
               const itemKey = `${targetType}:${item.id}`;
               const replies = state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
@@ -949,7 +860,7 @@ export function HomeScreen() {
                   .filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id)
                   .map((reaction) => reaction.userId),
               ).size;
-              const prayerCountLabel = prayerCount === 1 ? "1 person prayed" : `${prayerCount} people prayed`;
+              const prayerPresenceLabel = prayerCount === 1 ? "Someone has prayed here." : "Prayer has been offered here.";
               const ownsItem = item.userId === state.currentUserId;
               const authorName = userById.get(item.userId) ?? "Someone";
               const replyComposerOpen = replyComposerKey === itemKey;
@@ -978,15 +889,15 @@ export function HomeScreen() {
                         width: 52,
                       }}
                     >
-                      <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>{initials(authorName) || "?"}</Text>
+                      <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "700" }}>{initials(authorName) || "?"}</Text>
                     </View>
                     <View style={{ flex: 1, gap: 3, paddingRight: ownsItem ? 10 : 0 }}>
-                      <Text selectable style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
+                      <Text selectable style={{ color: colors.ink, fontSize: 18, fontWeight: "700" }}>
                         {authorName}
                       </Text>
-                      <Text selectable style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>
+                      <Text selectable style={{ color: colors.muted, fontSize: 15, fontWeight: "600" }}>
                         {formatRelativeTime(item.createdAt)}
-                        {item.type === "check_in" ? ` - Mood ${item.mood} (${moodLabel(item.mood)})` : ""}
+                        {item.type === "check_in" ? ` - ${moodLabel(item.mood)}` : ""}
                       </Text>
                     </View>
                     {ownsItem ? (
@@ -998,7 +909,7 @@ export function HomeScreen() {
                         }}
                       >
                         <Pressable
-                          accessibilityLabel="Post options"
+                          accessibilityLabel="Sharing options"
                           accessibilityRole="button"
                           hitSlop={10}
                           onPress={() => setOpenMenuKey((current) => (current === itemKey ? undefined : itemKey))}
@@ -1032,7 +943,7 @@ export function HomeScreen() {
                           setOpenMenuKey(undefined);
                           confirmAction({
                             title: `Delete ${itemLabel}?`,
-                            message: "This will remove it from the group feed.",
+                            message: "This will remove it from the shared room.",
                             confirmText: "Delete",
                             destructive: true,
                             onConfirm: () =>
@@ -1045,7 +956,7 @@ export function HomeScreen() {
                         style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 }}
                       >
                         <Feather name="trash-2" size={16} color={colors.danger} />
-                        <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete</Text>
+                        <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "700" }}>Delete</Text>
                       </Pressable>
                     </View>
                   ) : null}
@@ -1054,15 +965,12 @@ export function HomeScreen() {
                     {item.type === "check_in" ? (
                       <FeedTypeBadge iconName="check-circle" label="Check-in" tone="moss" />
                     ) : isPrayerRequest ? (
-                      <FeedTypeBadge iconName="heart" label="Prayer request" tone="rose" />
+                      <FeedTypeBadge iconName="heart" label="Prayer" tone="rose" />
                     ) : isReflection ? (
                       <FeedTypeBadge iconName="book-open" label="Reflection" tone="moss" />
                     ) : null}
-                    {item.type === "check_in" ? (
-                      <FeedTypeBadge iconName={item.readToday ? "book-open" : "clock"} label={item.readToday ? "Read today" : "Not yet today"} tone="gold" />
-                    ) : null}
                     {isPrayerRequest && item.answeredAt ? (
-                      <FeedTypeBadge iconName="check-circle" label={"Answered by God's grace."} tone="moss" />
+                      <FeedTypeBadge iconName="check-circle" label="Answered" tone="moss" />
                     ) : null}
                   </View>
 
@@ -1077,7 +985,7 @@ export function HomeScreen() {
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
                     <FeedActionButton
                       emoji={prayed ? "\u{1F64F}" : "\u{1F64F}"}
-                      label={prayed ? "Prayed" : "Pray"}
+                      label={prayed ? "Prayed" : "Pray with this"}
                       selected={prayed}
                       onPress={() => {
                         if (prayed) {
@@ -1089,15 +997,15 @@ export function HomeScreen() {
                     />
                     <FeedActionButton
                       iconName="message-circle"
-                      label="Reply"
+                      label="Leave a word"
                       selected={replyComposerOpen}
                       onPress={() => setReplyComposerKey((current) => (current === itemKey ? undefined : itemKey))}
                     />
                   </View>
 
                   {prayerCount > 0 ? (
-                    <Text selectable style={{ color: colors.muted, fontSize: 14, fontWeight: "800" }}>
-                      {prayerCountLabel}
+                    <Text selectable style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>
+                      {prayerPresenceLabel}
                     </Text>
                   ) : null}
 
@@ -1126,8 +1034,8 @@ export function HomeScreen() {
                                 .filter((reaction) => reaction.targetType === "reply" && reaction.targetId === reply.id)
                                 .map((reaction) => reaction.userId),
                             ).size;
-                            const replyPrayerCountLabel =
-                              replyPrayerCount === 1 ? "1 person prayed" : `${replyPrayerCount} people prayed`;
+                            const replyPrayerPresenceLabel =
+                              replyPrayerCount === 1 ? "Someone has prayed here." : "Prayer has been offered here.";
                             const replyCommentReactions = state.commentReactions.filter((reaction) => reaction.replyId === reply.id);
 
                             return (
@@ -1146,7 +1054,7 @@ export function HomeScreen() {
                                     }}
                                     style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                   >
-                                    <Text style={{ color: replyPrayed ? colors.moss : colors.clay, fontWeight: "900" }}>
+                                    <Text style={{ color: replyPrayed ? colors.moss : colors.clay, fontWeight: "700" }}>
                                       {replyPrayed ? "Prayed" : "Pray"}
                                     </Text>
                                   </Pressable>
@@ -1156,13 +1064,7 @@ export function HomeScreen() {
                                       (reaction) => reaction.kind === option.kind && reaction.userId === state.currentUserId,
                                     );
                                     const selected = pendingCommentReactions[reactionKey] ?? serverSelected;
-                                    const serverCount = new Set(
-                                      replyCommentReactions
-                                        .filter((reaction) => reaction.kind === option.kind)
-                                        .map((reaction) => reaction.userId),
-                                    ).size;
-                                    const count = serverCount + (selected && !serverSelected ? 1 : 0) - (!selected && serverSelected ? 1 : 0);
-                                    const label = count > 0 ? `${option.label} ${count}` : option.label;
+                                    const label = option.label;
 
                                     return (
                                       <Pressable
@@ -1179,7 +1081,7 @@ export function HomeScreen() {
                                         }}
                                         style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                       >
-                                        <Text style={{ color: selected ? colors.moss : colors.clay, fontWeight: "900" }}>{label}</Text>
+                                        <Text style={{ color: selected ? colors.moss : colors.clay, fontWeight: "700" }}>{label}</Text>
                                       </Pressable>
                                     );
                                   })}
@@ -1188,7 +1090,7 @@ export function HomeScreen() {
                                       onPress={() => {
                                         confirmAction({
                                           title: "Delete reply?",
-                                          message: "This comment will be removed from the group feed.",
+                                          message: "This reply will be removed from the shared room.",
                                           confirmText: "Delete",
                                           destructive: true,
                                           onConfirm: () => dispatch({ type: "deleteReply", id: reply.id }),
@@ -1196,13 +1098,13 @@ export function HomeScreen() {
                                       }}
                                       style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                     >
-                                      <Text style={{ color: colors.clay, fontWeight: "900" }}>Delete</Text>
+                                      <Text style={{ color: colors.clay, fontWeight: "700" }}>Delete</Text>
                                     </Pressable>
                                   ) : null}
                                 </View>
                                 {replyPrayerCount > 0 ? (
-                                  <Text selectable style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>
-                                    {replyPrayerCountLabel}
+                                  <Text selectable style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+                                    {replyPrayerPresenceLabel}
                                   </Text>
                                 ) : null}
                               </>
@@ -1218,7 +1120,7 @@ export function HomeScreen() {
                       <Field
                         value={replyDrafts[itemKey] ?? ""}
                         onChangeText={(value) => setReplyDrafts((drafts) => ({ ...drafts, [itemKey]: value.slice(0, 500) }))}
-                        placeholder="Short supportive reply"
+                        placeholder="A short word of care"
                       />
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                         <PillButton
@@ -1229,7 +1131,7 @@ export function HomeScreen() {
                             setReplyComposerKey(undefined);
                           }}
                         >
-                          Send reply
+                          Send encouragement
                         </PillButton>
                         <PillButton variant="ghost" onPress={() => setReplyComposerKey(undefined)}>
                           Cancel
@@ -1238,13 +1140,15 @@ export function HomeScreen() {
                     </View>
                   ) : null}
 
-                  <Text selectable style={{ color: colors.muted, fontSize: 15, fontWeight: "800" }}>
-                    {replies.length} {replies.length === 1 ? "reply" : "replies"}
-                  </Text>
                 </Card>
               );
             })
           )}
+          {!showOlderSharedItems && feedItems.length > visibleFeedItems.length ? (
+            <PillButton variant="ghost" onPress={() => setShowOlderSharedItems(true)}>
+              Show older shares
+            </PillButton>
+          ) : null}
         </View>
       </ScrollView>
 
