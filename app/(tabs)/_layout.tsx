@@ -17,7 +17,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.cream },
-        headerLeft: () => <KoinoHeaderLogo />,
+        headerTitle: () => <KoinoHeaderLogo />,
         headerRight: () => <CurrentGroupIndicator />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
@@ -68,7 +68,7 @@ export default function TabLayout() {
 }
 
 function KoinoHeaderLogo() {
-  return <KoinoLogo size={40} style={{ marginLeft: 16 }} />;
+  return <KoinoLogo size={40} />;
 }
 
 function CurrentGroupIndicator() {
@@ -84,6 +84,7 @@ function CurrentGroupIndicator() {
         borderColor: colors.line,
         borderRadius: 999,
         borderWidth: 1,
+        marginRight: 16,
         maxWidth: 170,
         paddingHorizontal: 10,
         paddingVertical: 6,
