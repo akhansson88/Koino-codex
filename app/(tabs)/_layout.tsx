@@ -74,7 +74,7 @@ function KoinoHeaderLogo() {
 
 function HeaderRightControls() {
   return (
-    <View style={{ alignItems: "flex-end", gap: 8, marginRight: 16 }}>
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginRight: 16 }}>
       <ThemeSelector />
       <CurrentGroupIndicator />
     </View>

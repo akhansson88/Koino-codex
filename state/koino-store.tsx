@@ -884,12 +884,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               if (!replies.some((reply) => reply.id === action.replyId)) return;
               const reactionId = `${firebaseUser.uid}_${action.replyId}_${action.kind}`;
-              const reactionRef = ref(database, `commentReactions/${profile.currentGroupId}/${reactionId}`);
               const existing = commentReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid);
               if (existing) {
-                await remove(reactionRef);
+                await remove(ref(database, `commentReactions/${profile.currentGroupId}/${reactionId}`));
                 return;
               }
+              const userReplyReactions = commentReactions.filter(
+                (reaction) => reaction.userId === firebaseUser.uid && reaction.replyId === action.replyId,
+              );
               const reaction: CommentReaction = {
                 id: reactionId,
                 userId: firebaseUser.uid,
@@ -897,7 +899,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 kind: action.kind,
                 createdAt: now(),
               };
-              await set(reactionRef, reaction);
+              await update(ref(database), {
+                ...userReplyReactions.reduce<Record<string, null>>((deletes, currentReaction) => {
+                  deletes[`commentReactions/${profile.currentGroupId}/${currentReaction.id}`] = null;
+                  return deletes;
+                }, {}),
+                [`commentReactions/${profile.currentGroupId}/${reactionId}`]: reaction,
+              });
               return;
             }
             case "createJournalEntry": {

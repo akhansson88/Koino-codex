@@ -4,7 +4,9 @@
       "Bash(npm run build 2>&1 || true)",
       "Bash(npm run typecheck 2>&1 || true)",
       "Bash(npm run typecheck)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(npm run typecheck 2>&1 || true)",
+      "Bash(npm run build 2>&1 || true)"
     ]
   }
 }

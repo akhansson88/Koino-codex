@@ -736,6 +736,8 @@ export function HomeScreen() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyComposerKey, setReplyComposerKey] = useState<string>();
   const [openMenuKey, setOpenMenuKey] = useState<string>();
+  const [openReplyMenuId, setOpenReplyMenuId] = useState<string>();
+  const [openReplyMenuAnchor, setOpenReplyMenuAnchor] = useState<{ x: number; y: number }>();
   const [imageGallery, setImageGallery] = useState<ImageGalleryState>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [pendingCommentReactions, setPendingCommentReactions] = useState<Record<string, boolean>>({});
@@ -1098,14 +1100,15 @@ export function HomeScreen() {
               const replyComposerOpen = replyComposerKey === itemKey;
               const itemLabel = item.type === "check_in" ? "check-in" : isPrayerRequest ? "prayer request" : "reflection";
               const menuOpen = openMenuKey === itemKey;
+              const replyMenuOpenInItem = replies.some((reply) => reply.id === openReplyMenuId);
 
               return (
                 <Card
                   key={`${item.type}-${item.id}`}
                   style={{
-                    elevation: menuOpen ? 24 : 0,
+                    elevation: menuOpen || replyMenuOpenInItem ? 24 : 0,
                     position: "relative",
-                    zIndex: menuOpen ? 1000 : 0,
+                    zIndex: menuOpen || replyMenuOpenInItem ? 2000 : 0,
                   }}
                 >
                   <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
@@ -1291,7 +1294,17 @@ export function HomeScreen() {
                   {replies.length > 0 ? (
                     <View style={{ gap: 8 }}>
                       {replies.map((reply) => (
-                        <View key={reply.id} style={{ borderLeftColor: colors.moss, borderLeftWidth: 3, paddingLeft: 10 }}>
+                        <View
+                          key={reply.id}
+                          style={{
+                            borderLeftColor: colors.moss,
+                            borderLeftWidth: 3,
+                            elevation: openReplyMenuId === reply.id ? 30 : 0,
+                            paddingLeft: 10,
+                            position: "relative",
+                            zIndex: openReplyMenuId === reply.id ? 3000 : 0,
+                          }}
+                        >
                           {(() => {
                             const replyPrayed = state.prayerReactions.some(
                               (reaction) =>
@@ -1308,9 +1321,35 @@ export function HomeScreen() {
 
                             return (
                               <>
-                                <Body>
-                                  {userById.get(reply.userId) ?? "Someone"}: {reply.body}
-                                </Body>
+                                <View style={{ flexDirection: "row", gap: 10 }}>
+                                  <View style={{ flex: 1 }}>
+                                    <Body>
+                                      {userById.get(reply.userId) ?? "Someone"}: {reply.body}
+                                    </Body>
+                                  </View>
+                                  {reply.userId === state.currentUserId ? (
+                                    <View>
+                                      <Pressable
+                                        accessibilityLabel="Reply options"
+                                        accessibilityRole="button"
+                                        hitSlop={10}
+                                        onPress={(event) => {
+                                          if (openReplyMenuId === reply.id) {
+                                            setOpenReplyMenuId(undefined);
+                                            setOpenReplyMenuAnchor(undefined);
+                                            return;
+                                          }
+                                          const { pageX, pageY } = event.nativeEvent;
+                                          setOpenReplyMenuAnchor({ x: pageX, y: pageY });
+                                          setOpenReplyMenuId(reply.id);
+                                        }}
+                                        style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
+                                      >
+                                        <Feather name="more-horizontal" size={18} color={colors.ink} />
+                                      </Pressable>
+                                    </View>
+                                  ) : null}
+                                </View>
                                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
                                   <Pressable
                                     onPress={() => {
@@ -1323,7 +1362,7 @@ export function HomeScreen() {
                                     style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                   >
                                     <Text style={{ color: replyPrayed ? colors.moss : colors.clay, fontWeight: "700" }}>
-                                      {replyPrayed ? "Prayed" : "Pray"}
+                                      {replyPrayed ? `Prayed (${replyPrayerCount})` : `Pray (${replyPrayerCount})`}
                                     </Text>
                                   </Pressable>
                                   {commentReactionOptions.map((option) => {
@@ -1332,17 +1371,40 @@ export function HomeScreen() {
                                       (reaction) => reaction.kind === option.kind && reaction.userId === state.currentUserId,
                                     );
                                     const selected = pendingCommentReactions[reactionKey] ?? serverSelected;
-                                    const label = option.label;
+                                    const reactionCount = replyCommentReactions.filter((reaction) => reaction.kind === option.kind).length;
+                                    const projectedCount = selected === serverSelected ? reactionCount : reactionCount + (selected ? 1 : -1);
+                                    const label = `${option.label} (${Math.max(projectedCount, 0)})`;
 
                                     return (
                                       <Pressable
                                         key={option.kind}
                                         onPress={() => {
-                                          setPendingCommentReactions((pending) => ({ ...pending, [reactionKey]: !selected }));
+                                          setPendingCommentReactions((pending) => {
+                                            const next = { ...pending };
+                                            commentReactionOptions.forEach((reactionOption) => {
+                                              const key = `${reply.id}:${reactionOption.kind}`;
+                                              const currentServerSelected = replyCommentReactions.some(
+                                                (reaction) => reaction.kind === reactionOption.kind && reaction.userId === state.currentUserId,
+                                              );
+                                              const currentSelected = pending[key] ?? currentServerSelected;
+                                              if (reactionOption.kind === option.kind) {
+                                                next[key] = !currentSelected;
+                                                return;
+                                              }
+                                              if (currentSelected) {
+                                                next[key] = false;
+                                                return;
+                                              }
+                                              delete next[key];
+                                            });
+                                            return next;
+                                          });
                                           void dispatch({ type: "toggleCommentReaction", replyId: reply.id, kind: option.kind }).finally(() => {
                                             setPendingCommentReactions((pending) => {
                                               const next = { ...pending };
-                                              delete next[reactionKey];
+                                              commentReactionOptions.forEach((reactionOption) => {
+                                                delete next[`${reply.id}:${reactionOption.kind}`];
+                                              });
                                               return next;
                                             });
                                           });
@@ -1353,22 +1415,6 @@ export function HomeScreen() {
                                       </Pressable>
                                     );
                                   })}
-                                  {reply.userId === state.currentUserId ? (
-                                    <Pressable
-                                      onPress={() => {
-                                        confirmAction({
-                                          title: "Delete reply?",
-                                          message: "This reply will be removed from the shared room.",
-                                          confirmText: "Delete",
-                                          destructive: true,
-                                          onConfirm: () => dispatch({ type: "deleteReply", id: reply.id }),
-                                        });
-                                      }}
-                                      style={{ alignSelf: "flex-start", paddingVertical: 6 }}
-                                    >
-                                      <Text style={{ color: colors.clay, fontWeight: "700" }}>Delete</Text>
-                                    </Pressable>
-                                  ) : null}
                                 </View>
                                 {replyPrayerCount > 0 ? (
                                   <Text selectable style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
@@ -1442,6 +1488,62 @@ export function HomeScreen() {
          onSubmit={editPostId ? handleSubmitEditPost : handleSubmitPost}
          isEditing={!!editPostId}
        />
+
+       <Modal
+         animationType="fade"
+         transparent
+         visible={Boolean(openReplyMenuId)}
+         onRequestClose={() => {
+           setOpenReplyMenuId(undefined);
+           setOpenReplyMenuAnchor(undefined);
+         }}
+       >
+         <Pressable
+           onPress={() => {
+             setOpenReplyMenuId(undefined);
+             setOpenReplyMenuAnchor(undefined);
+           }}
+           style={{ backgroundColor: "transparent", flex: 1 }}
+         >
+           <View style={{ flex: 1 }}>
+             <Pressable
+               accessibilityRole="button"
+               onPress={() => {
+                 const replyId = openReplyMenuId;
+                 setOpenReplyMenuId(undefined);
+                 setOpenReplyMenuAnchor(undefined);
+                 if (!replyId) return;
+                 confirmAction({
+                   title: "Delete reply?",
+                   message: "This reply will be removed from the shared room.",
+                   confirmText: "Delete",
+                   destructive: true,
+                   onConfirm: () => dispatch({ type: "deleteReply", id: replyId }),
+                 });
+               }}
+               style={{
+                 alignItems: "center",
+                 backgroundColor: colors.elevated,
+                 borderColor: colors.line,
+                 borderRadius: 10,
+                 borderWidth: 1,
+                 elevation: 45,
+                 flexDirection: "row",
+                 gap: 8,
+                 left: Math.max(12, (openReplyMenuAnchor?.x ?? 12) - 116),
+                 minWidth: 140,
+                 paddingHorizontal: 12,
+                 paddingVertical: 10,
+                 position: "absolute",
+                 top: Math.max(12, (openReplyMenuAnchor?.y ?? 12) + 18),
+               }}
+             >
+               <Feather name="trash-2" size={14} color={colors.danger} />
+               <Text style={{ color: colors.danger, fontSize: 14, fontWeight: "700" }}>Delete</Text>
+             </Pressable>
+           </View>
+         </Pressable>
+       </Modal>
 
        <ImageGalleryModal gallery={imageGallery} onClose={() => setImageGallery(undefined)} />
 
