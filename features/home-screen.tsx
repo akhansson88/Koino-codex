@@ -321,6 +321,7 @@ function CreatePostModal({
   onClose,
   onSubmit,
   onPreviewImage,
+  isEditing = false,
 }: {
   visible: boolean;
   kind: ComposerKind;
@@ -332,6 +333,7 @@ function CreatePostModal({
   onClose: () => void;
   onSubmit: () => void;
   onPreviewImage: (index: number) => void;
+  isEditing?: boolean;
 }) {
   const canSubmit = body.trim().length > 0 || images.length > 0;
   const isPrayer = kind === "prayer_request";
@@ -404,7 +406,7 @@ function CreatePostModal({
               <Feather name="x" size={26} color={composerPalette.text} />
             </Pressable>
             <Text style={{ color: composerPalette.text, fontSize: 20, fontWeight: "700" }}>
-              {isPrayer ? "Ask for prayer" : "Share reflection"}
+              {isPrayer ? (isEditing ? "Edit prayer request" : "Ask for prayer") : (isEditing ? "Edit reflection" : "Share reflection")}
             </Text>
           </View>
 
@@ -470,7 +472,7 @@ function CreatePostModal({
             >
               <Feather name={isPrayer ? "heart" : "book-open"} size={21} color={canSubmit ? composerPalette.onAccent : colors.disabledText} />
               <Text style={{ color: canSubmit ? composerPalette.onAccent : colors.disabledText, fontSize: 18, fontWeight: "700" }}>
-                {isPrayer ? "Share for prayer" : "Share gently"}
+                {isPrayer ? (isEditing ? "Update prayer" : "Share for prayer") : (isEditing ? "Update reflection" : "Share gently")}
               </Text>
             </Pressable>
           </View>
@@ -551,6 +553,150 @@ function ImageGalleryModal({ gallery, onClose }: { gallery?: ImageGalleryState; 
   );
 }
 
+function EditCheckInModal({
+  visible,
+  mood,
+  readToday,
+  text,
+  onMoodChange,
+  onReadTodayChange,
+  onTextChange,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  mood: number;
+  readToday: boolean;
+  text: string;
+  onMoodChange: (mood: number) => void;
+  onReadTodayChange: (readToday: boolean) => void;
+  onTextChange: (text: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const canSubmit = text.trim().length > 0;
+
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View style={{ backgroundColor: "rgba(0,0,0,0.45)", flex: 1, justifyContent: "center", padding: 18 }}>
+        <View
+          style={{
+            alignSelf: "center",
+            backgroundColor: colors.paper,
+            borderColor: colors.line,
+            borderRadius: 8,
+            borderWidth: 1,
+            maxWidth: 540,
+            overflow: "hidden",
+            width: "100%",
+          }}
+        >
+          <View
+            style={{
+              alignItems: "center",
+              borderBottomColor: colors.line,
+              borderBottomWidth: 1,
+              flexDirection: "row",
+              justifyContent: "center",
+              minHeight: 70,
+              paddingHorizontal: 18,
+            }}
+          >
+            <Pressable
+              accessibilityLabel="Close edit check-in"
+              accessibilityRole="button"
+              hitSlop={10}
+              onPress={onClose}
+              style={{ alignItems: "center", height: 38, justifyContent: "center", left: 12, position: "absolute", width: 38 }}
+            >
+              <Feather name="x" size={26} color={colors.ink} />
+            </Pressable>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "700" }}>Edit check-in</Text>
+          </View>
+
+          <View style={{ gap: 20, padding: 22 }}>
+            <View>
+              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700", marginBottom: 10 }}>Have you read the Bible today?</Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Choice label="Yes" selected={readToday} onPress={() => onReadTodayChange(true)} />
+                <Choice label="Not yet" selected={!readToday} onPress={() => onReadTodayChange(false)} />
+              </View>
+            </View>
+
+            <View style={{ gap: 18 }}>
+              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>How is your heart?</Text>
+              <View style={{ flexDirection: "row", width: "100%" }}>
+                {moodOptions.map((option) => {
+                  const selected = mood === option.value;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`Mood ${option.value}: ${option.label}`}
+                      accessibilityRole="button"
+                      key={option.value}
+                      onPress={() => onMoodChange(option.value)}
+                      style={{
+                        alignItems: "center",
+                        borderColor: selected ? colors.olive : "transparent",
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        flex: 1,
+                        gap: 8,
+                        minWidth: 0,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <View style={{ alignSelf: "stretch", aspectRatio: 1, overflow: "hidden", paddingHorizontal: 3, width: "100%" }}>
+                        <Image source={option.image} style={{ height: "100%", objectFit: "contain", width: "100%" }} />
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                        style={{ color: selected ? colors.ink : colors.muted, fontSize: 13, fontWeight: "800", textAlign: "center", width: "100%" }}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Field
+              multiline
+              value={text}
+              onChangeText={onTextChange}
+              placeholder="Optional reflection. A sentence is enough."
+            />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSubmit }}
+              disabled={!canSubmit}
+              onPress={onSubmit}
+              style={{
+                alignItems: "center",
+                backgroundColor: canSubmit ? colors.olive : colors.disabled,
+                borderRadius: 12,
+                flexDirection: "row",
+                gap: 10,
+                justifyContent: "center",
+                minHeight: 58,
+                paddingHorizontal: 18,
+              }}
+            >
+              <Feather name="check" size={21} color={canSubmit ? colors.onAccent : colors.disabledText} />
+              <Text style={{ color: canSubmit ? colors.onAccent : colors.disabledText, fontSize: 18, fontWeight: "700" }}>
+                Update check-in
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function HomeScreen() {
   const { state, dispatch } = useKoino();
   const [mood, setMood] = useState(3);
@@ -569,6 +715,17 @@ export function HomeScreen() {
   const [imageGallery, setImageGallery] = useState<ImageGalleryState>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [pendingCommentReactions, setPendingCommentReactions] = useState<Record<string, boolean>>({});
+  // Edit post state
+  const [editPostId, setEditPostId] = useState<string | null>(null);
+  const [editPostBody, setEditPostBody] = useState("");
+  const [editPostKind, setEditPostKind] = useState<ComposerKind>("reflection");
+  const [editPostImages, setEditPostImages] = useState<string[]>([]);
+  // Edit check-in state
+  const [editCheckInId, setEditCheckInId] = useState<string | null>(null);
+  const [editCheckInMood, setEditCheckInMood] = useState(3);
+  const [editCheckInReadToday, setEditCheckInReadToday] = useState(true);
+  const [editCheckInText, setEditCheckInText] = useState("");
+  const [editCheckInVisible, setEditCheckInVisible] = useState(false);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
@@ -669,14 +826,65 @@ export function HomeScreen() {
     setComposerVisible(false);
   }
 
-  function handleSubmitPost() {
-    if (shouldShowDailyPostFriction) {
-      showDailyPostFriction(submitPost);
-      return;
+   function handleSubmitPost() {
+     if (shouldShowDailyPostFriction) {
+       showDailyPostFriction(submitPost);
+       return;
+     }
+
+     submitPost();
+   }
+
+   function handleSubmitEditPost() {
+     if (shouldShowDailyPostFriction) {
+       showDailyPostFriction(() => {
+         dispatch({
+           type: "editPost",
+           id: editPostId!,
+           body: editPostBody,
+           kind: editPostKind,
+           images: editPostImages,
+         });
+         // Clear edit state
+         setEditPostId(null);
+         setEditPostBody("");
+         setEditPostKind("reflection");
+         setEditPostImages([]);
+         setComposerVisible(false);
+       });
+       return;
+     }
+
+     dispatch({
+       type: "editPost",
+       id: editPostId!,
+       body: editPostBody,
+       kind: editPostKind,
+       images: editPostImages,
+     });
+     // Clear edit state
+     setEditPostId(null);
+     setEditPostBody("");
+     setEditPostKind("reflection");
+     setEditPostImages([]);
+      setComposerVisible(false);
     }
 
-    submitPost();
-  }
+   function handleSubmitEditCheckIn() {
+     dispatch({
+       type: "updateCheckIn",
+       id: editCheckInId!,
+       mood: editCheckInMood,
+       readToday: editCheckInReadToday,
+       reflectionText: editCheckInText,
+       visibility: "group",
+     });
+     setEditCheckInId(null);
+     setEditCheckInMood(3);
+     setEditCheckInReadToday(true);
+     setEditCheckInText("");
+     setEditCheckInVisible(false);
+   }
 
   return (
     <Screen>
@@ -921,49 +1129,85 @@ export function HomeScreen() {
                     ) : null}
                   </View>
 
-                  {menuOpen ? (
-                    <View
-                      style={{
-                        backgroundColor: colors.elevated,
-                        borderColor: colors.line,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        elevation: 26,
-                        minWidth: 132,
-                        paddingVertical: 6,
-                        position: "absolute",
-                        right: 18,
-                        top: 56,
-                        zIndex: 1002,
-                      }}
-                    >
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          setOpenMenuKey(undefined);
-                          confirmAction({
-                            title: `Delete ${itemLabel}?`,
-                            message: "This will remove it from the shared room.",
-                            confirmText: "Delete",
-                            destructive: true,
-                            onConfirm: () =>
-                              dispatch({
-                                type: item.type === "check_in" ? "deleteCheckIn" : "deletePost",
-                                id: item.id,
-                              }),
-                          });
-                        }}
-                        style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 }}
-                      >
-                        <Feather name="trash-2" size={16} color={colors.danger} />
-                        <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "700" }}>Delete</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
+                   {menuOpen ? (
+                     <View
+                       style={{
+                         backgroundColor: colors.elevated,
+                         borderColor: colors.line,
+                         borderRadius: 12,
+                         borderWidth: 1,
+                         elevation: 26,
+                         minWidth: 132,
+                         paddingVertical: 6,
+                         position: "absolute",
+                         right: 18,
+                         top: 56,
+                         zIndex: 1002,
+                       }}
+                     >
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => {
+                            setOpenMenuKey(undefined);
+                            if (item.type === "check_in") {
+                              const checkInToEdit = state.checkIns.find(ci => ci.id === item.id);
+                              if (checkInToEdit) {
+                                setEditCheckInId(checkInToEdit.id);
+                                setEditCheckInMood(checkInToEdit.mood);
+                                setEditCheckInReadToday(checkInToEdit.readToday);
+                                setEditCheckInText(checkInToEdit.reflectionText);
+                                setEditCheckInVisible(true);
+                              }
+                            } else {
+                              const postToEdit = state.posts.find(post => post.id === item.id);
+                              if (postToEdit) {
+                                setEditPostId(postToEdit.id);
+                                setEditPostBody(postToEdit.body);
+                                setEditPostKind(normalizePostKind(postToEdit.kind ?? "reflection"));
+                                setEditPostImages(postToEdit.images ?? []);
+                                setComposerVisible(true);
+                              }
+                            }
+                          }}
+                         style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 }}
+                       >
+                         <Feather name="edit-2" size={16} color={colors.ink} />
+                         <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>Edit</Text>
+                       </Pressable>
+                       <Pressable
+                         accessibilityRole="button"
+                         onPress={() => {
+                           setOpenMenuKey(undefined);
+                           confirmAction({
+                             title: `Delete ${itemLabel}?`,
+                             message: "This will remove it from the shared room.",
+                             confirmText: "Delete",
+                             destructive: true,
+                             onConfirm: () =>
+                               dispatch({
+                                 type: item.type === "check_in" ? "deleteCheckIn" : "deletePost",
+                                 id: item.id,
+                               }),
+                           });
+                         }}
+                         style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingVertical: 10 }}
+                       >
+                         <Feather name="trash-2" size={16} color={colors.danger} />
+                         <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "700" }}>Delete</Text>
+                       </Pressable>
+                     </View>
+                   ) : null}
 
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {item.type === "check_in" ? (
-                      <FeedTypeBadge iconName="check-circle" label="Check-in" tone="moss" />
+                      <>
+                        <FeedTypeBadge iconName="check-circle" label="Check-in" tone="moss" />
+                        <FeedTypeBadge
+                          iconName={item.readToday ? "book-open" : "book"}
+                          label={item.readToday ? "Bible read today" : "Bible not read yet"}
+                          tone={item.readToday ? "moss" : "gold"}
+                        />
+                      </>
                     ) : isPrayerRequest ? (
                       <FeedTypeBadge iconName="heart" label="Prayer" tone="rose" />
                     ) : isReflection ? (
@@ -1152,22 +1396,50 @@ export function HomeScreen() {
         </View>
       </ScrollView>
 
-      <CreatePostModal
-        visible={composerVisible}
-        kind={postKind}
-        body={postBody}
-        images={postImages}
-        onKindChange={setPostKind}
-        onBodyChange={setPostBody}
-        onImagesChange={setPostImages}
-        onClose={() => setComposerVisible(false)}
-        onPreviewImage={(index) => setImageGallery({ images: postImages, index })}
-        onSubmit={handleSubmitPost}
-      />
+       <CreatePostModal
+         visible={composerVisible}
+         kind={editPostId ? editPostKind : postKind}
+         body={editPostId ? editPostBody : postBody}
+         images={editPostId ? editPostImages : postImages}
+         onKindChange={editPostId ? setEditPostKind : setPostKind}
+         onBodyChange={editPostId ? setEditPostBody : setPostBody}
+         onImagesChange={editPostId ? setEditPostImages : setPostImages}
+         onClose={() => {
+           setComposerVisible(false);
+           // Clear edit state when closing
+           if (editPostId) {
+             setEditPostId(null);
+             setEditPostBody("");
+             setEditPostKind("reflection");
+             setEditPostImages([]);
+           }
+         }}
+         onPreviewImage={(index) => setImageGallery({ images: editPostId ? editPostImages : postImages, index })}
+         onSubmit={editPostId ? handleSubmitEditPost : handleSubmitPost}
+         isEditing={!!editPostId}
+       />
 
-      <ImageGalleryModal gallery={imageGallery} onClose={() => setImageGallery(undefined)} />
+       <ImageGalleryModal gallery={imageGallery} onClose={() => setImageGallery(undefined)} />
 
-      <PrayerMoment
+       <EditCheckInModal
+         visible={editCheckInVisible}
+         mood={editCheckInMood}
+         readToday={editCheckInReadToday}
+         text={editCheckInText}
+         onMoodChange={setEditCheckInMood}
+         onReadTodayChange={setEditCheckInReadToday}
+         onTextChange={setEditCheckInText}
+         onClose={() => {
+           setEditCheckInVisible(false);
+           setEditCheckInId(null);
+           setEditCheckInMood(3);
+           setEditCheckInReadToday(true);
+           setEditCheckInText("");
+         }}
+         onSubmit={handleSubmitEditCheckIn}
+       />
+
+       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
         onFinish={(status, startedAt) => {

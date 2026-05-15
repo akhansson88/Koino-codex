@@ -17,11 +17,11 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.cream, height: 110 },
-        headerTitle: undefined,
         headerLeft: () => <KoinoHeaderLogo />,
         headerRight: () => <CurrentGroupIndicator />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
+        headerTitleAlign: "center",
         headerTitleStyle: { color: colors.ink, fontWeight: "700" },
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
@@ -85,10 +85,10 @@ function CurrentGroupIndicator() {
         borderColor: colors.line,
         borderRadius: 999,
         borderWidth: 1,
-        marginRight: 16,
         maxWidth: 170,
         paddingHorizontal: 10,
         paddingVertical: 6,
+        marginRight: 16,
       }}
     >
       <Text numberOfLines={1} selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700" }}>
