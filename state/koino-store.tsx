@@ -3,8 +3,9 @@ import { FirebaseError, initializeApp, getApp, getApps } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
 import type { Auth, User as FirebaseUser } from "@firebase/auth";
 import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/database";
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { applyTheme, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
   CommentReaction,
@@ -21,6 +22,7 @@ import {
   SupportIntent,
   User,
 } from "@/state/types";
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyCLLSGBYogHq7YqUx6an4JRTWRhU9Y950s",
@@ -50,11 +52,15 @@ const auth = authInstance;
 const database = getDatabase(app);
 const pendingCheckInKeys = new Set<string>();
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
+const themeStorageKey = "koino.theme";
+
 
 type Profile = User & {
   email?: string | null;
   currentGroupId?: Id | null;
+  theme?: ThemeName;
 };
+
 
 type CreatePostKind = "reflection" | "prayer_request";
 
@@ -88,7 +94,9 @@ type Action =
   | { type: "createJournalEntry"; body: string; images?: string[] }
   | { type: "updateJournalEntry"; id: Id; body: string; images?: string[] }
   | { type: "deleteJournalEntry"; id: Id }
-  | { type: "createSupportIntent"; amount: number };
+  | { type: "createSupportIntent"; amount: number }
+  | { type: "setTheme"; theme: ThemeName };
+
 
 type KoinoContextValue = {
   state: KoinoState;
@@ -169,6 +177,7 @@ async function ensureProfile(user: FirebaseUser, name?: string) {
     name: resolvedName,
     email: user.email ?? null,
     createdAt: existing?.createdAt ?? timestamp,
+    theme: existing?.theme === "brand" ? "brand" : "classic",
   });
 
   if (name?.trim() && user.displayName !== resolvedName) {
@@ -317,8 +326,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
+  const [theme, setTheme] = useState<ThemeName>("classic");
+  const [themeReady, setThemeReady] = useState(false);
+  const themeRef = useRef<ThemeName>("classic");
+  const isThemeSyncPendingRef = useRef(false);
 
   useEffect(() => {
+    void (async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem(themeStorageKey);
+        const nextTheme = storedTheme === "brand" ? "brand" : "classic";
+        themeRef.current = nextTheme;
+        applyTheme(nextTheme);
+        setTheme(nextTheme);
+      } finally {
+        setThemeReady(true);
+      }
+    })();
+
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthReady(true);
@@ -341,8 +366,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         setJournalEntries([]);
         setSupportIntents([]);
       }
+
     });
   }, []);
+
+  useEffect(() => {
+    themeRef.current = theme;
+    applyTheme(theme);
+    if (themeReady) {
+      void AsyncStorage.setItem(themeStorageKey, theme);
+    }
+  }, [theme, themeReady]);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -355,7 +389,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setProfile(snapshot.val() as Profile);
+      const nextProfile = snapshot.val() as Profile;
+      setProfile(nextProfile);
+      const nextTheme = nextProfile.theme === "brand" ? "brand" : "classic";
+      if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
+        isThemeSyncPendingRef.current = false;
+      }
+      if (!isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
+        setTheme(nextTheme);
+      }
       setProfileReady(true);
     });
 
@@ -481,11 +523,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
 
     return {
-      ready: authReady && (!firebaseUser || (profileReady && userGroupsReady)),
+      ready: themeReady && authReady && (!firebaseUser || (profileReady && userGroupsReady)),
       currentUserId: firebaseUser?.uid,
       currentGroupId: profile?.currentGroupId ?? undefined,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
       authError,
+      theme,
       users,
       groups,
       memberships,
@@ -501,6 +544,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     };
   }, [
     authError,
+    theme,
+    themeReady,
     authReady,
     checkIns,
     firebaseUser,
@@ -901,6 +946,30 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await set(ref(database, `supportIntents/${firebaseUser.uid}/${intent.id}`), intent);
               return;
             }
+            case "setTheme": {
+              if (!firebaseUser) return;
+              isThemeSyncPendingRef.current = true;
+              themeRef.current = action.theme;
+              applyTheme(action.theme);
+              setTheme(action.theme);
+              const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
+              const resolvedName = profile?.name?.trim() || firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "KOINO member";
+              try {
+                await update(profileRef, {
+                  id: firebaseUser.uid,
+                  name: resolvedName,
+                  email: firebaseUser.email ?? null,
+                  createdAt: profile?.createdAt ?? now(),
+                  currentGroupId: profile?.currentGroupId ?? null,
+                  theme: action.theme,
+                });
+              } catch (error) {
+                isThemeSyncPendingRef.current = false;
+                throw error;
+              }
+              return;
+            }
+
           }
       } catch (error) {
         setAuthError(authMessage(error));

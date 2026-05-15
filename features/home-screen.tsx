@@ -175,18 +175,42 @@ function FeedTypeBadge({
 }
 
 const composerPalette = {
-  panel: colors.paper,
-  surface: colors.input,
-  line: colors.line,
-  text: colors.ink,
-  muted: colors.muted,
-  prayer: colors.gold,
-  prayerSoft: colors.roseSurface,
-  reflection: colors.moss,
-  reflectionSoft: colors.mossSurface,
-  submit: colors.olive,
-  disabled: colors.disabled,
-  onAccent: colors.onAccent,
+  get panel() {
+    return colors.paper;
+  },
+  get surface() {
+    return colors.input;
+  },
+  get line() {
+    return colors.line;
+  },
+  get text() {
+    return colors.ink;
+  },
+  get muted() {
+    return colors.muted;
+  },
+  get prayer() {
+    return colors.gold;
+  },
+  get prayerSoft() {
+    return colors.roseSurface;
+  },
+  get reflection() {
+    return colors.moss;
+  },
+  get reflectionSoft() {
+    return colors.mossSurface;
+  },
+  get submit() {
+    return colors.olive;
+  },
+  get disabled() {
+    return colors.disabled;
+  },
+  get onAccent() {
+    return colors.onAccent;
+  },
 };
 
 function ComposerKindButton({

@@ -1,13 +1,23 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
-import { KoinoProvider } from "@/state/koino-store";
-import { colors } from "@/ui/theme";
+import { KoinoProvider, useKoino } from "@/state/koino-store";
+import { colors, statusBarStyle } from "@/ui/theme";
 
 export default function RootLayout() {
   return (
     <KoinoProvider>
-      <StatusBar style="dark" backgroundColor={colors.cream} />
+      <RootNavigator />
+    </KoinoProvider>
+  );
+}
+
+function RootNavigator() {
+  const { state } = useKoino();
+
+  return (
+    <>
+      <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.cream },
@@ -21,6 +31,7 @@ export default function RootLayout() {
         <Stack.Screen name="reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-    </KoinoProvider>
+    </>
   );
 }
+

@@ -1,3 +1,5 @@
+import type { ThemeName } from "@/ui/theme";
+
 export type Id = string;
 
 export type User = {
@@ -115,6 +117,7 @@ export type KoinoState = {
   currentGroupId?: Id;
   authEmail?: string;
   authError?: string;
+  theme: ThemeName;
   users: User[];
   groups: Group[];
   memberships: Membership[];

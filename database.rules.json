@@ -7,7 +7,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && newData.child('createdAt').isString())",
+        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && newData.child('createdAt').isString() && (!newData.child('theme').exists() || newData.child('theme').val() == 'classic' || newData.child('theme').val() == 'brand'))",
         "id": {
           ".validate": "newData.val() == $uid"
         },
@@ -23,8 +23,11 @@
         "currentGroupId": {
           ".validate": "newData.val() == null || newData.isString()"
         },
+        "theme": {
+          ".validate": "newData.val() == 'classic' || newData.val() == 'brand'"
+        },
         "$other": {
-          ".validate": false
+          ".validate": "newData.val() == data.val() || newData.val() == null"
         }
       }
     },

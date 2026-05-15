@@ -1,6 +1,6 @@
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
@@ -18,7 +18,7 @@ export default function TabLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.cream, height: 110 },
         headerLeft: () => <KoinoHeaderLogo />,
-        headerRight: () => <CurrentGroupIndicator />,
+        headerRight: () => <HeaderRightControls />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
         headerTitleAlign: "center",
@@ -72,6 +72,42 @@ function KoinoHeaderLogo() {
   return <KoinoLogo size={48} style={{ marginLeft: 16, marginVertical: 8 }} />;
 }
 
+function HeaderRightControls() {
+  return (
+    <View style={{ alignItems: "flex-end", gap: 8, marginRight: 16 }}>
+      <ThemeSelector />
+      <CurrentGroupIndicator />
+    </View>
+  );
+}
+
+function ThemeSelector() {
+  const { state, dispatch } = useKoino();
+
+  if (!state.currentUserId) return null;
+
+  const nextTheme = state.theme === "classic" ? "brand" : "classic";
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => dispatch({ type: "setTheme", theme: nextTheme })}
+      style={{
+        backgroundColor: colors.elevated,
+        borderColor: colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      }}
+    >
+      <Text selectable style={{ color: state.theme === "brand" ? colors.white : colors.ink, fontSize: 12, fontWeight: "700" }}>
+        Theme: {state.theme === "brand" ? "Brand" : "Classic"}
+      </Text>
+    </Pressable>
+  );
+}
+
 function CurrentGroupIndicator() {
   const { state } = useKoino();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -88,7 +124,6 @@ function CurrentGroupIndicator() {
         maxWidth: 170,
         paddingHorizontal: 10,
         paddingVertical: 6,
-        marginRight: 16,
       }}
     >
       <Text numberOfLines={1} selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700" }}>
