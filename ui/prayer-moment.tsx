@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
 
 import type { PrayerSessionTargetType } from "@/state/types";
-import { colors } from "@/ui/theme";
+import { brandPalette, colors } from "@/ui/theme";
 
 const BREATH_PHASE_MS = 3800;
 const PRAYER_COMPLETE_DELAY_MS = 15_000;
@@ -104,8 +104,8 @@ export function PrayerMoment({
           >
             <Animated.View
               style={{
-                backgroundColor: "rgba(168,216,216,0.16)",
-                borderColor: "rgba(168,216,216,0.24)",
+                backgroundColor: colors.moss,
+                borderColor: colors.moss,
                 borderRadius: 999,
                 borderWidth: 1,
                 height: 238,
@@ -118,8 +118,8 @@ export function PrayerMoment({
             <Animated.View
               style={{
                 alignItems: "center",
-                backgroundColor: "rgba(232,166,128,0.16)",
-                borderColor: "rgba(245,243,240,0.2)",
+                backgroundColor: colors.gold,
+                borderColor: colors.white,
                 borderRadius: 999,
                 borderWidth: 1,
                 height: 210,
@@ -130,18 +130,18 @@ export function PrayerMoment({
               }}
             />
             <View
-              pointerEvents="none"
               style={{
                 alignItems: "center",
                 gap: 8,
                 justifyContent: "center",
+                pointerEvents: "none",
                 position: "absolute",
               }}
             >
               <Text
                 selectable
                 style={{
-                  color: colors.gold,
+                  color: brandPalette.deepNavy,
                   fontSize: 28,
                   fontWeight: "700",
                   textAlign: "center",
@@ -154,7 +154,7 @@ export function PrayerMoment({
         </View>
         <View
           style={{
-            backgroundColor: "rgba(245,243,240,0.05)",
+            backgroundColor: colors.paper,
             borderColor: colors.line,
             borderCurve: "continuous",
             borderRadius: 8,
@@ -177,7 +177,7 @@ export function PrayerMoment({
             onPress={() => onFinish("completed", startedAt)}
             style={{
               alignItems: "center",
-              backgroundColor: canCompletePrayer ? colors.olive : colors.disabled,
+              backgroundColor: canCompletePrayer ? colors.gold : colors.disabled,
               borderRadius: 999,
               overflow: "hidden",
               padding: 16,
@@ -185,18 +185,18 @@ export function PrayerMoment({
             }}
           >
             <Animated.View
-              pointerEvents="none"
               style={{
-                backgroundColor: colors.olive,
+                backgroundColor: colors.gold,
                 bottom: 0,
                 left: 0,
                 opacity: canCompletePrayer ? 1 : 0.72,
+                pointerEvents: "none",
                 position: "absolute",
                 top: 0,
                 width: completeProgressWidth,
               }}
             />
-            <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.ink, fontSize: 16, fontWeight: "700", zIndex: 1 }}>
+            <Text style={{ color: canCompletePrayer ? brandPalette.deepNavy : colors.ink, fontSize: 16, fontWeight: "700", zIndex: 1 }}>
               I have prayed
             </Text>
           </Pressable>

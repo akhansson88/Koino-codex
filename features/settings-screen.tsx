@@ -154,8 +154,8 @@ export function SettingsScreen() {
                   <View
                     key={joinedGroup.id}
                     style={{
-                      backgroundColor: isCurrent ? colors.accentSubtle : colors.elevated,
-                      borderColor: isCurrent ? colors.moss : colors.line,
+                      backgroundColor: colors.paper,
+                      borderColor: isCurrent ? colors.gold : colors.line,
                       borderCurve: "continuous",
                       borderRadius: 8,
                       borderWidth: 1,

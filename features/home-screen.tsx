@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ComponentProps } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentProps, ElementRef } from "react";
 import { Feather } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import { Alert, Image, Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { Image, LayoutAnimation, Modal, Platform, Pressable, ScrollView, Text, UIManager, useWindowDimensions, View } from "react-native";
 import type { ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -10,7 +9,7 @@ import { CommentReactionKind, FeedItem, Post } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { colors } from "@/ui/theme";
+import { brandPalette, colors } from "@/ui/theme";
 
 const moodOptions: { value: number; label: string; image: ImageSourcePropType }[] = [
   { value: 1, label: "Struggling", image: require("../emoji1-transparent.png") },
@@ -19,9 +18,11 @@ const moodOptions: { value: number; label: string; image: ImageSourcePropType }[
   { value: 4, label: "Great", image: require("../emoji4-transparent.png") },
 ];
 const MAX_POST_BODY_LENGTH = 500;
-const MAX_POST_IMAGES = 6;
 const DAILY_SHARED_POST_FRICTION_THRESHOLD = 3;
 const INITIAL_SHARED_ITEMS = 4;
+const INITIAL_VISIBLE_COMMENTS = 1;
+const COLLAPSED_POST_LINES = 3;
+const POST_TEXT_LINE_HEIGHT = 34;
 const DAILY_SHARED_POST_FRICTION_MESSAGE =
   "KOINO is built for a calm rhythm and meaningful sharing. If this still feels important, share it. Otherwise, you can keep it private with God.";
 type FeedFilter = "all" | "my_reflections" | "my_prayer_requests";
@@ -32,6 +33,10 @@ const commentReactionOptions: { kind: CommentReactionKind; label: string }[] = [
   { kind: "with_you", label: "With you" },
   { kind: "encouraged", label: "Encouraged" },
 ];
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 function formatJoinedDay(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
@@ -117,10 +122,11 @@ function FeedActionButton({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: selected ? colors.accentSubtle : colors.paper,
-        borderColor: selected ? colors.moss : colors.line,
+        backgroundColor: selected ? colors.gold : colors.paper,
+        borderColor: selected ? colors.gold : colors.line,
         borderRadius: 8,
         borderWidth: 1,
+        elevation: selected ? 2 : 0,
         flex: 1,
         flexDirection: "row",
         gap: 10,
@@ -134,9 +140,9 @@ function FeedActionButton({
       {emoji ? (
         <Text style={{ fontSize: 20 }}>{emoji}</Text>
       ) : iconName ? (
-        <Feather name={iconName} size={20} color={selected ? colors.moss : colors.ink} />
+        <Feather name={iconName} size={20} color={selected ? brandPalette.deepNavy : colors.ink} />
       ) : null}
-      <Text style={{ color: disabled ? colors.disabledText : colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
+      <Text style={{ color: disabled ? colors.disabledText : selected ? brandPalette.deepNavy : colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }
@@ -151,7 +157,7 @@ function FeedTypeBadge({
   tone: "moss" | "rose" | "gold";
 }) {
   const tint = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.gold;
-  const backgroundColor = tone === "moss" ? colors.mossSurface : tone === "rose" ? colors.roseSurface : colors.elevated;
+  const backgroundColor = tint;
 
   return (
     <View
@@ -159,7 +165,7 @@ function FeedTypeBadge({
         alignItems: "center",
         alignSelf: "flex-start",
         backgroundColor,
-        borderColor: colors.line,
+        borderColor: tint,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -168,8 +174,83 @@ function FeedTypeBadge({
         paddingVertical: 6,
       }}
     >
-      <Feather name={iconName} size={14} color={tint} />
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700" }}>{label}</Text>
+      <Feather name={iconName} size={14} color={brandPalette.deepNavy} />
+      <Text style={{ color: brandPalette.deepNavy, fontSize: 13, fontWeight: "700" }}>{label}</Text>
+    </View>
+  );
+}
+
+function ExpandableFeedText({ children }: { children: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [measuredLineCount, setMeasuredLineCount] = useState(0);
+  const hiddenTextRef = useRef<ElementRef<typeof Text> | null>(null);
+  const { width } = useWindowDimensions();
+  const canExpand = measuredLineCount > COLLAPSED_POST_LINES;
+  const textStyle = { color: colors.ink, fontSize: 22, fontWeight: "500" as const, lineHeight: POST_TEXT_LINE_HEIGHT };
+
+  const toggleExpanded = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((current) => !current);
+  };
+
+  useEffect(() => {
+    setExpanded(false);
+    setMeasuredLineCount(0);
+  }, [children]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof requestAnimationFrame === "undefined") return;
+
+    const frame = requestAnimationFrame(() => {
+      const node = hiddenTextRef.current as unknown as {
+        getBoundingClientRect?: () => { height: number };
+        scrollHeight?: number;
+      } | null;
+      const height = Math.max(node?.scrollHeight ?? 0, node?.getBoundingClientRect?.().height ?? 0);
+      if (height <= 0) return;
+
+      const lineCount = Math.max(1, Math.round(height / POST_TEXT_LINE_HEIGHT));
+      setMeasuredLineCount((current) => (current === lineCount ? current : lineCount));
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [children, width]);
+
+  return (
+    <View style={{ gap: 8 }}>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ left: 0, opacity: 0, pointerEvents: "none", position: "absolute", right: 0, top: 0, zIndex: -1 }}
+      >
+        <Text
+          ref={hiddenTextRef}
+          onTextLayout={(event) => {
+            const lineCount = event.nativeEvent.lines.length;
+            setMeasuredLineCount((current) => (current === lineCount ? current : lineCount));
+          }}
+          style={textStyle}
+        >
+          {children}
+        </Text>
+      </View>
+      <Text
+        selectable
+        numberOfLines={!expanded ? COLLAPSED_POST_LINES : undefined}
+        style={textStyle}
+      >
+        {children}
+      </Text>
+      {canExpand ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          onPress={toggleExpanded}
+          style={{ alignSelf: "flex-start", paddingVertical: 2 }}
+        >
+          <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "800" }}>{expanded ? "See less" : "See more"}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -194,22 +275,22 @@ const composerPalette = {
     return colors.gold;
   },
   get prayerSoft() {
-    return colors.roseSurface;
+    return colors.gold;
   },
   get reflection() {
     return colors.moss;
   },
   get reflectionSoft() {
-    return colors.mossSurface;
+    return colors.moss;
   },
   get submit() {
-    return colors.olive;
+    return colors.gold;
   },
   get disabled() {
     return colors.disabled;
   },
   get onAccent() {
-    return colors.onAccent;
+    return brandPalette.deepNavy;
   },
 };
 
@@ -244,65 +325,11 @@ function ComposerKindButton({
         padding: 14,
       }}
     >
-      <Feather name={isPrayer ? "heart" : "edit-3"} size={30} color={accent} />
-      <Text style={{ color: accent, fontSize: 18, fontWeight: "700", textAlign: "center" }}>
+      <Feather name={isPrayer ? "heart" : "edit-3"} size={30} color={selected ? brandPalette.deepNavy : colors.ink} />
+      <Text style={{ color: selected ? brandPalette.deepNavy : colors.ink, fontSize: 18, fontWeight: "700", textAlign: "center" }}>
         {isPrayer ? "Ask for prayer" : "Share reflection"}
       </Text>
     </Pressable>
-  );
-}
-
-function ComposerImages({
-  images,
-  onRemove,
-  onOpen,
-}: {
-  images: string[];
-  onRemove: (index: number) => void;
-  onOpen: (index: number) => void;
-}) {
-  if (images.length === 0) return null;
-
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
-      {images.map((image, index) => (
-        <Pressable
-          accessibilityLabel={`Open selected image ${index + 1}`}
-          accessibilityRole="imagebutton"
-          key={`${index}-${image.slice(0, 24)}`}
-          onPress={() => onOpen(index)}
-          style={{
-            borderColor: composerPalette.line,
-            borderRadius: 8,
-            borderWidth: 1,
-            height: 86,
-            overflow: "hidden",
-            width: 86,
-          }}
-        >
-          <Image source={{ uri: image }} style={{ height: "100%", width: "100%" }} />
-          <Pressable
-            accessibilityLabel={`Remove selected image ${index + 1}`}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => onRemove(index)}
-            style={{
-              alignItems: "center",
-              backgroundColor: "rgba(36,38,43,0.78)",
-              borderRadius: 999,
-              height: 26,
-              justifyContent: "center",
-              position: "absolute",
-              right: 6,
-              top: 6,
-              width: 26,
-            }}
-          >
-            <Feather name="x" size={15} color={composerPalette.surface} />
-          </Pressable>
-        </Pressable>
-      ))}
-    </ScrollView>
   );
 }
 
@@ -338,65 +365,27 @@ function CreatePostModal({
   visible,
   kind,
   body,
-  images,
   onKindChange,
   onBodyChange,
-  onImagesChange,
   onClose,
   onSubmit,
-  onPreviewImage,
   isEditing = false,
 }: {
   visible: boolean;
   kind: ComposerKind;
   body: string;
-  images: string[];
   onKindChange: (kind: ComposerKind) => void;
   onBodyChange: (body: string) => void;
-  onImagesChange: (images: string[]) => void;
   onClose: () => void;
   onSubmit: () => void;
-  onPreviewImage: (index: number) => void;
   isEditing?: boolean;
 }) {
-  const canSubmit = body.trim().length > 0 || images.length > 0;
+  const canSubmit = body.trim().length > 0;
   const isPrayer = kind === "prayer_request";
-
-  async function pickImages() {
-    const remainingSlots = MAX_POST_IMAGES - images.length;
-    if (remainingSlots <= 0) {
-      Alert.alert("Image limit reached", `You can add up to ${MAX_POST_IMAGES} images.`);
-      return;
-    }
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Photos permission needed", "Allow photo access to add images.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      base64: true,
-      mediaTypes: ["images"],
-      orderedSelection: true,
-      quality: 0.55,
-      selectionLimit: remainingSlots,
-    });
-
-    if (result.canceled) return;
-
-    const selectedImages = result.assets
-      .map((asset) => (asset.base64 ? `data:${asset.mimeType ?? "image/jpeg"};base64,${asset.base64}` : asset.uri))
-      .filter(Boolean)
-      .slice(0, remainingSlots);
-
-    onImagesChange([...images, ...selectedImages].slice(0, MAX_POST_IMAGES));
-  }
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: "rgba(0,0,0,0.45)", flex: 1, justifyContent: "center", padding: 18 }}>
+      <View style={{ backgroundColor: colors.cream, flex: 1, justifyContent: "center", padding: 18 }}>
         <View
           style={{
             alignSelf: "center",
@@ -458,25 +447,10 @@ function CreatePostModal({
                 }}
                 value={body}
               />
-              <Pressable
-                accessibilityLabel="Add images"
-                accessibilityRole="button"
-                hitSlop={10}
-                onPress={pickImages}
-                style={{ alignItems: "center", bottom: 16, height: 36, justifyContent: "center", left: 14, position: "absolute", width: 36 }}
-              >
-                <Feather name="image" size={24} color={composerPalette.text} />
-              </Pressable>
               <Text style={{ bottom: 22, color: composerPalette.text, fontSize: 16, fontWeight: "700", position: "absolute", right: 18 }}>
                 {body.length}/{MAX_POST_BODY_LENGTH}
               </Text>
             </View>
-
-            <ComposerImages
-              images={images}
-              onOpen={onPreviewImage}
-              onRemove={(index) => onImagesChange(images.filter((_, imageIndex) => imageIndex !== index))}
-            />
 
             <Pressable
               accessibilityRole="button"
@@ -520,7 +494,7 @@ function ImageGalleryModal({ gallery, onClose }: { gallery?: ImageGalleryState; 
 
   return (
     <Modal animationType="fade" visible={Boolean(gallery)} onRequestClose={onClose}>
-      <View style={{ backgroundColor: "#050505", flex: 1 }}>
+      <View style={{ backgroundColor: colors.cream, flex: 1 }}>
         {gallery ? (
           <>
             <ScrollView
@@ -557,16 +531,16 @@ function ImageGalleryModal({ gallery, onClose }: { gallery?: ImageGalleryState; 
                 onPress={onClose}
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.16)",
+                  backgroundColor: colors.gold,
                   borderRadius: 999,
                   height: 42,
                   justifyContent: "center",
                   width: 42,
                 }}
               >
-                <Feather name="x" size={24} color={colors.white} />
+                <Feather name="x" size={24} color={brandPalette.deepNavy} />
               </Pressable>
-              <Text style={{ color: colors.white, fontSize: 15, fontWeight: "700" }}>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>
                 {page + 1}/{gallery.images.length}
               </Text>
             </View>
@@ -602,7 +576,7 @@ function EditCheckInModal({
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: "rgba(0,0,0,0.45)", flex: 1, justifyContent: "center", padding: 18 }}>
+      <View style={{ backgroundColor: colors.cream, flex: 1, justifyContent: "center", padding: 18 }}>
         <View
           style={{
             alignSelf: "center",
@@ -660,7 +634,7 @@ function EditCheckInModal({
                       onPress={() => onMoodChange(option.value)}
                       style={{
                         alignItems: "center",
-                        borderColor: selected ? colors.olive : "transparent",
+                        borderColor: selected ? colors.olive : colors.line,
                         borderRadius: 8,
                         borderWidth: 1,
                         flex: 1,
@@ -729,10 +703,11 @@ export function HomeScreen() {
   const [visibility, setVisibility] = useState<"private" | "group">("private");
   const [postBody, setPostBody] = useState("");
   const [postKind, setPostKind] = useState<ComposerKind>("reflection");
-  const [postImages, setPostImages] = useState<string[]>([]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
   const [showOlderSharedItems, setShowOlderSharedItems] = useState(false);
+  const [visibleCommentThreads, setVisibleCommentThreads] = useState<Record<string, boolean>>({});
+  const [expandedCommentThreads, setExpandedCommentThreads] = useState<Record<string, boolean>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [replyComposerKey, setReplyComposerKey] = useState<string>();
   const [openMenuKey, setOpenMenuKey] = useState<string>();
@@ -745,7 +720,6 @@ export function HomeScreen() {
   const [editPostId, setEditPostId] = useState<string | null>(null);
   const [editPostBody, setEditPostBody] = useState("");
   const [editPostKind, setEditPostKind] = useState<ComposerKind>("reflection");
-  const [editPostImages, setEditPostImages] = useState<string[]>([]);
   // Edit check-in state
   const [editCheckInId, setEditCheckInId] = useState<string | null>(null);
   const [editCheckInMood, setEditCheckInMood] = useState(3);
@@ -825,6 +799,8 @@ export function HomeScreen() {
 
   useEffect(() => {
     setShowOlderSharedItems(false);
+    setVisibleCommentThreads({});
+    setExpandedCommentThreads({});
   }, [feedFilter, state.currentGroupId]);
 
   function submitCheckIn(nextVisibility = visibility) {
@@ -845,9 +821,8 @@ export function HomeScreen() {
   }
 
   function submitPost() {
-    dispatch({ type: "createPost", body: postBody, kind: postKind, images: postImages });
+    dispatch({ type: "createPost", body: postBody, kind: postKind });
     setPostBody("");
-    setPostImages([]);
     setPostKind("reflection");
     setComposerVisible(false);
   }
@@ -869,13 +844,11 @@ export function HomeScreen() {
            id: editPostId!,
            body: editPostBody,
            kind: editPostKind,
-           images: editPostImages,
          });
          // Clear edit state
          setEditPostId(null);
          setEditPostBody("");
          setEditPostKind("reflection");
-         setEditPostImages([]);
          setComposerVisible(false);
        });
        return;
@@ -886,13 +859,11 @@ export function HomeScreen() {
        id: editPostId!,
        body: editPostBody,
        kind: editPostKind,
-       images: editPostImages,
      });
      // Clear edit state
      setEditPostId(null);
      setEditPostBody("");
      setEditPostKind("reflection");
-     setEditPostImages([]);
       setComposerVisible(false);
     }
 
@@ -975,7 +946,7 @@ export function HomeScreen() {
                       onPress={() => setMood(option.value)}
                       style={{
                         alignItems: "center",
-                        borderColor: selected ? colors.olive : "transparent",
+                        borderColor: selected ? colors.olive : colors.line,
                         borderRadius: 8,
                         borderWidth: 1,
                         flex: 1,
@@ -1038,7 +1009,6 @@ export function HomeScreen() {
               label="Share reflection"
               onPress={() => {
                 setPostBody("");
-                setPostImages([]);
                 setPostKind("reflection");
                 setComposerVisible(true);
               }}
@@ -1048,7 +1018,6 @@ export function HomeScreen() {
               label="Ask for prayer"
               onPress={() => {
                 setPostBody("");
-                setPostImages([]);
                 setPostKind("prayer_request");
                 setComposerVisible(true);
               }}
@@ -1081,7 +1050,9 @@ export function HomeScreen() {
             visibleFeedItems.map((item) => {
               const targetType = item.type === "post" ? "post" : "check_in";
               const itemKey = `${targetType}:${item.id}`;
-              const replies = state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
+              const replies = state.replies
+                .filter((reply) => reply.targetType === targetType && reply.targetId === item.id)
+                .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
               const isPost = item.type === "post";
               const isPrayerRequest = item.type === "post" && item.kind === "prayer_request";
               const isReflection = item.type === "post" && item.kind === "reflection";
@@ -1101,6 +1072,12 @@ export function HomeScreen() {
               const itemLabel = item.type === "check_in" ? "check-in" : isPrayerRequest ? "prayer request" : "reflection";
               const menuOpen = openMenuKey === itemKey;
               const replyMenuOpenInItem = replies.some((reply) => reply.id === openReplyMenuId);
+              const commentsVisible = visibleCommentThreads[itemKey] ?? false;
+              const commentsExpanded = expandedCommentThreads[itemKey] ?? false;
+              const visibleReplies = commentsVisible
+                ? replies.slice(0, commentsExpanded ? replies.length : INITIAL_VISIBLE_COMMENTS)
+                : [];
+              const hiddenReplyCount = replies.length - visibleReplies.length;
 
               return (
                 <Card
@@ -1124,7 +1101,7 @@ export function HomeScreen() {
                         width: 52,
                       }}
                     >
-                      <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "700" }}>{initials(authorName) || "?"}</Text>
+                      <Text style={{ color: brandPalette.deepNavy, fontSize: 17, fontWeight: "700" }}>{initials(authorName) || "?"}</Text>
                     </View>
                     <View style={{ flex: 1, gap: 3, paddingRight: ownsItem ? 10 : 0 }}>
                       <Text selectable style={{ color: colors.ink, fontSize: 18, fontWeight: "700" }}>
@@ -1191,7 +1168,6 @@ export function HomeScreen() {
                                 setEditPostId(postToEdit.id);
                                 setEditPostBody(postToEdit.body);
                                 setEditPostKind(normalizePostKind(postToEdit.kind ?? "reflection"));
-                                setEditPostImages(postToEdit.images ?? []);
                                 setComposerVisible(true);
                               }
                             }
@@ -1246,9 +1222,7 @@ export function HomeScreen() {
                   </View>
 
                   {item.body || itemImages.length === 0 ? (
-                    <Text selectable style={{ color: colors.ink, fontSize: 22, fontWeight: "500", lineHeight: 34 }}>
-                      {item.body || "No words today, just presence."}
-                    </Text>
+                    <ExpandableFeedText>{item.body || "No words today, just presence."}</ExpandableFeedText>
                   ) : null}
 
                   {isPost ? <PostImages images={itemImages} onOpen={(index) => setImageGallery({ images: itemImages, index })} /> : null}
@@ -1292,8 +1266,30 @@ export function HomeScreen() {
                   ) : null}
 
                   {replies.length > 0 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: commentsVisible }}
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        if (commentsVisible && replyMenuOpenInItem) {
+                          setOpenReplyMenuId(undefined);
+                          setOpenReplyMenuAnchor(undefined);
+                        }
+                        setVisibleCommentThreads((current) => ({ ...current, [itemKey]: !commentsVisible }));
+                        setExpandedCommentThreads((current) => ({ ...current, [itemKey]: false }));
+                      }}
+                      style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 8, paddingVertical: 4 }}
+                    >
+                      <Feather name="message-circle" size={17} color={colors.olive} />
+                      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "800" }}>
+                        {commentsVisible ? "Hide comments" : `Show comments (${replies.length})`}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+
+                  {commentsVisible && visibleReplies.length > 0 ? (
                     <View style={{ gap: 8 }}>
-                      {replies.map((reply) => (
+                      {visibleReplies.map((reply) => (
                         <View
                           key={reply.id}
                           style={{
@@ -1361,7 +1357,7 @@ export function HomeScreen() {
                                     }}
                                     style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                   >
-                                    <Text style={{ color: replyPrayed ? colors.moss : colors.clay, fontWeight: "700" }}>
+                                    <Text style={{ color: replyPrayed ? colors.olive : colors.clay, fontWeight: "700" }}>
                                       {replyPrayed ? `Prayed (${replyPrayerCount})` : `Pray (${replyPrayerCount})`}
                                     </Text>
                                   </Pressable>
@@ -1411,7 +1407,7 @@ export function HomeScreen() {
                                         }}
                                         style={{ alignSelf: "flex-start", paddingVertical: 6 }}
                                       >
-                                        <Text style={{ color: selected ? colors.moss : colors.clay, fontWeight: "700" }}>{label}</Text>
+                                        <Text style={{ color: selected ? colors.olive : colors.clay, fontWeight: "700" }}>{label}</Text>
                                       </Pressable>
                                     );
                                   })}
@@ -1426,6 +1422,25 @@ export function HomeScreen() {
                           })()}
                         </View>
                       ))}
+                      {hiddenReplyCount > 0 || (commentsExpanded && replies.length > INITIAL_VISIBLE_COMMENTS) ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: commentsExpanded }}
+                          onPress={() => {
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                            if (commentsExpanded && replyMenuOpenInItem) {
+                              setOpenReplyMenuId(undefined);
+                              setOpenReplyMenuAnchor(undefined);
+                            }
+                            setExpandedCommentThreads((current) => ({ ...current, [itemKey]: !commentsExpanded }));
+                          }}
+                          style={{ alignSelf: "flex-start", paddingVertical: 4 }}
+                        >
+                          <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "800" }}>
+                            {commentsExpanded ? "Show fewer comments" : `Show more comments (${hiddenReplyCount})`}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   ) : null}
 
@@ -1441,6 +1456,8 @@ export function HomeScreen() {
                           disabled={!replyDrafts[itemKey]?.trim()}
                           onPress={() => {
                             dispatch({ type: "createReply", targetType, targetId: item.id, body: replyDrafts[itemKey] ?? "" });
+                            setVisibleCommentThreads((current) => ({ ...current, [itemKey]: true }));
+                            setExpandedCommentThreads((current) => ({ ...current, [itemKey]: false }));
                             setReplyDrafts((drafts) => ({ ...drafts, [itemKey]: "" }));
                             setReplyComposerKey(undefined);
                           }}
@@ -1470,10 +1487,8 @@ export function HomeScreen() {
          visible={composerVisible}
          kind={editPostId ? editPostKind : postKind}
          body={editPostId ? editPostBody : postBody}
-         images={editPostId ? editPostImages : postImages}
          onKindChange={editPostId ? setEditPostKind : setPostKind}
          onBodyChange={editPostId ? setEditPostBody : setPostBody}
-         onImagesChange={editPostId ? setEditPostImages : setPostImages}
          onClose={() => {
            setComposerVisible(false);
            // Clear edit state when closing
@@ -1481,10 +1496,8 @@ export function HomeScreen() {
              setEditPostId(null);
              setEditPostBody("");
              setEditPostKind("reflection");
-             setEditPostImages([]);
            }
          }}
-         onPreviewImage={(index) => setImageGallery({ images: editPostId ? editPostImages : postImages, index })}
          onSubmit={editPostId ? handleSubmitEditPost : handleSubmitPost}
          isEditing={!!editPostId}
        />

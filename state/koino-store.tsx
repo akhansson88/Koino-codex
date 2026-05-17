@@ -81,8 +81,8 @@ type Action =
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"] }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; images?: string[] }
-  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; images?: string[] }
+  | { type: "createPost"; body: string; kind: CreatePostKind }
+  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind }
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
@@ -738,8 +738,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                return;
              }
              case "createPost": {
-               const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
-               if (!firebaseUser || !profile?.currentGroupId || (!action.body.trim() && images.length === 0)) return;
+               if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
                const post: Post = {
                  id: id("post"),
                  userId: firebaseUser.uid,
@@ -748,9 +747,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  body: action.body.trim(),
                  createdAt: now(),
                };
-               if (images.length > 0) {
-                 post.images = images;
-               }
                await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
                return;
              }
@@ -758,11 +754,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                if (!firebaseUser || !profile?.currentGroupId) return;
                const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
                if (!post || post.userId !== firebaseUser.uid) return;
-               const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
+               if (!action.body.trim()) return;
                await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                  body: action.body.trim(),
                  kind: action.kind,
-                 images: images.length > 0 ? images : undefined,
                  // Note: We don't update createdAt to preserve the original timestamp
                  // We also don't update answeredAt or answeredMarkedAt for prayer requests
                });

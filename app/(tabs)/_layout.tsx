@@ -4,7 +4,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
-import { colors } from "@/ui/theme";
+import { brandPalette, colors } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -16,7 +16,15 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.cream, height: 110 },
+        headerStyle: {
+          backgroundColor: colors.cream,
+          elevation: 0,
+          height: 110,
+          shadowColor: brandPalette.deepNavy,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+        },
         headerLeft: () => <KoinoHeaderLogo />,
         headerRight: () => <HeaderRightControls />,
         headerTintColor: colors.ink,
@@ -28,8 +36,13 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.paper,
           borderTopColor: colors.line,
+          elevation: 8,
           height: 70,
           paddingTop: 8,
+          shadowColor: brandPalette.deepNavy,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.1,
+          shadowRadius: 18,
         },
         tabBarLabelStyle: { fontWeight: "700" },
       }}

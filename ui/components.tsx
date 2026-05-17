@@ -1,7 +1,7 @@
 import { PropsWithChildren } from "react";
 import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
-import { colors, radius } from "@/ui/theme";
+import { brandPalette, colors, radius } from "@/ui/theme";
 
 export function Screen({ children }: PropsWithChildren) {
   return (
@@ -16,18 +16,25 @@ export function Card({
   tone = "paper",
   style,
 }: PropsWithChildren<{ tone?: "paper" | "moss" | "rose"; style?: StyleProp<ViewStyle> }>) {
-  const backgroundColor = tone === "paper" ? colors.paper : tone === "moss" ? colors.mossSurface : colors.roseSurface;
+  const accentColor = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.line;
   return (
     <View
       style={[
         {
-          backgroundColor,
+          backgroundColor: colors.paper,
           borderColor: colors.line,
           borderCurve: "continuous",
           borderRadius: radius.lg,
           borderWidth: 1,
+          borderLeftColor: accentColor,
+          borderLeftWidth: tone === "paper" ? 1 : 4,
+          elevation: 3,
           gap: 14,
           padding: 18,
+          shadowColor: brandPalette.deepNavy,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.12,
+          shadowRadius: 18,
         },
         style,
       ]}
@@ -67,8 +74,8 @@ export function PillButton({
   variant = "primary",
   disabled = false,
 }: PropsWithChildren<{ onPress: () => void; variant?: "primary" | "secondary" | "ghost"; disabled?: boolean }>) {
-  const backgroundColor = variant === "primary" ? colors.olive : variant === "secondary" ? colors.elevated : "transparent";
-  const color = variant === "primary" ? colors.onAccent : variant === "secondary" ? colors.ink : colors.olive;
+  const backgroundColor = variant === "primary" ? colors.gold : colors.paper;
+  const color = variant === "primary" ? brandPalette.deepNavy : variant === "secondary" ? colors.ink : colors.olive;
   return (
     <Pressable
       disabled={disabled}
@@ -76,11 +83,17 @@ export function PillButton({
       style={{
         alignItems: "center",
         backgroundColor: disabled ? colors.disabled : backgroundColor,
-        borderColor: variant === "primary" ? "transparent" : colors.line,
+        borderColor: variant === "primary" ? colors.gold : colors.line,
         borderRadius: 999,
         borderWidth: 1,
+        elevation: variant === "primary" && !disabled ? 2 : 0,
+        minHeight: 48,
         paddingHorizontal: 18,
         paddingVertical: 12,
+        shadowColor: brandPalette.deepNavy,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: variant === "primary" && !disabled ? 0.1 : 0,
+        shadowRadius: 10,
       }}
     >
       <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "700" }}>{children}</Text>
@@ -126,14 +139,14 @@ export function Choice({
       onPress={onPress}
       style={{
         backgroundColor: selected ? colors.accentSubtle : colors.paper,
-        borderColor: selected ? colors.olive : colors.line,
+        borderColor: selected ? colors.gold : colors.line,
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 16,
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? colors.ink : colors.muted, fontWeight: "700" }}>{label}</Text>
+      <Text style={{ color: selected ? brandPalette.deepNavy : colors.ink, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }

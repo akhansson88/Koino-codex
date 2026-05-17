@@ -8,7 +8,7 @@ import { useKoino } from "@/state/koino-store";
 import { Body, Card, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { colors } from "@/ui/theme";
+import { brandPalette, colors } from "@/ui/theme";
 
 const MAX_JOURNAL_IMAGES = 6;
 
@@ -49,7 +49,7 @@ function JournalImages({
               onPress={() => onRemove(index)}
               style={{
                 alignItems: "center",
-                backgroundColor: "rgba(36,38,43,0.78)",
+                backgroundColor: colors.ink,
                 borderRadius: 999,
                 height: 26,
                 justifyContent: "center",
@@ -59,7 +59,7 @@ function JournalImages({
                 width: 26,
               }}
             >
-              <Feather name="x" size={15} color={colors.paper} />
+              <Feather name="x" size={15} color={colors.onAccent} />
             </Pressable>
           ) : null}
         </View>
@@ -80,7 +80,7 @@ function JournalTypeBadge({
       style={{
         alignItems: "center",
         alignSelf: "flex-start",
-        backgroundColor: colors.mossSurface,
+        backgroundColor: colors.moss,
         borderColor: colors.moss,
         borderRadius: 999,
         borderWidth: 1,
@@ -90,8 +90,8 @@ function JournalTypeBadge({
         paddingVertical: 6,
       }}
     >
-      <Feather name={iconName} size={14} color={colors.moss} />
-      <Text style={{ color: colors.ink, fontSize: 13, fontWeight: "700" }}>{label}</Text>
+      <Feather name={iconName} size={14} color={brandPalette.deepNavy} />
+      <Text style={{ color: brandPalette.deepNavy, fontSize: 13, fontWeight: "700" }}>{label}</Text>
     </View>
   );
 }
@@ -112,8 +112,8 @@ function JournalActionButton({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: selected ? colors.accentSubtle : colors.paper,
-        borderColor: selected ? colors.moss : colors.line,
+        backgroundColor: selected ? colors.gold : colors.paper,
+        borderColor: selected ? colors.gold : colors.line,
         borderRadius: 8,
         borderWidth: 1,
         flexDirection: "row",
@@ -125,8 +125,8 @@ function JournalActionButton({
         paddingVertical: 13,
       }}
     >
-      <Feather name="heart" size={20} color={selected ? colors.moss : colors.ink} />
-      <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
+      <Feather name="heart" size={20} color={selected ? brandPalette.deepNavy : colors.ink} />
+      <Text style={{ color: selected ? brandPalette.deepNavy : colors.ink, fontSize: 15, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }
