@@ -7,7 +7,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && newData.child('createdAt').isString() && (!newData.child('theme').exists() || newData.child('theme').val() == 'light' || newData.child('theme').val() == 'dark' || newData.child('theme').val() == 'classic' || newData.child('theme').val() == 'brand'))",
+        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && (!newData.child('createdAt').exists() || newData.child('createdAt').isString()) && (!newData.child('currentGroupId').exists() || newData.child('currentGroupId').val() == null || newData.child('currentGroupId').isString()) && (!newData.child('theme').exists() || newData.child('theme').val() == 'light' || newData.child('theme').val() == 'dark' || newData.child('theme').val() == 'classic' || newData.child('theme').val() == 'brand'))",
         "id": {
           ".validate": "newData.val() == $uid"
         },
@@ -83,7 +83,7 @@
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$uid": {
-          ".write": "auth != null && ((!data.exists() && !newData.exists()) || (auth.uid == $uid && (newData.val() == null || newData.child('userId').val() == auth.uid)) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
+          ".write": "auth != null && ((!data.exists() && !newData.exists()) || (auth.uid == $uid && (newData.val() == null || (newData.child('userId').val() == auth.uid && root.child('groups').child($groupId).child('id').val() == $groupId && root.child('inviteCodes').child(root.child('groups').child($groupId).child('inviteCode').val()).child('groupId').val() == $groupId))) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
           ".validate": "newData.val() == null || (newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && newData.child('role').isString() && newData.child('userName').isString() && newData.child('createdAt').isString())",
           "id": {
             ".validate": "newData.isString()"
@@ -114,7 +114,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         "$groupId": {
-          ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
+          ".write": "auth != null && ((!data.exists() && !newData.exists()) || (auth.uid == $uid && (newData.val() == null || (newData.child('userId').val() == auth.uid && root.child('groups').child($groupId).child('id').val() == $groupId && root.child('inviteCodes').child(root.child('groups').child($groupId).child('inviteCode').val()).child('groupId').val() == $groupId))) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
           ".validate": "newData.val() == null || (newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && newData.child('role').isString() && newData.child('userName').isString() && newData.child('createdAt').isString())",
           "id": {
             ".validate": "newData.isString()"

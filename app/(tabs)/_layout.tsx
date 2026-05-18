@@ -1,11 +1,12 @@
 import { Redirect, Tabs } from "expo-router";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Platform, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
-import { brandPalette, colors } from "@/ui/theme";
+import { brandPalette, colors, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -33,19 +34,26 @@ export default function TabLayout() {
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
+        tabBarBackground: () => <TabBarGlassBackground theme={state.theme} />,
         tabBarStyle: {
-          backgroundColor: state.theme === "dark" ? "rgba(17, 26, 44, 0.34)" : "rgba(255, 255, 255, 0.28)",
+          backgroundColor:
+            Platform.OS === "web"
+              ? state.theme === "dark"
+                ? "rgba(17, 26, 44, 0.28)"
+                : "rgba(255, 255, 255, 0.22)"
+              : "transparent",
           borderColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.82)",
-          borderRadius: 28,
+          borderRadius: 0,
           borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
           borderWidth: 1,
-          bottom: 14,
+          bottom: 0,
           elevation: 12,
-          height: 64,
-          left: 14,
+          height: 76,
+          left: 0,
+          paddingBottom: 12,
           paddingTop: 8,
           position: "absolute",
-          right: 14,
+          right: 0,
           shadowColor: brandPalette.deepNavy,
           shadowOffset: { width: 0, height: 12 },
           shadowOpacity: state.theme === "dark" ? 0.34 : 0.16,
@@ -95,6 +103,35 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
+  if (Platform.OS === "web") return null;
+
+  const isDark = theme === "dark";
+
+  return (
+    <BlurView
+      blurReductionFactor={2}
+      experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : "none"}
+      intensity={90}
+      tint={isDark ? "systemMaterialDark" : "systemMaterial"}
+      style={{
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: 0,
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: isDark ? "rgba(17, 26, 44, 0.34)" : "rgba(255, 255, 255, 0.28)",
+          borderTopColor: isDark ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.88)",
+          borderTopWidth: 1,
+        }}
+      />
+    </BlurView>
   );
 }
 
