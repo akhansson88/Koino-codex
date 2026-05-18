@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
@@ -34,15 +34,32 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
-          backgroundColor: colors.paper,
-          borderTopColor: colors.line,
-          elevation: 4,
-          height: 70,
+          backgroundColor: state.theme === "dark" ? "rgba(17, 26, 44, 0.34)" : "rgba(255, 255, 255, 0.28)",
+          borderColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.22)" : "rgba(255, 255, 255, 0.82)",
+          borderRadius: 28,
+          borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
+          borderWidth: 1,
+          bottom: 14,
+          elevation: 12,
+          height: 64,
+          left: 14,
           paddingTop: 8,
+          position: "absolute",
+          right: 14,
           shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity: state.theme === "dark" ? 0.34 : 0.16,
+          shadowRadius: 26,
+          ...(Platform.OS === "web"
+            ? {
+                WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
+                backdropFilter: "blur(34px) saturate(220%) contrast(115%)",
+                boxShadow:
+                  state.theme === "dark"
+                    ? "inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.36)"
+                    : "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
+              }
+            : {}),
         },
         tabBarLabelStyle: { fontWeight: "700" },
       }}
