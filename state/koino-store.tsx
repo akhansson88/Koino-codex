@@ -92,8 +92,8 @@ type Action =
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
   | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
-  | { type: "createJournalEntry"; body: string; images?: string[] }
-  | { type: "updateJournalEntry"; id: Id; body: string; images?: string[] }
+  | { type: "createJournalEntry"; body: string }
+  | { type: "updateJournalEntry"; id: Id; body: string }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
@@ -906,8 +906,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createJournalEntry": {
-              const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
-              if (!firebaseUser || (!action.body.trim() && images.length === 0)) return;
+              if (!firebaseUser || !action.body.trim()) return;
               const timestamp = now();
               const entry: JournalEntry = {
                 id: id("journal"),
@@ -917,18 +916,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: timestamp,
                 updatedAt: timestamp,
               };
-              if (images.length > 0) {
-                entry.images = images;
-              }
               await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
               return;
             }
             case "updateJournalEntry":
               if (!firebaseUser) return;
-              const images = action.images?.filter((image) => image.trim()).slice(0, 6) ?? [];
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
-                images: images.length > 0 ? images : null,
+                images: null,
                 updatedAt: now(),
               });
               return;
