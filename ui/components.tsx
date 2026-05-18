@@ -78,6 +78,8 @@ export function PillButton({
   const color = variant === "primary" ? brandPalette.deepNavy : variant === "secondary" ? colors.ink : colors.olive;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={{
@@ -136,6 +138,8 @@ export function Choice({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={{
         backgroundColor: selected ? colors.accentSubtle : colors.paper,

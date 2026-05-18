@@ -1,9 +1,10 @@
-import { Redirect, Tabs } from "expo-router";
+import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
 import { brandPalette, colors, type ThemeName } from "@/ui/theme";
@@ -12,7 +13,7 @@ export default function TabLayout() {
   const { state } = useKoino();
 
   if (state.ready && !state.currentUserId) {
-    return <Redirect href="/" />;
+    return <OnboardingScreen />;
   }
 
   return (

@@ -333,6 +333,25 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const hasStoredThemeRef = useRef(false);
   const isThemeSyncPendingRef = useRef(false);
 
+  const clearUserSession = useCallback(() => {
+    setFirebaseUser(null);
+    setProfile(null);
+    setProfileReady(true);
+    setUserGroupsReady(true);
+    setGroups([]);
+    setUserMemberships([]);
+    setMemberships([]);
+    setCheckIns([]);
+    setPrivateCheckIns([]);
+    setPosts([]);
+    setPrayerSessions([]);
+    setPrayerReactions([]);
+    setReplies([]);
+    setCommentReactions([]);
+    setJournalEntries([]);
+    setSupportIntents([]);
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -353,25 +372,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setAuthError(undefined);
 
       if (!user) {
-        setProfile(null);
-        setProfileReady(true);
-        setUserGroupsReady(true);
-        setGroups([]);
-        setUserMemberships([]);
-        setMemberships([]);
-        setCheckIns([]);
-        setPrivateCheckIns([]);
-        setPosts([]);
-        setPrayerSessions([]);
-        setPrayerReactions([]);
-        setReplies([]);
-        setCommentReactions([]);
-        setJournalEntries([]);
-        setSupportIntents([]);
+        clearUserSession();
       }
 
     });
-  }, []);
+  }, [clearUserSession]);
 
   useEffect(() => {
     themeRef.current = theme;
@@ -582,6 +587,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "signOut":
+              clearUserSession();
               await FirebaseAuth.signOut(auth);
               return;
             case "requestPasswordReset": {
@@ -992,6 +998,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     },
     [
       checkIns,
+      clearUserSession,
       commentReactions,
       firebaseUser,
       groups,
