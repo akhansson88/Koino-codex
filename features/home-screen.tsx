@@ -4,6 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { Image, LayoutAnimation, Modal, Platform, Pressable, ScrollView, Text, UIManager, useWindowDimensions, View } from "react-native";
 import type { ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
+import { activePrivateCheckIns } from "@/state/check-ins";
 import { useKoino } from "@/state/koino-store";
 import { CommentReactionKind, FeedItem, Post } from "@/state/types";
 import { Body, Card, Choice, Field, PillButton, Screen, SectionTitle } from "@/ui/components";
@@ -551,6 +552,202 @@ function ImageGalleryModal({ gallery, onClose }: { gallery?: ImageGalleryState; 
   );
 }
 
+function DailyCheckInPrompt({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable accessibilityLabel="Open daily check-in" accessibilityRole="button" onPress={onPress}>
+      <Card tone="moss">
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 1, gap: 14 }}>
+            <Text selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700", letterSpacing: 1 }}>
+              DAILY CHECK-IN
+            </Text>
+            <SectionTitle>Open today's check-in</SectionTitle>
+            <Body muted>A gentle entry point, not a score to keep.</Body>
+          </View>
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: colors.gold,
+              borderRadius: 999,
+              height: 42,
+              justifyContent: "center",
+              width: 42,
+            }}
+          >
+            <Feather name="chevron-right" size={24} color={brandPalette.deepNavy} />
+          </View>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+function DailyCheckInModal({
+  visible,
+  mood,
+  readToday,
+  reflectionText,
+  visibility,
+  onMoodChange,
+  onReadTodayChange,
+  onReflectionChange,
+  onVisibilityChange,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  mood: number;
+  readToday: boolean;
+  reflectionText: string;
+  visibility: "private" | "group";
+  onMoodChange: (mood: number) => void;
+  onReadTodayChange: (readToday: boolean) => void;
+  onReflectionChange: (text: string) => void;
+  onVisibilityChange: (visibility: "private" | "group") => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const submitLabel = visibility === "private" ? "Save today's check-in" : "Share today's check-in";
+  const { height } = useWindowDimensions();
+  const modalMaxHeight = Math.max(360, height - 36);
+  const contentMaxHeight = Math.max(280, modalMaxHeight - 70);
+
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View style={{ backgroundColor: "rgba(23, 28, 22, 0.46)", flex: 1, justifyContent: "center", padding: 18 }}>
+        <Pressable
+          accessibilityLabel="Close daily check-in"
+          accessibilityRole="button"
+          onPress={onClose}
+          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+        />
+        <View
+          style={{
+            alignSelf: "center",
+            backgroundColor: colors.paper,
+            borderColor: colors.line,
+            borderRadius: 8,
+            borderWidth: 1,
+            elevation: 18,
+            maxWidth: 540,
+            overflow: "hidden",
+            shadowColor: brandPalette.deepNavy,
+            shadowOffset: { width: 0, height: 18 },
+            shadowOpacity: 0.22,
+            shadowRadius: 34,
+            maxHeight: modalMaxHeight,
+            width: "100%",
+          }}
+        >
+          <View
+            style={{
+              alignItems: "center",
+              borderBottomColor: colors.line,
+              borderBottomWidth: 1,
+              flexDirection: "row",
+              justifyContent: "center",
+              minHeight: 70,
+              paddingHorizontal: 18,
+            }}
+          >
+            <Pressable
+              accessibilityLabel="Close daily check-in"
+              accessibilityRole="button"
+              hitSlop={10}
+              onPress={onClose}
+              style={{ alignItems: "center", height: 38, justifyContent: "center", left: 12, position: "absolute", width: 38 }}
+            >
+              <Feather name="x" size={26} color={colors.ink} />
+            </Pressable>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "700" }}>Daily check-in</Text>
+          </View>
+
+          <ScrollView contentContainerStyle={{ gap: 20, padding: 22 }} style={{ maxHeight: contentMaxHeight }}>
+            <Body muted>A gentle entry point, not a score to keep.</Body>
+
+            <View>
+              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700", marginBottom: 10 }}>Have you read the Bible today?</Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Choice label="Yes" selected={readToday} onPress={() => onReadTodayChange(true)} />
+                <Choice label="Not yet" selected={!readToday} onPress={() => onReadTodayChange(false)} />
+              </View>
+            </View>
+
+            <View style={{ gap: 18 }}>
+              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>How is your heart?</Text>
+              <View style={{ flexDirection: "row", width: "100%" }}>
+                {moodOptions.map((option) => {
+                  const selected = mood === option.value;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`Mood ${option.value}: ${option.label}`}
+                      accessibilityRole="button"
+                      key={option.value}
+                      onPress={() => onMoodChange(option.value)}
+                      style={{
+                        alignItems: "center",
+                        borderColor: selected ? colors.olive : colors.line,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        flex: 1,
+                        gap: 8,
+                        minWidth: 0,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <View style={{ alignSelf: "stretch", aspectRatio: 1, overflow: "hidden", paddingHorizontal: 3, width: "100%" }}>
+                        <Image source={option.image} style={{ height: "100%", objectFit: "contain", width: "100%" }} />
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                        style={{ color: selected ? colors.ink : colors.muted, fontSize: 13, fontWeight: "800", textAlign: "center", width: "100%" }}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Field
+              multiline
+              value={reflectionText}
+              onChangeText={onReflectionChange}
+              placeholder="Optional reflection. A sentence is enough."
+            />
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <Choice label="Save privately" selected={visibility === "private"} onPress={() => onVisibilityChange("private")} />
+              <Choice label="Share gently" selected={visibility === "group"} onPress={() => onVisibilityChange("group")} />
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={onSubmit}
+              style={{
+                alignItems: "center",
+                backgroundColor: colors.gold,
+                borderRadius: 12,
+                flexDirection: "row",
+                gap: 10,
+                justifyContent: "center",
+                minHeight: 58,
+                paddingHorizontal: 18,
+              }}
+            >
+              <Feather name={visibility === "private" ? "lock" : "send"} size={21} color={brandPalette.deepNavy} />
+              <Text style={{ color: brandPalette.deepNavy, fontSize: 18, fontWeight: "700" }}>{submitLabel}</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function EditCheckInModal({
   visible,
   mood,
@@ -701,6 +898,7 @@ export function HomeScreen() {
   const [readToday, setReadToday] = useState(true);
   const [reflectionText, setReflectionText] = useState("");
   const [visibility, setVisibility] = useState<"private" | "group">("private");
+  const [checkInModalVisible, setCheckInModalVisible] = useState(false);
   const [postBody, setPostBody] = useState("");
   const [postKind, setPostKind] = useState<ComposerKind>("reflection");
   const [composerVisible, setComposerVisible] = useState(false);
@@ -770,13 +968,13 @@ export function HomeScreen() {
   }, [feedFilter, state.checkIns, state.currentGroupId, state.currentUserId, state.posts]);
   const todaysCheckIn = useMemo(() => {
     const todayKey = localDayKey(new Date());
-    return [...state.checkIns, ...state.privateCheckIns].find(
+    return [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].find(
       (item) =>
         item.userId === state.currentUserId &&
         item.groupId === state.currentGroupId &&
         localDayKey(item.createdAt) === todayKey,
     );
-  }, [state.checkIns, state.currentGroupId, state.currentUserId, state.privateCheckIns]);
+  }, [state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries, state.privateCheckIns]);
   const sharedPostsToday = useMemo(() => {
     const todayKey = localDayKey(new Date());
     const sharedCheckIns = state.checkIns.filter(
@@ -803,8 +1001,15 @@ export function HomeScreen() {
     setExpandedCommentThreads({});
   }, [feedFilter, state.currentGroupId]);
 
+  useEffect(() => {
+    if (todaysCheckIn) {
+      setCheckInModalVisible(false);
+    }
+  }, [todaysCheckIn]);
+
   function submitCheckIn(nextVisibility = visibility) {
     dispatch({ type: "submitCheckIn", mood, readToday, reflectionText, visibility: nextVisibility });
+    setCheckInModalVisible(false);
     setReflectionText("");
     setMood(3);
     setReadToday(true);
@@ -894,111 +1099,7 @@ export function HomeScreen() {
           <Body muted>Check in, share honestly when you are ready, pray, and leave encouraged.</Body>
         </Card>
 
-        {todaysCheckIn ? (
-          <Card tone="moss">
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.olive,
-                  borderRadius: 999,
-                  height: 42,
-                  justifyContent: "center",
-                  width: 42,
-                }}
-              >
-                <Feather name="check" size={22} color={colors.onAccent} />
-              </View>
-              <View style={{ flex: 1, gap: 3 }}>
-                <SectionTitle>Today's check-in is held</SectionTitle>
-                <Body muted>
-                  You have already saved today's {todaysCheckIn.visibility === "private" ? "private " : ""}check-in.
-                </Body>
-              </View>
-            </View>
-          </Card>
-        ) : (
-          <Card>
-            <SectionTitle>Daily check-in</SectionTitle>
-            <Body muted>A gentle entry point, not a score to keep.</Body>
-            <Body>Have you read the Bible today?</Body>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Choice label="Yes" selected={readToday} onPress={() => setReadToday(true)} />
-              <Choice label="Not yet" selected={!readToday} onPress={() => setReadToday(false)} />
-            </View>
-            <View
-              style={{
-                alignSelf: "stretch",
-                gap: 18,
-                width: "100%",
-              }}
-            >
-              <SectionTitle>How is your heart?</SectionTitle>
-              <View style={{ alignSelf: "stretch", flexDirection: "row", width: "100%" }}>
-                {moodOptions.map((option) => {
-                  const selected = mood === option.value;
-
-                  return (
-                    <Pressable
-                      accessibilityLabel={`Mood ${option.value}: ${option.label}`}
-                      accessibilityRole="button"
-                      key={option.value}
-                      onPress={() => setMood(option.value)}
-                      style={{
-                        alignItems: "center",
-                        borderColor: selected ? colors.olive : colors.line,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        flex: 1,
-                        gap: 8,
-                        minWidth: 0,
-                        paddingVertical: 6,
-                      }}
-                    >
-                      <View
-                        style={{
-                          alignSelf: "stretch",
-                          aspectRatio: 1,
-                          overflow: "hidden",
-                          paddingHorizontal: 3,
-                          width: "100%",
-                        }}
-                      >
-                        <Image
-                          source={option.image}
-                          style={{
-                            height: "100%",
-                            objectFit: "contain",
-                            width: "100%",
-                          }}
-                        />
-                      </View>
-                      <Text
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.7}
-                        style={{ color: selected ? colors.ink : colors.muted, fontSize: 13, fontWeight: "800", textAlign: "center", width: "100%" }}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <Field
-              multiline
-              value={reflectionText}
-              onChangeText={setReflectionText}
-              placeholder="Optional reflection. A sentence is enough."
-            />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              <Choice label="Save privately" selected={visibility === "private"} onPress={() => setVisibility("private")} />
-              <Choice label="Share gently" selected={visibility === "group"} onPress={() => setVisibility("group")} />
-            </View>
-            <PillButton onPress={handleSubmitCheckIn}>{visibility === "private" ? "Save today's check-in" : "Share today's check-in"}</PillButton>
-          </Card>
-        )}
+        {!todaysCheckIn ? <DailyCheckInPrompt onPress={() => setCheckInModalVisible(true)} /> : null}
 
         <Card>
           <SectionTitle>When you want to be known</SectionTitle>
@@ -1559,6 +1660,20 @@ export function HomeScreen() {
        </Modal>
 
        <ImageGalleryModal gallery={imageGallery} onClose={() => setImageGallery(undefined)} />
+
+       <DailyCheckInModal
+         visible={checkInModalVisible && !todaysCheckIn}
+         mood={mood}
+         readToday={readToday}
+         reflectionText={reflectionText}
+         visibility={visibility}
+         onMoodChange={setMood}
+         onReadTodayChange={setReadToday}
+         onReflectionChange={setReflectionText}
+         onVisibilityChange={setVisibility}
+         onClose={() => setCheckInModalVisible(false)}
+         onSubmit={handleSubmitCheckIn}
+       />
 
        <EditCheckInModal
          visible={editCheckInVisible}

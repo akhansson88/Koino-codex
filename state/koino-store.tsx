@@ -5,6 +5,7 @@ import type { Auth, User as FirebaseUser } from "@firebase/auth";
 import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/database";
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { activePrivateCheckIns } from "@/state/check-ins";
 import { applyTheme, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
@@ -680,7 +681,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const pendingKey = `${firebaseUser.uid}:${profile.currentGroupId}:${todayKey}`;
               if (pendingCheckInKeys.has(pendingKey)) return;
 
-              const hasCheckInToday = [...checkIns, ...privateCheckIns].some(
+              const hasCheckInToday = [...checkIns, ...activePrivateCheckIns(privateCheckIns, journalEntries)].some(
                 (item) =>
                   item.userId === firebaseUser.uid &&
                   item.groupId === profile.currentGroupId &&
@@ -704,10 +705,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 if (action.visibility === "group") {
                   await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
                 } else {
-                  await set(ref(database, `privateCheckIns/${firebaseUser.uid}/${checkIn.id}`), checkIn);
-                }
-
-                if (action.visibility === "private") {
                   const entry: JournalEntry = {
                     id: id("journal"),
                     userId: firebaseUser.uid,
@@ -717,7 +714,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                     createdAt: timestamp,
                     updatedAt: timestamp,
                   };
-                  await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+                  await update(ref(database), {
+                    [`privateCheckIns/${firebaseUser.uid}/${checkIn.id}`]: checkIn,
+                    [`journalEntries/${firebaseUser.uid}/${entry.id}`]: entry,
+                  });
                 }
                } finally {
                  pendingCheckInKeys.delete(pendingKey);
@@ -930,10 +930,26 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 updatedAt: now(),
               });
               return;
-            case "deleteJournalEntry":
+            case "deleteJournalEntry": {
               if (!firebaseUser) return;
-              await remove(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`));
+              const entry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
+              const updates: Record<string, null> = {
+                [`journalEntries/${firebaseUser.uid}/${action.id}`]: null,
+              };
+
+              if (entry?.source === "private_check_in") {
+                const checkInId = privateCheckIns.find(
+                  (checkIn) => checkIn.userId === firebaseUser.uid && checkIn.createdAt === entry.createdAt,
+                )?.id;
+
+                if (checkInId) {
+                  updates[`privateCheckIns/${firebaseUser.uid}/${checkInId}`] = null;
+                }
+              }
+
+              await update(ref(database), updates);
               return;
+            }
             case "createSupportIntent": {
               if (!firebaseUser) return;
               const intent: SupportIntent = {
@@ -990,6 +1006,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       commentReactions,
       firebaseUser,
       groups,
+      journalEntries,
       posts,
       prayerReactions,
       privateCheckIns,

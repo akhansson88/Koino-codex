@@ -300,7 +300,10 @@ export function JournalScreen() {
                   onPress={() =>
                     confirmAction({
                       title: "Delete entry?",
-                      message: "This private journal entry will be removed.",
+                      message:
+                        entry.source === "private_check_in"
+                          ? "This private journal entry and its check-in will be removed."
+                          : "This private journal entry will be removed.",
                       confirmText: "Delete",
                       destructive: true,
                       onConfirm: () => dispatch({ type: "deleteJournalEntry", id: entry.id }),
