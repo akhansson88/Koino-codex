@@ -6,7 +6,7 @@ import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/da
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { applyTheme, ThemeName } from "@/ui/theme";
+import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
   CommentReaction,
@@ -59,7 +59,7 @@ const themeStorageKey = "koino.theme";
 type Profile = User & {
   email?: string | null;
   currentGroupId?: Id | null;
-  theme?: ThemeName;
+  theme?: StoredThemeName;
 };
 
 
@@ -178,7 +178,7 @@ async function ensureProfile(user: FirebaseUser, name?: string) {
     name: resolvedName,
     email: user.email ?? null,
     createdAt: existing?.createdAt ?? timestamp,
-    theme: existing?.theme === "brand" ? "brand" : "classic",
+    theme: normalizeTheme(existing?.theme),
   });
 
   if (name?.trim() && user.displayName !== resolvedName) {
@@ -327,16 +327,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
-  const [theme, setTheme] = useState<ThemeName>("classic");
+  const [theme, setTheme] = useState<ThemeName>("light");
   const [themeReady, setThemeReady] = useState(false);
-  const themeRef = useRef<ThemeName>("classic");
+  const themeRef = useRef<ThemeName>("light");
+  const hasStoredThemeRef = useRef(false);
   const isThemeSyncPendingRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
       try {
         const storedTheme = await AsyncStorage.getItem(themeStorageKey);
-        const nextTheme = storedTheme === "brand" ? "brand" : "classic";
+        hasStoredThemeRef.current = Boolean(storedTheme);
+        const nextTheme = normalizeTheme(storedTheme);
         themeRef.current = nextTheme;
         applyTheme(nextTheme);
         setTheme(nextTheme);
@@ -392,11 +394,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
       const nextProfile = snapshot.val() as Profile;
       setProfile(nextProfile);
-      const nextTheme = nextProfile.theme === "brand" ? "brand" : "classic";
+      const nextTheme = normalizeTheme(nextProfile.theme);
       if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
         isThemeSyncPendingRef.current = false;
       }
-      if (!isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
+      if (!hasStoredThemeRef.current && !isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
         setTheme(nextTheme);
       }
       setProfileReady(true);
@@ -967,24 +969,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "setTheme": {
               if (!firebaseUser) return;
+              hasStoredThemeRef.current = true;
               isThemeSyncPendingRef.current = true;
               themeRef.current = action.theme;
               applyTheme(action.theme);
               setTheme(action.theme);
               const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
-              const resolvedName = profile?.name?.trim() || firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "KOINO member";
               try {
-                await update(profileRef, {
-                  id: firebaseUser.uid,
-                  name: resolvedName,
-                  email: firebaseUser.email ?? null,
-                  createdAt: profile?.createdAt ?? now(),
-                  currentGroupId: profile?.currentGroupId ?? null,
-                  theme: action.theme,
-                });
-              } catch (error) {
+                await update(profileRef, { theme: action.theme });
+              } catch {
                 isThemeSyncPendingRef.current = false;
-                throw error;
               }
               return;
             }

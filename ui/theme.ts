@@ -32,69 +32,76 @@ export const brandPalette = {
   offWhite: "#F3F2EC",
 } as const;
 
-const classicTheme: ThemeColors = {
-  cream: brandPalette.offWhite,
-  paper: brandPalette.offWhite,
-  elevated: brandPalette.lavenderHaze,
-  input: brandPalette.offWhite,
+const lightTheme: ThemeColors = {
+  cream: "#F6F3EE",
+  paper: "#FFFEFB",
+  elevated: "#F0ECE5",
+  input: "#FBFAF6",
   ink: brandPalette.deepNavy,
-  muted: brandPalette.deepNavy,
-  olive: brandPalette.deepNavy,
-  moss: brandPalette.softCyan,
-  clay: brandPalette.deepNavy,
-  gold: brandPalette.warmPeach,
-  line: brandPalette.lavenderHaze,
-  rose: brandPalette.blushRosa,
-  roseSurface: brandPalette.blushRosa,
-  mossSurface: brandPalette.softCyan,
-  accentSubtle: brandPalette.warmPeach,
-  danger: brandPalette.deepNavy,
-  dangerBorder: brandPalette.blushRosa,
-  dangerSurface: brandPalette.blushRosa,
-  disabled: brandPalette.lavenderHaze,
-  disabledText: brandPalette.deepNavy,
-  onAccent: brandPalette.offWhite,
-  white: brandPalette.offWhite,
+  muted: "#667085",
+  olive: "#7A4A22",
+  moss: "#E9965F",
+  clay: "#8B3F2F",
+  gold: "#F4B47F",
+  line: "#DED8CE",
+  rose: "#D77C68",
+  roseSurface: "#FCEDE8",
+  mossSurface: "#FFF3EA",
+  accentSubtle: "#FFF4EA",
+  danger: "#B42318",
+  dangerBorder: "#FDA29B",
+  dangerSurface: "#FEF3F2",
+  disabled: "#E8E3DB",
+  disabledText: "#8A8177",
+  onAccent: brandPalette.deepNavy,
+  white: "#FFFFFF",
 };
 
-export type ThemeName = "classic" | "brand";
+export type ThemeName = "light" | "dark";
+export type LegacyThemeName = "classic" | "brand";
+export type StoredThemeName = ThemeName | LegacyThemeName;
 
-const brandTheme: ThemeColors = {
+const darkTheme: ThemeColors = {
   cream: brandPalette.deepNavy,
-  paper: brandPalette.deepNavy,
-  elevated: brandPalette.deepNavy,
-  input: brandPalette.deepNavy,
+  paper: "#111A2C",
+  elevated: "#172237",
+  input: "#0F192B",
   ink: brandPalette.offWhite,
-  muted: brandPalette.offWhite,
+  muted: "#A7B0C0",
   olive: brandPalette.warmPeach,
-  moss: brandPalette.softCyan,
-  clay: brandPalette.blushRosa,
-  gold: brandPalette.warmPeach,
-  line: brandPalette.lavenderHaze,
-  rose: brandPalette.blushRosa,
-  roseSurface: brandPalette.deepNavy,
-  mossSurface: brandPalette.deepNavy,
-  accentSubtle: brandPalette.warmPeach,
-  danger: brandPalette.blushRosa,
-  dangerBorder: brandPalette.blushRosa,
-  dangerSurface: brandPalette.deepNavy,
-  disabled: brandPalette.lavenderHaze,
-  disabledText: brandPalette.deepNavy,
+  moss: "#FFB985",
+  clay: "#E99B89",
+  gold: "#F8BE88",
+  line: "#2A3549",
+  rose: "#F0A090",
+  roseSurface: "#33201E",
+  mossSurface: "#342417",
+  accentSubtle: "#3A281C",
+  danger: "#FDA29B",
+  dangerBorder: "#7A271A",
+  dangerSurface: "#2A1716",
+  disabled: "#263145",
+  disabledText: "#7D8797",
   onAccent: brandPalette.deepNavy,
   white: brandPalette.offWhite,
 };
 
 export const themes: Record<ThemeName, ThemeColors> = {
-  classic: classicTheme,
-  brand: brandTheme,
+  light: lightTheme,
+  dark: darkTheme,
 };
 
 export const themeLabels: Record<ThemeName, string> = {
-  classic: "Classic",
-  brand: "Brand",
+  light: "Light",
+  dark: "Night",
 };
 
-export const colors: ThemeColors = { ...themes.classic };
+export const colors: ThemeColors = { ...themes.light };
+
+export function normalizeTheme(theme: string | null | undefined): ThemeName {
+  if (theme === "dark" || theme === "brand") return "dark";
+  return "light";
+}
 
 export function applyTheme(theme: ThemeName) {
   const next = themes[theme];
@@ -104,7 +111,7 @@ export function applyTheme(theme: ThemeName) {
 }
 
 export function statusBarStyle(theme: ThemeName): "dark" | "light" {
-  return theme === "brand" ? "light" : "dark";
+  return theme === "dark" ? "light" : "dark";
 }
 
 export const radius = {

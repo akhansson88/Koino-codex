@@ -27,14 +27,14 @@ export function Card({
           borderRadius: radius.lg,
           borderWidth: 1,
           borderLeftColor: accentColor,
-          borderLeftWidth: tone === "paper" ? 1 : 4,
-          elevation: 3,
+          borderLeftWidth: tone === "paper" ? 1 : 3,
+          elevation: 1,
           gap: 14,
           padding: 18,
           shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.12,
-          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
         },
         style,
       ]}
@@ -74,7 +74,7 @@ export function PillButton({
   variant = "primary",
   disabled = false,
 }: PropsWithChildren<{ onPress: () => void; variant?: "primary" | "secondary" | "ghost"; disabled?: boolean }>) {
-  const backgroundColor = variant === "primary" ? colors.gold : colors.paper;
+  const backgroundColor = variant === "primary" ? colors.gold : variant === "secondary" ? colors.elevated : colors.paper;
   const color = variant === "primary" ? brandPalette.deepNavy : variant === "secondary" ? colors.ink : colors.olive;
   return (
     <Pressable
@@ -86,14 +86,14 @@ export function PillButton({
         borderColor: variant === "primary" ? colors.gold : colors.line,
         borderRadius: 999,
         borderWidth: 1,
-        elevation: variant === "primary" && !disabled ? 2 : 0,
+        elevation: variant === "primary" && !disabled ? 1 : 0,
         minHeight: 48,
         paddingHorizontal: 18,
         paddingVertical: 12,
         shadowColor: brandPalette.deepNavy,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: variant === "primary" && !disabled ? 0.1 : 0,
-        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: variant === "primary" && !disabled ? 0.08 : 0,
+        shadowRadius: 8,
       }}
     >
       <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "700" }}>{children}</Text>
@@ -146,7 +146,7 @@ export function Choice({
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? brandPalette.deepNavy : colors.ink, fontWeight: "700" }}>{label}</Text>
+      <Text style={{ color: selected ? colors.olive : colors.ink, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }

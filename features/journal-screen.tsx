@@ -59,7 +59,7 @@ function JournalImages({
                 width: 26,
               }}
             >
-              <Feather name="x" size={15} color={colors.onAccent} />
+              <Feather name="x" size={15} color={colors.white} />
             </Pressable>
           ) : null}
         </View>

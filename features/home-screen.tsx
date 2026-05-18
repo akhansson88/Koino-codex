@@ -871,7 +871,7 @@ function EditCheckInModal({
               onPress={onSubmit}
               style={{
                 alignItems: "center",
-                backgroundColor: canSubmit ? colors.olive : colors.disabled,
+                backgroundColor: canSubmit ? colors.gold : colors.disabled,
                 borderRadius: 12,
                 flexDirection: "row",
                 gap: 10,
@@ -1194,7 +1194,7 @@ export function HomeScreen() {
                       style={{
                         alignItems: "center",
                         backgroundColor: colors.accentSubtle,
-                        borderColor: colors.line,
+                        borderColor: colors.gold,
                         borderRadius: 999,
                         borderWidth: 1,
                         height: 52,
@@ -1202,7 +1202,7 @@ export function HomeScreen() {
                         width: 52,
                       }}
                     >
-                      <Text style={{ color: brandPalette.deepNavy, fontSize: 17, fontWeight: "700" }}>{initials(authorName) || "?"}</Text>
+                      <Text style={{ color: colors.olive, fontSize: 17, fontWeight: "700" }}>{initials(authorName) || "?"}</Text>
                     </View>
                     <View style={{ flex: 1, gap: 3, paddingRight: ownsItem ? 10 : 0 }}>
                       <Text selectable style={{ color: colors.ink, fontSize: 18, fontWeight: "700" }}>

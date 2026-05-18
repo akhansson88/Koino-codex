@@ -1,6 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { KoinoLogo } from "@/ui/koino-logo";
@@ -21,28 +22,27 @@ export default function TabLayout() {
           elevation: 0,
           height: 110,
           shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
         },
         headerLeft: () => <KoinoHeaderLogo />,
         headerRight: () => <HeaderRightControls />,
+        headerTitle: "",
         headerTintColor: colors.ink,
         headerShadowVisible: false,
-        headerTitleAlign: "center",
-        headerTitleStyle: { color: colors.ink, fontWeight: "700" },
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
           backgroundColor: colors.paper,
           borderTopColor: colors.line,
-          elevation: 8,
+          elevation: 4,
           height: 70,
           paddingTop: 8,
           shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: -6 },
-          shadowOpacity: 0.1,
-          shadowRadius: 18,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
         },
         tabBarLabelStyle: { fontWeight: "700" },
       }}
@@ -96,26 +96,80 @@ function HeaderRightControls() {
 
 function ThemeSelector() {
   const { state, dispatch } = useKoino();
+  const progress = useRef(new Animated.Value(state.theme === "dark" ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      toValue: state.theme === "dark" ? 1 : 0,
+      useNativeDriver: false,
+    }).start();
+  }, [progress, state.theme]);
+
+  const isNight = state.theme === "dark";
+  const nextTheme = state.theme === "light" ? "dark" : "light";
+  const trackBackground = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["#FFF4D8", "#172237"],
+  });
+  const thumbTranslate = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, 38],
+  });
 
   if (!state.currentUserId) return null;
 
-  const nextTheme = state.theme === "classic" ? "brand" : "classic";
-
   return (
     <Pressable
+      accessibilityLabel={`Switch to ${isNight ? "light" : "night"} mode`}
       accessibilityRole="button"
+      accessibilityState={{ checked: isNight }}
       onPress={() => dispatch({ type: "setTheme", theme: nextTheme })}
       style={{
-        backgroundColor: colors.elevated,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
+        alignItems: "center",
+        flexDirection: "row",
+        gap: 8,
       }}
     >
-      <Text selectable style={{ color: state.theme === "brand" ? colors.white : colors.ink, fontSize: 12, fontWeight: "700" }}>
-        Theme: {state.theme === "brand" ? "Brand" : "Classic"}
+      <Animated.View
+        style={{
+          alignItems: "center",
+          backgroundColor: trackBackground,
+          borderColor: colors.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          flexDirection: "row",
+          height: 34,
+          justifyContent: "space-between",
+          paddingHorizontal: 8,
+          width: 74,
+        }}
+      >
+        <Ionicons name="sunny" color="#B86B17" size={15} />
+        <Ionicons name="moon" color="#D6D9EA" size={14} />
+        <Animated.View
+          style={{
+            alignItems: "center",
+            backgroundColor: isNight ? colors.cream : colors.paper,
+            borderRadius: 999,
+            height: 28,
+            justifyContent: "center",
+            left: 2,
+            position: "absolute",
+            shadowColor: brandPalette.deepNavy,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.16,
+            shadowRadius: 5,
+            transform: [{ translateX: thumbTranslate }],
+            width: 32,
+          }}
+        >
+          <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPeach : "#B86B17"} size={16} />
+        </Animated.View>
+      </Animated.View>
+      <Text selectable style={{ color: colors.ink, fontSize: 12, fontWeight: "700", minWidth: 36 }}>
+        {isNight ? "Night" : "Light"}
       </Text>
     </Pressable>
   );
