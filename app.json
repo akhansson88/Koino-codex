@@ -16,7 +16,8 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F7EFE4"
-      }
+      },
+      "package": "com.akhansson.koinomvp"
     },
     "plugins": [
       "expo-router",
