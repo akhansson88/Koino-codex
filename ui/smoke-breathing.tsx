@@ -1,19 +1,24 @@
 import { useEffect, useRef } from "react";
+import { Asset } from "expo-asset";
 import { Platform, View } from "react-native";
 import {
-  Clock,
+  ClampToEdgeWrapping,
   Color,
   DirectionalLight,
+  LinearFilter,
   Mesh,
   MeshLambertMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  Texture,
   TextureLoader,
   WebGLRenderer,
 } from "three";
 
-const SMOKE_TEXTURE_URL = "https://s3-us-west-2.amazonaws.com/s.cdpn.io/95637/Smoke-Element.png";
+const SMOKE_TEXTURE_ASSET = require("../assets/smoke-element.png");
+const SMOKE_TEXTURE_WIDTH = 377;
+const SMOKE_TEXTURE_HEIGHT = 329;
 
 interface SmokeParticleData {
   rotSpeed: number;
@@ -29,6 +34,35 @@ interface SmokeBreathingProps {
   fullScreen?: boolean;
   primaryColor?: string;
   secondaryColor?: string;
+}
+
+function configureSmokeTexture(texture: Texture) {
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.wrapS = ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+
+  return texture;
+}
+
+function createNativeSmokeTexture(asset: Asset) {
+  const uri = asset.localUri ?? asset.uri;
+  const texture = new Texture({
+    downloadAsync: () => Promise.resolve(asset),
+    localUri: uri,
+    uri,
+    width: asset.width ?? SMOKE_TEXTURE_WIDTH,
+    height: asset.height ?? SMOKE_TEXTURE_HEIGHT,
+  });
+
+  texture.name = "smoke-element";
+  return configureSmokeTexture(texture);
+}
+
+function elapsedSeconds(startTime: number) {
+  return ((globalThis.performance?.now?.() ?? Date.now()) - startTime) / 1000;
 }
 
 function SmokeBreathingWeb({ size = 280, fullScreen = false, primaryColor = "#F4B47F", secondaryColor = "#E9965F" }: SmokeBreathingProps) {
@@ -60,11 +94,10 @@ function SmokeBreathingWeb({ size = 280, fullScreen = false, primaryColor = "#F4
     light.position.set(-1, 0, 1);
     scene.add(light);
 
-    const clock = new Clock();
-
     const textureLoader = new TextureLoader();
-    textureLoader.crossOrigin = "anonymous";
-    const smokeTexture = textureLoader.load(SMOKE_TEXTURE_URL);
+    const smokeAsset = Asset.fromModule(SMOKE_TEXTURE_ASSET);
+    const smokeTexture = configureSmokeTexture(textureLoader.load(smokeAsset.uri));
+    const startTime = globalThis.performance?.now?.() ?? Date.now();
 
     const primary = new Color(primaryColor);
     const secondary = new Color(secondaryColor);
@@ -122,7 +155,7 @@ function SmokeBreathingWeb({ size = 280, fullScreen = false, primaryColor = "#F4
     }
 
     const breathe = () => {
-      const t = clock.getElapsedTime();
+      const t = elapsedSeconds(startTime);
       const breathCycle = (Math.sin(t * 0.4) + 1) / 2;
       const breathFactor = 0.85 + breathCycle * 0.2;
 
@@ -180,9 +213,12 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
   const glRef = useRef<any>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const frameRef = useRef<number>(0);
+  const disposedRef = useRef(false);
 
   useEffect(() => {
+    disposedRef.current = false;
     return () => {
+      disposedRef.current = true;
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
       }
@@ -220,11 +256,13 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
     light.position.set(-1, 0, 1);
     scene.add(light);
 
-    const clock = new Clock();
-
-    const textureLoader = new TextureLoader();
-    textureLoader.crossOrigin = "anonymous";
-    const smokeTexture = textureLoader.load(SMOKE_TEXTURE_URL);
+    const startTime = globalThis.performance?.now?.() ?? Date.now();
+    const smokeAsset = await Asset.fromModule(SMOKE_TEXTURE_ASSET).downloadAsync();
+    if (disposedRef.current) {
+      renderer.dispose();
+      return;
+    }
+    const smokeTexture = createNativeSmokeTexture(smokeAsset);
 
     const primary = new Color(primaryColor);
     const secondary = new Color(secondaryColor);
@@ -282,7 +320,7 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
     }
 
     const breathe = () => {
-      const t = clock.getElapsedTime();
+      const t = elapsedSeconds(startTime);
       const breathCycle = (Math.sin(t * 0.4) + 1) / 2;
       const breathFactor = 0.85 + breathCycle * 0.2;
 
