@@ -316,6 +316,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
+  const [groupMemberCounts, setGroupMemberCounts] = useState<Record<Id, number>>({});
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [privateCheckIns, setPrivateCheckIns] = useState<CheckIn[]>([]);
@@ -340,6 +341,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setUserGroupsReady(true);
     setGroups([]);
     setUserMemberships([]);
+    setGroupMemberCounts({});
     setMemberships([]);
     setCheckIns([]);
     setPrivateCheckIns([]);
@@ -458,6 +460,31 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, [firebaseUser, userMemberships]);
 
   useEffect(() => {
+    if (!firebaseUser) return;
+
+    if (userMemberships.length === 0) {
+      setGroupMemberCounts({});
+      return;
+    }
+
+    const counts = Object.fromEntries(userMemberships.map((membership) => [membership.groupId, 0])) as Record<Id, number>;
+    setGroupMemberCounts(counts);
+
+    const syncCounts = () => {
+      setGroupMemberCounts({ ...counts });
+    };
+
+    const unsubs = userMemberships.map((membership) =>
+      onValue(ref(database, `groupMembers/${membership.groupId}`), (snapshot) => {
+        counts[membership.groupId] = asArray<Membership>(snapshot.val()).length;
+        syncCounts();
+      }),
+    );
+
+    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+  }, [firebaseUser, userMemberships]);
+
+  useEffect(() => {
     if (!firebaseUser || !profileReady || !userGroupsReady) return;
 
     const joinedGroupIds = userMemberships.map((membership) => membership.groupId);
@@ -539,6 +566,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       theme,
       users,
       groups,
+      groupMemberCounts,
       memberships,
       checkIns,
       privateCheckIns,
@@ -557,6 +585,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     authReady,
     checkIns,
     firebaseUser,
+    groupMemberCounts,
     groups,
     journalEntries,
     memberships,
@@ -990,7 +1019,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         if (
           action.type === "requestPasswordReset" ||
           action.type === "confirmPasswordReset" ||
-          action.type === "changePassword"
+          action.type === "changePassword" ||
+          action.type === "createGroup" ||
+          action.type === "joinGroup"
         ) {
           throw error;
         }

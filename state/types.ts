@@ -120,6 +120,7 @@ export type KoinoState = {
   theme: ThemeName;
   users: User[];
   groups: Group[];
+  groupMemberCounts: Record<Id, number>;
   memberships: Membership[];
   checkIns: CheckIn[];
   privateCheckIns: CheckIn[];
