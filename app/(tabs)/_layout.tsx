@@ -69,6 +69,16 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
+        name="bible"
+        options={{
+          title: "Bible",
+          tabBarLabel: "Bible",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "library" : "library-outline"} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: "Today",
@@ -149,7 +159,7 @@ function KoinoTabHeader() {
       router.setParams({ newEntry: stamp } as never);
       return;
     }
-    if (!pathname.includes("/settings")) {
+    if (!pathname.includes("/settings") && !pathname.includes("/bible")) {
       router.setParams({ checkIn: stamp } as never);
       return;
     }
@@ -160,6 +170,10 @@ function KoinoTabHeader() {
     const stamp = String(Date.now());
     if (pathname.includes("/journal")) {
       router.setParams({ newEntry: stamp } as never);
+      return;
+    }
+    if (pathname.includes("/bible")) {
+      router.push({ pathname: "/", params: { compose: stamp } } as never);
       return;
     }
     if (!pathname.includes("/settings")) {
