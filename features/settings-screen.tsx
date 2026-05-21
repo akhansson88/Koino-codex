@@ -127,7 +127,7 @@ export function SettingsScreen() {
           {group ? (
             <>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 18 }}>
-                <RoomImage size={76} />
+                <RoomImage name={group.name} size={76} />
                 <View style={{ flex: 1, gap: 5 }}>
                   <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
@@ -194,7 +194,7 @@ export function SettingsScreen() {
                   padding: 14,
                 }}
               >
-                <RoomImage size={48} />
+                <RoomImage name={room.name} size={48} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{room.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(roomMemberCount(state.groupMemberCounts, room.id))}</Text>

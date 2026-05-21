@@ -89,7 +89,7 @@ export function IdentitySupportScreen() {
           {group ? (
             <>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <RoomImage size={54} />
+                <RoomImage name={group.name} size={54} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>{group.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>

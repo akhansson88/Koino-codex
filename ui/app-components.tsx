@@ -83,7 +83,7 @@ export function AppHeader({
           onPress={onRoomPress}
           style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
         >
-          <RoomImage size={44} />
+          <RoomImage name={currentRoomName} size={44} />
           <View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
               <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{currentRoomName}</Text>
@@ -112,7 +112,7 @@ export function CurrentRoomHeader() {
       onPress={() => router.push("/settings" as never)}
       style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
     >
-      <RoomImage size={44} />
+      <RoomImage name={group?.name} size={44} />
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
@@ -447,25 +447,8 @@ export function Avatar({ name, size = 42, tone = "orange" }: { name?: string; si
   );
 }
 
-export function RoomImage({ size = 64 }: { size?: number }) {
-  return (
-    <View
-      style={{
-        backgroundColor: "#F7D4A8",
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        height: size,
-        overflow: "hidden",
-        width: size,
-      }}
-    >
-      <View style={{ backgroundColor: "#B9CEDA", height: "42%" }} />
-      <View style={{ backgroundColor: "#F8C878", flex: 1 }} />
-      <View style={{ backgroundColor: "#77532D", bottom: size * 0.25, height: 2, left: size * 0.31, position: "absolute", width: size * 0.36 }} />
-      <View style={{ backgroundColor: "#5A3D24", bottom: size * 0.18, height: size * 0.33, left: size * 0.48, position: "absolute", width: 2 }} />
-    </View>
-  );
+export function RoomImage({ name, size = 64 }: { name?: string; size?: number }) {
+  return <Avatar name={name ?? "Room"} size={size} tone="blue" />;
 }
 
 export function AvatarStack({ names }: { names: string[] }) {

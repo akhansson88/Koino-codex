@@ -692,7 +692,7 @@ function CheckInModal({
               <SectionHeading>Share with</SectionHeading>
               <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
                 <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                  <RoomImage size={34} />
+                  <RoomImage name={share ? roomName : "Private journal"} size={34} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
                     <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{share ? "Shared with your room" : "Only you can see this"}</Text>
