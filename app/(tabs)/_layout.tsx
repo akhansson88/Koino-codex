@@ -222,9 +222,6 @@ function ThemeSelector() {
           <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPeach : "#B86B17"} size={16} />
         </Animated.View>
       </Animated.View>
-      <Text selectable style={{ color: colors.ink, fontSize: 12, fontWeight: "700", minWidth: 36 }}>
-        {isNight ? "Night" : "Light"}
-      </Text>
     </Pressable>
   );
 }
