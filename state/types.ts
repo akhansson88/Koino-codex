@@ -5,6 +5,7 @@ export type Id = string;
 export type User = {
   id: Id;
   name: string;
+  image?: ProfileImage;
   createdAt: string;
 };
 
@@ -16,6 +17,8 @@ export type GroupImage = {
   contentType: "image/webp";
   updatedAt: string;
 };
+
+export type ProfileImage = GroupImage;
 
 export type Group = {
   id: Id;

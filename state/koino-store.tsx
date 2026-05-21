@@ -6,7 +6,7 @@ import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/da
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { deleteRoomImage, roomImagePublicUrl, uploadRoomImage } from "@/state/supabase-storage";
+import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
@@ -83,6 +83,8 @@ type Action =
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "uploadGroupImage"; id: Id; localUri: string }
   | { type: "deleteGroupImage"; id: Id }
+  | { type: "uploadUserAvatar"; localUri: string }
+  | { type: "deleteUserAvatar" }
   | { type: "deleteGroup"; id: Id }
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
@@ -265,12 +267,21 @@ async function localUriToArrayBuffer(uri: string) {
   return response.arrayBuffer();
 }
 
-async function deleteStoragePath(path?: string) {
+async function deleteRoomStoragePath(path?: string) {
   if (!path) return;
   try {
     await deleteRoomImage(path);
   } catch {
     // Storage cleanup should never undo the room metadata update.
+  }
+}
+
+async function deleteUserAvatarStoragePath(path?: string) {
+  if (!path) return;
+  try {
+    await deleteUserAvatar(path);
+  } catch {
+    // Storage cleanup should never undo the profile metadata update.
   }
 }
 
@@ -580,6 +591,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const memberUsers = memberships.map<User>((membership) => ({
       id: membership.userId,
       name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
+      image: membership.userId === profile?.id ? profile.image : undefined,
       createdAt: membership.createdAt,
     }));
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
@@ -739,11 +751,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   updatedAt: timestamp,
                 });
               } catch (error) {
-                await deleteStoragePath(path);
+                await deleteRoomStoragePath(path);
                 throw error;
               }
 
-              await deleteStoragePath(groupToUpdate.image?.path);
+              await deleteRoomStoragePath(groupToUpdate.image?.path);
               return;
             }
             case "deleteGroupImage": {
@@ -755,7 +767,46 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
 
               await update(ref(database, `groups/${action.id}`), { image: null, updatedAt: now() });
-              await deleteStoragePath(groupToUpdate.image?.path);
+              await deleteRoomStoragePath(groupToUpdate.image?.path);
+              return;
+            }
+            case "uploadUserAvatar": {
+              if (!firebaseUser) return;
+              const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
+              const profileToUpdate = profileSnapshot.val() as Profile | null;
+              const timestamp = now();
+              const path = `${firebaseUser.uid}/${Date.now().toString(36)}.webp`;
+              const imageBody = await localUriToArrayBuffer(action.localUri);
+
+              await uploadUserAvatar(path, imageBody);
+
+              try {
+                const url = userAvatarPublicUrl(path);
+                await update(ref(database, `profiles/${firebaseUser.uid}`), {
+                  image: {
+                    url,
+                    path,
+                    width: 512,
+                    height: 512,
+                    contentType: "image/webp",
+                    updatedAt: timestamp,
+                  },
+                });
+              } catch (error) {
+                await deleteUserAvatarStoragePath(path);
+                throw error;
+              }
+
+              await deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
+              return;
+            }
+            case "deleteUserAvatar": {
+              if (!firebaseUser) return;
+              const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
+              const profileToUpdate = profileSnapshot.val() as Profile | null;
+
+              await update(ref(database, `profiles/${firebaseUser.uid}`), { image: null });
+              await deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
               return;
             }
             case "deleteGroup": {
@@ -783,7 +834,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 userMemberships.find((membership) => membership.groupId !== action.id)?.groupId ?? null;
 
               await update(ref(database), updates);
-              await deleteStoragePath(groupToDelete.image?.path);
+              await deleteRoomStoragePath(groupToDelete.image?.path);
               return;
             }
             case "submitCheckIn": {
@@ -1136,7 +1187,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "createGroup" ||
           action.type === "joinGroup" ||
           action.type === "uploadGroupImage" ||
-          action.type === "deleteGroupImage"
+          action.type === "deleteGroupImage" ||
+          action.type === "uploadUserAvatar" ||
+          action.type === "deleteUserAvatar"
         ) {
           throw error;
         }

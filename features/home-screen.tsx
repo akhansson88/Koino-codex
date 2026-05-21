@@ -99,6 +99,7 @@ function defaultTitle(item: FeedItem) {
 }
 
 function FeedPostCard({
+  authorImage,
   authorName,
   item,
   onDelete,
@@ -111,6 +112,7 @@ function FeedPostCard({
   prayerCount,
   replyCount,
 }: {
+  authorImage?: GroupImage;
   authorName: string;
   item: FeedItem;
   onDelete: () => void;
@@ -139,7 +141,7 @@ function FeedPostCard({
   return (
       <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
         <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
-          <Avatar name={authorName} size={42} tone={isPrayer ? "orange" : "green"} />
+          <Avatar image={authorImage} name={authorName} size={42} tone={isPrayer ? "orange" : "green"} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
@@ -305,6 +307,7 @@ export function HomeScreen() {
     (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
   );
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
+  const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
       .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
@@ -421,6 +424,7 @@ export function HomeScreen() {
       <CurrentRoomHeader />
 
       <HeartPromptCard
+        image={user?.image}
         name={user?.name ?? state.authEmail ?? "K"}
         subtitle={todaysCheckIn ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
         onPress={() => {
@@ -455,11 +459,13 @@ export function HomeScreen() {
       ) : (
         feedItems.map((item) => {
           const authorName = userById.get(item.userId) ?? "Someone";
+          const authorImage = userImageById.get(item.userId);
           const prayer = itemPrayerState(item);
           const replies = itemReplies(item);
           return (
             <FeedPostCard
               key={`${item.type}-${item.id}`}
+              authorImage={authorImage}
               authorName={authorName}
               item={item}
               ownsItem={item.userId === state.currentUserId}
@@ -540,12 +546,14 @@ export function HomeScreen() {
 
       <PrayerDetailModal
         item={detailItem}
+        authorImage={detailItem ? userImageById.get(detailItem.userId) : undefined}
         authorName={detailItem ? userById.get(detailItem.userId) ?? "Someone" : "Someone"}
         currentUserId={state.currentUserId}
         replies={detailItem ? itemReplies(detailItem) : []}
         prayer={detailItem ? itemPrayerState(detailItem) : undefined}
         replyDraft={detailItem ? replyDrafts[`${detailItem.type}:${detailItem.id}`] ?? "" : ""}
         userById={userById}
+        userImageById={userImageById}
         onClose={() => setDetailItem(undefined)}
         onDraft={(value) => {
           if (!detailItem) return;
@@ -812,6 +820,7 @@ function ComposerModal({
 }
 
 function PrayerDetailModal({
+  authorImage,
   authorName,
   currentUserId,
   item,
@@ -824,7 +833,9 @@ function PrayerDetailModal({
   replies,
   replyDraft,
   userById,
+  userImageById,
 }: {
+  authorImage?: GroupImage;
   authorName: string;
   currentUserId?: string;
   item?: FeedItem;
@@ -837,6 +848,7 @@ function PrayerDetailModal({
   replies: { id: string; userId: string; body: string; createdAt: string }[];
   replyDraft: string;
   userById: Map<string, string>;
+  userImageById: Map<string, GroupImage | undefined>;
 }) {
   return (
     <Modal animationType="slide" visible={Boolean(item)} onRequestClose={onClose}>
@@ -852,7 +864,7 @@ function PrayerDetailModal({
               <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-              <Avatar name={authorName} size={48} tone="orange" />
+              <Avatar image={authorImage} name={authorName} size={48} tone="orange" />
               <View>
                 <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
                 <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
@@ -887,7 +899,7 @@ function PrayerDetailModal({
                       }}
                     >
                       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                        <Avatar name={userById.get(reply.userId)} size={32} tone="pink" />
+                        <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
                           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Linking, Pressable, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Image, Linking, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { useKoino } from "@/state/koino-store";
@@ -16,7 +17,10 @@ import {
   RoomImage,
   Row,
   SectionHeading,
+  SecondaryButton,
 } from "@/ui/app-components";
+import { confirmAction } from "@/ui/confirm";
+import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors } from "@/ui/theme";
 
 function memberLabel(count: number) {
@@ -27,11 +31,79 @@ export function IdentitySupportScreen() {
   const { state, dispatch } = useKoino();
   const [accountSheetVisible, setAccountSheetVisible] = useState(false);
   const [amount, setAmount] = useState("50");
+  const [avatarCropSource, setAvatarCropSource] = useState<RoomImageCropSource>();
+  const [avatarMessage, setAvatarMessage] = useState("");
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
 
+  async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
+    if (asset.width > 0 && asset.height > 0) {
+      return { height: asset.height, width: asset.width };
+    }
+
+    return new Promise<{ height: number; width: number }>((resolve, reject) => {
+      Image.getSize(
+        asset.uri,
+        (width, height) => resolve({ height, width }),
+        () => reject(new Error("Could not read that image.")),
+      );
+    });
+  }
+
+  async function handleChooseAvatar() {
+    setAvatarMessage("");
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setAvatarMessage("Photo library permission is needed to choose a profile image.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setAvatarMessage("Could not read that image.");
+        return;
+      }
+
+      const size = await selectedImageSize(asset);
+      setAvatarCropSource({ ...size, uri: asset.uri });
+    } catch {
+      setAvatarMessage("Could not open that image.");
+    }
+  }
+
+  async function handleSaveAvatar(localUri: string) {
+    await dispatch({ type: "uploadUserAvatar", localUri });
+    setAvatarCropSource(undefined);
+    setAvatarMessage("Profile image updated.");
+  }
+
+  function handleDeleteAvatar() {
+    if (!user?.image) return;
+    confirmAction({
+      title: "Delete profile image?",
+      message: "Your profile will return to its initials avatar.",
+      confirmText: "Delete",
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "deleteUserAvatar" })
+          .then(() => setAvatarMessage("Profile image deleted."))
+          .catch(() => setAvatarMessage("Could not delete the profile image."));
+      },
+    });
+  }
+
   return (
+    <>
     <AppScreen>
       <AppHeader showBack onBack={() => router.back()} />
 
@@ -45,14 +117,27 @@ export function IdentitySupportScreen() {
           <Pressable accessibilityRole="button" style={{ paddingHorizontal: 14 }}>
             <Row icon="user">
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <Avatar name={user?.name ?? state.authEmail ?? "K"} size={42} tone="pink" />
-                <View>
+                <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={42} tone="pink" />
+                <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Profile</Text>
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>View and edit your profile</Text>
                 </View>
               </View>
             </Row>
           </Pressable>
+          <View style={{ gap: 10, paddingBottom: 14, paddingHorizontal: 14 }}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <SecondaryButton icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
+                {user?.image ? "Change image" : "Choose image"}
+              </SecondaryButton>
+              {user?.image ? (
+                <SecondaryButton icon="trash-2" onPress={handleDeleteAvatar} style={{ flex: 1 }} tone="danger">
+                  Delete
+                </SecondaryButton>
+              ) : null}
+            </View>
+            {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{avatarMessage}</Text> : null}
+          </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ paddingHorizontal: 14 }}>
             <Row onPress={() => undefined}>
@@ -187,5 +272,13 @@ export function IdentitySupportScreen() {
         </Card>
       </BottomSheet>
     </AppScreen>
+    <RoomImageCropper
+      source={avatarCropSource}
+      title="Crop profile image"
+      visible={Boolean(avatarCropSource)}
+      onCancel={() => setAvatarCropSource(undefined)}
+      onSave={handleSaveAvatar}
+    />
+    </>
   );
 }

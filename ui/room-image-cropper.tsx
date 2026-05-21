@@ -33,11 +33,13 @@ export function RoomImageCropper({
   onCancel,
   onSave,
   source,
+  title = "Crop room image",
   visible,
 }: {
   onCancel: () => void;
   onSave: (localUri: string) => Promise<void>;
   source?: RoomImageCropSource;
+  title?: string;
   visible: boolean;
 }) {
   const dimensions = useWindowDimensions();
@@ -159,7 +161,7 @@ export function RoomImageCropper({
       <View style={{ backgroundColor: colors.cream, flex: 1, paddingBottom: Math.max(18, insets.bottom + 12), paddingHorizontal: 18, paddingTop: Math.max(18, insets.top + 14) }}>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Cancel room image crop" icon="x" onPress={onCancel} />
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Crop room image</Text>
+          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title}</Text>
           <View style={{ width: 38 }} />
         </View>
 

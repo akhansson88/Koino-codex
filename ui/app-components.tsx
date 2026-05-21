@@ -74,7 +74,7 @@ export function AppHeader({
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <ThemeDots />
           <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={() => router.push("/identity" as never)}>
-            <Avatar name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
+            <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
           </Pressable>
         </View>
       </View>
@@ -193,11 +193,13 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
 }
 
 export function HeartPromptCard({
+  image,
   name,
   onCreate,
   onPress,
   subtitle = "Share, reflect or ask for prayer...",
 }: {
+  image?: GroupImage;
   name?: string;
   onCreate: () => void;
   onPress: () => void;
@@ -223,7 +225,7 @@ export function HeartPromptCard({
       }}
     >
       <Pressable accessibilityRole="button" onPress={onPress} style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}>
-        <Avatar name={name ?? "K"} size={48} tone="orange" />
+        <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
           <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
@@ -423,13 +425,29 @@ export function FilterChips<T extends string>({
   );
 }
 
-export function Avatar({ name, size = 42, tone = "orange" }: { name?: string; size?: number; tone?: "orange" | "green" | "pink" | "blue" }) {
+export function Avatar({
+  image,
+  name,
+  size = 42,
+  tone = "orange",
+}: {
+  image?: GroupImage;
+  name?: string;
+  size?: number;
+  tone?: "orange" | "green" | "pink" | "blue";
+}) {
+  const [failed, setFailed] = useState(false);
   const palette = {
     orange: ["#FFE1C9", "#A9561A"],
     green: ["#E7F1DD", "#58712D"],
     pink: ["#F8D3DD", "#8E3B54"],
     blue: ["#DDE8F3", "#365778"],
   }[tone];
+
+  useEffect(() => {
+    setFailed(false);
+  }, [image?.url]);
+
   return (
     <View
       style={{
@@ -444,7 +462,17 @@ export function Avatar({ name, size = 42, tone = "orange" }: { name?: string; si
         width: size,
       }}
     >
-      <Text style={{ color: palette[1], fontSize: Math.max(12, size * 0.36), fontWeight: "900" }}>{initials(name)}</Text>
+      {image?.url && !failed ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          onError={() => setFailed(true)}
+          resizeMode="cover"
+          source={{ uri: image.url }}
+          style={{ height: "100%", width: "100%" }}
+        />
+      ) : (
+        <Text style={{ color: palette[1], fontSize: Math.max(12, size * 0.36), fontWeight: "900" }}>{initials(name)}</Text>
+      )}
     </View>
   );
 }

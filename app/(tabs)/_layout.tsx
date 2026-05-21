@@ -263,7 +263,7 @@ function IdentityButton() {
 
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={() => router.push("/identity" as never)}>
-      <Avatar name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
+      <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
     </Pressable>
   );
 }

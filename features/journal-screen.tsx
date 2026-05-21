@@ -131,6 +131,7 @@ export function JournalScreen() {
           <CurrentRoomHeader />
 
           <HeartPromptCard
+            image={user?.image}
             name={user?.name ?? state.authEmail ?? "K"}
             onPress={() => beginEntry()}
             onCreate={() => beginEntry()}
@@ -149,7 +150,7 @@ export function JournalScreen() {
               entries.map((entry) => (
                 <Card key={`${entry.id}-${entry.createdAt}`}>
                   <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
-                    <Avatar name={user?.name ?? "K"} size={38} tone="green" />
+                    <Avatar image={user?.image} name={user?.name ?? "K"} size={38} tone="green" />
                     <View style={{ flex: 1, gap: 3 }}>
                       <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{user?.name ?? "You"}</Text>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatDate(entry.createdAt)}</Text>

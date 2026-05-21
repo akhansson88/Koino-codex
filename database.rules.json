@@ -7,7 +7,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && (!newData.child('email').exists() || newData.child('email').val() == null || newData.child('email').isString()) && (!newData.child('createdAt').exists() || newData.child('createdAt').isString()) && (!newData.child('currentGroupId').exists() || newData.child('currentGroupId').val() == null || newData.child('currentGroupId').isString()) && (!newData.child('theme').exists() || newData.child('theme').val() == 'light' || newData.child('theme').val() == 'dark' || newData.child('theme').val() == 'classic' || newData.child('theme').val() == 'brand'))",
+        ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('name').isString() && (!newData.child('email').exists() || newData.child('email').val() == null || newData.child('email').isString()) && (!newData.child('createdAt').exists() || newData.child('createdAt').isString()) && (!newData.child('currentGroupId').exists() || newData.child('currentGroupId').val() == null || newData.child('currentGroupId').isString()) && (!newData.child('theme').exists() || newData.child('theme').val() == 'light' || newData.child('theme').val() == 'dark' || newData.child('theme').val() == 'classic' || newData.child('theme').val() == 'brand') && (!newData.child('image').exists() || (newData.child('image').child('url').isString() && newData.child('image').child('path').isString() && newData.child('image').child('width').val() == 512 && newData.child('image').child('height').val() == 512 && newData.child('image').child('contentType').val() == 'image/webp' && newData.child('image').child('updatedAt').isString())))",
         "id": {
           ".validate": "newData.val() == $uid"
         },
@@ -25,6 +25,30 @@
         },
         "theme": {
           ".validate": "newData.val() == 'light' || newData.val() == 'dark' || newData.val() == 'classic' || newData.val() == 'brand'"
+        },
+        "image": {
+          ".validate": "newData.val() == null || (newData.child('url').isString() && newData.child('path').isString() && newData.child('width').val() == 512 && newData.child('height').val() == 512 && newData.child('contentType').val() == 'image/webp' && newData.child('updatedAt').isString())",
+          "url": {
+            ".validate": "newData.isString()"
+          },
+          "path": {
+            ".validate": "newData.isString()"
+          },
+          "width": {
+            ".validate": "newData.val() == 512"
+          },
+          "height": {
+            ".validate": "newData.val() == 512"
+          },
+          "contentType": {
+            ".validate": "newData.val() == 'image/webp'"
+          },
+          "updatedAt": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
         "$other": {
           ".validate": "newData.val() == data.val() || newData.val() == null"
