@@ -6,7 +6,7 @@ import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/da
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { roomImagesBucket, supabase } from "@/state/supabase-storage";
+import { deleteRoomImage, roomImagePublicUrl, uploadRoomImage } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
@@ -257,18 +257,18 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
   });
 }
 
-async function localUriToBlob(uri: string) {
+async function localUriToArrayBuffer(uri: string) {
   const response = await fetch(uri);
   if (!response.ok) {
     throw new Error("Could not read the selected image.");
   }
-  return response.blob();
+  return response.arrayBuffer();
 }
 
 async function deleteStoragePath(path?: string) {
   if (!path) return;
   try {
-    await supabase.storage.from(roomImagesBucket).remove([path]);
+    await deleteRoomImage(path);
   } catch {
     // Storage cleanup should never undo the room metadata update.
   }
@@ -721,17 +721,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
               const timestamp = now();
               const path = `${action.id}/${Date.now().toString(36)}.webp`;
-              const blob = await localUriToBlob(action.localUri);
+              const imageBody = await localUriToArrayBuffer(action.localUri);
 
-              const uploadResult = await supabase.storage.from(roomImagesBucket).upload(path, blob, {
-                contentType: "image/webp",
-                upsert: false,
-              });
-              if (uploadResult.error) throw uploadResult.error;
+              await uploadRoomImage(path, imageBody);
 
               try {
-                const { data } = supabase.storage.from(roomImagesBucket).getPublicUrl(path);
-                const url = data.publicUrl;
+                const url = roomImagePublicUrl(path);
                 await update(ref(database, `groups/${action.id}`), {
                   image: {
                     url,
