@@ -11,6 +11,7 @@ import {
   BodyText,
   Card,
   ExpandableBodyText,
+  HeartPromptCard,
   IconButton,
   PrimaryButton,
   RoomImage,
@@ -126,6 +127,11 @@ export function JournalScreen() {
     <AppScreen topInset={false}>
       {stage === "feed" ? (
         <>
+          <HeartPromptCard
+            name={user?.name ?? state.authEmail ?? "K"}
+            onPress={() => beginEntry()}
+            onCreate={() => beginEntry()}
+          />
           <View style={{ gap: 12 }}>
             {state.authError ? (
               <Card>

@@ -161,6 +161,64 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
   );
 }
 
+export function HeartPromptCard({
+  name,
+  onCreate,
+  onPress,
+  subtitle = "Share, reflect or ask for prayer...",
+}: {
+  name?: string;
+  onCreate: () => void;
+  onPress: () => void;
+  subtitle?: string;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 12,
+        padding: 14,
+        ...platformShadow({
+          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+          offset: { width: 0, height: 10 },
+          opacity: 0.055,
+          radius: 24,
+        }),
+      }}
+    >
+      <Pressable accessibilityRole="button" onPress={onPress} style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}>
+        <Avatar name={name ?? "K"} size={48} tone="orange" />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
+          <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
+        </View>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Create new entry"
+        onPress={onCreate}
+        style={{
+          alignItems: "center",
+          backgroundColor: colors.accentSubtle,
+          borderColor: colors.line,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          height: 46,
+          justifyContent: "center",
+          width: 46,
+        }}
+      >
+        <Feather name="plus" size={23} color={colors.olive} />
+      </Pressable>
+    </View>
+  );
+}
+
 export function PrimaryButton({
   children,
   disabled = false,

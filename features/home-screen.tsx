@@ -3,6 +3,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
+import { activePrivateCheckIns } from "@/state/check-ins";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, FeedItem } from "@/state/types";
 import {
@@ -13,6 +14,7 @@ import {
   Card,
   ExpandableBodyText,
   FilterChips,
+  HeartPromptCard,
   IconButton,
   PrimaryButton,
   RoomImage,
@@ -50,6 +52,12 @@ function formatRelativeTime(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function localDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function moodLabel(mood: number) {
@@ -290,6 +298,11 @@ export function HomeScreen() {
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const user = state.users.find((item) => item.id === state.currentUserId);
+  const todayKey = localDayKey(new Date());
+  const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
+    (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
+  );
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
@@ -404,6 +417,16 @@ export function HomeScreen() {
 
   return (
     <AppScreen topInset={false}>
+      <HeartPromptCard
+        name={user?.name ?? state.authEmail ?? "K"}
+        subtitle={todaysCheckIn ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
+        onPress={() => {
+          resetCheckIn();
+          setCheckInVisible(true);
+        }}
+        onCreate={() => openComposer(filter === "all" ? "reflection" : filter)}
+      />
+
       <FilterChips
         value={filter}
         onChange={setFilter}
