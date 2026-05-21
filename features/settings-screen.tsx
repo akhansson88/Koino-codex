@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Platform, Pressable, Share, Text, View } from "react-native";
+import { Image, Platform, Pressable, Share, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import type { Group, Id } from "@/state/types";
@@ -56,6 +56,7 @@ export function SettingsScreen() {
   const [inviteMessage, setInviteMessage] = useState("");
   const [roomImageMessage, setRoomImageMessage] = useState("");
   const [cropSource, setCropSource] = useState<RoomImageCropSource>();
+  const [roomImagePickerRequested, setRoomImagePickerRequested] = useState(false);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -94,31 +95,67 @@ export function SettingsScreen() {
     setManageSheetVisible(false);
   }
 
-  async function handleChooseRoomImage() {
+  useEffect(() => {
+    if (!roomImagePickerRequested) return;
+
+    const timer = setTimeout(() => {
+      void openRoomImagePicker();
+    }, Platform.OS === "ios" ? 500 : 250);
+
+    return () => clearTimeout(timer);
+  }, [roomImagePickerRequested]);
+
+  async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
+    if (asset.width > 0 && asset.height > 0) {
+      return { height: asset.height, width: asset.width };
+    }
+
+    return new Promise<{ height: number; width: number }>((resolve, reject) => {
+      Image.getSize(
+        asset.uri,
+        (width, height) => resolve({ height, width }),
+        () => reject(new Error("Could not read that image.")),
+      );
+    });
+  }
+
+  function handleChooseRoomImage() {
     if (!group || !ownsGroup) return;
     setRoomImageMessage("");
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setRoomImageMessage("Photo library permission is needed to choose a room image.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: false,
-      mediaTypes: ["images"],
-      quality: 1,
-    });
-
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    if (!asset?.uri || !asset.width || !asset.height) {
-      setRoomImageMessage("Could not read that image.");
-      return;
-    }
-
     setManageSheetVisible(false);
-    setCropSource({ height: asset.height, uri: asset.uri, width: asset.width });
+    setRoomImagePickerRequested(true);
+  }
+
+  async function openRoomImagePicker() {
+    setRoomImagePickerRequested(false);
+
+    try {
+      if (!group || !ownsGroup) return;
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setRoomImageMessage("Photo library permission is needed to choose a room image.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setRoomImageMessage("Could not read that image.");
+        return;
+      }
+
+      const size = await selectedImageSize(asset);
+      setCropSource({ ...size, uri: asset.uri });
+    } catch {
+      setRoomImageMessage("Could not open that image.");
+    }
   }
 
   async function handleSaveRoomImage(localUri: string) {
@@ -169,6 +206,7 @@ export function SettingsScreen() {
   }
 
   return (
+    <>
     <AppScreen>
       <View style={{ gap: 8, paddingTop: 64 }}>
         <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Community</Text>
@@ -367,7 +405,8 @@ export function SettingsScreen() {
         </Card>
         <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
       </BottomSheet>
-      <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
     </AppScreen>
+    <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
+    </>
   );
 }
