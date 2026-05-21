@@ -7,9 +7,12 @@ import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -23,7 +26,10 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import {
   bibleChapterVerses,
-  BiblePosition,
+  bibleCrossReferences,
+  type BibleCrossReference,
+  type BiblePosition,
+  hasBibleCrossReferences,
   kjvBooks,
   nextBibleChapter,
   normalizeBiblePosition,
@@ -251,10 +257,26 @@ export function BibleScreen() {
   const [puterAuthToken, setPuterAuthToken] = useState<string | undefined>();
   const [puterTokenModalVisible, setPuterTokenModalVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
+  const [crossReferencePosition, setCrossReferencePosition] = useState<BiblePosition | undefined>();
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter), [position.book, position.chapter]);
+  const chapterCrossReferenceAvailability = useMemo(
+    () =>
+      Object.fromEntries(
+        chapterVerses.map((item) => [
+          item.verse,
+          hasBibleCrossReferences({
+            book: position.book,
+            chapter: position.chapter,
+            verse: item.verse,
+          }),
+        ]),
+      ) as Record<number, boolean>,
+    [chapterVerses, position.book, position.chapter],
+  );
+  const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition) : []), [crossReferencePosition]);
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
@@ -731,6 +753,22 @@ export function BibleScreen() {
     [tryScrollToVerse],
   );
 
+  const openCrossReferences = useCallback(
+    (verse: number) => {
+      const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+      setCrossReferencePosition(nextPosition);
+    },
+    [],
+  );
+
+  const readCrossReferenceChapter = useCallback(
+    (nextPosition: BiblePosition) => {
+      setCrossReferencePosition(undefined);
+      jumpToPosition(nextPosition);
+    },
+    [jumpToPosition],
+  );
+
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (pendingScrollVerseRef.current) return;
@@ -1000,6 +1038,7 @@ export function BibleScreen() {
 
             <View style={{ gap: 2 }}>
               {chapterVerses.map((item) => {
+                const hasCrossReferences = chapterCrossReferenceAvailability[item.verse];
                 const highlighted =
                   highlightedPosition?.book === position.book &&
                   highlightedPosition.chapter === position.chapter &&
@@ -1033,6 +1072,30 @@ export function BibleScreen() {
                     >
                       {item.verse}
                     </Text>
+                    {hasCrossReferences ? (
+                      <Pressable
+                        accessibilityLabel={`Show cross references for ${position.book} ${position.chapter}:${item.verse}`}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          openCrossReferences(item.verse);
+                        }}
+                        style={{
+                          alignItems: "center",
+                          backgroundColor: colors.accentSubtle,
+                          borderColor: colors.line,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          height: 26,
+                          justifyContent: "center",
+                          marginTop: Math.max(0, Math.round((readerLineHeight - 26) / 2)),
+                          width: 26,
+                        }}
+                      >
+                        <Feather name="link-2" size={13} color={colors.olive} />
+                      </Pressable>
+                    ) : null}
                     <Text selectable style={[readerTextStyle, { flex: 1 }]}>
                       {item.text}
                     </Text>
@@ -1044,6 +1107,14 @@ export function BibleScreen() {
         </View>
       </ScrollView>
 
+      <CrossReferenceSheet
+        onClose={() => setCrossReferencePosition(undefined)}
+        onReadChapter={readCrossReferenceChapter}
+        position={crossReferencePosition}
+        readerTextStyle={readerTextStyle}
+        references={selectedCrossReferences}
+        visible={Boolean(crossReferencePosition)}
+      />
       <BibleReferencePicker
         initialPosition={position}
         onClose={() => setPickerVisible(false)}
@@ -1077,6 +1148,161 @@ export function BibleScreen() {
         visible={bridgeOverlayVisible}
       />
     </View>
+  );
+}
+
+function CrossReferenceSheet({
+  onClose,
+  onReadChapter,
+  position,
+  readerTextStyle,
+  references,
+  visible,
+}: {
+  onClose: () => void;
+  onReadChapter: (position: BiblePosition) => void;
+  position?: BiblePosition;
+  readerTextStyle: TextStyle;
+  references: BibleCrossReference[];
+  visible: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const sheetHeight = Math.min(Math.round(height * 0.78), 680);
+  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.max(18, readerTextStyle.fontSize) : 18;
+  const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
+
+  const closeWithAnimation = useCallback(
+    (afterClose?: () => void) => {
+      Animated.timing(translateY, {
+        duration: 190,
+        easing: Easing.out(Easing.cubic),
+        toValue: sheetHeight,
+        useNativeDriver: true,
+      }).start(() => {
+        onClose();
+        afterClose?.();
+      });
+    },
+    [onClose, sheetHeight, translateY],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 5,
+        onPanResponderMove: (_event, gesture) => {
+          translateY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 90 || gesture.vy > 0.7) {
+            closeWithAnimation();
+            return;
+          }
+
+          Animated.spring(translateY, {
+            damping: 22,
+            stiffness: 220,
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+        onStartShouldSetPanResponder: () => true,
+      }),
+    [closeWithAnimation, translateY],
+  );
+
+  useEffect(() => {
+    if (!visible) return;
+    translateY.setValue(sheetHeight);
+    Animated.timing(translateY, {
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  }, [sheetHeight, translateY, visible]);
+
+  if (!visible || !position) return null;
+
+  return (
+    <Modal transparent visible={visible} onRequestClose={() => closeWithAnimation()}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Pressable accessibilityLabel="Close cross references" style={{ backgroundColor: "rgba(11, 18, 32, 0.28)", flex: 1 }} onPress={() => closeWithAnimation()} />
+        <Animated.View
+          style={{
+            backgroundColor: colors.paper,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
+            height: sheetHeight,
+            overflow: "hidden",
+            paddingBottom: insets.bottom,
+            transform: [{ translateY }],
+            ...platformShadow({
+              boxShadow: "0 -16px 34px rgba(11, 18, 32, 0.18)",
+              offset: { width: 0, height: -10 },
+              opacity: 0.14,
+              radius: 26,
+            }),
+          }}
+        >
+          <View style={{ alignItems: "center", borderBottomColor: colors.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 8 }}>
+            <View {...panResponder.panHandlers} style={{ alignItems: "center", height: 22, justifyContent: "center", width: 120 }}>
+              <View style={{ backgroundColor: colors.disabled, borderRadius: 999, height: 5, width: 56 }} />
+            </View>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{referenceLabel(position)}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+                  {references.length} {references.length === 1 ? "cross reference" : "cross references"}
+                </Text>
+              </View>
+              <IconButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} />
+            </View>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+            {references.length > 0 ? (
+              references.map((reference, index) => (
+                <View
+                  key={`${reference.source}-${index}`}
+                  style={{
+                    borderBottomColor: index === references.length - 1 ? "transparent" : colors.line,
+                    borderBottomWidth: 1,
+                    gap: 8,
+                    paddingBottom: 18,
+                    paddingTop: index === 0 ? 0 : 18,
+                  }}
+                >
+                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                    <Text selectable style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900" }}>
+                      {reference.reference}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
+                  </View>
+                  <Text selectable style={[readerTextStyle, { color: colors.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
+                    {reference.text}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                    accessibilityRole="button"
+                    onPress={() => closeWithAnimation(() => onReadChapter(reference.startPosition))}
+                    style={{ alignSelf: "flex-start", minHeight: 34, justifyContent: "center" }}
+                  >
+                    <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>Read this chapter</Text>
+                  </Pressable>
+                </View>
+              ))
+            ) : (
+              <Card>
+                <BodyText muted>No readable cross references were found for this verse.</BodyText>
+              </Card>
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
