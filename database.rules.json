@@ -147,9 +147,23 @@
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$checkInId": {
           ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((!data.exists() && !newData.exists()) || (!data.exists() && newData.exists() && newData.child('userId').val() == auth.uid) || (data.exists() && data.child('userId').val() == auth.uid))",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $checkInId && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && newData.child('mood').isNumber() && newData.child('readToday').isBoolean() && newData.child('reflectionText').isString() && newData.child('visibility').val() == 'group' && newData.child('createdAt').isString())",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $checkInId && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && newData.child('mood').isNumber() && newData.child('readToday').isBoolean() && newData.child('reflectionText').isString() && newData.child('visibility').val() == 'group' && newData.child('createdAt').isString() && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))))",
+          "verse": {
+            "reference": {
+              ".validate": "newData.isString()"
+            },
+            "text": {
+              ".validate": "newData.isString()"
+            },
+            "translation": {
+              ".validate": "newData.val() == null || newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "$other": {
-            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'mood' || $other == 'readToday' || $other == 'reflectionText' || $other == 'visibility' || $other == 'createdAt'"
+            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'mood' || $other == 'readToday' || $other == 'reflectionText' || $other == 'visibility' || $other == 'verse' || $other == 'createdAt'"
           }
         }
       }
@@ -160,9 +174,23 @@
         ".read": "auth != null && auth.uid == $uid",
         "$checkInId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $checkInId && newData.child('userId').val() == $uid && newData.child('groupId').isString() && root.child('groupMembers').child(newData.child('groupId').val()).child($uid).exists() && newData.child('mood').isNumber() && newData.child('readToday').isBoolean() && newData.child('reflectionText').isString() && newData.child('visibility').val() == 'private' && newData.child('createdAt').isString())",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $checkInId && newData.child('userId').val() == $uid && newData.child('groupId').isString() && root.child('groupMembers').child(newData.child('groupId').val()).child($uid).exists() && newData.child('mood').isNumber() && newData.child('readToday').isBoolean() && newData.child('reflectionText').isString() && newData.child('visibility').val() == 'private' && newData.child('createdAt').isString() && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))))",
+          "verse": {
+            "reference": {
+              ".validate": "newData.isString()"
+            },
+            "text": {
+              ".validate": "newData.isString()"
+            },
+            "translation": {
+              ".validate": "newData.val() == null || newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "$other": {
-            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'mood' || $other == 'readToday' || $other == 'reflectionText' || $other == 'visibility' || $other == 'createdAt'"
+            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'mood' || $other == 'readToday' || $other == 'reflectionText' || $other == 'visibility' || $other == 'verse' || $other == 'createdAt'"
           }
         }
       }
@@ -174,14 +202,31 @@
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$postId": {
           ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((!data.exists() && !newData.exists()) || (!data.exists() && newData.exists() && newData.child('userId').val() == auth.uid) || (data.exists() && data.child('userId').val() == auth.uid))",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $postId && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && newData.child('body').isString() && (newData.child('kind').val() == 'reflection' || newData.child('kind').val() == 'post' || newData.child('kind').val() == 'prayer_request') && newData.child('createdAt').isString() && (!newData.child('answeredAt').exists() || (newData.child('kind').val() == 'prayer_request' && newData.child('answeredAt').isString())) && (!newData.child('answeredMarkedAt').exists() || (newData.child('kind').val() == 'prayer_request' && newData.child('answeredMarkedAt').isString())))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $postId && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && newData.child('body').isString() && (newData.child('kind').val() == 'reflection' || newData.child('kind').val() == 'post' || newData.child('kind').val() == 'prayer_request' || newData.child('kind').val() == 'praise' || newData.child('kind').val() == 'update') && newData.child('createdAt').isString() && (!newData.child('title').exists() || newData.child('title').isString()) && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))) && (!newData.child('answeredAt').exists() || (newData.child('kind').val() == 'prayer_request' && newData.child('answeredAt').isString())) && (!newData.child('answeredMarkedAt').exists() || (newData.child('kind').val() == 'prayer_request' && newData.child('answeredMarkedAt').isString())))",
+          "title": {
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "verse": {
+            "reference": {
+              ".validate": "newData.isString()"
+            },
+            "text": {
+              ".validate": "newData.isString()"
+            },
+            "translation": {
+              ".validate": "newData.val() == null || newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "images": {
             "$imageIndex": {
               ".validate": "newData.isString()"
             }
           },
           "$other": {
-            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'kind' || $other == 'body' || $other == 'images' || $other == 'answeredAt' || $other == 'answeredMarkedAt' || $other == 'createdAt'"
+            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'groupId' || $other == 'kind' || $other == 'title' || $other == 'body' || $other == 'verse' || $other == 'images' || $other == 'answeredAt' || $other == 'answeredMarkedAt' || $other == 'createdAt'"
           }
         }
       }
@@ -247,14 +292,28 @@
         ".read": "auth != null && auth.uid == $uid",
         "$entryId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('mood').exists() || newData.child('mood').isNumber()))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('entryKind').exists() || newData.child('entryKind').val() == 'reflection' || newData.child('entryKind').val() == 'prayer_request' || newData.child('entryKind').val() == 'praise' || newData.child('entryKind').val() == 'update') && (!newData.child('mood').exists() || newData.child('mood').isNumber()) && (!newData.child('sharedPostId').exists() || newData.child('sharedPostId').isString()) && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))))",
           "images": {
             "$imageIndex": {
               ".validate": "newData.isString()"
             }
           },
+          "verse": {
+            "reference": {
+              ".validate": "newData.isString()"
+            },
+            "text": {
+              ".validate": "newData.isString()"
+            },
+            "translation": {
+              ".validate": "newData.val() == null || newData.isString()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "$other": {
-            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'body' || $other == 'images' || $other == 'source' || $other == 'mood' || $other == 'createdAt' || $other == 'updatedAt'"
+            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'body' || $other == 'images' || $other == 'source' || $other == 'entryKind' || $other == 'mood' || $other == 'verse' || $other == 'sharedPostId' || $other == 'createdAt' || $other == 'updatedAt'"
           }
         }
       }

@@ -26,6 +26,14 @@ export type Membership = {
   createdAt: string;
 };
 
+export type BibleVerse = {
+  reference: string;
+  text: string;
+  translation?: string;
+};
+
+export type EntryKind = "reflection" | "prayer_request" | "praise" | "update";
+
 export type CheckIn = {
   id: Id;
   userId: Id;
@@ -34,6 +42,7 @@ export type CheckIn = {
   readToday: boolean;
   reflectionText: string;
   visibility: "private" | "group";
+  verse?: BibleVerse;
   createdAt: string;
 };
 
@@ -41,8 +50,10 @@ export type Post = {
   id: Id;
   userId: Id;
   groupId: Id;
-  kind: "reflection" | "post" | "prayer_request";
+  kind: EntryKind | "post";
+  title?: string;
   body: string;
+  verse?: BibleVerse;
   images?: string[];
   answeredAt?: string;
   answeredMarkedAt?: string;
@@ -95,7 +106,10 @@ export type JournalEntry = {
   body: string;
   images?: string[];
   source: "manual" | "private_check_in";
+  entryKind?: EntryKind;
   mood?: number;
+  verse?: BibleVerse;
+  sharedPostId?: Id;
   createdAt: string;
   updatedAt: string;
 };
@@ -139,8 +153,10 @@ export type FeedItem =
       id: Id;
       userId: Id;
       groupId: Id;
-      kind: Post["kind"];
+      kind: EntryKind | "post";
+      title?: string;
       body: string;
+      verse?: BibleVerse;
       images?: string[];
       answeredAt?: string;
       answeredMarkedAt?: string;
@@ -154,5 +170,6 @@ export type FeedItem =
       body: string;
       mood: number;
       readToday: boolean;
+      verse?: BibleVerse;
       createdAt: string;
     };

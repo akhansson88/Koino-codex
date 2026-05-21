@@ -33,17 +33,17 @@ export const brandPalette = {
 } as const;
 
 const lightTheme: ThemeColors = {
-  cream: "#F6F3EE",
-  paper: "#FFFEFB",
-  elevated: "#F0ECE5",
-  input: "#FBFAF6",
+  cream: "#FAF5EE",
+  paper: "#FFFFFF",
+  elevated: "#FFF9F2",
+  input: "#FFFDF9",
   ink: brandPalette.deepNavy,
-  muted: "#667085",
-  olive: "#7A4A22",
+  muted: "#6F7686",
+  olive: "#A45118",
   moss: "#E9965F",
-  clay: "#8B3F2F",
-  gold: "#F4B47F",
-  line: "#DED8CE",
+  clay: "#8B4A2F",
+  gold: "#F59A63",
+  line: "#E9D9C8",
   rose: "#D77C68",
   roseSurface: "#FCEDE8",
   mossSurface: "#FFF3EA",
@@ -51,8 +51,8 @@ const lightTheme: ThemeColors = {
   danger: "#B42318",
   dangerBorder: "#FDA29B",
   dangerSurface: "#FEF3F2",
-  disabled: "#E8E3DB",
-  disabledText: "#8A8177",
+  disabled: "#EDE5DA",
+  disabledText: "#9A9085",
   onAccent: brandPalette.deepNavy,
   white: "#FFFFFF",
 };
@@ -116,8 +116,10 @@ export function statusBarStyle(theme: ThemeName): "dark" | "light" {
 
 export const radius = {
   sm: 8,
-  md: 8,
-  lg: 8,
+  md: 12,
+  lg: 16,
+  xl: 18,
+  xxl: 28,
 };
 
 export const copy = {
