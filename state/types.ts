@@ -8,11 +8,21 @@ export type User = {
   createdAt: string;
 };
 
+export type GroupImage = {
+  url: string;
+  path: string;
+  width: 512;
+  height: 512;
+  contentType: "image/webp";
+  updatedAt: string;
+};
+
 export type Group = {
   id: Id;
   name: string;
   inviteCode: string;
   ownerId: Id;
+  image?: GroupImage;
   createdAt: string;
   updatedAt: string;
 };

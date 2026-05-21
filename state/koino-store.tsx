@@ -6,6 +6,7 @@ import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/da
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
+import { roomImagesBucket, supabase } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
   CheckIn,
@@ -80,6 +81,8 @@ type Action =
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "updateGroup"; id: Id; name: string }
+  | { type: "uploadGroupImage"; id: Id; localUri: string }
+  | { type: "deleteGroupImage"; id: Id }
   | { type: "deleteGroup"; id: Id }
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
@@ -252,6 +255,23 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
     [`userGroups/${user.uid}/${invite.groupId}`]: membership,
     [`profiles/${user.uid}/currentGroupId`]: invite.groupId,
   });
+}
+
+async function localUriToBlob(uri: string) {
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error("Could not read the selected image.");
+  }
+  return response.blob();
+}
+
+async function deleteStoragePath(path?: string) {
+  if (!path) return;
+  try {
+    await supabase.storage.from(roomImagesBucket).remove([path]);
+  } catch {
+    // Storage cleanup should never undo the room metadata update.
+  }
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
@@ -691,6 +711,58 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "updateGroup":
               await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
               return;
+            case "uploadGroupImage": {
+              if (!firebaseUser) return;
+              const groupSnapshot = await get(ref(database, `groups/${action.id}`));
+              const groupToUpdate = groupSnapshot.val() as Group | null;
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
+                throw new Error("Only the room owner can change the room image.");
+              }
+
+              const timestamp = now();
+              const path = `${action.id}/${Date.now().toString(36)}.webp`;
+              const blob = await localUriToBlob(action.localUri);
+
+              const uploadResult = await supabase.storage.from(roomImagesBucket).upload(path, blob, {
+                contentType: "image/webp",
+                upsert: false,
+              });
+              if (uploadResult.error) throw uploadResult.error;
+
+              try {
+                const { data } = supabase.storage.from(roomImagesBucket).getPublicUrl(path);
+                const url = data.publicUrl;
+                await update(ref(database, `groups/${action.id}`), {
+                  image: {
+                    url,
+                    path,
+                    width: 512,
+                    height: 512,
+                    contentType: "image/webp",
+                    updatedAt: timestamp,
+                  },
+                  updatedAt: timestamp,
+                });
+              } catch (error) {
+                await deleteStoragePath(path);
+                throw error;
+              }
+
+              await deleteStoragePath(groupToUpdate.image?.path);
+              return;
+            }
+            case "deleteGroupImage": {
+              if (!firebaseUser) return;
+              const groupSnapshot = await get(ref(database, `groups/${action.id}`));
+              const groupToUpdate = groupSnapshot.val() as Group | null;
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
+                throw new Error("Only the room owner can delete the room image.");
+              }
+
+              await update(ref(database, `groups/${action.id}`), { image: null, updatedAt: now() });
+              await deleteStoragePath(groupToUpdate.image?.path);
+              return;
+            }
             case "deleteGroup": {
               const groupSnapshot = await get(ref(database, `groups/${action.id}`));
               const groupToDelete = groupSnapshot.val() as Group | null;
@@ -716,6 +788,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 userMemberships.find((membership) => membership.groupId !== action.id)?.groupId ?? null;
 
               await update(ref(database), updates);
+              await deleteStoragePath(groupToDelete.image?.path);
               return;
             }
             case "submitCheckIn": {
@@ -1066,7 +1139,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "confirmPasswordReset" ||
           action.type === "changePassword" ||
           action.type === "createGroup" ||
-          action.type === "joinGroup"
+          action.type === "joinGroup" ||
+          action.type === "uploadGroupImage" ||
+          action.type === "deleteGroupImage"
         ) {
           throw error;
         }

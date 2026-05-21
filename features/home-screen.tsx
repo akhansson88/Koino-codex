@@ -5,7 +5,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, Vie
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -491,6 +491,7 @@ export function HomeScreen() {
         note={checkInText}
         verses={checkInVerses}
         roomName={group?.name ?? "Test Room"}
+        roomImage={group?.image}
         share={shareCheckIn}
         onClose={() => setCheckInVisible(false)}
         onMood={(value) => {
@@ -591,6 +592,7 @@ function CheckInModal({
   note,
   verses,
   roomName,
+  roomImage,
   share,
   onBack,
   onClose,
@@ -607,6 +609,7 @@ function CheckInModal({
   note: string;
   verses: BibleVerse[];
   roomName: string;
+  roomImage?: GroupImage;
   share: boolean;
   onBack: () => void;
   onClose: () => void;
@@ -692,7 +695,7 @@ function CheckInModal({
               <SectionHeading>Share with</SectionHeading>
               <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
                 <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                  <RoomImage name={share ? roomName : "Private journal"} size={34} />
+                  <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={34} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
                     <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{share ? "Shared with your room" : "Only you can see this"}</Text>

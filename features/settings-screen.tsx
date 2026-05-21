@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { Platform, Pressable, Share, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -17,6 +18,7 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
+import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors } from "@/ui/theme";
 
 function memberLabel(count: number) {
@@ -52,6 +54,8 @@ export function SettingsScreen() {
   const [newGroupName, setNewGroupName] = useState("");
   const [currentGroupName, setCurrentGroupName] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
+  const [roomImageMessage, setRoomImageMessage] = useState("");
+  const [cropSource, setCropSource] = useState<RoomImageCropSource>();
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -88,6 +92,56 @@ export function SettingsScreen() {
     if (!group || !canRename) return;
     await dispatch({ type: "updateGroup", id: group.id, name: currentGroupName });
     setManageSheetVisible(false);
+  }
+
+  async function handleChooseRoomImage() {
+    if (!group || !ownsGroup) return;
+    setRoomImageMessage("");
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setRoomImageMessage("Photo library permission is needed to choose a room image.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      mediaTypes: ["images"],
+      quality: 1,
+    });
+
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    if (!asset?.uri || !asset.width || !asset.height) {
+      setRoomImageMessage("Could not read that image.");
+      return;
+    }
+
+    setManageSheetVisible(false);
+    setCropSource({ height: asset.height, uri: asset.uri, width: asset.width });
+  }
+
+  async function handleSaveRoomImage(localUri: string) {
+    if (!group) return;
+    await dispatch({ type: "uploadGroupImage", id: group.id, localUri });
+    setCropSource(undefined);
+    setRoomImageMessage("Room image updated.");
+  }
+
+  function handleDeleteRoomImage() {
+    if (!group?.image || !ownsGroup) return;
+    setManageSheetVisible(false);
+    confirmAction({
+      title: "Delete room image?",
+      message: "The room will return to its initials avatar.",
+      confirmText: "Delete",
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "deleteGroupImage", id: group.id })
+          .then(() => setRoomImageMessage("Room image deleted."))
+          .catch(() => setRoomImageMessage("Could not delete the room image."));
+      },
+    });
   }
 
   function handleLeaveRoom() {
@@ -127,7 +181,7 @@ export function SettingsScreen() {
           {group ? (
             <>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 18 }}>
-                <RoomImage name={group.name} size={76} />
+                <RoomImage image={group.image} name={group.name} size={76} />
                 <View style={{ flex: 1, gap: 5 }}>
                   <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
@@ -161,6 +215,7 @@ export function SettingsScreen() {
                 </PrimaryButton>
               </View>
               {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
+              {roomImageMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{roomImageMessage}</Text> : null}
             </>
           ) : (
             <>
@@ -194,7 +249,7 @@ export function SettingsScreen() {
                   padding: 14,
                 }}
               >
-                <RoomImage name={room.name} size={48} />
+                <RoomImage image={room.image} name={room.name} size={48} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{room.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(roomMemberCount(state.groupMemberCounts, room.id))}</Text>
@@ -267,6 +322,29 @@ export function SettingsScreen() {
           </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ paddingHorizontal: 14 }}>
+            <Row icon="image" onPress={ownsGroup ? handleChooseRoomImage : undefined}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                <RoomImage image={group?.image} name={group?.name} size={42} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group?.image ? "Change room image" : "Add room image"}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new room image" : "Only the owner can change this"}</Text>
+                </View>
+              </View>
+            </Row>
+          </View>
+          {group?.image ? (
+            <>
+              <View style={{ backgroundColor: colors.line, height: 1 }} />
+              <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
+                <Row icon="trash-2" tone="danger">
+                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room image</Text>
+                  <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
+                </Row>
+              </Pressable>
+            </>
+          ) : null}
+          <View style={{ backgroundColor: colors.line, height: 1 }} />
+          <View style={{ paddingHorizontal: 14 }}>
             <Row icon="user" onPress={() => undefined}>
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Hand over ownership to another member</Text>
@@ -289,6 +367,7 @@ export function SettingsScreen() {
         </Card>
         <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
       </BottomSheet>
+      <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
     </AppScreen>
   );
 }

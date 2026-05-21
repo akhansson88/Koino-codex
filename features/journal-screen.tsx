@@ -254,7 +254,7 @@ export function JournalScreen() {
             <SectionHeading>Share with</SectionHeading>
             <Pressable accessibilityRole="button" onPress={() => setShareWithRoom((current) => !current)}>
               <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                <RoomImage name={shareWithRoom ? group?.name : "Private journal"} size={34} />
+                <RoomImage image={shareWithRoom ? group?.image : undefined} name={shareWithRoom ? group?.name : "Private journal"} size={34} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{shareWithRoom ? group?.name ?? "Test Room" : "Private journal"}</Text>
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{shareWithRoom ? "Shared with your room" : "Only you can see this"}</Text>

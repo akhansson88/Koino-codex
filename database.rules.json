@@ -53,7 +53,7 @@
       "$groupId": {
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && ((!data.exists() && !newData.exists()) || (!data.exists() && newData.exists() && newData.child('id').val() == $groupId && newData.child('ownerId').val() == auth.uid) || (data.exists() && data.child('ownerId').val() == auth.uid))",
-        ".validate": "newData.val() == null || (newData.child('id').val() == $groupId && newData.child('name').isString() && newData.child('inviteCode').isString() && newData.child('ownerId').isString() && newData.child('createdAt').isString() && newData.child('updatedAt').isString())",
+        ".validate": "newData.val() == null || (newData.child('id').val() == $groupId && newData.child('name').isString() && newData.child('inviteCode').isString() && newData.child('ownerId').isString() && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('image').exists() || (newData.child('image').child('url').isString() && newData.child('image').child('path').isString() && newData.child('image').child('width').val() == 512 && newData.child('image').child('height').val() == 512 && newData.child('image').child('contentType').val() == 'image/webp' && newData.child('image').child('updatedAt').isString())))",
         "id": {
           ".validate": "newData.val() == $groupId"
         },
@@ -71,6 +71,30 @@
         },
         "updatedAt": {
           ".validate": "newData.isString()"
+        },
+        "image": {
+          ".validate": "newData.val() == null || (newData.child('url').isString() && newData.child('path').isString() && newData.child('width').val() == 512 && newData.child('height').val() == 512 && newData.child('contentType').val() == 'image/webp' && newData.child('updatedAt').isString())",
+          "url": {
+            ".validate": "newData.isString()"
+          },
+          "path": {
+            ".validate": "newData.isString()"
+          },
+          "width": {
+            ".validate": "newData.val() == 512"
+          },
+          "height": {
+            ".validate": "newData.val() == 512"
+          },
+          "contentType": {
+            ".validate": "newData.val() == 'image/webp'"
+          },
+          "updatedAt": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
         "$other": {
           ".validate": false

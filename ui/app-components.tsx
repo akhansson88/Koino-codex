@@ -1,12 +1,12 @@
 import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
+import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse } from "@/state/types";
+import type { BibleVerse, GroupImage } from "@/state/types";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -47,12 +47,14 @@ export function AppScreen({
 
 export function AppHeader({
   currentRoomName,
+  currentRoomImage,
   memberCount,
   onRoomPress,
   showBack = false,
   onBack,
 }: {
   currentRoomName?: string;
+  currentRoomImage?: GroupImage;
   memberCount?: number;
   onRoomPress?: () => void;
   showBack?: boolean;
@@ -83,7 +85,7 @@ export function AppHeader({
           onPress={onRoomPress}
           style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
         >
-          <RoomImage name={currentRoomName} size={44} />
+          <RoomImage image={currentRoomImage} name={currentRoomName} size={44} />
           <View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
               <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{currentRoomName}</Text>
@@ -112,7 +114,7 @@ export function CurrentRoomHeader() {
       onPress={() => router.push("/settings" as never)}
       style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
     >
-      <RoomImage name={group?.name} size={44} />
+      <RoomImage image={group?.image} name={group?.name} size={44} />
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
@@ -447,7 +449,37 @@ export function Avatar({ name, size = 42, tone = "orange" }: { name?: string; si
   );
 }
 
-export function RoomImage({ name, size = 64 }: { name?: string; size?: number }) {
+export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name?: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [image?.url]);
+
+  if (image?.url && !failed) {
+    return (
+      <View
+        style={{
+          backgroundColor: colors.input,
+          borderColor: colors.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          height: size,
+          overflow: "hidden",
+          width: size,
+        }}
+      >
+        <Image
+          accessibilityIgnoresInvertColors
+          onError={() => setFailed(true)}
+          resizeMode="cover"
+          source={{ uri: image.url }}
+          style={{ height: "100%", width: "100%" }}
+        />
+      </View>
+    );
+  }
+
   return <Avatar name={name ?? "Room"} size={size} tone="blue" />;
 }
 

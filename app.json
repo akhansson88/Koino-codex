@@ -23,6 +23,12 @@
       "expo-router",
       "expo-asset",
       "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow KOINO to choose a room image from your photo library."
+        }
+      ],
       "expo-web-browser",
       "expo-secure-store"
     ],
