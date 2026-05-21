@@ -52,6 +52,7 @@ type BibleReaderFontId = (typeof readerFonts)[number]["id"];
 type PickerStage = "book" | "chapter" | "verse";
 
 type BibleReaderPreferences = {
+  audioPosition: BiblePosition;
   audioVoiceId: string;
   audioVoiceName?: string;
   fontId: BibleReaderFontId;
@@ -164,6 +165,7 @@ function normalizeBridgeVoices(value: unknown): AudioVoice[] {
 function parsePreferences(value: string | null): BibleReaderPreferences {
   if (!value) {
     return {
+      audioPosition: defaultPosition,
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
       fontId: defaultFontId,
@@ -175,15 +177,18 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
   try {
     const parsed = JSON.parse(value) as Partial<BibleReaderPreferences> | null;
     const storedVoice = normalizeStoredVoice(parsed?.audioVoiceId, parsed?.audioVoiceName);
+    const position = normalizeBiblePosition(parsed?.position);
     return {
+      audioPosition: normalizeBiblePosition(parsed?.audioPosition ?? position),
       audioVoiceId: storedVoice.id,
       audioVoiceName: storedVoice.name,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
-      position: normalizeBiblePosition(parsed?.position),
+      position,
     };
   } catch {
     return {
+      audioPosition: defaultPosition,
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
       fontId: defaultFontId,
@@ -228,7 +233,6 @@ export function BibleScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const audioBridgeRef = useRef<WebView>(null);
   const activeAudioRequestRef = useRef<string | undefined>(undefined);
-  const activeAudioPositionRef = useRef<BiblePosition | undefined>(undefined);
   const audioFinishHandledRef = useRef(false);
   const audioFileRef = useRef<File | undefined>(undefined);
   const audioPrepareTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -238,10 +242,12 @@ export function BibleScreen() {
   const verseOffsetsRef = useRef<Record<number, number>>({});
   const pendingScrollVerseRef = useRef<number | undefined>(undefined);
   const positionRef = useRef<BiblePosition>(defaultPosition);
+  const audioPositionRef = useRef<BiblePosition>(defaultPosition);
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
+  const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
@@ -279,20 +285,23 @@ export function BibleScreen() {
   const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition) : []), [crossReferencePosition]);
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
+  const previousAudioChapter = useMemo(() => previousBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
+  const nextAudioChapter = useMemo(() => nextBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
   const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
   const audioIsPreparing = audioPlaybackState === "preparing";
   const audioIsPlaying = audioPlaybackState === "playing";
+  const audioHighlightActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const audioStatusLabel =
     audioPlaybackState === "preparing"
       ? bridgeOverlayVisible
         ? "Complete the voice service prompt, then playback will continue."
         : "Preparing verse audio..."
       : audioPlaybackState === "playing"
-        ? `Listening to ${referenceLabel(activeAudioPositionRef.current ?? position)}`
+        ? `Listening to ${referenceLabel(audioPosition)}`
         : audioPlaybackState === "paused"
-          ? "Paused"
+          ? `Paused at ${referenceLabel(audioPosition)}`
           : audioPlaybackState === "error"
             ? audioError ?? "Audio could not be prepared."
             : !puterAuthToken
@@ -300,7 +309,7 @@ export function BibleScreen() {
             : bridgeOverlayVisible
               ? "Complete the voice service prompt, then playback will continue."
             : bridgeReady
-              ? "Ready to listen"
+              ? `Ready to listen from ${referenceLabel(audioPosition)}`
               : "Loading voice service...";
 
   useEffect(() => {
@@ -379,7 +388,9 @@ export function BibleScreen() {
         verseOffsetsRef.current = {};
         pendingScrollVerseRef.current = nextPreferences.position.verse;
         positionRef.current = nextPreferences.position;
+        audioPositionRef.current = nextPreferences.audioPosition;
         setPosition(nextPreferences.position);
+        setAudioPosition(nextPreferences.audioPosition);
         showTemporaryHighlight(nextPreferences.position);
         setAudioVoice(normalizeStoredVoice(nextPreferences.audioVoiceId, nextPreferences.audioVoiceName));
         setFontId(nextPreferences.fontId);
@@ -398,12 +409,12 @@ export function BibleScreen() {
     if (!storageKey || !preferencesReady) return;
 
     const timeout = setTimeout(() => {
-      const payload: BibleReaderPreferences = { audioVoiceId: audioVoice.id, audioVoiceName: audioVoice.name, fontId, fontSize, position };
+      const payload: BibleReaderPreferences = { audioPosition, audioVoiceId: audioVoice.id, audioVoiceName: audioVoice.name, fontId, fontSize, position };
       void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioVoice.id, audioVoice.name, fontId, fontSize, position, preferencesReady, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, fontId, fontSize, position, preferencesReady, storageKey]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
@@ -439,6 +450,13 @@ export function BibleScreen() {
     [showTemporaryHighlight, tryScrollToVerse],
   );
 
+  const updateAudioPosition = useCallback((nextPosition: Partial<BiblePosition>) => {
+    const normalized = normalizeBiblePosition(nextPosition);
+    audioPositionRef.current = normalized;
+    setAudioPosition(normalized);
+    return normalized;
+  }, []);
+
   const cleanupAudioFile = useCallback(() => {
     const file = audioFileRef.current;
     audioFileRef.current = undefined;
@@ -465,7 +483,6 @@ export function BibleScreen() {
   const stopAudioPlayback = useCallback(
     (nextState: AudioPlaybackState = "idle") => {
       activeAudioRequestRef.current = undefined;
-      activeAudioPositionRef.current = undefined;
       audioFinishHandledRef.current = true;
       clearAudioPrepareTimeout();
       pendingAudioTransfersRef.current = {};
@@ -478,9 +495,9 @@ export function BibleScreen() {
 
   const startVerseAudio = useCallback(
     (requestedPosition?: Partial<BiblePosition>) => {
+      const nextPosition = updateAudioPosition(requestedPosition ?? audioPositionRef.current);
       const activePuterToken = puterAuthToken || authTokenInput.trim();
       if (!activePuterToken) {
-        activeAudioPositionRef.current = normalizeBiblePosition(requestedPosition ?? positionRef.current);
         setAudioPlaybackState("idle");
         setAudioError(undefined);
         setPuterTokenModalVisible(true);
@@ -493,7 +510,6 @@ export function BibleScreen() {
         return;
       }
 
-      const nextPosition = normalizeBiblePosition(requestedPosition ?? positionRef.current);
       const verse = bibleChapterVerses(nextPosition.book, nextPosition.chapter).find((item) => item.verse === nextPosition.verse);
 
       if (!verse) {
@@ -504,7 +520,6 @@ export function BibleScreen() {
 
       const requestId = `bible-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       activeAudioRequestRef.current = requestId;
-      activeAudioPositionRef.current = nextPosition;
       audioFinishHandledRef.current = true;
       clearAudioPrepareTimeout();
       audioPlayer.pause();
@@ -516,36 +531,37 @@ export function BibleScreen() {
       sendAudioBridgeCommand({
         requestId,
         requiresGesture: false,
-        text: `${nextPosition.book} ${nextPosition.chapter}:${nextPosition.verse}. ${verse.text}`,
+        text: verse.text,
         type: "synthesize",
         voiceId: audioVoice.id,
       });
     },
-    [audioPlayer, audioVoice.id, authTokenInput, clearAudioPrepareTimeout, puterAuthToken, sendAudioBridgeCommand],
+    [audioPlayer, audioVoice.id, authTokenInput, clearAudioPrepareTimeout, puterAuthToken, sendAudioBridgeCommand, updateAudioPosition],
   );
 
   const advanceAudioPlayback = useCallback(() => {
-    const current = activeAudioPositionRef.current ?? positionRef.current;
+    const current = audioPositionRef.current;
     const verses = bibleChapterVerses(current.book, current.chapter);
     const verseIndex = verses.findIndex((item) => item.verse === current.verse);
     const nextVerse = verseIndex >= 0 ? verses[verseIndex + 1] : undefined;
 
     if (nextVerse) {
       const nextPosition = { ...current, verse: nextVerse.verse };
-      jumpToPosition(nextPosition);
+      updateAudioPosition(nextPosition);
       requestAnimationFrame(() => startVerseAudio(nextPosition));
       return;
     }
 
     const nextChapterPosition = nextBibleChapter(current.book, current.chapter);
     if (nextChapterPosition) {
+      updateAudioPosition(nextChapterPosition);
       jumpToPosition(nextChapterPosition);
       setTimeout(() => startVerseAudio(nextChapterPosition), 80);
       return;
     }
 
     stopAudioPlayback("idle");
-  }, [jumpToPosition, startVerseAudio, stopAudioPlayback]);
+  }, [jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition]);
 
   const playAudioBase64 = useCallback(
     async (requestId: string, base64: string) => {
@@ -685,20 +701,20 @@ export function BibleScreen() {
       return;
     }
 
-    jumpToPosition(positionRef.current);
-    startVerseAudio(positionRef.current);
-  }, [audioPlaybackState, audioPlayer, audioStatus.isLoaded, jumpToPosition, startVerseAudio, stopAudioPlayback]);
+    startVerseAudio(audioPositionRef.current);
+  }, [audioPlaybackState, audioPlayer, audioStatus.isLoaded, startVerseAudio, stopAudioPlayback]);
 
   const handleAudioChapterJump = useCallback(
     (nextPosition: BiblePosition) => {
       const shouldResume = audioPlaybackState === "playing" || audioPlaybackState === "preparing";
       stopAudioPlayback(shouldResume ? "preparing" : "idle");
+      updateAudioPosition(nextPosition);
       jumpToPosition(nextPosition);
       if (shouldResume) {
         setTimeout(() => startVerseAudio(nextPosition), 80);
       }
     },
-    [audioPlaybackState, jumpToPosition, startVerseAudio, stopAudioPlayback],
+    [audioPlaybackState, jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition],
   );
 
   const chooseAudioVoice = useCallback(
@@ -731,7 +747,7 @@ export function BibleScreen() {
     if (bridgeReadyRef.current) {
       sendAudioBridgeCommand({ token, type: "setAuthToken" });
     }
-    startVerseAudio(activeAudioPositionRef.current ?? positionRef.current);
+    startVerseAudio(audioPositionRef.current);
   }, [authTokenInput, puterTokenKey, sendAudioBridgeCommand, startVerseAudio]);
 
   const forgetPuterAuthToken = useCallback(async () => {
@@ -915,7 +931,7 @@ export function BibleScreen() {
             </View>
 
             <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-              <ChapterButton disabled={!previousChapter || audioIsPreparing} icon="chevron-left" label="Back" onPress={() => previousChapter && handleAudioChapterJump(previousChapter)} />
+              <ChapterButton disabled={!previousAudioChapter || audioIsPreparing} icon="chevron-left" label="Back" onPress={() => previousAudioChapter && handleAudioChapterJump(previousAudioChapter)} />
               <Pressable
                 accessibilityLabel="Choose audio voice"
                 accessibilityRole="button"
@@ -940,7 +956,7 @@ export function BibleScreen() {
                 </Text>
                 <Feather name="chevron-down" size={15} color={colors.muted} />
               </Pressable>
-              <ChapterButton disabled={!nextChapter || audioIsPreparing} icon="chevron-right" label="Forward" onPress={() => nextChapter && handleAudioChapterJump(nextChapter)} />
+              <ChapterButton disabled={!nextAudioChapter || audioIsPreparing} icon="chevron-right" label="Forward" onPress={() => nextAudioChapter && handleAudioChapterJump(nextAudioChapter)} />
             </View>
 
             <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -1043,16 +1059,24 @@ export function BibleScreen() {
                   highlightedPosition?.book === position.book &&
                   highlightedPosition.chapter === position.chapter &&
                   highlightedPosition.verse === item.verse;
+                const audioHighlighted =
+                  audioHighlightActive &&
+                  audioPosition.book === position.book &&
+                  audioPosition.chapter === position.chapter &&
+                  audioPosition.verse === item.verse;
+                const selected = highlighted || audioHighlighted;
                 return (
                   <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: highlighted }}
+                    aria-selected={selected}
                     key={item.reference}
                     onLayout={(event) => handleVerseLayout(item.verse, event.nativeEvent.layout.y)}
                     onPress={() => jumpToPosition({ ...position, verse: item.verse }, false)}
+                    role={hasCrossReferences ? "group" : "button"}
                     style={{
-                      backgroundColor: highlighted ? colors.accentSubtle : "transparent",
+                      backgroundColor: selected ? colors.accentSubtle : "transparent",
+                      borderColor: audioHighlighted ? colors.gold : "transparent",
                       borderRadius: radius.md,
+                      borderWidth: 1,
                       flexDirection: "row",
                       gap: 10,
                       paddingHorizontal: 8,
@@ -1061,7 +1085,7 @@ export function BibleScreen() {
                   >
                     <Text
                       style={{
-                        color: highlighted ? colors.olive : colors.muted,
+                        color: selected ? colors.olive : colors.muted,
                         fontSize: Math.max(12, fontSize - 5),
                         fontVariant: ["tabular-nums"],
                         fontWeight: "900",
@@ -1074,13 +1098,13 @@ export function BibleScreen() {
                     </Text>
                     {hasCrossReferences ? (
                       <Pressable
-                        accessibilityLabel={`Show cross references for ${position.book} ${position.chapter}:${item.verse}`}
-                        accessibilityRole="button"
+                        aria-label={`Show cross references for ${position.book} ${position.chapter}:${item.verse}`}
                         hitSlop={8}
                         onPress={(event) => {
                           event.stopPropagation();
                           openCrossReferences(item.verse);
                         }}
+                        role="button"
                         style={{
                           alignItems: "center",
                           backgroundColor: colors.accentSubtle,
