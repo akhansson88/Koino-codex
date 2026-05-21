@@ -101,6 +101,35 @@ export function AppHeader({
   );
 }
 
+export function CurrentRoomHeader() {
+  const { state } = useKoino();
+  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push("/settings" as never)}
+      style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
+    >
+      <RoomImage size={44} />
+      <View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
+            {group?.name ?? "No group"}
+          </Text>
+          <Feather name="chevron-down" size={16} color={colors.ink} />
+        </View>
+        {group ? (
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+            {memberCount} {memberCount === 1 ? "member" : "members"}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 function ThemeDots() {
   const { state, dispatch } = useKoino();
   const isNight = state.theme === "dark";

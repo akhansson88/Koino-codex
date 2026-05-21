@@ -1,14 +1,14 @@
 import { Tabs, router } from "expo-router";
 import { BlurView } from "expo-blur";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { Avatar, RoomImage } from "@/ui/app-components";
-import { brandPalette, colors, platformShadow, radius, type ThemeName } from "@/ui/theme";
+import { Avatar } from "@/ui/app-components";
+import { brandPalette, colors, platformShadow, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -141,16 +141,12 @@ function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
 }
 
 function KoinoTabHeader() {
-  const { state } = useKoino();
   const insets = useSafeAreaInsets();
-  const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
 
   return (
     <View
       style={{
         backgroundColor: colors.cream,
-        gap: 16,
         paddingBottom: 14,
         paddingHorizontal: 18,
         paddingTop: insets.top + 12,
@@ -166,28 +162,6 @@ function KoinoTabHeader() {
         <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
         <HeaderRightControls />
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push("/settings" as never)}
-        style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
-      >
-        <RoomImage size={44} />
-        <View>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
-              {group?.name ?? "No group"}
-            </Text>
-            <Feather name="chevron-down" size={16} color={colors.ink} />
-          </View>
-          {group ? (
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
-              {memberCount} {memberCount === 1 ? "member" : "members"}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-
     </View>
   );
 }

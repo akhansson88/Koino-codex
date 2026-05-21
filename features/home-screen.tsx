@@ -12,6 +12,7 @@ import {
   AvatarStack,
   BodyText,
   Card,
+  CurrentRoomHeader,
   ExpandableBodyText,
   FilterChips,
   HeartPromptCard,
@@ -417,6 +418,8 @@ export function HomeScreen() {
 
   return (
     <AppScreen topInset={false}>
+      <CurrentRoomHeader />
+
       <HeartPromptCard
         name={user?.name ?? state.authEmail ?? "K"}
         subtitle={todaysCheckIn ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
