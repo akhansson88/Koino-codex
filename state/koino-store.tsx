@@ -81,11 +81,11 @@ type Action =
   | { type: "leaveGroup"; id: Id }
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "deleteGroup"; id: Id }
-  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse }
-  | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse }
+  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse }
-  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse }
+  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
@@ -94,8 +94,8 @@ type Action =
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
   | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
-  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; verse?: BibleVerse; shareWithGroup?: boolean; title?: string }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; verse?: BibleVerse; sharedPostId?: Id }
+  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
+  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
@@ -132,6 +132,11 @@ function inviteCode() {
 function asArray<T extends { id: string }>(value: unknown): T[] {
   if (!value || typeof value !== "object") return [];
   return Object.entries(value as Record<string, T>).map(([key, item]) => ({ ...item, id: item.id ?? key }));
+}
+
+function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[] }) {
+  if (action.verses?.length) return action.verses.slice(0, 5);
+  return action.verse ? [action.verse] : [];
 }
 
 function authMessage(error: unknown) {
@@ -730,6 +735,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               pendingCheckInKeys.add(pendingKey);
 
               try {
+                const verses = actionVerses(action);
                 const checkIn: CheckIn = {
                   id: id("checkin"),
                   userId: firebaseUser.uid,
@@ -738,7 +744,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   readToday: action.readToday,
                   reflectionText: action.reflectionText.trim(),
                   visibility: action.visibility,
-                  ...(action.verse ? { verse: action.verse } : {}),
+                  ...(verses[0] ? { verse: verses[0], verses } : {}),
                   createdAt: timestamp,
                 };
 
@@ -752,7 +758,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                     source: "private_check_in",
                     entryKind: "reflection",
                     mood: action.mood,
-                    ...(action.verse ? { verse: action.verse } : {}),
+                    ...(verses[0] ? { verse: verses[0], verses } : {}),
                     createdAt: timestamp,
                     updatedAt: timestamp,
                   };
@@ -776,12 +782,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  readToday: action.readToday,
                  reflectionText: action.reflectionText.trim(),
                  visibility: action.visibility,
-                 verse: action.verse ?? null,
+                 verse: actionVerses(action)[0] ?? null,
+                 verses: actionVerses(action).length ? actionVerses(action) : null,
                });
                return;
              }
              case "createPost": {
                if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
+               const verses = actionVerses(action);
                const post: Post = {
                  id: id("post"),
                  userId: firebaseUser.uid,
@@ -789,7 +797,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  kind: action.kind,
                  ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                  body: action.body.trim(),
-                 ...(action.verse ? { verse: action.verse } : {}),
+                 ...(verses[0] ? { verse: verses[0], verses } : {}),
                  createdAt: now(),
                };
                await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
@@ -804,7 +812,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  body: action.body.trim(),
                  kind: action.kind,
                  title: action.title?.trim() || null,
-                 verse: action.verse ?? null,
+                 verse: actionVerses(action)[0] ?? null,
+                 verses: actionVerses(action).length ? actionVerses(action) : null,
                  // Note: We don't update createdAt to preserve the original timestamp
                  // We also don't update answeredAt or answeredMarkedAt for prayer requests
                });
@@ -954,13 +963,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !action.body.trim()) return;
               const timestamp = now();
               const postId = action.shareWithGroup && profile?.currentGroupId ? id("post") : undefined;
+              const verses = actionVerses(action);
               const entry: JournalEntry = {
                 id: id("journal"),
                 userId: firebaseUser.uid,
                 body: action.body.trim(),
                 source: "manual",
                 entryKind: action.entryKind ?? "reflection",
-                ...(action.verse ? { verse: action.verse } : {}),
+                ...(verses[0] ? { verse: verses[0], verses } : {}),
                 ...(postId ? { sharedPostId: postId } : {}),
                 createdAt: timestamp,
                 updatedAt: timestamp,
@@ -973,7 +983,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   kind: action.entryKind ?? "reflection",
                   ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                   body: action.body.trim(),
-                  ...(action.verse ? { verse: action.verse } : {}),
+                  ...(verses[0] ? { verse: verses[0], verses } : {}),
                   createdAt: timestamp,
                 };
                 await update(ref(database), {
@@ -990,7 +1000,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
                 entryKind: action.entryKind ?? null,
-                verse: action.verse ?? null,
+                verse: actionVerses(action)[0] ?? null,
+                verses: actionVerses(action).length ? actionVerses(action) : null,
                 sharedPostId: action.sharedPostId ?? null,
                 images: null,
                 updatedAt: now(),

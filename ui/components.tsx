@@ -1,7 +1,7 @@
 import { PropsWithChildren } from "react";
 import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
-import { brandPalette, colors, radius } from "@/ui/theme";
+import { brandPalette, colors, platformShadow, radius } from "@/ui/theme";
 
 export function Screen({ children }: PropsWithChildren) {
   return (
@@ -28,13 +28,15 @@ export function Card({
           borderWidth: 1,
           borderLeftColor: accentColor,
           borderLeftWidth: tone === "paper" ? 1 : 3,
-          elevation: 1,
           gap: 14,
           padding: 18,
-          shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.06,
-          shadowRadius: 12,
+          ...platformShadow({
+            boxShadow: "0 4px 12px rgba(11, 18, 32, 0.06)",
+            elevation: 1,
+            offset: { width: 0, height: 4 },
+            opacity: 0.06,
+            radius: 12,
+          }),
         },
         style,
       ]}
@@ -88,14 +90,16 @@ export function PillButton({
         borderColor: variant === "primary" ? colors.gold : colors.line,
         borderRadius: 999,
         borderWidth: 1,
-        elevation: variant === "primary" && !disabled ? 1 : 0,
         minHeight: 48,
         paddingHorizontal: 18,
         paddingVertical: 12,
-        shadowColor: brandPalette.deepNavy,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: variant === "primary" && !disabled ? 0.08 : 0,
-        shadowRadius: 8,
+        ...platformShadow({
+          boxShadow: variant === "primary" && !disabled ? "0 3px 8px rgba(11, 18, 32, 0.08)" : "none",
+          elevation: variant === "primary" && !disabled ? 1 : 0,
+          offset: { width: 0, height: 3 },
+          opacity: variant === "primary" && !disabled ? 0.08 : 0,
+          radius: 8,
+        }),
       }}
     >
       <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "700" }}>{children}</Text>

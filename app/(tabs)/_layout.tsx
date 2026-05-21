@@ -1,13 +1,15 @@
-import { Tabs } from "expo-router";
+import { Tabs, router, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { activePrivateCheckIns } from "@/state/check-ins";
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { KoinoLogo } from "@/ui/koino-logo";
-import { brandPalette, colors, type ThemeName } from "@/ui/theme";
+import { Avatar, RoomImage } from "@/ui/app-components";
+import { brandPalette, colors, platformShadow, radius, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -19,18 +21,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.cream,
-          elevation: 0,
-          height: 110,
-          shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.04,
-          shadowRadius: 10,
-        },
-        headerLeft: () => <KoinoHeaderLogo />,
-        headerRight: () => <HeaderRightControls />,
-        headerTitle: "",
+        header: () => <KoinoTabHeader />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.olive,
@@ -47,17 +38,22 @@ export default function TabLayout() {
           borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
           borderTopWidth: 1,
           bottom: -10,
-          elevation: 12,
           height: 86,
           left: 0,
           paddingBottom: 22,
           paddingTop: 8,
           position: "absolute",
           right: 0,
-          shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 12 },
-          shadowOpacity: state.theme === "dark" ? 0.34 : 0.16,
-          shadowRadius: 26,
+          ...platformShadow({
+            boxShadow:
+              state.theme === "dark"
+                ? "0 18px 42px rgba(0, 0, 0, 0.36)"
+                : "0 18px 42px rgba(11, 18, 32, 0.16)",
+            elevation: 12,
+            offset: { width: 0, height: 12 },
+            opacity: state.theme === "dark" ? 0.34 : 0.16,
+            radius: 26,
+          }),
           ...(Platform.OS === "web"
             ? {
                 WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
@@ -135,15 +131,146 @@ function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
   );
 }
 
-function KoinoHeaderLogo() {
-  return <KoinoLogo size={48} style={{ marginLeft: 16, marginVertical: 8 }} />;
+function KoinoTabHeader() {
+  const { state } = useKoino();
+  const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const user = state.users.find((item) => item.id === state.currentUserId);
+  const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
+  const todayKey = localDayKey(new Date());
+  const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
+    (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
+  );
+
+  function openPrimaryAction() {
+    const stamp = String(Date.now());
+    if (pathname.includes("/journal")) {
+      router.setParams({ newEntry: stamp } as never);
+      return;
+    }
+    if (!pathname.includes("/settings")) {
+      router.setParams({ checkIn: stamp } as never);
+      return;
+    }
+    router.push({ pathname: "/", params: { checkIn: stamp } } as never);
+  }
+
+  function openPlusAction() {
+    const stamp = String(Date.now());
+    if (pathname.includes("/journal")) {
+      router.setParams({ newEntry: stamp } as never);
+      return;
+    }
+    if (!pathname.includes("/settings")) {
+      router.setParams({ compose: stamp } as never);
+      return;
+    }
+    router.push({ pathname: "/journal", params: { newEntry: stamp } } as never);
+  }
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.cream,
+        gap: 16,
+        paddingBottom: 14,
+        paddingHorizontal: 18,
+        paddingTop: insets.top + 12,
+        ...platformShadow({
+          boxShadow: "0 4px 12px rgba(11, 18, 32, 0.04)",
+          offset: { width: 0, height: 4 },
+          opacity: 0.04,
+          radius: 12,
+        }),
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
+        <HeaderRightControls />
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/settings" as never)}
+        style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
+      >
+        <RoomImage size={44} />
+        <View>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
+              {group?.name ?? "No group"}
+            </Text>
+            <Feather name="chevron-down" size={16} color={colors.ink} />
+          </View>
+          {group ? (
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+              {memberCount} {memberCount === 1 ? "member" : "members"}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: colors.paper,
+          borderColor: colors.line,
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 12,
+          padding: 14,
+          ...platformShadow({
+            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+            offset: { width: 0, height: 10 },
+            opacity: 0.055,
+            radius: 24,
+          }),
+        }}
+      >
+        <Pressable accessibilityRole="button" onPress={openPrimaryAction} style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}>
+          <Avatar name={user?.name ?? state.authEmail ?? "K"} size={48} tone="orange" />
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
+            <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>
+              {todaysCheckIn || pathname.includes("/journal") ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Create new entry"
+          onPress={openPlusAction}
+          style={{
+            alignItems: "center",
+            backgroundColor: colors.accentSubtle,
+            borderColor: colors.line,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            height: 46,
+            justifyContent: "center",
+            width: 46,
+          }}
+        >
+          <Feather name="plus" size={23} color={colors.olive} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function localDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function HeaderRightControls() {
   return (
-    <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginRight: 16 }}>
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
       <ThemeSelector />
-      <CurrentGroupIndicator />
+      <IdentityButton />
     </View>
   );
 }
@@ -211,10 +338,12 @@ function ThemeSelector() {
             justifyContent: "center",
             left: 2,
             position: "absolute",
-            shadowColor: brandPalette.deepNavy,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.16,
-            shadowRadius: 5,
+            ...platformShadow({
+              boxShadow: "0 2px 5px rgba(11, 18, 32, 0.16)",
+              offset: { width: 0, height: 2 },
+              opacity: 0.16,
+              radius: 5,
+            }),
             transform: [{ translateX: thumbTranslate }],
             width: 32,
           }}
@@ -226,27 +355,15 @@ function ThemeSelector() {
   );
 }
 
-function CurrentGroupIndicator() {
+function IdentityButton() {
   const { state } = useKoino();
-  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const user = state.users.find((item) => item.id === state.currentUserId);
 
   if (!state.currentUserId) return null;
 
   return (
-    <View
-      style={{
-        backgroundColor: colors.elevated,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        maxWidth: 170,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-      }}
-    >
-      <Text numberOfLines={1} selectable style={{ color: colors.olive, fontSize: 12, fontWeight: "700" }}>
-        {group?.name ?? "No group"}
-      </Text>
-    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={() => router.push("/identity" as never)}>
+      <Avatar name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
+    </Pressable>
   );
 }

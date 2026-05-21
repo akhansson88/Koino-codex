@@ -43,6 +43,7 @@ export type CheckIn = {
   reflectionText: string;
   visibility: "private" | "group";
   verse?: BibleVerse;
+  verses?: BibleVerse[];
   createdAt: string;
 };
 
@@ -54,6 +55,7 @@ export type Post = {
   title?: string;
   body: string;
   verse?: BibleVerse;
+  verses?: BibleVerse[];
   images?: string[];
   answeredAt?: string;
   answeredMarkedAt?: string;
@@ -109,6 +111,7 @@ export type JournalEntry = {
   entryKind?: EntryKind;
   mood?: number;
   verse?: BibleVerse;
+  verses?: BibleVerse[];
   sharedPostId?: Id;
   createdAt: string;
   updatedAt: string;
@@ -157,6 +160,7 @@ export type FeedItem =
       title?: string;
       body: string;
       verse?: BibleVerse;
+      verses?: BibleVerse[];
       images?: string[];
       answeredAt?: string;
       answeredMarkedAt?: string;
@@ -171,5 +175,6 @@ export type FeedItem =
       mood: number;
       readToday: boolean;
       verse?: BibleVerse;
+      verses?: BibleVerse[];
       createdAt: string;
     };

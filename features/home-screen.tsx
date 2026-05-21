@@ -1,17 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
-import { activePrivateCheckIns } from "@/state/check-ins";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Id } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem } from "@/state/types";
 import {
-  AppHeader,
   AppScreen,
   Avatar,
   AvatarStack,
   BodyText,
   Card,
+  ExpandableBodyText,
   FilterChips,
   IconButton,
   PrimaryButton,
@@ -19,16 +19,18 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  VerseCard,
+  VerseList,
 } from "@/ui/app-components";
+import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { brandPalette, colors, radius } from "@/ui/theme";
+import { colors, platformShadow, radius } from "@/ui/theme";
 
-type FeedFilter = "all" | "prayer_request" | "praise" | "update";
+type FeedFilter = "all" | EntryKind;
 type CheckInStep = "choose" | "details" | "thanks";
 
 const MAX_BODY_LENGTH = 500;
+const FEED_BODY_PREVIEW_LINES = 3;
 
 const moodOptions = [
   { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
@@ -37,11 +39,6 @@ const moodOptions = [
   { value: 2, label: "Heavy", description: "Carrying some burden", icon: "cloud-outline" as const },
   { value: 1, label: "Struggling", description: "Finding today difficult", icon: "rainy-outline" as const },
 ];
-
-const suggestedVerse: BibleVerse = {
-  reference: "Philippians 4:6-7",
-  text: "Do not be anxious about anything, but in everything by prayer...",
-};
 
 function formatRelativeTime(value: string) {
   const created = Date.parse(value);
@@ -55,12 +52,6 @@ function formatRelativeTime(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-function localDayKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 function moodLabel(mood: number) {
   return moodOptions.find((option) => option.value === mood)?.label ?? (mood >= 4 ? "Peaceful" : mood <= 2 ? "Heavy" : "Okay");
 }
@@ -72,11 +63,12 @@ function normalizeKind(kind: EntryKind | "post" | undefined): EntryKind {
 
 function kindLabel(item: FeedItem) {
   if (item.type === "check_in") return "Check-in";
+  if (item.kind === "post") return "Post";
   const kind = normalizeKind(item.kind);
   if (kind === "prayer_request") return "Prayer request";
   if (kind === "praise") return "Praise";
   if (kind === "update") return "Update";
-  return "Normal post";
+  return "Reflection";
 }
 
 function kindIcon(item: FeedItem) {
@@ -95,11 +87,6 @@ function defaultTitle(item: FeedItem) {
   if (kind === "praise") return "Grateful for a new day";
   if (kind === "update") return "A small update";
   return "Shared reflection";
-}
-
-function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 0) {
-  if (!roomId) return fallback;
-  return counts[roomId] || fallback;
 }
 
 function FeedPostCard({
@@ -128,11 +115,21 @@ function FeedPostCard({
   replyCount: number;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const suppressOpenRef = useRef(false);
   const isPrayer = item.type === "post" && normalizeKind(item.kind) === "prayer_request";
 
+  function runMenuAction(action: () => void) {
+    suppressOpenRef.current = true;
+    setMenuOpen(false);
+    action();
+    setTimeout(() => {
+      suppressOpenRef.current = false;
+    }, 250);
+  }
+
   return (
-      <Card style={{ padding: 16 }}>
-        <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
+      <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
+        <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
           <Avatar name={authorName} size={42} tone={isPrayer ? "orange" : "green"} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
@@ -148,6 +145,7 @@ function FeedPostCard({
                 accessibilityRole="button"
                 accessibilityLabel="Post options"
                 hitSlop={8}
+                onPressIn={(event) => event.stopPropagation()}
                 onPress={(event) => {
                   event.stopPropagation();
                   setMenuOpen((current) => !current);
@@ -156,56 +154,76 @@ function FeedPostCard({
               >
                 <Feather name="more-horizontal" size={20} color={colors.ink} />
               </Pressable>
-              {menuOpen ? (
-                <View
-                  style={{
-                    backgroundColor: colors.paper,
-                    borderColor: colors.line,
-                    borderRadius: radius.md,
-                    borderWidth: 1,
-                    elevation: 12,
-                    minWidth: 118,
-                    paddingVertical: 4,
-                    position: "absolute",
-                    right: 0,
-                    top: 30,
-                    zIndex: 20,
-                  }}
-                >
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      setMenuOpen(false);
-                      onEdit();
-                    }}
-                    style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-                  >
-                    <Feather name="edit-2" size={14} color={colors.ink} />
-                    <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      setMenuOpen(false);
-                      onDelete();
-                    }}
-                    style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-                  >
-                    <Feather name="trash-2" size={14} color={colors.danger} />
-                    <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
-                  </Pressable>
-                </View>
-              ) : null}
             </View>
           ) : null}
         </View>
 
-        <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>{item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}</Text>
-          <BodyText>{item.body || "No words today, just presence."}</BodyText>
+        {ownsItem && menuOpen ? (
+          <View
+            style={{
+              backgroundColor: colors.paper,
+              borderColor: colors.line,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              minWidth: 118,
+              paddingVertical: 4,
+              position: "absolute",
+              right: 14,
+              top: 50,
+              zIndex: 40,
+              ...platformShadow({
+                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+                elevation: 12,
+                offset: { width: 0, height: 10 },
+                opacity: 0.14,
+                radius: 24,
+              }),
+            }}
+          >
+            <Pressable
+              onPressIn={(event) => event.stopPropagation()}
+              onPress={(event) => {
+                event.stopPropagation();
+                runMenuAction(onEdit);
+              }}
+              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <Feather name="edit-2" size={14} color={colors.ink} />
+              <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
+            </Pressable>
+            <Pressable
+              onPressIn={(event) => event.stopPropagation()}
+              onPress={(event) => {
+                event.stopPropagation();
+                runMenuAction(onDelete);
+              }}
+              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <Feather name="trash-2" size={14} color={colors.danger} />
+              <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => {
+            if (menuOpen || suppressOpenRef.current) {
+              setMenuOpen(false);
+              return;
+            }
+            onOpen();
+          }}
+          style={{ gap: 8 }}
+        >
+          <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
+            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+          </Text>
+          <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
+            {item.body || "No words today, just presence."}
+          </ExpandableBodyText>
         </Pressable>
 
-        <VerseCard verse={item.verse} compact />
+        <VerseList verse={item.verse} verses={item.verses} compact />
 
         {isPrayer ? (
           <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
@@ -252,28 +270,27 @@ function FeedPostCard({
 
 export function HomeScreen() {
   const { state, dispatch } = useKoino();
+  const params = useLocalSearchParams<{ checkIn?: string; compose?: string }>();
   const [filter, setFilter] = useState<FeedFilter>("all");
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
   const [mood, setMood] = useState(4);
   const [checkInText, setCheckInText] = useState("");
-  const [checkInVerseText, setCheckInVerseText] = useState("");
+  const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
   const [shareCheckIn, setShareCheckIn] = useState(true);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
-  const [composerVerse, setComposerVerse] = useState<BibleVerse | undefined>();
+  const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
   const [detailItem, setDetailItem] = useState<FeedItem | undefined>();
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const lastComposeParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
-  const currentUserName = userById.get(state.currentUserId ?? "") ?? state.authEmail ?? "Joel";
-
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
       .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
@@ -286,6 +303,7 @@ export function HomeScreen() {
         mood: item.mood,
         readToday: item.readToday,
         verse: item.verse,
+        verses: item.verses,
         createdAt: item.createdAt,
       }));
     const posts: FeedItem[] = state.posts
@@ -299,6 +317,7 @@ export function HomeScreen() {
         title: item.title,
         body: item.body,
         verse: item.verse,
+        verses: item.verses,
         images: item.images,
         answeredAt: item.answeredAt,
         answeredMarkedAt: item.answeredMarkedAt,
@@ -312,18 +331,11 @@ export function HomeScreen() {
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [filter, state.checkIns, state.currentGroupId, state.posts]);
 
-  const todaysCheckIn = useMemo(() => {
-    const today = localDayKey(new Date());
-    return [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].find(
-      (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === today,
-    );
-  }, [state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries, state.privateCheckIns]);
-
   function resetCheckIn() {
     setCheckInStep("choose");
     setMood(4);
     setCheckInText("");
-    setCheckInVerseText("");
+    setCheckInVerses([]);
     setShareCheckIn(true);
   }
 
@@ -332,22 +344,34 @@ export function HomeScreen() {
     setEditingItem(item);
     setComposerTitle(item?.type === "post" ? item.title ?? "" : "");
     setComposerBody(item?.body ?? "");
-    setComposerVerse(item?.verse);
+    setComposerVerses(normalizeBibleVerses(item?.verse, item?.verses));
     setComposerVisible(true);
   }
+
+  useEffect(() => {
+    if (!params.checkIn) return;
+    resetCheckIn();
+    setCheckInVisible(true);
+  }, [params.checkIn]);
+
+  useEffect(() => {
+    if (!params.compose || params.compose === lastComposeParamRef.current) return;
+    lastComposeParamRef.current = params.compose;
+    openComposer(filter === "all" ? "reflection" : filter);
+  }, [filter, params.compose]);
 
   async function submitComposer() {
     if (!composerBody.trim()) return;
     if (editingItem?.type === "post") {
-      await dispatch({ type: "editPost", id: editingItem.id, kind: composerKind, title: composerTitle, body: composerBody, verse: composerVerse });
+      await dispatch({ type: "editPost", id: editingItem.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     } else {
-      await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: composerVerse });
+      await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
     setComposerVisible(false);
     setEditingItem(undefined);
     setComposerTitle("");
     setComposerBody("");
-    setComposerVerse(undefined);
+    setComposerVerses([]);
     setComposerKind("reflection");
   }
 
@@ -379,52 +403,13 @@ export function HomeScreen() {
   }
 
   return (
-    <AppScreen>
-      <AppHeader currentRoomName={group?.name ?? "Test Room"} memberCount={memberCount || 4} />
-
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              resetCheckIn();
-              setCheckInVisible(true);
-            }}
-            style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}
-          >
-            <Avatar name={currentUserName} size={48} tone="orange" />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-              <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>
-                {todaysCheckIn ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Create new entry"
-            onPress={(event) => {
-              openComposer("reflection");
-            }}
-            style={{
-              alignItems: "center",
-              backgroundColor: colors.accentSubtle,
-              borderColor: colors.line,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              height: 46,
-              justifyContent: "center",
-              width: 46,
-            }}
-          >
-            <Feather name="plus" size={23} color={colors.olive} />
-          </Pressable>
-        </Card>
-
+    <AppScreen topInset={false}>
       <FilterChips
         value={filter}
         onChange={setFilter}
         options={[
           { label: "All", value: "all" },
+          { label: "Reflection", value: "reflection" },
           { label: "Prayer requests", value: "prayer_request" },
           { label: "Praise", value: "praise" },
           { label: "Updates", value: "update" },
@@ -478,7 +463,7 @@ export function HomeScreen() {
         step={checkInStep}
         mood={mood}
         note={checkInText}
-        verseText={checkInVerseText}
+        verses={checkInVerses}
         roomName={group?.name ?? "Test Room"}
         share={shareCheckIn}
         onClose={() => setCheckInVisible(false)}
@@ -487,7 +472,7 @@ export function HomeScreen() {
           setCheckInStep("details");
         }}
         onNote={setCheckInText}
-        onVerse={setCheckInVerseText}
+        onVerses={setCheckInVerses}
         onShare={setShareCheckIn}
         onBack={() => setCheckInStep("choose")}
         onSubmit={async () => {
@@ -497,7 +482,8 @@ export function HomeScreen() {
             readToday: true,
             reflectionText: checkInText,
             visibility: shareCheckIn ? "group" : "private",
-            verse: checkInVerseText.trim() ? { reference: checkInVerseText.trim(), text: suggestedVerse.text } : undefined,
+            verse: primaryBibleVerse(checkInVerses),
+            verses: checkInVerses,
           });
           setCheckInStep("thanks");
         }}
@@ -512,12 +498,12 @@ export function HomeScreen() {
         kind={composerKind}
         title={composerTitle}
         body={composerBody}
-        verse={composerVerse}
+        verses={composerVerses}
         editing={Boolean(editingItem)}
         onKind={setComposerKind}
         onTitle={setComposerTitle}
         onBody={setComposerBody}
-        onVerse={setComposerVerse}
+        onVerses={setComposerVerses}
         onClose={() => {
           setComposerVisible(false);
           setEditingItem(undefined);
@@ -577,7 +563,7 @@ function CheckInModal({
   step,
   mood,
   note,
-  verseText,
+  verses,
   roomName,
   share,
   onBack,
@@ -587,13 +573,13 @@ function CheckInModal({
   onNote,
   onShare,
   onSubmit,
-  onVerse,
+  onVerses,
 }: {
   visible: boolean;
   step: CheckInStep;
   mood: number;
   note: string;
-  verseText: string;
+  verses: BibleVerse[];
   roomName: string;
   share: boolean;
   onBack: () => void;
@@ -603,7 +589,7 @@ function CheckInModal({
   onNote: (value: string) => void;
   onShare: (value: boolean) => void;
   onSubmit: () => void;
-  onVerse: (value: string) => void;
+  onVerses: (verses: BibleVerse[]) => void;
 }) {
   const selectedMood = moodOptions.find((option) => option.value === mood) ?? moodOptions[1];
   return (
@@ -675,10 +661,7 @@ function CheckInModal({
               <TextInputField multiline maxLength={350} value={note} onChangeText={onNote} placeholder="Thankful for a quiet morning and time with God." />
               <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
             </View>
-            <View style={{ gap: 8 }}>
-              <SectionHeading>Add a verse (optional)</SectionHeading>
-              <TextInputField value={verseText} onChangeText={onVerse} placeholder="Philippians 4:6-7" />
-            </View>
+            <BibleVerseField verses={verses} onChange={onVerses} />
             <View style={{ gap: 8 }}>
               <SectionHeading>Share with</SectionHeading>
               <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
@@ -740,9 +723,9 @@ function ComposerModal({
   onKind,
   onSubmit,
   onTitle,
-  onVerse,
+  onVerses,
   title,
-  verse,
+  verses,
   visible,
 }: {
   body: string;
@@ -753,9 +736,9 @@ function ComposerModal({
   onKind: (kind: EntryKind) => void;
   onSubmit: () => void;
   onTitle: (value: string) => void;
-  onVerse: (verse?: BibleVerse) => void;
+  onVerses: (verses: BibleVerse[]) => void;
   title: string;
-  verse?: BibleVerse;
+  verses: BibleVerse[];
   visible: boolean;
 }) {
   return (
@@ -790,21 +773,7 @@ function ComposerModal({
           />
           <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{body.length}/{MAX_BODY_LENGTH}</Text>
         </View>
-        <View style={{ gap: 8 }}>
-          <SectionHeading>Add a verse (optional)</SectionHeading>
-          {verse ? (
-            <Card style={{ alignItems: "center", flexDirection: "row", padding: 12 }}>
-              <VerseCard verse={verse} compact />
-              <Pressable accessibilityRole="button" onPress={() => onVerse(undefined)} style={{ padding: 8 }}>
-                <Feather name="x" size={18} color={colors.olive} />
-              </Pressable>
-            </Card>
-          ) : (
-            <SecondaryButton icon="plus" onPress={() => onVerse(suggestedVerse)}>
-              Add Bible verse
-            </SecondaryButton>
-          )}
-        </View>
+        <BibleVerseField verses={verses} onChange={onVerses} />
         <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit}>
           {editing ? "Update entry" : "Post entry"}
         </PrimaryButton>
@@ -864,7 +833,7 @@ function PrayerDetailModal({
               <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>{item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}</Text>
               <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{item.body || "No words today, just presence."}</BodyText>
             </View>
-            <VerseCard verse={item.verse} />
+            <VerseList verse={item.verse} verses={item.verses} />
             <PrimaryButton icon="heart" onPress={onPray} style={{ minHeight: 58 }}>
               {prayer?.prayed ? "Prayed" : "Pray"}
             </PrimaryButton>

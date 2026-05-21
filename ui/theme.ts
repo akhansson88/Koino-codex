@@ -1,3 +1,5 @@
+import { Platform, type ViewStyle } from "react-native";
+
 type ThemeColors = {
   cream: string;
   paper: string;
@@ -126,3 +128,31 @@ export const copy = {
   checkInQuestion: "Have you read the Bible today?",
   prayerInvitation: "Take a quiet breath. Hold this person before God, without hurry.",
 };
+
+export function platformShadow({
+  boxShadow,
+  color = brandPalette.deepNavy,
+  elevation,
+  opacity,
+  radius,
+  offset,
+}: {
+  boxShadow: string;
+  color?: string;
+  elevation?: number;
+  opacity: number;
+  radius: number;
+  offset: { width: number; height: number };
+}): ViewStyle {
+  if (Platform.OS === "web") {
+    return { boxShadow } as ViewStyle;
+  }
+
+  return {
+    elevation,
+    shadowColor: color,
+    shadowOffset: offset,
+    shadowOpacity: opacity,
+    shadowRadius: radius,
+  };
+}

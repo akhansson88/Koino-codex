@@ -1,13 +1,13 @@
-import { PropsWithChildren, ReactNode } from "react";
+import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from "react-native";
+import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
-import { brandPalette, colors, radius } from "@/ui/theme";
+import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -21,10 +21,14 @@ export function initials(name?: string) {
     .toUpperCase();
 }
 
-export function AppScreen({ children, scroll = true }: PropsWithChildren<{ scroll?: boolean }>) {
+export function AppScreen({
+  children,
+  scroll = true,
+  topInset = true,
+}: PropsWithChildren<{ scroll?: boolean; topInset?: boolean }>) {
   const insets = useSafeAreaInsets();
   if (!scroll) {
-    return <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: insets.top }}>{children}</View>;
+    return <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>{children}</View>;
   }
 
   return (
@@ -33,7 +37,7 @@ export function AppScreen({ children, scroll = true }: PropsWithChildren<{ scrol
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: insets.top + 18 }}
+        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: (topInset ? insets.top : 0) + 18 }}
       >
         {children}
       </ScrollView>
@@ -116,10 +120,12 @@ function ThemeDots() {
         gap: 6,
         height: 34,
         paddingHorizontal: 8,
-        shadowColor: brandPalette.deepNavy,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        ...platformShadow({
+          boxShadow: "0 3px 8px rgba(11, 18, 32, 0.08)",
+          offset: { width: 0, height: 3 },
+          opacity: 0.08,
+          radius: 8,
+        }),
       }}
     >
       <Ionicons name="sunny" color={!isNight ? colors.olive : "#B8C0CE"} size={15} />
@@ -140,10 +146,12 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
           borderWidth: 1,
           gap: 14,
           padding: 16,
-          shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.055,
-          shadowRadius: 24,
+          ...platformShadow({
+            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+            offset: { width: 0, height: 10 },
+            opacity: 0.055,
+            radius: 24,
+          }),
         },
         style,
       ]}
@@ -409,6 +417,23 @@ export function VerseCard({ verse, compact = false }: { verse?: BibleVerse; comp
   );
 }
 
+export function bibleVerses(verse?: BibleVerse, verses?: BibleVerse[]) {
+  if (verses?.length) return verses.slice(0, 5);
+  return verse ? [verse] : [];
+}
+
+export function VerseList({ verse, verses, compact = false }: { verse?: BibleVerse; verses?: BibleVerse[]; compact?: boolean }) {
+  const visibleVerses = bibleVerses(verse, verses);
+  if (visibleVerses.length === 0) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      {visibleVerses.map((item) => (
+        <VerseCard key={`${item.reference}-${item.text}`} verse={item} compact={compact} />
+      ))}
+    </View>
+  );
+}
+
 export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: boolean }>) {
   return (
     <Text style={{ color: muted ? colors.muted : colors.ink, fontSize: muted ? 12 : 18, fontWeight: "900", textTransform: muted ? "uppercase" : "none" }}>
@@ -417,11 +442,78 @@ export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: 
   );
 }
 
-export function BodyText({ children, muted = false, style }: PropsWithChildren<{ muted?: boolean; style?: StyleProp<TextStyle> }>) {
+export function BodyText({ children, muted = false, style, ...props }: PropsWithChildren<TextProps & { muted?: boolean; style?: StyleProp<TextStyle> }>) {
   return (
-    <Text style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
+    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
       {children}
     </Text>
+  );
+}
+
+export function ExpandableBodyText({
+  children,
+  collapsedLines = 3,
+  muted = false,
+  style,
+}: PropsWithChildren<{ collapsedLines?: number; muted?: boolean; style?: StyleProp<TextStyle> }>) {
+  const collapsedHeight = collapsedLines * 22;
+  const heightAnimation = useRef(new Animated.Value(collapsedHeight)).current;
+  const hasMeasuredRef = useRef(false);
+  const [expanded, setExpanded] = useState(false);
+  const [fullHeight, setFullHeight] = useState(0);
+  const hasMeasured = fullHeight > 0;
+  const canExpand = fullHeight > collapsedHeight + 1;
+  const visibleHeight = canExpand ? (expanded ? fullHeight : collapsedHeight) : fullHeight || collapsedHeight;
+
+  useEffect(() => {
+    hasMeasuredRef.current = false;
+    setFullHeight(0);
+    setExpanded(false);
+    heightAnimation.setValue(collapsedHeight);
+  }, [children, collapsedHeight, heightAnimation]);
+
+  useEffect(() => {
+    if (!fullHeight) return;
+    if (!hasMeasuredRef.current) {
+      hasMeasuredRef.current = true;
+      heightAnimation.setValue(visibleHeight);
+      return;
+    }
+    Animated.timing(heightAnimation, {
+      duration: 220,
+      toValue: visibleHeight,
+      useNativeDriver: false,
+    }).start();
+  }, [fullHeight, heightAnimation, visibleHeight]);
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Animated.View style={[{ overflow: "hidden" }, hasMeasured ? { height: heightAnimation } : null]}>
+        <BodyText muted={muted} numberOfLines={hasMeasured ? undefined : collapsedLines} style={style}>
+          {children}
+        </BodyText>
+      </Animated.View>
+      <BodyText
+        muted={muted}
+        onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
+        style={[style, { left: 0, opacity: 0, position: "absolute", right: 0, zIndex: -1 }]}
+      >
+        {children}
+      </BodyText>
+      {canExpand ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={(event) => {
+            event.stopPropagation();
+            setExpanded((current) => !current);
+          }}
+          style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: 28 }}
+        >
+          <Text style={{ color: muted ? colors.muted : colors.olive, fontSize: 13, fontWeight: "900" }}>{expanded ? "Show less" : "Show more"}</Text>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -469,10 +561,12 @@ export function BottomSheet({
               maxHeight: "88%",
               padding: 18,
               paddingBottom: Math.max(24, insets.bottom + 14),
-              shadowColor: brandPalette.deepNavy,
-              shadowOffset: { width: 0, height: -12 },
-              shadowOpacity: 0.18,
-              shadowRadius: 30,
+              ...platformShadow({
+                boxShadow: "0 -12px 30px rgba(11, 18, 32, 0.18)",
+                offset: { width: 0, height: -12 },
+                opacity: 0.18,
+                radius: 30,
+              }),
             }}
           >
             <View style={{ alignItems: "center" }}>

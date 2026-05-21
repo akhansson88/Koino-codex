@@ -1,38 +1,33 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
+import { Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, JournalEntry } from "@/state/types";
 import {
-  AppHeader,
   AppScreen,
   Avatar,
   BodyText,
   Card,
-  FilterChips,
+  ExpandableBodyText,
   IconButton,
   PrimaryButton,
   RoomImage,
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  VerseCard,
+  VerseList,
 } from "@/ui/app-components";
+import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
-type JournalStage = "feed" | "type" | "write" | "verse";
+type JournalStage = "feed" | "type" | "write";
 
 const MAX_BODY_LENGTH = 500;
-
-const verseSuggestions: BibleVerse[] = [
-  { reference: "Philippians 4:6-7", text: "Do not be anxious about anything, but in everything by prayer..." },
-  { reference: "Psalm 23:1", text: "The Lord is my shepherd; I shall not want." },
-  { reference: "Isaiah 41:10", text: "Fear not, for I am with you; be not dismayed..." },
-  { reference: "Jeremiah 29:11", text: "For I know the plans I have for you, declares the Lord..." },
-];
+const JOURNAL_BODY_PREVIEW_LINES = 3;
 
 const entryTypes: { kind: EntryKind; title: string; description: string; icon: "book-open" | "heart" | "star" | "send" }[] = [
   { kind: "reflection", title: "Reflection", description: "Write your thoughts and reflect on your day", icon: "book-open" },
@@ -57,11 +52,11 @@ function localDayKey(value: string | Date) {
 
 export function JournalScreen() {
   const { state, dispatch } = useKoino();
+  const params = useLocalSearchParams<{ newEntry?: string }>();
   const [stage, setStage] = useState<JournalStage>("feed");
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
   const [body, setBody] = useState("");
-  const [verse, setVerse] = useState<BibleVerse | undefined>();
-  const [verseTab, setVerseTab] = useState<"suggested" | "recent" | "bookmarks">("suggested");
+  const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | undefined>();
   const [shareWithRoom, setShareWithRoom] = useState(true);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
@@ -82,6 +77,7 @@ export function JournalScreen() {
         entryKind: "reflection" as EntryKind,
         mood: checkIn.mood,
         verse: checkIn.verse,
+        verses: checkIn.verses,
         createdAt: checkIn.createdAt,
         updatedAt: checkIn.createdAt,
         displaySource: "Shared check-in",
@@ -93,7 +89,7 @@ export function JournalScreen() {
   function beginEntry(kind?: EntryKind) {
     setEntryKind(kind ?? "reflection");
     setBody("");
-    setVerse(undefined);
+    setVerses([]);
     setEditingEntry(undefined);
     setShareWithRoom(true);
     setStage(kind ? "write" : "type");
@@ -103,7 +99,7 @@ export function JournalScreen() {
     setEditingEntry(entry);
     setEntryKind(entry.entryKind ?? "reflection");
     setBody(entry.body);
-    setVerse(entry.verse);
+    setVerses(normalizeBibleVerses(entry.verse, entry.verses));
     setShareWithRoom(Boolean(entry.sharedPostId));
     setStage("write");
   }
@@ -111,43 +107,25 @@ export function JournalScreen() {
   async function submitEntry() {
     if (!body.trim()) return;
     if (editingEntry) {
-      await dispatch({ type: "updateJournalEntry", id: editingEntry.id, body, entryKind, verse, sharedPostId: editingEntry.sharedPostId });
+      await dispatch({ type: "updateJournalEntry", id: editingEntry.id, body, entryKind, verse: primaryBibleVerse(verses), verses, sharedPostId: editingEntry.sharedPostId });
     } else {
-      await dispatch({ type: "createJournalEntry", body, entryKind, verse, shareWithGroup: shareWithRoom, title: entryTitle(entryKind) });
+      await dispatch({ type: "createJournalEntry", body, entryKind, verse: primaryBibleVerse(verses), verses, shareWithGroup: shareWithRoom, title: entryTitle(entryKind) });
     }
     setStage("feed");
     setBody("");
-    setVerse(undefined);
+    setVerses([]);
     setEditingEntry(undefined);
   }
 
+  useEffect(() => {
+    if (!params.newEntry) return;
+    beginEntry();
+  }, [params.newEntry]);
+
   return (
-    <AppScreen>
+    <AppScreen topInset={false}>
       {stage === "feed" ? (
         <>
-          <AppHeader currentRoomName={group?.name ?? "Test Room"} memberCount={state.groupMemberCounts[group?.id ?? ""] || 4} />
-          <Pressable accessibilityRole="button" onPress={() => beginEntry()}>
-            <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
-              <Avatar name={user?.name ?? state.authEmail ?? "K"} size={48} tone="orange" />
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-                <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>Share, reflect or ask for prayer...</Text>
-              </View>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.accentSubtle,
-                  borderRadius: 14,
-                  height: 46,
-                  justifyContent: "center",
-                  width: 46,
-                }}
-              >
-                <Feather name="plus" size={22} color={colors.olive} />
-              </View>
-            </Card>
-          </Pressable>
-
           <View style={{ gap: 12 }}>
             {state.authError ? (
               <Card>
@@ -172,9 +150,13 @@ export function JournalScreen() {
                       <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{entry.displaySource}</Text>
                     </View>
                   </View>
-                  <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{entryTitle(entry.entryKind)}</Text>
-                  <BodyText>{entry.body}</BodyText>
-                  <VerseCard verse={entry.verse} compact />
+                  <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
+                    {entryTitle(entry.entryKind)}
+                  </Text>
+                  <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>
+                    {entry.body}
+                  </ExpandableBodyText>
+                  <VerseList verse={entry.verse} verses={entry.verses} compact />
                   {"isSharedCheckIn" in entry ? null : (
                     <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                       <SecondaryButton icon="edit-2" onPress={() => editEntry(entry)} style={{ flex: 1 }}>
@@ -258,23 +240,7 @@ export function JournalScreen() {
             />
             <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{body.length}/{MAX_BODY_LENGTH}</Text>
           </View>
-          <View style={{ gap: 8 }}>
-            <SectionHeading>Add a verse (optional)</SectionHeading>
-            {verse ? (
-              <Card style={{ alignItems: "center", flexDirection: "row", padding: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{verse.reference}</Text>
-                </View>
-                <Pressable accessibilityRole="button" onPress={() => setVerse(undefined)} style={{ padding: 8 }}>
-                  <Feather name="x" size={18} color={colors.olive} />
-                </Pressable>
-              </Card>
-            ) : (
-              <SecondaryButton icon="plus" onPress={() => setStage("verse")}>
-                Add Bible verse
-              </SecondaryButton>
-            )}
-          </View>
+          <BibleVerseField verses={verses} onChange={setVerses} />
           <View style={{ gap: 8 }}>
             <SectionHeading>Share with</SectionHeading>
             <Pressable accessibilityRole="button" onPress={() => setShareWithRoom((current) => !current)}>
@@ -294,18 +260,6 @@ export function JournalScreen() {
         </>
       ) : null}
 
-      {stage === "verse" ? (
-        <VersePicker
-          tab={verseTab}
-          onTab={setVerseTab}
-          onBack={() => setStage("write")}
-          onSelect={(nextVerse) => {
-            setVerse(nextVerse);
-            setStage("write");
-          }}
-        />
-      ) : null}
-
       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
@@ -317,52 +271,5 @@ export function JournalScreen() {
         }}
       />
     </AppScreen>
-  );
-}
-
-function VersePicker({
-  onBack,
-  onSelect,
-  onTab,
-  tab,
-}: {
-  onBack: () => void;
-  onSelect: (verse: BibleVerse) => void;
-  onTab: (tab: "suggested" | "recent" | "bookmarks") => void;
-  tab: "suggested" | "recent" | "bookmarks";
-}) {
-  const verses = tab === "recent" ? verseSuggestions.slice(0, 2) : tab === "bookmarks" ? verseSuggestions.slice(1, 3) : verseSuggestions;
-  return (
-    <Modal animationType="slide" visible onRequestClose={onBack}>
-      <AppScreen>
-        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Choose a Bible verse</Text>
-          <IconButton accessibilityLabel="Close verse picker" icon="x" onPress={onBack} />
-        </View>
-        <TextInputField placeholder="Search (e.g. love, peace, strength)" />
-        <FilterChips
-          value={tab}
-          onChange={onTab}
-          options={[
-            { label: "Suggested", value: "suggested" },
-            { label: "Recent", value: "recent" },
-            { label: "Bookmarks", value: "bookmarks" },
-          ]}
-        />
-        <View style={{ gap: 10 }}>
-          {verses.map((verse) => (
-            <Pressable accessibilityRole="button" key={verse.reference} onPress={() => onSelect(verse)}>
-              <Card style={{ flexDirection: "row", gap: 10, padding: 14 }}>
-                <View style={{ flex: 1, gap: 5 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{verse.reference}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>{verse.text}</Text>
-                </View>
-                <Feather name="star" size={18} color={colors.muted} />
-              </Card>
-            </Pressable>
-          ))}
-        </View>
-      </AppScreen>
-    </Modal>
   );
 }
