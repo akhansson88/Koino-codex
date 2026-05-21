@@ -1,10 +1,13 @@
 import { Tabs } from "expo-router";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { brandPalette, colors } from "@/ui/theme";
+import { KoinoLogo } from "@/ui/koino-logo";
+import { brandPalette, colors, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -16,52 +19,92 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
+        headerStyle: {
+          backgroundColor: colors.cream,
+          elevation: 0,
+          height: 110,
+          shadowColor: brandPalette.deepNavy,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+        },
+        headerLeft: () => <KoinoHeaderLogo />,
+        headerRight: () => <HeaderRightControls />,
+        headerTitle: "",
+        headerTintColor: colors.ink,
+        headerShadowVisible: false,
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "700", marginTop: 2 },
+        tabBarBackground: () => <TabBarGlassBackground theme={state.theme} />,
         tabBarStyle: {
-          backgroundColor: colors.paper,
-          borderTopColor: colors.line,
+          backgroundColor:
+            Platform.OS === "web"
+              ? state.theme === "dark"
+                ? "rgba(17, 26, 44, 0.28)"
+                : "rgba(255, 255, 255, 0.22)"
+              : "transparent",
+          borderRadius: 0,
+          borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
           borderTopWidth: 1,
-          height: Platform.OS === "ios" ? 86 : 76,
-          paddingBottom: Platform.OS === "ios" ? 24 : 12,
+          bottom: -10,
+          elevation: 12,
+          height: 86,
+          left: 0,
+          paddingBottom: 22,
           paddingTop: 8,
           position: "absolute",
+          right: 0,
           shadowColor: brandPalette.deepNavy,
-          shadowOffset: { width: 0, height: -8 },
-          shadowOpacity: 0.06,
-          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity: state.theme === "dark" ? 0.34 : 0.16,
+          shadowRadius: 26,
+          ...(Platform.OS === "web"
+            ? {
+                WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
+                backdropFilter: "blur(34px) saturate(220%) contrast(115%)",
+                boxShadow:
+                  state.theme === "dark"
+                    ? "inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.36)"
+                    : "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
+              }
+            : {}),
         },
+        tabBarLabelStyle: { fontWeight: "700" },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Today",
-          tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? "leaf" : "leaf-outline"} color={color} size={size} />,
+          tabBarLabel: "Today",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "leaf" : "leaf-outline"} color={color} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="journal"
         options={{
           title: "Journal",
-          tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? "book" : "book-outline"} color={color} size={size} />,
+          tabBarLabel: "Journal",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "book" : "book-outline"} color={color} size={size} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Community",
-          tabBarLabel: "Community",
-          tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />,
+          title: "Room",
+          tabBarLabel: "Room",
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
+          ),
         }}
       />
     </Tabs>
   );
 }
-<<<<<<< HEAD
-=======
 
 function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
   if (Platform.OS === "web") return null;
@@ -207,4 +250,3 @@ function CurrentGroupIndicator() {
     </View>
   );
 }
->>>>>>> dfcd64f87f0c4bc124d5d299a8c086a135dd5288
