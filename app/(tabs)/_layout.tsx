@@ -70,6 +70,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="bible"
         options={{
+          headerShown: false,
           title: "Bible",
           tabBarLabel: "Bible",
           tabBarIcon: ({ color, focused, size }) => (

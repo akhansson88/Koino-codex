@@ -5,7 +5,7 @@ import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   Easing,
@@ -17,6 +17,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   TextStyle,
   useWindowDimensions,
   View,
@@ -30,6 +31,7 @@ import {
   bibleVersionFor,
   bibleVersions,
   type BibleCrossReference,
+  type BibleChapterVerse,
   type BiblePosition,
   type BibleVersionId,
   hasBibleCrossReferences,
@@ -49,10 +51,16 @@ const readerFonts = [
   { id: "classic", label: "Classic" },
   { id: "humanist", label: "Humanist" },
   { id: "system", label: "System" },
-  { id: "mono", label: "Mono" },
+] as const;
+
+const readerThemes = [
+  { id: "light", label: "Ljus" },
+  { id: "sepia", label: "Sepia" },
+  { id: "dark", label: "Mörk" },
 ] as const;
 
 type BibleReaderFontId = (typeof readerFonts)[number]["id"];
+type BibleReaderThemeId = (typeof readerThemes)[number]["id"];
 type PickerStage = "book" | "chapter" | "verse";
 
 type BibleReaderPreferences = {
@@ -60,9 +68,13 @@ type BibleReaderPreferences = {
   audioVoiceId: string;
   audioVoiceName?: string;
   bibleVersionId: BibleVersionId;
+  compactMode: boolean;
   fontId: BibleReaderFontId;
   fontSize: number;
   position: BiblePosition;
+  readerTheme: BibleReaderThemeId;
+  showFootnotes: boolean;
+  showVerseNumbers: boolean;
 };
 
 type AudioPlaybackState = "idle" | "preparing" | "playing" | "paused" | "error";
@@ -94,19 +106,23 @@ type PendingAudioTransfer = {
   totalChunks: number;
 };
 
-const defaultPosition = normalizeBiblePosition();
-const defaultBibleVersionId: BibleVersionId = "kjv";
+const defaultPosition = normalizeBiblePosition({ book: "John", chapter: 3, verse: 1 });
+const defaultBibleVersionId: BibleVersionId = "sv1917";
 const defaultFontId: BibleReaderFontId = "serif";
 const defaultFontSize = 18;
+const defaultReaderTheme: BibleReaderThemeId = "light";
+const defaultShowVerseNumbers = true;
+const defaultShowFootnotes = false;
+const defaultCompactMode = false;
 const minFontSize = 16;
 const maxFontSize = 28;
 const fontSizeStep = 2;
 const elevenLabsTurboModel = "eleven_turbo_v2_5";
 const puterDashboardUrl = "https://puter.com/dashboard#account";
-const defaultAudioVoice: AudioVoice = { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", description: "Clear sample voice" };
+const defaultAudioVoice: AudioVoice = { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Warm and steady" };
 const fallbackAudioVoices: AudioVoice[] = [
   defaultAudioVoice,
-  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Warm and steady" },
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", description: "Clear sample voice" },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Soft and bright" },
   { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Calm narration" },
   { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli", description: "Gentle reading" },
@@ -125,6 +141,10 @@ function puterTokenStorageKey(userId?: string) {
 
 function isReaderFontId(value: unknown): value is BibleReaderFontId {
   return typeof value === "string" && readerFonts.some((font) => font.id === value);
+}
+
+function isReaderThemeId(value: unknown): value is BibleReaderThemeId {
+  return typeof value === "string" && readerThemes.some((theme) => theme.id === value);
 }
 
 function normalizeFontSize(value: unknown) {
@@ -175,9 +195,13 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
       bibleVersionId: defaultBibleVersionId,
+      compactMode: defaultCompactMode,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
+      readerTheme: defaultReaderTheme,
+      showFootnotes: defaultShowFootnotes,
+      showVerseNumbers: defaultShowVerseNumbers,
     };
   }
 
@@ -190,9 +214,13 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioVoiceId: storedVoice.id,
       audioVoiceName: storedVoice.name,
       bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
+      compactMode: typeof parsed?.compactMode === "boolean" ? parsed.compactMode : defaultCompactMode,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position,
+      readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
+      showFootnotes: typeof parsed?.showFootnotes === "boolean" ? parsed.showFootnotes : defaultShowFootnotes,
+      showVerseNumbers: typeof parsed?.showVerseNumbers === "boolean" ? parsed.showVerseNumbers : defaultShowVerseNumbers,
     };
   } catch {
     return {
@@ -200,20 +228,19 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
       bibleVersionId: defaultBibleVersionId,
+      compactMode: defaultCompactMode,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
+      readerTheme: defaultReaderTheme,
+      showFootnotes: defaultShowFootnotes,
+      showVerseNumbers: defaultShowVerseNumbers,
     };
   }
 }
 
 function fontFamilyFor(fontId: BibleReaderFontId) {
   if (fontId === "system") return undefined;
-  if (fontId === "mono") {
-    if (Platform.OS === "ios") return "Menlo";
-    if (Platform.OS === "android") return "monospace";
-    return "Menlo, Consolas, monospace";
-  }
   if (fontId === "humanist") {
     if (Platform.OS === "ios") return "Avenir Next";
     if (Platform.OS === "android") return "sans-serif-light";
@@ -231,6 +258,80 @@ function fontFamilyFor(fontId: BibleReaderFontId) {
 
 function referenceLabel(position: BiblePosition) {
   return `${position.book} ${position.chapter}:${position.verse}`;
+}
+
+function chapterLabel(position: BiblePosition) {
+  return `${position.book} ${position.chapter}`;
+}
+
+type ReaderPalette = {
+  accent: string;
+  background: string;
+  buttonText: string;
+  danger: string;
+  dim: string;
+  input: string;
+  line: string;
+  muted: string;
+  peach: string;
+  shadow: string;
+  sheet: string;
+  surface: string;
+  text: string;
+};
+
+function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
+  if (theme === "dark") {
+    return {
+      accent: "#FFC79A",
+      background: "#0B1220",
+      buttonText: "#0B1220",
+      danger: "#FDA29B",
+      dim: "rgba(2, 6, 16, 0.58)",
+      input: "#101A2C",
+      line: "#2A3549",
+      muted: "#A7B0C0",
+      peach: "rgba(255, 199, 154, 0.14)",
+      shadow: "#000000",
+      sheet: "#111A2C",
+      surface: "#172237",
+      text: "#F3F2EC",
+    };
+  }
+
+  if (theme === "sepia") {
+    return {
+      accent: "#A45118",
+      background: "#F7EDE0",
+      buttonText: "#0B1220",
+      danger: colors.danger,
+      dim: "rgba(63, 38, 21, 0.34)",
+      input: "#FFF8EF",
+      line: "#E7CFB9",
+      muted: "#776A5E",
+      peach: "#FFE8D8",
+      shadow: "#3F2615",
+      sheet: "#FFF6ED",
+      surface: "#FFF9F2",
+      text: "#1B2434",
+    };
+  }
+
+  return {
+    accent: colors.olive,
+    background: colors.cream,
+    buttonText: colors.onAccent,
+    danger: colors.danger,
+    dim: "rgba(11, 18, 32, 0.34)",
+    input: colors.input,
+    line: colors.line,
+    muted: colors.muted,
+    peach: colors.accentSubtle,
+    shadow: colors.ink,
+    sheet: colors.paper,
+    surface: colors.paper,
+    text: colors.ink,
+  };
 }
 
 export function BibleScreen() {
@@ -261,8 +362,15 @@ export function BibleScreen() {
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
+  const [readerTheme, setReaderTheme] = useState<BibleReaderThemeId>(defaultReaderTheme);
+  const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
+  const [showFootnotes, setShowFootnotes] = useState(defaultShowFootnotes);
+  const [compactMode, setCompactMode] = useState(defaultCompactMode);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
+  const [reflectionText, setReflectionText] = useState("");
   const [audioError, setAudioError] = useState<string | undefined>();
   const [audioPlaybackState, setAudioPlaybackState] = useState<AudioPlaybackState>("idle");
   const [audioVoice, setAudioVoice] = useState<AudioVoice>(defaultAudioVoice);
@@ -278,6 +386,7 @@ export function BibleScreen() {
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
+  const readerPalette = useMemo(() => readerPaletteFor(readerTheme), [readerTheme]);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const chapterCrossReferenceAvailability = useMemo(
     () =>
@@ -299,7 +408,8 @@ export function BibleScreen() {
   const previousAudioChapter = useMemo(() => previousBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
   const nextAudioChapter = useMemo(() => nextBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
-  const readerLineHeight = Math.round(fontSize * 1.62);
+  const effectiveFontSize = compactMode ? Math.max(minFontSize, fontSize - 1) : fontSize;
+  const readerLineHeight = Math.round(effectiveFontSize * (compactMode ? 1.48 : 1.62));
   const contentWidth = width >= 780 ? 720 : undefined;
   const audioIsPreparing = audioPlaybackState === "preparing";
   const audioIsPlaying = audioPlaybackState === "playing";
@@ -407,6 +517,10 @@ export function BibleScreen() {
         setBibleVersionId(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
         setFontSize(nextPreferences.fontSize);
+        setReaderTheme(nextPreferences.readerTheme);
+        setShowVerseNumbers(nextPreferences.showVerseNumbers);
+        setShowFootnotes(nextPreferences.showFootnotes);
+        setCompactMode(nextPreferences.compactMode);
       })
       .finally(() => {
         if (active) setPreferencesReady(true);
@@ -421,12 +535,24 @@ export function BibleScreen() {
     if (!storageKey || !preferencesReady) return;
 
     const timeout = setTimeout(() => {
-      const payload: BibleReaderPreferences = { audioPosition, audioVoiceId: audioVoice.id, audioVoiceName: audioVoice.name, bibleVersionId, fontId, fontSize, position };
+      const payload: BibleReaderPreferences = {
+        audioPosition,
+        audioVoiceId: audioVoice.id,
+        audioVoiceName: audioVoice.name,
+        bibleVersionId,
+        compactMode,
+        fontId,
+        fontSize,
+        position,
+        readerTheme,
+        showFootnotes,
+        showVerseNumbers,
+      };
       void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, fontId, fontSize, position, preferencesReady, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showFootnotes, showVerseNumbers, storageKey]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
@@ -837,6 +963,50 @@ export function BibleScreen() {
     [chapterVerses],
   );
 
+  const handleReaderBack = useCallback(() => {
+    // TODO: Replace this with a real reader-dismiss action if Bible becomes a nested/modal route.
+    scrollRef.current?.scrollTo({ animated: true, y: 0 });
+  }, []);
+
+  const handleVersePress = useCallback((verse: number) => {
+    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+    positionRef.current = nextPosition;
+    setPosition(nextPosition);
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = undefined;
+    }
+    setHighlightedPosition(undefined);
+    setSelectedVersePosition(nextPosition);
+  }, []);
+
+  const handleVerseAction = useCallback((_action: "pray" | "journal" | "save" | "share") => {
+    // TODO: Wire these calm response actions into prayer, journal, saved-verse, and room-sharing flows.
+    setSelectedVersePosition(undefined);
+  }, []);
+
+  const handleReflectionAction = useCallback((_action: "journal" | "pray" | "save") => {
+    // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
+  }, []);
+
+  const chapterSwipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 44 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.8,
+        onPanResponderRelease: (_event, gesture) => {
+          if (Math.abs(gesture.dx) < 74 || Math.abs(gesture.dy) > 48) return;
+          if (gesture.dx < 0 && nextChapter) {
+            jumpToPosition(nextChapter);
+            return;
+          }
+          if (gesture.dx > 0 && previousChapter) {
+            jumpToPosition(previousChapter);
+          }
+        },
+      }),
+    [jumpToPosition, nextChapter, previousChapter],
+  );
+
   useEffect(() => {
     if (!audioStatus.didJustFinish || audioPlaybackState !== "playing" || audioFinishHandledRef.current) return;
     audioFinishHandledRef.current = true;
@@ -858,329 +1028,113 @@ export function BibleScreen() {
   }
 
   const readerTextStyle: TextStyle = {
-    color: colors.ink,
+    color: readerPalette.text,
     fontFamily: readerFontFamily,
-    fontSize,
+    fontSize: effectiveFontSize,
     fontWeight: "400",
     lineHeight: readerLineHeight,
   };
 
   return (
-    <View style={{ backgroundColor: colors.cream, flex: 1 }}>
+    <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
+      <BibleReaderHeader
+        audioActive={audioIsPlaying || audioIsPreparing}
+        audioDisabled={!bridgeReady && audioPlaybackState !== "paused"}
+        onAudioPress={handleAudioToggle}
+        onBack={handleReaderBack}
+        onOpenPicker={() => setPickerVisible(true)}
+        onOpenSettings={() => setSettingsVisible(true)}
+        palette={readerPalette}
+        subtitle={bibleVersion.label}
+        title={chapterLabel(position)}
+        topInset={insets.top}
+      />
+
       <ScrollView
         ref={scrollRef}
-        contentInsetAdjustmentBehavior="automatic"
+        {...chapterSwipeResponder.panHandlers}
+        contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           alignSelf: "stretch",
-          gap: 16,
-          padding: 18,
-          paddingBottom: Math.max(112, insets.bottom + 92),
+          paddingBottom: Math.max(190, insets.bottom + 166),
+          paddingHorizontal: 22,
+          paddingTop: compactMode ? 12 : 18,
         }}
       >
-        <View style={{ alignSelf: "center", gap: 16, maxWidth: contentWidth, width: "100%" }}>
-          <View style={{ gap: 7 }}>
-            <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Bible</Text>
-            <BodyText muted selectable>
-              {referenceLabel(position)} - {bibleVersion.label}
-            </BodyText>
-          </View>
+        <View style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, width: "100%" }}>
+          <BibleText
+            audioHighlightActive={audioHighlightActive}
+            audioPosition={audioPosition}
+            compactMode={compactMode}
+            highlightedPosition={highlightedPosition}
+            onVerseLayout={handleVerseLayout}
+            onVersePress={handleVersePress}
+            palette={readerPalette}
+            position={position}
+            readerLineHeight={readerLineHeight}
+            readerTextStyle={readerTextStyle}
+            selectedVersePosition={selectedVersePosition}
+            showVerseNumbers={showVerseNumbers}
+            verses={chapterVerses}
+          />
 
-          <Card style={{ gap: 16, padding: 16 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>Current place</Text>
-                <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>
-                  {referenceLabel(position)}
-                </Text>
-              </View>
-              <SecondaryButton icon="search" onPress={() => setPickerVisible(true)} style={{ minHeight: 44, paddingHorizontal: 14 }}>
-                Choose
-              </SecondaryButton>
-            </View>
+          <ChapterReflectionCard
+            onAction={handleReflectionAction}
+            onChangeText={setReflectionText}
+            palette={readerPalette}
+            value={reflectionText}
+          />
 
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-              <ChapterButton disabled={!previousChapter} icon="chevron-left" label="Previous" onPress={() => previousChapter && jumpToPosition(previousChapter)} />
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.input,
-                  borderColor: colors.line,
-                  borderRadius: radius.md,
-                  borderWidth: 1,
-                  flex: 1,
-                  minHeight: 46,
-                  justifyContent: "center",
-                  paddingHorizontal: 10,
-                }}
-              >
-                <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                  {position.book} {position.chapter}
-                </Text>
-              </View>
-              <ChapterButton disabled={!nextChapter} icon="chevron-right" label="Next" onPress={() => nextChapter && jumpToPosition(nextChapter)} />
-            </View>
-          </Card>
-
-          <Card style={{ gap: 14, padding: 16 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <SectionHeading>Audio Bible</SectionHeading>
-                <Text selectable style={{ color: audioPlaybackState === "error" ? colors.danger : colors.muted, fontSize: 13, fontWeight: "700", lineHeight: 18 }}>
-                  {audioStatusLabel}
-                </Text>
-              </View>
-              <Pressable
-                accessibilityLabel={audioIsPlaying || audioIsPreparing ? "Pause audio Bible" : "Play audio Bible"}
-                accessibilityRole="button"
-                disabled={!bridgeReady && audioPlaybackState !== "paused"}
-                onPress={handleAudioToggle}
-                style={{
-                  alignItems: "center",
-                  backgroundColor: !bridgeReady && audioPlaybackState !== "paused" ? colors.disabled : colors.olive,
-                  borderRadius: 999,
-                  height: 50,
-                  justifyContent: "center",
-                  opacity: !bridgeReady && audioPlaybackState !== "paused" ? 0.72 : 1,
-                  width: 50,
-                }}
-              >
-                <Feather name={audioIsPlaying || audioIsPreparing ? "pause" : "play"} size={21} color={colors.paper} />
-              </Pressable>
-            </View>
-
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-              <ChapterButton disabled={!previousAudioChapter || audioIsPreparing} icon="chevron-left" label="Back" onPress={() => previousAudioChapter && handleAudioChapterJump(previousAudioChapter)} />
-              <Pressable
-                accessibilityLabel="Choose audio voice"
-                accessibilityRole="button"
-                onPress={() => setVoicePickerVisible(true)}
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.input,
-                  borderColor: colors.line,
-                  borderRadius: radius.md,
-                  borderWidth: 1,
-                  flex: 1,
-                  flexDirection: "row",
-                  gap: 8,
-                  minHeight: 46,
-                  justifyContent: "center",
-                  paddingHorizontal: 10,
-                }}
-              >
-                <Feather name="volume-2" size={16} color={colors.olive} />
-                <Text numberOfLines={1} style={{ color: colors.ink, flexShrink: 1, fontSize: 14, fontWeight: "900" }}>
-                  {audioVoice.name}
-                </Text>
-                <Feather name="chevron-down" size={15} color={colors.muted} />
-              </Pressable>
-              <ChapterButton disabled={!nextAudioChapter || audioIsPreparing} icon="chevron-right" label="Forward" onPress={() => nextAudioChapter && handleAudioChapterJump(nextAudioChapter)} />
-            </View>
-
-            <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <SecondaryButton icon={puterAuthToken ? "check" : "external-link"} onPress={() => setPuterTokenModalVisible(true)} style={{ minHeight: 40, paddingHorizontal: 12 }}>
-                {puterAuthToken ? "Puter connected" : "Connect Puter"}
-              </SecondaryButton>
-              {puterAuthToken ? (
-                <Pressable accessibilityRole="button" onPress={forgetPuterAuthToken} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 8 }}>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Forget token</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </Card>
-
-          <Card style={{ gap: 14, padding: 16 }}>
-            <SectionHeading>Reading style</SectionHeading>
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Bible version</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {bibleVersions.map((version) => {
-                  const selected = version.id === bibleVersionId;
-                  return (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      key={version.id}
-                      onPress={() => chooseBibleVersion(version.id)}
-                      style={{
-                        alignItems: "center",
-                        backgroundColor: selected ? colors.accentSubtle : colors.paper,
-                        borderColor: selected ? colors.gold : colors.line,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        justifyContent: "center",
-                        minHeight: 40,
-                        paddingHorizontal: 14,
-                      }}
-                    >
-                      <Text style={{ color: selected ? colors.olive : colors.muted, fontSize: 14, fontWeight: "900" }}>{version.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {readerFonts.map((font) => {
-                const selected = font.id === fontId;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    key={font.id}
-                    onPress={() => setFontId(font.id)}
-                    style={{
-                      alignItems: "center",
-                      backgroundColor: selected ? colors.accentSubtle : colors.paper,
-                      borderColor: selected ? colors.gold : colors.line,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      justifyContent: "center",
-                      minHeight: 40,
-                      paddingHorizontal: 14,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? colors.olive : colors.muted,
-                        fontFamily: fontFamilyFor(font.id),
-                        fontSize: 14,
-                        fontWeight: "900",
-                      }}
-                    >
-                      {font.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-              <Text style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>Font size</Text>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.input,
-                  borderColor: colors.line,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  flexDirection: "row",
-                  gap: 10,
-                  padding: 5,
-                }}
-              >
-                <StepperButton disabled={fontSize <= minFontSize} icon="minus" label="Decrease font size" onPress={() => changeFontSize(-fontSizeStep)} />
-                <Text style={{ color: colors.ink, fontSize: 15, fontVariant: ["tabular-nums"], fontWeight: "900", minWidth: 28, textAlign: "center" }}>
-                  {fontSize}
-                </Text>
-                <StepperButton disabled={fontSize >= maxFontSize} icon="plus" label="Increase font size" onPress={() => changeFontSize(fontSizeStep)} />
-              </View>
-            </View>
-          </Card>
-
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: radius.xl,
-              borderWidth: 1,
-              gap: 14,
-              padding: 18,
-              ...platformShadow({
-                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
-                offset: { width: 0, height: 10 },
-                opacity: 0.055,
-                radius: 24,
-              }),
-            }}
-          >
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>{position.book}</Text>
-              <Text style={{ color: colors.gold, fontSize: 22, fontWeight: "900" }}>{position.chapter}</Text>
-            </View>
-
-            <View style={{ gap: 2 }}>
-              {chapterVerses.map((item) => {
-                const hasCrossReferences = chapterCrossReferenceAvailability[item.verse];
-                const highlighted =
-                  highlightedPosition?.book === position.book &&
-                  highlightedPosition.chapter === position.chapter &&
-                  highlightedPosition.verse === item.verse;
-                const audioHighlighted =
-                  audioHighlightActive &&
-                  audioPosition.book === position.book &&
-                  audioPosition.chapter === position.chapter &&
-                  audioPosition.verse === item.verse;
-                const selected = highlighted || audioHighlighted;
-                return (
-                  <Pressable
-                    aria-selected={selected}
-                    key={item.reference}
-                    onLayout={(event) => handleVerseLayout(item.verse, event.nativeEvent.layout.y)}
-                    onPress={() => jumpToPosition({ ...position, verse: item.verse }, false)}
-                    role={hasCrossReferences ? "group" : "button"}
-                    style={{
-                      backgroundColor: selected ? colors.accentSubtle : "transparent",
-                      borderColor: audioHighlighted ? colors.gold : "transparent",
-                      borderRadius: radius.md,
-                      borderWidth: 1,
-                      flexDirection: "row",
-                      gap: 8,
-                      paddingHorizontal: 0,
-                      paddingVertical: 7,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? colors.olive : colors.muted,
-                        fontSize: Math.max(12, fontSize - 5),
-                        fontVariant: ["tabular-nums"],
-                        fontWeight: "900",
-                        lineHeight: readerLineHeight,
-                        textAlign: "left",
-                        width: 24,
-                      }}
-                    >
-                      {item.verse}
-                    </Text>
-                    {hasCrossReferences ? (
-                      <Pressable
-                        aria-label={`Show cross references for ${position.book} ${position.chapter}:${item.verse}`}
-                        hitSlop={8}
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          openCrossReferences(item.verse);
-                        }}
-                        role="button"
-                        style={{
-                          alignItems: "center",
-                          backgroundColor: colors.accentSubtle,
-                          borderColor: colors.line,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          height: 26,
-                          justifyContent: "center",
-                          marginTop: Math.max(0, Math.round((readerLineHeight - 26) / 2)),
-                          width: 26,
-                        }}
-                      >
-                        <Feather name="link-2" size={13} color={colors.olive} />
-                      </Pressable>
-                    ) : null}
-                    <Text selectable style={[readerTextStyle, { flex: 1 }]}>
-                      {item.text}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+          <NextChapterCard
+            nextChapter={nextChapter}
+            onPress={() => nextChapter && jumpToPosition(nextChapter)}
+            palette={readerPalette}
+          />
         </View>
       </ScrollView>
 
+      <CompactAudioPlayer
+        bottom={Math.max(92, insets.bottom + 78)}
+        disabled={!bridgeReady && audioPlaybackState !== "paused"}
+        isActive={audioIsPlaying || audioIsPreparing}
+        label={`${chapterLabel(audioPosition)} · ${audioVoice.name}`}
+        maxWidth={contentWidth}
+        onToggle={handleAudioToggle}
+        onVoicePress={() => setVoicePickerVisible(true)}
+        palette={readerPalette}
+        statusLabel={audioStatusLabel}
+      />
+
+      <VerseActionSheet
+        onAction={handleVerseAction}
+        onClose={() => setSelectedVersePosition(undefined)}
+        palette={readerPalette}
+        position={selectedVersePosition}
+        visible={Boolean(selectedVersePosition)}
+      />
+      <ReadingSettingsSheet
+        bibleVersionId={bibleVersionId}
+        compactMode={compactMode}
+        fontId={fontId}
+        fontSize={fontSize}
+        onChangeBibleVersion={chooseBibleVersion}
+        onChangeFont={setFontId}
+        onChangeReaderTheme={setReaderTheme}
+        onChangeShowFootnotes={setShowFootnotes}
+        onChangeShowVerseNumbers={setShowVerseNumbers}
+        onClose={() => setSettingsVisible(false)}
+        onCompactModeChange={setCompactMode}
+        onFontSizeChange={changeFontSize}
+        palette={readerPalette}
+        readerTheme={readerTheme}
+        showFootnotes={showFootnotes}
+        showVerseNumbers={showVerseNumbers}
+        visible={settingsVisible}
+      />
       <CrossReferenceSheet
         onClose={() => setCrossReferencePosition(undefined)}
         onReadChapter={readCrossReferenceChapter}
@@ -1223,6 +1177,816 @@ export function BibleScreen() {
         visible={bridgeOverlayVisible}
       />
     </View>
+  );
+}
+
+function ReaderCircleButton({
+  accessibilityLabel,
+  disabled,
+  icon,
+  onPress,
+  palette,
+  text,
+}: {
+  accessibilityLabel: string;
+  disabled?: boolean;
+  icon?: "chevron-down" | "volume-2" | "x" | "chevron-up";
+  onPress: () => void;
+  palette: ReaderPalette;
+  text?: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: palette.surface,
+        borderColor: palette.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        height: 42,
+        justifyContent: "center",
+        opacity: disabled ? 0.48 : 1,
+        width: 42,
+      }}
+    >
+      {icon ? <Feather name={icon} size={18} color={palette.accent} /> : null}
+      {text ? <Text style={{ color: palette.accent, fontSize: 15, fontWeight: "800" }}>{text}</Text> : null}
+    </Pressable>
+  );
+}
+
+function BibleReaderHeader({
+  audioActive,
+  audioDisabled,
+  onAudioPress,
+  onBack,
+  onOpenPicker,
+  onOpenSettings,
+  palette,
+  subtitle,
+  title,
+  topInset,
+}: {
+  audioActive: boolean;
+  audioDisabled: boolean;
+  onAudioPress: () => void;
+  onBack: () => void;
+  onOpenPicker: () => void;
+  onOpenSettings: () => void;
+  palette: ReaderPalette;
+  subtitle: string;
+  title: string;
+  topInset: number;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: palette.background,
+        paddingBottom: 10,
+        paddingHorizontal: 18,
+        paddingTop: topInset + 10,
+      }}
+    >
+      <View style={{ height: 54, justifyContent: "center" }}>
+        <View style={{ left: 0, position: "absolute", top: 6 }}>
+          <ReaderCircleButton accessibilityLabel="Back from Bible reader" icon="chevron-down" onPress={onBack} palette={palette} />
+        </View>
+
+        <Pressable
+          accessibilityLabel="Choose Bible chapter"
+          accessibilityRole="button"
+          onPress={onOpenPicker}
+          style={{ alignItems: "center", left: 96, paddingHorizontal: 8, position: "absolute", right: 96, top: 7 }}
+        >
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
+            <Text numberOfLines={1} style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>
+              {title}
+            </Text>
+            <Feather name="chevron-down" size={14} color={palette.muted} />
+          </View>
+          <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 13, fontWeight: "700", marginTop: 3 }}>
+            {subtitle}
+          </Text>
+        </Pressable>
+
+        <View style={{ flexDirection: "row", gap: 8, position: "absolute", right: 0, top: 6 }}>
+          <ReaderCircleButton
+            accessibilityLabel={audioActive ? "Pause audio Bible" : "Play audio Bible"}
+            disabled={audioDisabled}
+            icon="volume-2"
+            onPress={onAudioPress}
+            palette={palette}
+          />
+          <ReaderCircleButton accessibilityLabel="Open reading settings" onPress={onOpenSettings} palette={palette} text="Aa" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function BibleText({
+  audioHighlightActive,
+  audioPosition,
+  compactMode,
+  highlightedPosition,
+  onVerseLayout,
+  onVersePress,
+  palette,
+  position,
+  readerLineHeight,
+  readerTextStyle,
+  selectedVersePosition,
+  showVerseNumbers,
+  verses,
+}: {
+  audioHighlightActive: boolean;
+  audioPosition: BiblePosition;
+  compactMode: boolean;
+  highlightedPosition?: BiblePosition;
+  onVerseLayout: (verse: number, offset: number) => void;
+  onVersePress: (verse: number) => void;
+  palette: ReaderPalette;
+  position: BiblePosition;
+  readerLineHeight: number;
+  readerTextStyle: TextStyle;
+  selectedVersePosition?: BiblePosition;
+  showVerseNumbers: boolean;
+  verses: BibleChapterVerse[];
+}) {
+  const verseNumberStyle: TextStyle = {
+    color: palette.muted,
+    fontSize: Math.max(11, Number(readerTextStyle.fontSize ?? defaultFontSize) - 6),
+    fontVariant: ["tabular-nums"],
+    fontWeight: "800",
+    lineHeight: readerLineHeight,
+  };
+
+  return (
+    <View style={{ gap: compactMode ? 4 : 7 }}>
+      {verses.map((item, index) => {
+        const highlighted =
+          highlightedPosition?.book === position.book &&
+          highlightedPosition.chapter === position.chapter &&
+          highlightedPosition.verse === item.verse;
+        const audioHighlighted =
+          audioHighlightActive &&
+          audioPosition.book === position.book &&
+          audioPosition.chapter === position.chapter &&
+          audioPosition.verse === item.verse;
+        const actionSelected =
+          selectedVersePosition?.book === position.book &&
+          selectedVersePosition.chapter === position.chapter &&
+          selectedVersePosition.verse === item.verse;
+        const selected = highlighted || audioHighlighted || actionSelected;
+        const isFirstVerse = index === 0;
+
+        return (
+          <Pressable
+            accessibilityLabel={`${position.book} ${position.chapter}:${item.verse}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            key={item.reference}
+            onLayout={(event) => onVerseLayout(item.verse, event.nativeEvent.layout.y)}
+            onPress={() => onVersePress(item.verse)}
+            style={{
+              backgroundColor: selected ? palette.peach : "transparent",
+              borderColor: selected ? palette.line : "transparent",
+              borderRadius: radius.md,
+              borderWidth: 1,
+              paddingHorizontal: selected ? 10 : 0,
+              paddingVertical: compactMode ? 5 : 8,
+            }}
+          >
+            {isFirstVerse ? (
+              <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
+                <Text
+                  style={{
+                    color: palette.accent,
+                    fontFamily: fontFamilyFor("classic"),
+                    fontSize: 44,
+                    fontWeight: "500",
+                    lineHeight: 50,
+                    minWidth: 28,
+                  }}
+                >
+                  {position.chapter}
+                </Text>
+                <Text selectable style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
+                  {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
+                  {item.text}
+                </Text>
+              </View>
+            ) : (
+              <Text selectable style={readerTextStyle}>
+                {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
+                {item.text}
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function VerseActionSheet({
+  onAction,
+  onClose,
+  palette,
+  position,
+  visible,
+}: {
+  onAction: (action: "pray" | "journal" | "save" | "share") => void;
+  onClose: () => void;
+  palette: ReaderPalette;
+  position?: BiblePosition;
+  visible: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  if (!visible || !position) return null;
+
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
+        <Pressable accessibilityLabel="Close verse actions" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+        <View
+          style={{
+            backgroundColor: palette.sheet,
+            borderTopLeftRadius: radius.xxl,
+            borderTopRightRadius: radius.xxl,
+            gap: 2,
+            paddingBottom: Math.max(28, insets.bottom + 20),
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            ...platformShadow({
+              boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
+              color: palette.shadow,
+              offset: { width: 0, height: -12 },
+              opacity: 0.18,
+              radius: 34,
+            }),
+          }}
+        >
+          <View style={{ alignItems: "center", paddingBottom: 20 }}>
+            <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
+          </View>
+          <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle="Gör denna vers till ett böneämne" title="Be för detta" />
+          <VerseSheetAction icon="book-open" onPress={() => onAction("journal")} palette={palette} subtitle="Reflektera över denna vers" title="Skriv i journalen" />
+          <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle="Spara till dina favoritverser" title="Spara vers" />
+          <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle="Dela med ditt rum (valfritt)" title="Dela till rum" />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function VerseSheetAction({
+  icon,
+  onPress,
+  palette,
+  subtitle,
+  title,
+}: {
+  icon: "heart" | "book-open" | "bookmark" | "users";
+  onPress: () => void;
+  palette: ReaderPalette;
+  subtitle: string;
+  title: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        borderBottomColor: palette.line,
+        borderBottomWidth: 1,
+        flexDirection: "row",
+        gap: 14,
+        minHeight: 82,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.peach,
+          borderColor: palette.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          height: 46,
+          justifyContent: "center",
+          width: 46,
+        }}
+      >
+        <Feather name={icon} size={21} color={palette.accent} />
+      </View>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
+        <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "600" }}>{subtitle}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function ReadingSettingsSheet({
+  bibleVersionId,
+  compactMode,
+  fontId,
+  fontSize,
+  onChangeBibleVersion,
+  onChangeFont,
+  onChangeReaderTheme,
+  onChangeShowFootnotes,
+  onChangeShowVerseNumbers,
+  onClose,
+  onCompactModeChange,
+  onFontSizeChange,
+  palette,
+  readerTheme,
+  showFootnotes,
+  showVerseNumbers,
+  visible,
+}: {
+  bibleVersionId: BibleVersionId;
+  compactMode: boolean;
+  fontId: BibleReaderFontId;
+  fontSize: number;
+  onChangeBibleVersion: (versionId: BibleVersionId) => void;
+  onChangeFont: (fontId: BibleReaderFontId) => void;
+  onChangeReaderTheme: (theme: BibleReaderThemeId) => void;
+  onChangeShowFootnotes: (value: boolean) => void;
+  onChangeShowVerseNumbers: (value: boolean) => void;
+  onClose: () => void;
+  onCompactModeChange: (value: boolean) => void;
+  onFontSizeChange: (delta: number) => void;
+  palette: ReaderPalette;
+  readerTheme: BibleReaderThemeId;
+  showFootnotes: boolean;
+  showVerseNumbers: boolean;
+  visible: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
+        <Pressable accessibilityLabel="Close reading settings" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+        <View
+          style={{
+            backgroundColor: palette.sheet,
+            borderTopLeftRadius: radius.xxl,
+            borderTopRightRadius: radius.xxl,
+            maxHeight: "92%",
+            paddingBottom: Math.max(26, insets.bottom + 18),
+            paddingHorizontal: 20,
+            paddingTop: 24,
+          }}
+        >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 24 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
+              <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>Läsinställningar</Text>
+              <ReaderCircleButton accessibilityLabel="Close reading settings" icon="x" onPress={onClose} palette={palette} />
+            </View>
+
+            <SettingsGroup palette={palette} title="Bibelversion">
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {bibleVersions.map((version) => (
+                  <SettingChip
+                    key={version.id}
+                    label={version.label}
+                    onPress={() => onChangeBibleVersion(version.id)}
+                    palette={palette}
+                    selected={version.id === bibleVersionId}
+                  />
+                ))}
+              </View>
+            </SettingsGroup>
+
+            <SettingsGroup palette={palette} title="Typsnitt">
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {readerFonts.map((font) => (
+                  <SettingChip
+                    fontFamily={fontFamilyFor(font.id)}
+                    key={font.id}
+                    label={font.label}
+                    onPress={() => onChangeFont(font.id)}
+                    palette={palette}
+                    selected={font.id === fontId}
+                  />
+                ))}
+              </View>
+            </SettingsGroup>
+
+            <SettingsGroup palette={palette} title="Textstorlek">
+              <View
+                style={{
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  backgroundColor: palette.input,
+                  borderColor: palette.line,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  gap: 12,
+                  padding: 5,
+                }}
+              >
+                <SettingsStepperButton disabled={fontSize <= minFontSize} icon="minus" label="Minska textstorlek" onPress={() => onFontSizeChange(-fontSizeStep)} palette={palette} />
+                <Text style={{ color: palette.text, fontSize: 15, fontVariant: ["tabular-nums"], fontWeight: "900", minWidth: 30, textAlign: "center" }}>
+                  {fontSize}
+                </Text>
+                <SettingsStepperButton disabled={fontSize >= maxFontSize} icon="plus" label="Öka textstorlek" onPress={() => onFontSizeChange(fontSizeStep)} palette={palette} />
+              </View>
+            </SettingsGroup>
+
+            <SettingsGroup palette={palette} title="Tema">
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {readerThemes.map((theme) => (
+                  <SettingChip
+                    icon={theme.id === "dark" ? "moon" : theme.id === "sepia" ? "circle" : "sun"}
+                    key={theme.id}
+                    label={theme.label}
+                    onPress={() => onChangeReaderTheme(theme.id)}
+                    palette={palette}
+                    selected={theme.id === readerTheme}
+                  />
+                ))}
+              </View>
+            </SettingsGroup>
+
+            <SettingsGroup palette={palette} title="Läsningsinställningar">
+              <View style={{ gap: 2 }}>
+                <SettingsToggle label="Visa versnummer" onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
+                <SettingsToggle label="Visa fotnoter" onChange={onChangeShowFootnotes} palette={palette} value={showFootnotes} />
+                <SettingsToggle label="Kompakt läge" onChange={onCompactModeChange} palette={palette} value={compactMode} />
+              </View>
+            </SettingsGroup>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function SettingsGroup({ children, palette, title }: { children: ReactNode; palette: ReaderPalette; title: string }) {
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function SettingChip({
+  fontFamily,
+  icon,
+  label,
+  onPress,
+  palette,
+  selected,
+}: {
+  fontFamily?: TextStyle["fontFamily"];
+  icon?: "circle" | "moon" | "sun";
+  label: string;
+  onPress: () => void;
+  palette: ReaderPalette;
+  selected: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: selected ? palette.peach : palette.sheet,
+        borderColor: selected ? palette.accent : palette.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 8,
+        minHeight: 44,
+        paddingHorizontal: 18,
+      }}
+    >
+      {icon ? <Feather name={icon} size={15} color={selected ? palette.accent : palette.muted} /> : null}
+      <Text style={{ color: selected ? palette.accent : palette.muted, fontFamily, fontSize: 14, fontWeight: "900" }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SettingsToggle({
+  label,
+  onChange,
+  palette,
+  value,
+}: {
+  label: string;
+  onChange: (value: boolean) => void;
+  palette: ReaderPalette;
+  value: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      onPress={() => onChange(!value)}
+      style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, flexDirection: "row", minHeight: 58 }}
+    >
+      <Text style={{ color: palette.text, flex: 1, fontSize: 15, fontWeight: "700" }}>{label}</Text>
+      <View
+        style={{
+          alignItems: value ? "flex-end" : "flex-start",
+          backgroundColor: value ? palette.accent : palette.line,
+          borderRadius: 999,
+          height: 30,
+          justifyContent: "center",
+          paddingHorizontal: 3,
+          width: 52,
+        }}
+      >
+        <View style={{ backgroundColor: palette.sheet, borderRadius: 999, height: 24, width: 24 }} />
+      </View>
+    </Pressable>
+  );
+}
+
+function SettingsStepperButton({
+  disabled,
+  icon,
+  label,
+  onPress,
+  palette,
+}: {
+  disabled?: boolean;
+  icon: "minus" | "plus";
+  label: string;
+  onPress: () => void;
+  palette: ReaderPalette;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={6}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: disabled ? palette.line : palette.sheet,
+        borderColor: palette.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        height: 34,
+        justifyContent: "center",
+        opacity: disabled ? 0.62 : 1,
+        width: 34,
+      }}
+    >
+      <Feather name={icon} size={16} color={disabled ? palette.muted : palette.accent} />
+    </Pressable>
+  );
+}
+
+function CompactAudioPlayer({
+  bottom,
+  disabled,
+  isActive,
+  label,
+  maxWidth,
+  onToggle,
+  onVoicePress,
+  palette,
+  statusLabel,
+}: {
+  bottom: number;
+  disabled: boolean;
+  isActive: boolean;
+  label: string;
+  maxWidth?: number;
+  onToggle: () => void;
+  onVoicePress: () => void;
+  palette: ReaderPalette;
+  statusLabel: string;
+}) {
+  return (
+    <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0 }}>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.surface,
+          borderColor: palette.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 12,
+          minHeight: 58,
+          maxWidth,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+          width: "100%",
+          ...platformShadow({
+            boxShadow: "0 14px 32px rgba(11, 18, 32, 0.13)",
+            color: palette.shadow,
+            offset: { width: 0, height: 12 },
+            opacity: 0.13,
+            radius: 26,
+          }),
+        }}
+      >
+        <Pressable
+          accessibilityLabel={isActive ? "Pause audio Bible" : "Play audio Bible"}
+          accessibilityRole="button"
+          accessibilityState={{ disabled }}
+          disabled={disabled}
+          onPress={onToggle}
+          style={{
+            alignItems: "center",
+            backgroundColor: disabled ? palette.line : palette.peach,
+            borderRadius: 999,
+            height: 44,
+            justifyContent: "center",
+            opacity: disabled ? 0.62 : 1,
+            width: 44,
+          }}
+        >
+          <Feather name={isActive ? "pause" : "play"} size={20} color={disabled ? palette.muted : palette.accent} />
+        </Pressable>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
+            {label}
+          </Text>
+          {statusLabel ? (
+            <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "600" }}>
+              {statusLabel}
+            </Text>
+          ) : null}
+        </View>
+        <Pressable accessibilityLabel="Choose audio voice" accessibilityRole="button" hitSlop={8} onPress={onVoicePress} style={{ padding: 12 }}>
+          <Feather name="chevron-up" size={18} color={palette.accent} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ChapterReflectionCard({
+  onAction,
+  onChangeText,
+  palette,
+  value,
+}: {
+  onAction: (action: "journal" | "pray" | "save") => void;
+  onChangeText: (value: string) => void;
+  palette: ReaderPalette;
+  value: string;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: palette.peach,
+        borderColor: palette.line,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        gap: 14,
+        padding: 16,
+      }}
+    >
+      <Text style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>Vad stannade hos dig?</Text>
+      <TextInput
+        multiline
+        onChangeText={onChangeText}
+        placeholder="Skriv din reflektion..."
+        placeholderTextColor={palette.muted}
+        value={value}
+        style={{
+          backgroundColor: palette.input,
+          borderColor: palette.line,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          color: palette.text,
+          fontSize: 15,
+          minHeight: 86,
+          padding: 14,
+          textAlignVertical: "top",
+        }}
+      />
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <SmallPillButton icon="edit-3" label="Skriv i journalen" onPress={() => onAction("journal")} palette={palette} />
+        <SmallPillButton icon="heart" label="Be" onPress={() => onAction("pray")} palette={palette} />
+        <Pressable
+          accessibilityLabel="Spara reflektion"
+          accessibilityRole="button"
+          onPress={() => onAction("save")}
+          style={{
+            alignItems: "center",
+            backgroundColor: palette.sheet,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            height: 46,
+            justifyContent: "center",
+            width: 54,
+          }}
+        >
+          <Feather name="bookmark" size={18} color={palette.accent} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function SmallPillButton({
+  icon,
+  label,
+  onPress,
+  palette,
+}: {
+  icon: "edit-3" | "heart";
+  label: string;
+  onPress: () => void;
+  palette: ReaderPalette;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: palette.sheet,
+        borderColor: palette.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flex: 1,
+        flexDirection: "row",
+        gap: 8,
+        justifyContent: "center",
+        minHeight: 46,
+        paddingHorizontal: 12,
+      }}
+    >
+      <Feather name={icon} size={16} color={palette.accent} />
+      <Text numberOfLines={1} style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function NextChapterCard({
+  nextChapter,
+  onPress,
+  palette,
+}: {
+  nextChapter?: BiblePosition;
+  onPress: () => void;
+  palette: ReaderPalette;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !nextChapter }}
+      disabled={!nextChapter}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: palette.surface,
+        borderColor: palette.line,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 14,
+        minHeight: 86,
+        opacity: nextChapter ? 1 : 0.62,
+        padding: 16,
+      }}
+    >
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>Nästa kapitel</Text>
+        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{nextChapter ? chapterLabel(nextChapter) : "Slutet"}</Text>
+      </View>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.sheet,
+          borderColor: palette.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          height: 50,
+          justifyContent: "center",
+          width: 50,
+        }}
+      >
+        <Feather name="arrow-right" size={22} color={palette.accent} />
+      </View>
+    </Pressable>
   );
 }
 
