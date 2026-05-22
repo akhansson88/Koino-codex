@@ -31,6 +31,12 @@ import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeedFilter = "all" | EntryKind;
 type CheckInStep = "choose" | "details" | "thanks";
+type ItemPrayerState = {
+  prayed: boolean;
+  count: number;
+  targetType: "post" | "check_in";
+  prayedBy: string[];
+};
 
 const MAX_BODY_LENGTH = 500;
 const FEED_BODY_PREVIEW_LINES = 3;
@@ -395,10 +401,12 @@ export function HomeScreen() {
   function itemPrayerState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
+    const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
-      count: new Set(reactions.map((reaction) => reaction.userId)).size,
+      count: prayedByUserIds.length,
       targetType,
+      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
     };
   }
 
@@ -844,7 +852,7 @@ function PrayerDetailModal({
   onDraft: (value: string) => void;
   onPray: () => void;
   onSendReply: () => void;
-  prayer?: { prayed: boolean; count: number; targetType: "post" | "check_in" };
+  prayer?: ItemPrayerState;
   replies: { id: string; userId: string; body: string; createdAt: string }[];
   replyDraft: string;
   userById: Map<string, string>;
@@ -879,8 +887,10 @@ function PrayerDetailModal({
               {prayer?.prayed ? "Prayed" : "Pray"}
             </PrimaryButton>
             <View style={{ gap: 12 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Prayed by {prayer?.count ?? 0} members</Text>
-              <AvatarStack names={["Sofia", authorName, "David"]} />
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+                Prayed by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
+              </Text>
+              {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
             </View>
             <View style={{ gap: 12 }}>
               <SectionHeading>Encouragement</SectionHeading>

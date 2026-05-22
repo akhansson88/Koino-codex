@@ -1078,8 +1078,8 @@ export function BibleScreen() {
                       borderRadius: radius.md,
                       borderWidth: 1,
                       flexDirection: "row",
-                      gap: 10,
-                      paddingHorizontal: 8,
+                      gap: 8,
+                      paddingHorizontal: 0,
                       paddingVertical: 7,
                     }}
                   >
@@ -1090,8 +1090,8 @@ export function BibleScreen() {
                         fontVariant: ["tabular-nums"],
                         fontWeight: "900",
                         lineHeight: readerLineHeight,
-                        textAlign: "right",
-                        width: 30,
+                        textAlign: "left",
+                        width: 24,
                       }}
                     >
                       {item.verse}
