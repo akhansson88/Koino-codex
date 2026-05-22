@@ -10,7 +10,6 @@ import {
   Avatar,
   BodyText,
   Card,
-  CurrentRoomHeader,
   ExpandableBodyText,
   HeartPromptCard,
   IconButton,
@@ -128,8 +127,6 @@ export function JournalScreen() {
     <AppScreen topInset={false}>
       {stage === "feed" ? (
         <>
-          <CurrentRoomHeader />
-
           <HeartPromptCard
             image={user?.image}
             name={user?.name ?? state.authEmail ?? "K"}
