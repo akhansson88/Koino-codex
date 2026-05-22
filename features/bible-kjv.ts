@@ -1,8 +1,10 @@
 import kjvVerseMap from "@/assets/bible/kjv-verses-1769.json";
+import sv1917VerseMap from "@/assets/bible/sv1917-verses.json";
 import crossReferenceMap from "@/assets/bible/cross-references/cross_references.json";
 import type { BibleVerse } from "@/state/types";
 
 type VerseMap = Record<string, string>;
+type BookNameMap = Record<string, string>;
 type CrossReferenceMap = {
   references: Record<string, Array<{ verse: string; votes: number }>>;
 };
@@ -128,9 +130,98 @@ const osisBookByName: Record<string, string> = {
   Revelation: "Rev",
 };
 const bookNameByOsis = Object.fromEntries(Object.entries(osisBookByName).map(([name, osis]) => [osis, name])) as Record<string, string>;
+const sv1917BookNameMap: BookNameMap = {
+  "Andra Konungaboken": "2 Kings",
+  "Andra Krönikeboken": "2 Chronicles",
+  "Andra Samuelsboken": "2 Samuel",
+  Apostlagärningarna: "Acts",
+  "Brevet till hebréerna": "Hebrews",
+  Deuteronomium: "Deuteronomy",
+  Domarboken: "Judges",
+  "Evangelium enligt Johannes": "John",
+  "Evangelium enligt Lukas": "Luke",
+  "Evangelium enligt Markus": "Mark",
+  "Evangelium enligt Matteus": "Matthew",
+  Esra: "Ezra",
+  Ester: "Esther",
+  "Första Konungaboken": "1 Kings",
+  "Första Krönikeboken": "1 Chronicles",
+  "Första Samuelsboken": "1 Samuel",
+  Habackuk: "Habakkuk",
+  Hesekiel: "Ezekiel",
+  Hosea: "Hosea",
+  "Höga Visan": "Song of Solomon",
+  "Jakobs' brev": "James",
+  Jeremia: "Jeremiah",
+  Jesaja: "Isaiah",
+  Jona: "Jonah",
+  Josua: "Joshua",
+  Klagovisorna: "Lamentations",
+  Malaki: "Malachi",
+  Mika: "Micah",
+  Nehemja: "Nehemiah",
+  Numeri: "Numbers",
+  "Ordspråksboken": "Proverbs",
+  "Paulus' andra brev till korintierna": "2 Corinthians",
+  "Paulus' andra brev till tessalonikerna": "2 Thessalonians",
+  "Paulus' andra brev till Timoteus": "2 Timothy",
+  "Paulus' brev till efesierna": "Ephesians",
+  "Paulus' brev till Filemon": "Philemon",
+  "Paulus' brev till filipperna": "Philippians",
+  "Paulus' brev till galaterna": "Galatians",
+  "Paulus' brev till kolosserna": "Colossians",
+  "Paulus' brev till romarna": "Romans",
+  "Paulus' brev till Titus": "Titus",
+  "Paulus' första brev till korintierna": "1 Corinthians",
+  "Paulus' första brev till tessalonikerna": "1 Thessalonians",
+  "Paulus' första brev till Timoteus": "1 Timothy",
+  "Petrus' andra brev": "2 Peter",
+  "Petrus' första brev": "1 Peter",
+  Predikaren: "Ecclesiastes",
+  Psaltaren: "Psalms",
+  Rut: "Ruth",
+  Sakarja: "Zechariah",
+  Sefanja: "Zephaniah",
+  "Johannes' andra brev": "2 John",
+  "Johannes' första brev": "1 John",
+  "Johannes' tredje brev": "3 John",
+  "Johannes' uppenbarelse": "Revelation",
+  "Judas' brev": "Jude",
+};
+
+function normalizeVerseMapBookNames(verseMap: VerseMap, bookNameMap: BookNameMap): VerseMap {
+  return Object.fromEntries(
+    Object.entries(verseMap).map(([reference, text]) => {
+      const match = reference.match(/^(.+) (\d+:\d+)$/);
+      if (!match) return [reference, text];
+      return [`${bookNameMap[match[1]] ?? match[1]} ${match[2]}`, text];
+    }),
+  );
+}
+
+export const bibleVersions = [
+  { id: "kjv", label: "KJV", translation: "KJV", verses: versesByReference },
+  { id: "sv1917", label: "Bibel 1917", translation: "Bibel 1917", verses: normalizeVerseMapBookNames(sv1917VerseMap as VerseMap, sv1917BookNameMap) },
+] as const;
+
+export type BibleVersionId = (typeof bibleVersions)[number]["id"];
+
+const defaultBibleVersionId: BibleVersionId = "kjv";
+
+export function isBibleVersionId(value: unknown): value is BibleVersionId {
+  return typeof value === "string" && bibleVersions.some((version) => version.id === value);
+}
+
+export function bibleVersionFor(versionId?: BibleVersionId) {
+  return bibleVersions.find((version) => version.id === versionId) ?? bibleVersions.find((version) => version.id === defaultBibleVersionId) ?? bibleVersions[0];
+}
 
 function cleanVerseText(value: string) {
   return value.replace(/#/g, "").replace(/\s+/g, " ").trim();
+}
+
+function versesForVersion(versionId?: BibleVersionId) {
+  return bibleVersionFor(versionId).verses;
 }
 
 function crossReferenceKey(position: BiblePosition) {
@@ -175,14 +266,15 @@ function parseCrossReferenceVerse(value: string) {
   return { endPosition, startPosition };
 }
 
-function crossReferenceText(start: BiblePosition, end?: BiblePosition) {
+function crossReferenceText(start: BiblePosition, end?: BiblePosition, versionId?: BibleVersionId) {
+  const verseMap = versesForVersion(versionId);
   if (!end || start.book !== end.book || start.chapter !== end.chapter) {
-    return cleanVerseText(versesByReference[`${start.book} ${start.chapter}:${start.verse}`] ?? "");
+    return cleanVerseText(verseMap[`${start.book} ${start.chapter}:${start.verse}`] ?? "");
   }
 
   const parts: string[] = [];
   for (let verse = start.verse; verse <= end.verse; verse += 1) {
-    const text = versesByReference[`${start.book} ${start.chapter}:${verse}`];
+    const text = verseMap[`${start.book} ${start.chapter}:${verse}`];
     if (!text) return "";
     parts.push(cleanVerseText(text));
   }
@@ -196,13 +288,14 @@ export function versesForChapter(book: string, chapter: number) {
     .sort((a, b) => a - b);
 }
 
-export function bibleChapterVerses(book: string, chapter: number): BibleChapterVerse[] {
+export function bibleChapterVerses(book: string, chapter: number, versionId?: BibleVersionId): BibleChapterVerse[] {
+  const verseMap = versesForVersion(versionId);
   return parsedReferences
     .filter((item) => item.book === book && item.chapter === chapter)
     .sort((a, b) => a.verse - b.verse)
     .map((item) => ({
       reference: item.reference,
-      text: cleanVerseText(versesByReference[item.reference] ?? ""),
+      text: cleanVerseText(verseMap[item.reference] ?? ""),
       verse: item.verse,
     }))
     .filter((item) => item.text.length > 0);
@@ -213,7 +306,7 @@ export function hasBibleCrossReferences(position: BiblePosition) {
   return Boolean(key && crossReferencesBySource[key]?.length);
 }
 
-export function bibleCrossReferences(position: BiblePosition): BibleCrossReference[] {
+export function bibleCrossReferences(position: BiblePosition, versionId?: BibleVersionId): BibleCrossReference[] {
   const key = crossReferenceKey(position);
   if (!key) return [];
 
@@ -222,7 +315,7 @@ export function bibleCrossReferences(position: BiblePosition): BibleCrossReferen
       const parsed = parseCrossReferenceVerse(item.verse);
       if (!parsed) return undefined;
 
-      const text = crossReferenceText(parsed.startPosition, parsed.endPosition);
+      const text = crossReferenceText(parsed.startPosition, parsed.endPosition, versionId);
       if (!text) return undefined;
 
       return {
@@ -293,13 +386,15 @@ export function nextBibleChapter(bookName: string, chapter: number): BiblePositi
   };
 }
 
-export function buildKjvVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse): BibleVerse | undefined {
+export function buildBibleVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse, versionId?: BibleVersionId): BibleVerse | undefined {
   const firstVerse = Math.min(startVerse, endVerse);
   const lastVerse = Math.max(startVerse, endVerse);
+  const version = bibleVersionFor(versionId);
+  const verseMap = versesForVersion(version.id);
   const parts: string[] = [];
 
   for (let verse = firstVerse; verse <= lastVerse; verse += 1) {
-    const text = versesByReference[`${book} ${chapter}:${verse}`];
+    const text = verseMap[`${book} ${chapter}:${verse}`];
     if (!text) return undefined;
     parts.push(cleanVerseText(text));
   }
@@ -307,6 +402,10 @@ export function buildKjvVerse(book: string, chapter: number, startVerse: number,
   return {
     reference: `${book} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
     text: parts.join(" "),
-    translation: "KJV",
+    translation: version.translation,
   };
+}
+
+export function buildKjvVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse): BibleVerse | undefined {
+  return buildBibleVerse(book, chapter, startVerse, endVerse, "kjv");
 }

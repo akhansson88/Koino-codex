@@ -27,9 +27,13 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import {
   bibleChapterVerses,
   bibleCrossReferences,
+  bibleVersionFor,
+  bibleVersions,
   type BibleCrossReference,
   type BiblePosition,
+  type BibleVersionId,
   hasBibleCrossReferences,
+  isBibleVersionId,
   kjvBooks,
   nextBibleChapter,
   normalizeBiblePosition,
@@ -55,6 +59,7 @@ type BibleReaderPreferences = {
   audioPosition: BiblePosition;
   audioVoiceId: string;
   audioVoiceName?: string;
+  bibleVersionId: BibleVersionId;
   fontId: BibleReaderFontId;
   fontSize: number;
   position: BiblePosition;
@@ -90,6 +95,7 @@ type PendingAudioTransfer = {
 };
 
 const defaultPosition = normalizeBiblePosition();
+const defaultBibleVersionId: BibleVersionId = "kjv";
 const defaultFontId: BibleReaderFontId = "serif";
 const defaultFontSize = 18;
 const minFontSize = 16;
@@ -168,6 +174,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioPosition: defaultPosition,
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
+      bibleVersionId: defaultBibleVersionId,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
@@ -182,6 +189,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioPosition: normalizeBiblePosition(parsed?.audioPosition ?? position),
       audioVoiceId: storedVoice.id,
       audioVoiceName: storedVoice.name,
+      bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position,
@@ -191,6 +199,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       audioPosition: defaultPosition,
       audioVoiceId: defaultAudioVoice.id,
       audioVoiceName: defaultAudioVoice.name,
+      bibleVersionId: defaultBibleVersionId,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
@@ -249,6 +258,7 @@ export function BibleScreen() {
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
+  const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -267,7 +277,8 @@ export function BibleScreen() {
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
-  const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter), [position.book, position.chapter]);
+  const bibleVersion = bibleVersionFor(bibleVersionId);
+  const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const chapterCrossReferenceAvailability = useMemo(
     () =>
       Object.fromEntries(
@@ -282,7 +293,7 @@ export function BibleScreen() {
       ) as Record<number, boolean>,
     [chapterVerses, position.book, position.chapter],
   );
-  const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition) : []), [crossReferencePosition]);
+  const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition, bibleVersionId) : []), [bibleVersionId, crossReferencePosition]);
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const previousAudioChapter = useMemo(() => previousBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
@@ -393,6 +404,7 @@ export function BibleScreen() {
         setAudioPosition(nextPreferences.audioPosition);
         showTemporaryHighlight(nextPreferences.position);
         setAudioVoice(normalizeStoredVoice(nextPreferences.audioVoiceId, nextPreferences.audioVoiceName));
+        setBibleVersionId(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
         setFontSize(nextPreferences.fontSize);
       })
@@ -409,12 +421,12 @@ export function BibleScreen() {
     if (!storageKey || !preferencesReady) return;
 
     const timeout = setTimeout(() => {
-      const payload: BibleReaderPreferences = { audioPosition, audioVoiceId: audioVoice.id, audioVoiceName: audioVoice.name, fontId, fontSize, position };
+      const payload: BibleReaderPreferences = { audioPosition, audioVoiceId: audioVoice.id, audioVoiceName: audioVoice.name, bibleVersionId, fontId, fontSize, position };
       void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, fontId, fontSize, position, preferencesReady, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, fontId, fontSize, position, preferencesReady, storageKey]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
@@ -510,7 +522,7 @@ export function BibleScreen() {
         return;
       }
 
-      const verse = bibleChapterVerses(nextPosition.book, nextPosition.chapter).find((item) => item.verse === nextPosition.verse);
+      const verse = bibleChapterVerses(nextPosition.book, nextPosition.chapter, bibleVersionId).find((item) => item.verse === nextPosition.verse);
 
       if (!verse) {
         setAudioPlaybackState("error");
@@ -536,12 +548,12 @@ export function BibleScreen() {
         voiceId: audioVoice.id,
       });
     },
-    [audioPlayer, audioVoice.id, authTokenInput, clearAudioPrepareTimeout, puterAuthToken, sendAudioBridgeCommand, updateAudioPosition],
+    [audioPlayer, audioVoice.id, authTokenInput, bibleVersionId, clearAudioPrepareTimeout, puterAuthToken, sendAudioBridgeCommand, updateAudioPosition],
   );
 
   const advanceAudioPlayback = useCallback(() => {
     const current = audioPositionRef.current;
-    const verses = bibleChapterVerses(current.book, current.chapter);
+    const verses = bibleChapterVerses(current.book, current.chapter, bibleVersionId);
     const verseIndex = verses.findIndex((item) => item.verse === current.verse);
     const nextVerse = verseIndex >= 0 ? verses[verseIndex + 1] : undefined;
 
@@ -561,7 +573,17 @@ export function BibleScreen() {
     }
 
     stopAudioPlayback("idle");
-  }, [jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition]);
+  }, [bibleVersionId, jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition]);
+
+  const chooseBibleVersion = useCallback(
+    (nextVersionId: BibleVersionId) => {
+      setBibleVersionId(nextVersionId);
+      if (audioPlaybackState === "playing" || audioPlaybackState === "preparing") {
+        stopAudioPlayback("idle");
+      }
+    },
+    [audioPlaybackState, stopAudioPlayback],
+  );
 
   const playAudioBase64 = useCallback(
     async (requestId: string, base64: string) => {
@@ -863,7 +885,7 @@ export function BibleScreen() {
           <View style={{ gap: 7 }}>
             <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Bible</Text>
             <BodyText muted selectable>
-              {referenceLabel(position)} - KJV
+              {referenceLabel(position)} - {bibleVersion.label}
             </BodyText>
           </View>
 
@@ -973,6 +995,34 @@ export function BibleScreen() {
 
           <Card style={{ gap: 14, padding: 16 }}>
             <SectionHeading>Reading style</SectionHeading>
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Bible version</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {bibleVersions.map((version) => {
+                  const selected = version.id === bibleVersionId;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={version.id}
+                      onPress={() => chooseBibleVersion(version.id)}
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: selected ? colors.accentSubtle : colors.paper,
+                        borderColor: selected ? colors.gold : colors.line,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        justifyContent: "center",
+                        minHeight: 40,
+                        paddingHorizontal: 14,
+                      }}
+                    >
+                      <Text style={{ color: selected ? colors.olive : colors.muted, fontSize: 14, fontWeight: "900" }}>{version.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {readerFonts.map((font) => {
                 const selected = font.id === fontId;
@@ -1146,6 +1196,7 @@ export function BibleScreen() {
           setPickerVisible(false);
           jumpToPosition(nextPosition);
         }}
+        versionLabel={bibleVersion.label}
         visible={pickerVisible}
       />
       <AudioVoicePicker
@@ -1817,11 +1868,13 @@ function BibleReferencePicker({
   initialPosition,
   onClose,
   onSelect,
+  versionLabel,
   visible,
 }: {
   initialPosition: BiblePosition;
   onClose: () => void;
   onSelect: (position: BiblePosition) => void;
+  versionLabel: string;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -1882,7 +1935,7 @@ function BibleReferencePicker({
             <IconButton accessibilityLabel={stage === "book" ? "Close reference picker" : "Back"} icon={stage === "book" ? "x" : "arrow-left"} onPress={goBack} />
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>{title}</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>KJV</Text>
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{versionLabel}</Text>
             </View>
           </View>
 
