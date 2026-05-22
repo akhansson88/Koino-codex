@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import { KoinoProvider, useKoino } from "@/state/koino-store";
 import { colors, statusBarStyle } from "@/ui/theme";
 
-const iosNativeBackGesture = Platform.OS === "ios";
+const enableNativeBackGesture = Platform.OS === "ios";
 
 export default function RootLayout() {
   return (
@@ -28,13 +28,15 @@ function RootNavigator() {
           headerShadowVisible: false,
           headerTitleStyle: { color: colors.ink, fontWeight: "700" },
           contentStyle: { backgroundColor: colors.cream },
-          gestureEnabled: false,
+          gestureEnabled: enableNativeBackGesture,
         }}
       >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-        <Stack.Screen name="identity" options={{ gestureEnabled: iosNativeBackGesture, headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ gestureEnabled: false, headerShown: false }} />
+        <Stack.Screen name="reset-password" options={{ gestureEnabled: false, headerShown: false }} />
+        <Stack.Screen name="identity" options={{ headerShown: false }} />
+        <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
+        <Stack.Screen name="journal/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
       </Stack>
     </>
   );

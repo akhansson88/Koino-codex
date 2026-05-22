@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { useKoino } from "@/state/koino-store";
@@ -9,7 +9,6 @@ import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types"
 import {
   AppScreen,
   Avatar,
-  AvatarStack,
   BodyText,
   Card,
   CurrentRoomHeader,
@@ -31,12 +30,6 @@ import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeedFilter = "all" | EntryKind;
 type CheckInStep = "choose" | "details" | "thanks";
-type ItemPrayerState = {
-  prayed: boolean;
-  count: number;
-  targetType: "post" | "check_in";
-  prayedBy: string[];
-};
 
 const MAX_BODY_LENGTH = 500;
 const FEED_BODY_PREVIEW_LINES = 3;
@@ -301,8 +294,6 @@ export function HomeScreen() {
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
-  const [detailItem, setDetailItem] = useState<FeedItem | undefined>();
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
@@ -480,12 +471,12 @@ export function HomeScreen() {
               prayed={prayer.prayed}
               prayerCount={prayer.count}
               replyCount={replies.length}
-              onOpen={() => setDetailItem(item)}
+              onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
               onEdit={() => {
                 if (item.type === "post") openComposer(normalizeKind(item.kind), item);
               }}
               onDelete={() => deleteItem(item)}
-              onReply={() => setDetailItem(item)}
+              onReply={() => router.push(`/feed/${item.type}/${item.id}` as never)}
               onPray={() => {
                 if (prayer.prayed) {
                   dispatch({ type: "unpray", targetType: prayer.targetType, targetId: item.id });
@@ -550,41 +541,6 @@ export function HomeScreen() {
           setEditingItem(undefined);
         }}
         onSubmit={submitComposer}
-      />
-
-      <PrayerDetailModal
-        item={detailItem}
-        authorImage={detailItem ? userImageById.get(detailItem.userId) : undefined}
-        authorName={detailItem ? userById.get(detailItem.userId) ?? "Someone" : "Someone"}
-        currentUserId={state.currentUserId}
-        replies={detailItem ? itemReplies(detailItem) : []}
-        prayer={detailItem ? itemPrayerState(detailItem) : undefined}
-        replyDraft={detailItem ? replyDrafts[`${detailItem.type}:${detailItem.id}`] ?? "" : ""}
-        userById={userById}
-        userImageById={userImageById}
-        onClose={() => setDetailItem(undefined)}
-        onDraft={(value) => {
-          if (!detailItem) return;
-          setReplyDrafts((drafts) => ({ ...drafts, [`${detailItem.type}:${detailItem.id}`]: value.slice(0, MAX_BODY_LENGTH) }));
-        }}
-        onSendReply={async () => {
-          if (!detailItem) return;
-          const key = `${detailItem.type}:${detailItem.id}`;
-          const body = replyDrafts[key]?.trim();
-          if (!body) return;
-          await dispatch({ type: "createReply", targetType: detailItem.type === "post" ? "post" : "check_in", targetId: detailItem.id, body });
-          setReplyDrafts((drafts) => ({ ...drafts, [key]: "" }));
-        }}
-        onDeleteReply={(id) => dispatch({ type: "deleteReply", id })}
-        onPray={() => {
-          if (!detailItem) return;
-          const prayer = itemPrayerState(detailItem);
-          if (prayer.prayed) {
-            dispatch({ type: "unpray", targetType: prayer.targetType, targetId: detailItem.id });
-          } else {
-            setPrayerTarget({ targetType: prayer.targetType, targetId: detailItem.id, body: detailItem.body });
-          }
-        }}
       />
 
       <PrayerMoment
@@ -827,125 +783,3 @@ function ComposerModal({
   );
 }
 
-function PrayerDetailModal({
-  authorImage,
-  authorName,
-  currentUserId,
-  item,
-  onClose,
-  onDeleteReply,
-  onDraft,
-  onPray,
-  onSendReply,
-  prayer,
-  replies,
-  replyDraft,
-  userById,
-  userImageById,
-}: {
-  authorImage?: GroupImage;
-  authorName: string;
-  currentUserId?: string;
-  item?: FeedItem;
-  onClose: () => void;
-  onDeleteReply: (id: string) => void;
-  onDraft: (value: string) => void;
-  onPray: () => void;
-  onSendReply: () => void;
-  prayer?: ItemPrayerState;
-  replies: { id: string; userId: string; body: string; createdAt: string }[];
-  replyDraft: string;
-  userById: Map<string, string>;
-  userImageById: Map<string, GroupImage | undefined>;
-}) {
-  return (
-    <Modal animationType="slide" visible={Boolean(item)} onRequestClose={onClose}>
-      {item ? (
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
-          <AppScreen>
-            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-              <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onClose} />
-              <Feather name="more-horizontal" size={22} color={colors.ink} />
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-              <Feather name={kindIcon(item)} size={18} color={colors.gold} />
-              <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-              <Avatar image={authorImage} name={authorName} size={48} tone="orange" />
-              <View>
-                <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
-                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-              </View>
-            </View>
-            <View style={{ gap: 12 }}>
-              <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>{item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}</Text>
-              <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{item.body || "No words today, just presence."}</BodyText>
-            </View>
-            <VerseList verse={item.verse} verses={item.verses} />
-            <PrimaryButton icon="heart" onPress={onPray} style={{ minHeight: 58 }}>
-              {prayer?.prayed ? "Prayed" : "Pray"}
-            </PrimaryButton>
-            <View style={{ gap: 12 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-                Prayed by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
-              </Text>
-              {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
-            </View>
-            <View style={{ gap: 12 }}>
-              <SectionHeading>Encouragement</SectionHeading>
-              <Card style={{ gap: 0, padding: 0 }}>
-                {replies.length === 0 ? (
-                  <BodyText muted style={{ padding: 14 }}>No encouragement yet.</BodyText>
-                ) : (
-                  replies.map((reply, index) => (
-                    <View
-                      key={reply.id}
-                      style={{
-                        borderBottomColor: colors.line,
-                        borderBottomWidth: index === replies.length - 1 ? 0 : 1,
-                        gap: 8,
-                        padding: 14,
-                      }}
-                    >
-                      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                        <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
-                          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>
-                        </View>
-                        {reply.userId === currentUserId ? (
-                          <Pressable onPress={() => onDeleteReply(reply.id)} style={{ padding: 6 }}>
-                            <Feather name="trash-2" size={16} color={colors.danger} />
-                          </Pressable>
-                        ) : null}
-                      </View>
-                      <BodyText>{reply.body}</BodyText>
-                    </View>
-                  ))
-                )}
-              </Card>
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-              <TextInputField value={replyDraft} onChangeText={onDraft} placeholder="Write an encouragement..." style={{ flex: 1 }} />
-              <Pressable
-                accessibilityRole="button"
-                disabled={!replyDraft.trim()}
-                onPress={onSendReply}
-                style={{
-                  alignItems: "center",
-                  height: 48,
-                  justifyContent: "center",
-                  opacity: replyDraft.trim() ? 1 : 0.4,
-                  width: 48,
-                }}
-              >
-                <Feather name="send" size={22} color={colors.gold} />
-              </Pressable>
-            </View>
-          </AppScreen>
-        </KeyboardAvoidingView>
-      ) : null}
-    </Modal>
-  );
-}

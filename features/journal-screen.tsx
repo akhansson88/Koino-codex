@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -160,13 +160,15 @@ export function JournalScreen() {
                       <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{entry.displaySource}</Text>
                     </View>
                   </View>
-                  <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
-                    {entryTitle(entry.entryKind)}
-                  </Text>
-                  <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>
-                    {entry.body}
-                  </ExpandableBodyText>
-                  <VerseList verse={entry.verse} verses={entry.verses} compact />
+                  <Pressable accessibilityRole="button" onPress={() => router.push(`/journal/${entry.id}` as never)} style={{ gap: 8 }}>
+                    <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
+                      {entryTitle(entry.entryKind)}
+                    </Text>
+                    <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>
+                      {entry.body}
+                    </ExpandableBodyText>
+                    <VerseList verse={entry.verse} verses={entry.verses} compact />
+                  </Pressable>
                   {"isSharedCheckIn" in entry ? null : (
                     <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                       <SecondaryButton icon="edit-2" onPress={() => editEntry(entry)} style={{ flex: 1 }}>

@@ -1,0 +1,287 @@
+import { useMemo, useState } from "react";
+import { Feather } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
+
+import { useKoino } from "@/state/koino-store";
+import type { FeedItem, GroupImage } from "@/state/types";
+import {
+  AppScreen,
+  Avatar,
+  AvatarStack,
+  BodyText,
+  Card,
+  IconButton,
+  PrimaryButton,
+  SectionHeading,
+  TextInputField,
+  VerseList,
+} from "@/ui/app-components";
+import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
+import { colors } from "@/ui/theme";
+
+const MAX_REPLY_LENGTH = 500;
+
+function routeParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function formatRelativeTime(value: string) {
+  const created = Date.parse(value);
+  if (Number.isNaN(created)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function moodLabel(mood: number) {
+  if (mood >= 5) return "Joyful";
+  if (mood >= 4) return "Peaceful";
+  if (mood <= 1) return "Struggling";
+  if (mood <= 2) return "Heavy";
+  return "Okay";
+}
+
+function kindLabel(item: FeedItem) {
+  if (item.type === "check_in") return "Check-in";
+  if (item.kind === "prayer_request") return "Prayer request";
+  if (item.kind === "praise") return "Praise";
+  if (item.kind === "update") return "Update";
+  if (item.kind === "post") return "Post";
+  return "Reflection";
+}
+
+function kindIcon(item: FeedItem) {
+  if (item.type === "check_in") return "check-circle" as const;
+  if (item.kind === "prayer_request") return "heart" as const;
+  if (item.kind === "praise") return "star" as const;
+  if (item.kind === "update") return "send" as const;
+  return "edit-3" as const;
+}
+
+function defaultTitle(item: FeedItem) {
+  if (item.type === "check_in") return moodLabel(item.mood);
+  if (item.kind === "prayer_request") return "Please pray";
+  if (item.kind === "praise") return "Grateful for a new day";
+  if (item.kind === "update") return "A small update";
+  return "Shared reflection";
+}
+
+function targetTypeFor(item: FeedItem) {
+  return item.type === "post" ? "post" : "check_in";
+}
+
+export function FeedDetailScreen() {
+  const { id, targetType: routeTarget } = useLocalSearchParams<{ id?: string; targetType?: string }>();
+  const routeId = routeParam(id);
+  const routeTargetType = routeParam(routeTarget);
+  const { state, dispatch } = useKoino();
+  const navigation = useNavigation();
+  const [replyDraft, setReplyDraft] = useState("");
+  const [allowRemove, setAllowRemove] = useState(false);
+  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
+  const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
+  const item = useMemo<FeedItem | undefined>(() => {
+    if (!routeId) return undefined;
+    if (routeTargetType === "post") {
+      const post = state.posts.find((candidate) => candidate.id === routeId && candidate.groupId === state.currentGroupId);
+      return post ? { ...post, type: "post" } : undefined;
+    }
+    if (routeTargetType === "check_in") {
+      const checkIn = state.checkIns.find((candidate) => candidate.id === routeId && candidate.groupId === state.currentGroupId);
+      return checkIn
+        ? {
+            type: "check_in",
+            id: checkIn.id,
+            userId: checkIn.userId,
+            groupId: checkIn.groupId,
+            body: checkIn.reflectionText,
+            mood: checkIn.mood,
+            readToday: checkIn.readToday,
+            verse: checkIn.verse,
+            verses: checkIn.verses,
+            createdAt: checkIn.createdAt,
+          }
+        : undefined;
+    }
+    return undefined;
+  }, [routeId, routeTargetType, state.checkIns, state.currentGroupId, state.posts]);
+
+  const targetType = item ? targetTypeFor(item) : undefined;
+  const replies = useMemo(
+    () =>
+      targetType && item
+        ? state.replies
+            .filter((reply) => reply.targetType === targetType && reply.targetId === item.id)
+            .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+        : [],
+    [item, state.replies, targetType],
+  );
+  const prayer = useMemo(() => {
+    if (!item || !targetType) return undefined;
+    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
+    const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
+    return {
+      prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
+      count: prayedByUserIds.length,
+      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+    };
+  }, [item, state.currentUserId, state.prayerReactions, targetType, userById]);
+
+  usePreventRemove(Boolean(replyDraft.trim()) && !allowRemove, ({ data }) => {
+    Alert.alert("Discard reply?", "Your draft encouragement has not been sent.", [
+      { text: "Keep writing", style: "cancel" },
+      {
+        text: "Discard",
+        style: "destructive",
+        onPress: () => {
+          setAllowRemove(true);
+          setReplyDraft("");
+          setTimeout(() => navigation.dispatch(data.action), 0);
+        },
+      },
+    ]);
+  });
+
+  if (!item || !targetType) {
+    return (
+      <AppScreen>
+        <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
+        <Card>
+          <BodyText muted>This post is no longer available.</BodyText>
+        </Card>
+      </AppScreen>
+    );
+  }
+
+  const authorName = userById.get(item.userId) ?? "Someone";
+  const authorImage = userImageById.get(item.userId);
+
+  async function sendReply() {
+    const body = replyDraft.trim();
+    if (!body || !item || !targetType) return;
+    await dispatch({ type: "createReply", targetType, targetId: item.id, body });
+    setReplyDraft("");
+  }
+
+  function togglePrayer() {
+    if (!item || !targetType) return;
+    if (prayer?.prayed) {
+      dispatch({ type: "unpray", targetType, targetId: item.id });
+      return;
+    }
+    setPrayerTarget({ targetType, targetId: item.id, body: item.body });
+  }
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
+      <AppScreen>
+        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+          <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
+          <Feather name="more-horizontal" size={22} color={colors.ink} />
+        </View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+          <Feather name={kindIcon(item)} size={18} color={colors.gold} />
+          <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
+        </View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+          <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
+          <View>
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          </View>
+        </View>
+        <View style={{ gap: 12 }}>
+          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
+            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+          </Text>
+          <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{item.body || "No words today, just presence."}</BodyText>
+        </View>
+        <VerseList verse={item.verse} verses={item.verses} />
+        <PrimaryButton icon="heart" onPress={togglePrayer} style={{ minHeight: 58 }}>
+          {prayer?.prayed ? "Prayed" : "Pray"}
+        </PrimaryButton>
+        <View style={{ gap: 12 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+            Prayed by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
+          </Text>
+          {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
+        </View>
+        <View style={{ gap: 12 }}>
+          <SectionHeading>Encouragement</SectionHeading>
+          <Card style={{ gap: 0, padding: 0 }}>
+            {replies.length === 0 ? (
+              <BodyText muted style={{ padding: 14 }}>
+                No encouragement yet.
+              </BodyText>
+            ) : (
+              replies.map((reply, index) => (
+                <View
+                  key={reply.id}
+                  style={{
+                    borderBottomColor: colors.line,
+                    borderBottomWidth: index === replies.length - 1 ? 0 : 1,
+                    gap: 8,
+                    padding: 14,
+                  }}
+                >
+                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                    <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>
+                    </View>
+                    {reply.userId === state.currentUserId ? (
+                      <Pressable onPress={() => dispatch({ type: "deleteReply", id: reply.id })} style={{ padding: 6 }}>
+                        <Feather name="trash-2" size={16} color={colors.danger} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <BodyText>{reply.body}</BodyText>
+                </View>
+              ))
+            )}
+          </Card>
+        </View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <TextInputField
+            value={replyDraft}
+            onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
+            placeholder="Write an encouragement..."
+            style={{ flex: 1 }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            disabled={!replyDraft.trim()}
+            onPress={sendReply}
+            style={{
+              alignItems: "center",
+              height: 48,
+              justifyContent: "center",
+              opacity: replyDraft.trim() ? 1 : 0.4,
+              width: 48,
+            }}
+          >
+            <Feather name="send" size={22} color={colors.gold} />
+          </Pressable>
+        </View>
+      </AppScreen>
+      <PrayerMoment
+        target={prayerTarget}
+        onClose={() => setPrayerTarget(undefined)}
+        onFinish={(status, startedAt) => {
+          if (prayerTarget) {
+            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt });
+          }
+          setPrayerTarget(undefined);
+        }}
+      />
+    </KeyboardAvoidingView>
+  );
+}
