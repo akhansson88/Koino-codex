@@ -5,6 +5,7 @@ import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
+import { useNavigation } from "expo-router";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
@@ -73,6 +74,7 @@ type BibleReaderPreferences = {
   fontSize: number;
   position: BiblePosition;
   readerTheme: BibleReaderThemeId;
+  showCrossReferences: boolean;
   showFootnotes: boolean;
   showVerseNumbers: boolean;
 };
@@ -113,6 +115,7 @@ const defaultFontSize = 18;
 const defaultReaderTheme: BibleReaderThemeId = "light";
 const defaultShowVerseNumbers = true;
 const defaultShowFootnotes = false;
+const defaultShowCrossReferences = true;
 const defaultCompactMode = false;
 const minFontSize = 16;
 const maxFontSize = 28;
@@ -200,6 +203,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       fontSize: defaultFontSize,
       position: defaultPosition,
       readerTheme: defaultReaderTheme,
+      showCrossReferences: defaultShowCrossReferences,
       showFootnotes: defaultShowFootnotes,
       showVerseNumbers: defaultShowVerseNumbers,
     };
@@ -219,6 +223,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       fontSize: normalizeFontSize(parsed?.fontSize),
       position,
       readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
+      showCrossReferences: typeof parsed?.showCrossReferences === "boolean" ? parsed.showCrossReferences : defaultShowCrossReferences,
       showFootnotes: typeof parsed?.showFootnotes === "boolean" ? parsed.showFootnotes : defaultShowFootnotes,
       showVerseNumbers: typeof parsed?.showVerseNumbers === "boolean" ? parsed.showVerseNumbers : defaultShowVerseNumbers,
     };
@@ -233,6 +238,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       fontSize: defaultFontSize,
       position: defaultPosition,
       readerTheme: defaultReaderTheme,
+      showCrossReferences: defaultShowCrossReferences,
       showFootnotes: defaultShowFootnotes,
       showVerseNumbers: defaultShowVerseNumbers,
     };
@@ -336,6 +342,7 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 
 export function BibleScreen() {
   const { state } = useKoino();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const audioPlayer = useAudioPlayer(null, { keepAudioSessionActive: true, updateInterval: 250 });
@@ -365,6 +372,7 @@ export function BibleScreen() {
   const [readerTheme, setReaderTheme] = useState<BibleReaderThemeId>(defaultReaderTheme);
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
   const [showFootnotes, setShowFootnotes] = useState(defaultShowFootnotes);
+  const [showCrossReferences, setShowCrossReferences] = useState(defaultShowCrossReferences);
   const [compactMode, setCompactMode] = useState(defaultCompactMode);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -413,7 +421,9 @@ export function BibleScreen() {
   const contentWidth = width >= 780 ? 720 : undefined;
   const audioIsPreparing = audioPlaybackState === "preparing";
   const audioIsPlaying = audioPlaybackState === "playing";
+  const audioMiniPlayerVisible = audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const audioHighlightActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
+  const readerCanGoBack = navigation.canGoBack();
   const audioStatusLabel =
     audioPlaybackState === "preparing"
       ? bridgeOverlayVisible
@@ -520,6 +530,7 @@ export function BibleScreen() {
         setReaderTheme(nextPreferences.readerTheme);
         setShowVerseNumbers(nextPreferences.showVerseNumbers);
         setShowFootnotes(nextPreferences.showFootnotes);
+        setShowCrossReferences(nextPreferences.showCrossReferences);
         setCompactMode(nextPreferences.compactMode);
       })
       .finally(() => {
@@ -545,6 +556,7 @@ export function BibleScreen() {
         fontSize,
         position,
         readerTheme,
+        showCrossReferences,
         showFootnotes,
         showVerseNumbers,
       };
@@ -552,7 +564,7 @@ export function BibleScreen() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showFootnotes, showVerseNumbers, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showCrossReferences, showFootnotes, showVerseNumbers, storageKey]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
@@ -631,6 +643,13 @@ export function BibleScreen() {
     [audioPlayer, clearAudioPrepareTimeout],
   );
 
+  useEffect(() => {
+    const audioActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
+    if (!audioActive) return;
+    if (audioPosition.book === position.book && audioPosition.chapter === position.chapter) return;
+    stopAudioPlayback("idle");
+  }, [audioPlaybackState, audioPosition.book, audioPosition.chapter, position.book, position.chapter, stopAudioPlayback]);
+
   const startVerseAudio = useCallback(
     (requestedPosition?: Partial<BiblePosition>) => {
       const nextPosition = updateAudioPosition(requestedPosition ?? audioPositionRef.current);
@@ -704,7 +723,7 @@ export function BibleScreen() {
   const chooseBibleVersion = useCallback(
     (nextVersionId: BibleVersionId) => {
       setBibleVersionId(nextVersionId);
-      if (audioPlaybackState === "playing" || audioPlaybackState === "preparing") {
+      if (audioPlaybackState === "playing" || audioPlaybackState === "preparing" || audioPlaybackState === "paused") {
         stopAudioPlayback("idle");
       }
     },
@@ -849,7 +868,7 @@ export function BibleScreen() {
       return;
     }
 
-    startVerseAudio(audioPositionRef.current);
+    startVerseAudio(positionRef.current);
   }, [audioPlaybackState, audioPlayer, audioStatus.isLoaded, startVerseAudio, stopAudioPlayback]);
 
   const handleAudioChapterJump = useCallback(
@@ -964,9 +983,12 @@ export function BibleScreen() {
   );
 
   const handleReaderBack = useCallback(() => {
-    // TODO: Replace this with a real reader-dismiss action if Bible becomes a nested/modal route.
-    scrollRef.current?.scrollTo({ animated: true, y: 0 });
-  }, []);
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    setPickerVisible(true);
+  }, [navigation]);
 
   const handleVersePress = useCallback((verse: number) => {
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
@@ -980,10 +1002,17 @@ export function BibleScreen() {
     setSelectedVersePosition(nextPosition);
   }, []);
 
-  const handleVerseAction = useCallback((_action: "pray" | "journal" | "save" | "share") => {
+  const handleVerseAction = useCallback((action: "pray" | "journal" | "save" | "share" | "references") => {
+    if (action === "references") {
+      if (selectedVersePosition) {
+        setCrossReferencePosition(selectedVersePosition);
+      }
+      setSelectedVersePosition(undefined);
+      return;
+    }
     // TODO: Wire these calm response actions into prayer, journal, saved-verse, and room-sharing flows.
     setSelectedVersePosition(undefined);
-  }, []);
+  }, [selectedVersePosition]);
 
   const handleReflectionAction = useCallback((_action: "journal" | "pray" | "save") => {
     // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
@@ -1039,7 +1068,9 @@ export function BibleScreen() {
     <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
       <BibleReaderHeader
         audioActive={audioIsPlaying || audioIsPreparing}
-        audioDisabled={!bridgeReady && audioPlaybackState !== "paused"}
+        audioDisabled={false}
+        leftIcon={readerCanGoBack ? "arrow-left" : "book-open"}
+        leftLabel={readerCanGoBack ? "Go back" : "Choose Bible chapter"}
         onAudioPress={handleAudioToggle}
         onBack={handleReaderBack}
         onOpenPicker={() => setPickerVisible(true)}
@@ -1060,7 +1091,7 @@ export function BibleScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           alignSelf: "stretch",
-          paddingBottom: Math.max(190, insets.bottom + 166),
+          paddingBottom: audioMiniPlayerVisible ? Math.max(190, insets.bottom + 166) : Math.max(126, insets.bottom + 106),
           paddingHorizontal: 22,
           paddingTop: compactMode ? 12 : 18,
         }}
@@ -1070,6 +1101,7 @@ export function BibleScreen() {
             audioHighlightActive={audioHighlightActive}
             audioPosition={audioPosition}
             compactMode={compactMode}
+            crossReferenceAvailability={chapterCrossReferenceAvailability}
             highlightedPosition={highlightedPosition}
             onVerseLayout={handleVerseLayout}
             onVersePress={handleVersePress}
@@ -1078,6 +1110,7 @@ export function BibleScreen() {
             readerLineHeight={readerLineHeight}
             readerTextStyle={readerTextStyle}
             selectedVersePosition={selectedVersePosition}
+            showCrossReferences={showCrossReferences}
             showVerseNumbers={showVerseNumbers}
             verses={chapterVerses}
           />
@@ -1097,17 +1130,19 @@ export function BibleScreen() {
         </View>
       </ScrollView>
 
-      <CompactAudioPlayer
-        bottom={Math.max(92, insets.bottom + 78)}
-        disabled={!bridgeReady && audioPlaybackState !== "paused"}
-        isActive={audioIsPlaying || audioIsPreparing}
-        label={`${chapterLabel(audioPosition)} · ${audioVoice.name}`}
-        maxWidth={contentWidth}
-        onToggle={handleAudioToggle}
-        onVoicePress={() => setVoicePickerVisible(true)}
-        palette={readerPalette}
-        statusLabel={audioStatusLabel}
-      />
+      {audioMiniPlayerVisible ? (
+        <CompactAudioPlayer
+          bottom={Math.max(92, insets.bottom + 78)}
+          disabled={false}
+          isActive={audioIsPlaying}
+          label={`${chapterLabel(audioPosition)} · ${audioVoice.name}`}
+          maxWidth={contentWidth}
+          onToggle={handleAudioToggle}
+          onVoicePress={() => setVoicePickerVisible(true)}
+          palette={readerPalette}
+          statusLabel={audioStatusLabel}
+        />
+      ) : null}
 
       <VerseActionSheet
         onAction={handleVerseAction}
@@ -1124,6 +1159,7 @@ export function BibleScreen() {
         onChangeBibleVersion={chooseBibleVersion}
         onChangeFont={setFontId}
         onChangeReaderTheme={setReaderTheme}
+        onChangeShowCrossReferences={setShowCrossReferences}
         onChangeShowFootnotes={setShowFootnotes}
         onChangeShowVerseNumbers={setShowVerseNumbers}
         onClose={() => setSettingsVisible(false)}
@@ -1131,6 +1167,7 @@ export function BibleScreen() {
         onFontSizeChange={changeFontSize}
         palette={readerPalette}
         readerTheme={readerTheme}
+        showCrossReferences={showCrossReferences}
         showFootnotes={showFootnotes}
         showVerseNumbers={showVerseNumbers}
         visible={settingsVisible}
@@ -1139,6 +1176,7 @@ export function BibleScreen() {
         onClose={() => setCrossReferencePosition(undefined)}
         onReadChapter={readCrossReferenceChapter}
         position={crossReferencePosition}
+        palette={readerPalette}
         readerTextStyle={readerTextStyle}
         references={selectedCrossReferences}
         visible={Boolean(crossReferencePosition)}
@@ -1190,7 +1228,7 @@ function ReaderCircleButton({
 }: {
   accessibilityLabel: string;
   disabled?: boolean;
-  icon?: "chevron-down" | "volume-2" | "x" | "chevron-up";
+  icon?: "arrow-left" | "book-open" | "chevron-down" | "volume-2" | "x" | "chevron-up";
   onPress: () => void;
   palette: ReaderPalette;
   text?: string;
@@ -1224,6 +1262,8 @@ function ReaderCircleButton({
 function BibleReaderHeader({
   audioActive,
   audioDisabled,
+  leftIcon,
+  leftLabel,
   onAudioPress,
   onBack,
   onOpenPicker,
@@ -1235,6 +1275,8 @@ function BibleReaderHeader({
 }: {
   audioActive: boolean;
   audioDisabled: boolean;
+  leftIcon: "arrow-left" | "book-open";
+  leftLabel: string;
   onAudioPress: () => void;
   onBack: () => void;
   onOpenPicker: () => void;
@@ -1255,7 +1297,7 @@ function BibleReaderHeader({
     >
       <View style={{ height: 54, justifyContent: "center" }}>
         <View style={{ left: 0, position: "absolute", top: 6 }}>
-          <ReaderCircleButton accessibilityLabel="Back from Bible reader" icon="chevron-down" onPress={onBack} palette={palette} />
+          <ReaderCircleButton accessibilityLabel={leftLabel} icon={leftIcon} onPress={onBack} palette={palette} />
         </View>
 
         <Pressable
@@ -1294,6 +1336,7 @@ function BibleText({
   audioHighlightActive,
   audioPosition,
   compactMode,
+  crossReferenceAvailability,
   highlightedPosition,
   onVerseLayout,
   onVersePress,
@@ -1302,12 +1345,14 @@ function BibleText({
   readerLineHeight,
   readerTextStyle,
   selectedVersePosition,
+  showCrossReferences,
   showVerseNumbers,
   verses,
 }: {
   audioHighlightActive: boolean;
   audioPosition: BiblePosition;
   compactMode: boolean;
+  crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
   onVerseLayout: (verse: number, offset: number) => void;
   onVersePress: (verse: number) => void;
@@ -1316,6 +1361,7 @@ function BibleText({
   readerLineHeight: number;
   readerTextStyle: TextStyle;
   selectedVersePosition?: BiblePosition;
+  showCrossReferences: boolean;
   showVerseNumbers: boolean;
   verses: BibleChapterVerse[];
 }) {
@@ -1323,6 +1369,12 @@ function BibleText({
     color: palette.muted,
     fontSize: Math.max(11, Number(readerTextStyle.fontSize ?? defaultFontSize) - 6),
     fontVariant: ["tabular-nums"],
+    fontWeight: "800",
+    lineHeight: readerLineHeight,
+  };
+  const markerStyle: TextStyle = {
+    color: palette.accent,
+    fontSize: Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) - 8),
     fontWeight: "800",
     lineHeight: readerLineHeight,
   };
@@ -1345,6 +1397,8 @@ function BibleText({
           selectedVersePosition.verse === item.verse;
         const selected = highlighted || audioHighlighted || actionSelected;
         const isFirstVerse = index === 0;
+        const showReferenceMarker = showCrossReferences && Boolean(crossReferenceAvailability[item.verse]);
+        const marker = showReferenceMarker ? <Text style={markerStyle}> * </Text> : null;
 
         return (
           <Pressable
@@ -1379,12 +1433,14 @@ function BibleText({
                 </Text>
                 <Text selectable style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
+                  {marker}
                   {item.text}
                 </Text>
               </View>
             ) : (
               <Text selectable style={readerTextStyle}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
+                {marker}
                 {item.text}
               </Text>
             )}
@@ -1402,7 +1458,7 @@ function VerseActionSheet({
   position,
   visible,
 }: {
-  onAction: (action: "pray" | "journal" | "save" | "share") => void;
+  onAction: (action: "pray" | "journal" | "save" | "share" | "references") => void;
   onClose: () => void;
   palette: ReaderPalette;
   position?: BiblePosition;
@@ -1421,6 +1477,7 @@ function VerseActionSheet({
             borderTopLeftRadius: radius.xxl,
             borderTopRightRadius: radius.xxl,
             gap: 2,
+            maxHeight: "78%",
             paddingBottom: Math.max(28, insets.bottom + 20),
             paddingHorizontal: 20,
             paddingTop: 16,
@@ -1436,10 +1493,13 @@ function VerseActionSheet({
           <View style={{ alignItems: "center", paddingBottom: 20 }}>
             <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
           </View>
-          <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle="Gör denna vers till ett böneämne" title="Be för detta" />
-          <VerseSheetAction icon="book-open" onPress={() => onAction("journal")} palette={palette} subtitle="Reflektera över denna vers" title="Skriv i journalen" />
-          <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle="Spara till dina favoritverser" title="Spara vers" />
-          <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle="Dela med ditt rum (valfritt)" title="Dela till rum" />
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle="Gör denna vers till ett böneämne" title="Be för detta" />
+            <VerseSheetAction icon="book-open" onPress={() => onAction("journal")} palette={palette} subtitle="Reflektera över denna vers" title="Skriv i journalen" />
+            <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle="Spara till dina favoritverser" title="Spara vers" />
+            <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle="Dela med ditt rum (valfritt)" title="Dela till rum" />
+            <VerseSheetAction icon="link-2" onPress={() => onAction("references")} palette={palette} subtitle="Se relaterade bibelställen" title="Visa korsreferenser" />
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -1453,7 +1513,7 @@ function VerseSheetAction({
   subtitle,
   title,
 }: {
-  icon: "heart" | "book-open" | "bookmark" | "users";
+  icon: "heart" | "book-open" | "bookmark" | "users" | "link-2";
   onPress: () => void;
   palette: ReaderPalette;
   subtitle: string;
@@ -1469,7 +1529,7 @@ function VerseSheetAction({
         borderBottomWidth: 1,
         flexDirection: "row",
         gap: 14,
-        minHeight: 82,
+        minHeight: 72,
       }}
     >
       <View
@@ -1502,6 +1562,7 @@ function ReadingSettingsSheet({
   onChangeBibleVersion,
   onChangeFont,
   onChangeReaderTheme,
+  onChangeShowCrossReferences,
   onChangeShowFootnotes,
   onChangeShowVerseNumbers,
   onClose,
@@ -1509,6 +1570,7 @@ function ReadingSettingsSheet({
   onFontSizeChange,
   palette,
   readerTheme,
+  showCrossReferences,
   showFootnotes,
   showVerseNumbers,
   visible,
@@ -1520,6 +1582,7 @@ function ReadingSettingsSheet({
   onChangeBibleVersion: (versionId: BibleVersionId) => void;
   onChangeFont: (fontId: BibleReaderFontId) => void;
   onChangeReaderTheme: (theme: BibleReaderThemeId) => void;
+  onChangeShowCrossReferences: (value: boolean) => void;
   onChangeShowFootnotes: (value: boolean) => void;
   onChangeShowVerseNumbers: (value: boolean) => void;
   onClose: () => void;
@@ -1527,6 +1590,7 @@ function ReadingSettingsSheet({
   onFontSizeChange: (delta: number) => void;
   palette: ReaderPalette;
   readerTheme: BibleReaderThemeId;
+  showCrossReferences: boolean;
   showFootnotes: boolean;
   showVerseNumbers: boolean;
   visible: boolean;
@@ -1623,6 +1687,7 @@ function ReadingSettingsSheet({
             <SettingsGroup palette={palette} title="Läsningsinställningar">
               <View style={{ gap: 2 }}>
                 <SettingsToggle label="Visa versnummer" onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
+                <SettingsToggle label="Visa korsreferenser" onChange={onChangeShowCrossReferences} palette={palette} value={showCrossReferences} />
                 <SettingsToggle label="Visa fotnoter" onChange={onChangeShowFootnotes} palette={palette} value={showFootnotes} />
                 <SettingsToggle label="Kompakt läge" onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
@@ -1993,6 +2058,7 @@ function NextChapterCard({
 function CrossReferenceSheet({
   onClose,
   onReadChapter,
+  palette,
   position,
   readerTextStyle,
   references,
@@ -2000,6 +2066,7 @@ function CrossReferenceSheet({
 }: {
   onClose: () => void;
   onReadChapter: (position: BiblePosition) => void;
+  palette: ReaderPalette;
   position?: BiblePosition;
   readerTextStyle: TextStyle;
   references: BibleCrossReference[];
@@ -2009,7 +2076,7 @@ function CrossReferenceSheet({
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
   const translateY = useRef(new Animated.Value(sheetHeight)).current;
-  const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.max(18, readerTextStyle.fontSize) : 18;
+  const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
 
   const closeWithAnimation = useCallback(
@@ -2068,10 +2135,10 @@ function CrossReferenceSheet({
   return (
     <Modal transparent visible={visible} onRequestClose={() => closeWithAnimation()}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close cross references" style={{ backgroundColor: "rgba(11, 18, 32, 0.28)", flex: 1 }} onPress={() => closeWithAnimation()} />
+        <Pressable accessibilityLabel="Close cross references" style={{ backgroundColor: palette.dim, flex: 1 }} onPress={() => closeWithAnimation()} />
         <Animated.View
           style={{
-            backgroundColor: colors.paper,
+            backgroundColor: palette.sheet,
             borderTopLeftRadius: radius.xl,
             borderTopRightRadius: radius.xl,
             height: sheetHeight,
@@ -2080,24 +2147,23 @@ function CrossReferenceSheet({
             transform: [{ translateY }],
             ...platformShadow({
               boxShadow: "0 -16px 34px rgba(11, 18, 32, 0.18)",
+              color: palette.shadow,
               offset: { width: 0, height: -10 },
               opacity: 0.14,
               radius: 26,
             }),
           }}
         >
-          <View style={{ alignItems: "center", borderBottomColor: colors.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 8 }}>
+          <View style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 8 }}>
             <View {...panResponder.panHandlers} style={{ alignItems: "center", height: 22, justifyContent: "center", width: 120 }}>
-              <View style={{ backgroundColor: colors.disabled, borderRadius: 999, height: 5, width: 56 }} />
+              <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 56 }} />
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{referenceLabel(position)}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
-                  {references.length} {references.length === 1 ? "cross reference" : "cross references"}
-                </Text>
+                <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(position)}</Text>
               </View>
-              <IconButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} />
+              <ReaderCircleButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} palette={palette} />
             </View>
           </View>
 
@@ -2107,36 +2173,35 @@ function CrossReferenceSheet({
                 <View
                   key={`${reference.source}-${index}`}
                   style={{
-                    borderBottomColor: index === references.length - 1 ? "transparent" : colors.line,
+                    borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
                     borderBottomWidth: 1,
                     gap: 8,
                     paddingBottom: 18,
                     paddingTop: index === 0 ? 0 : 18,
                   }}
                 >
-                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                    <Text selectable style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900" }}>
-                      {reference.reference}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
-                  </View>
-                  <Text selectable style={[readerTextStyle, { color: colors.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
-                    {reference.text}
-                  </Text>
                   <Pressable
                     accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
                     accessibilityRole="button"
                     onPress={() => closeWithAnimation(() => onReadChapter(reference.startPosition))}
-                    style={{ alignSelf: "flex-start", minHeight: 34, justifyContent: "center" }}
+                    style={{ gap: 7, minHeight: 54, justifyContent: "center" }}
                   >
-                    <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>Read this chapter</Text>
+                    <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                      <Text selectable style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>
+                        {reference.reference}
+                      </Text>
+                      <Feather name="arrow-right" size={17} color={palette.accent} />
+                    </View>
+                    <Text selectable numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
+                      {reference.text}
+                    </Text>
                   </Pressable>
                 </View>
               ))
             ) : (
-              <Card>
-                <BodyText muted>No readable cross references were found for this verse.</BodyText>
-              </Card>
+              <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
+                <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>Inga korsreferenser för denna vers ännu</Text>
+              </View>
             )}
           </ScrollView>
         </Animated.View>
