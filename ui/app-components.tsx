@@ -3,7 +3,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
@@ -61,7 +61,13 @@ export function AppHeader({
   onBack?: () => void;
 }) {
   const { state } = useKoino();
+  const pathname = usePathname();
   const user = state.users.find((item) => item.id === state.currentUserId);
+  const openIdentitySupport = () => {
+    if (pathname === "/identity") return;
+    router.push("/identity" as never);
+  };
+
   return (
     <View style={{ gap: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
@@ -73,7 +79,7 @@ export function AppHeader({
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <ThemeDots />
-          <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={() => router.push("/identity" as never)}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={openIdentitySupport}>
             <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
           </Pressable>
         </View>

@@ -1,4 +1,4 @@
-import { Tabs, router } from "expo-router";
+import { Tabs, router, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
@@ -257,12 +257,18 @@ function ThemeSelector() {
 
 function IdentityButton() {
   const { state } = useKoino();
+  const pathname = usePathname();
   const user = state.users.find((item) => item.id === state.currentUserId);
 
   if (!state.currentUserId) return null;
 
+  const openIdentitySupport = () => {
+    if (pathname === "/identity") return;
+    router.push("/identity" as never);
+  };
+
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={() => router.push("/identity" as never)}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={openIdentitySupport}>
       <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
     </Pressable>
   );
