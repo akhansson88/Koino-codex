@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
+import { tabs } from "@/state/product";
 import { Avatar } from "@/ui/app-components";
 import { brandPalette, colors, platformShadow, type ThemeName } from "@/ui/theme";
 
@@ -71,8 +72,8 @@ export default function TabLayout() {
         name="bible"
         options={{
           headerShown: false,
-          title: "Bible",
-          tabBarLabel: "Bible",
+          title: tabs[0],
+          tabBarLabel: tabs[0],
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "library" : "library-outline"} color={color} size={size} />
           ),
@@ -81,8 +82,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Today",
-          tabBarLabel: "Today",
+          title: tabs[1],
+          tabBarLabel: tabs[1],
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "leaf" : "leaf-outline"} color={color} size={size} />
           ),
@@ -91,18 +92,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="journal"
         options={{
-          title: "Journal",
-          tabBarLabel: "Journal",
+          title: tabs[2],
+          tabBarLabel: tabs[2],
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "book" : "book-outline"} color={color} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="room"
         options={{
-          title: "Room",
-          tabBarLabel: "Room",
+          title: tabs[3],
+          tabBarLabel: tabs[3],
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
           ),

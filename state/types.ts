@@ -118,6 +118,7 @@ export type CommentReaction = {
 export type JournalEntry = {
   id: Id;
   userId: Id;
+  title?: string;
   body: string;
   images?: string[];
   source: "manual" | "private_check_in";

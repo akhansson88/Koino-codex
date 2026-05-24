@@ -1,9 +1,20 @@
+import type { ComponentProps } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
+import {
+  EntryVisibility,
+  actionLabels,
+  defaultFeedTitle as productDefaultFeedTitle,
+  entryKindIcon,
+  feedItemKind,
+  feedItemLabel,
+  normalizeEntryKind,
+  visibility,
+} from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
@@ -13,7 +24,6 @@ import {
   Card,
   CurrentRoomHeader,
   ExpandableBodyText,
-  FilterChips,
   HeartPromptCard,
   IconButton,
   PrimaryButton,
@@ -26,12 +36,11 @@ import {
 import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
+import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
-type FeedFilter = "all" | EntryKind;
 type CheckInStep = "choose" | "details" | "thanks";
 
-const MAX_BODY_LENGTH = 500;
 const FEED_BODY_PREVIEW_LINES = 3;
 
 const moodOptions = [
@@ -64,37 +73,17 @@ function moodLabel(mood: number) {
   return moodOptions.find((option) => option.value === mood)?.label ?? (mood >= 4 ? "Peaceful" : mood <= 2 ? "Heavy" : "Okay");
 }
 
-function normalizeKind(kind: EntryKind | "post" | undefined): EntryKind {
-  if (kind === "prayer_request" || kind === "praise" || kind === "update") return kind;
-  return "reflection";
-}
-
 function kindLabel(item: FeedItem) {
-  if (item.type === "check_in") return "Check-in";
-  if (item.kind === "post") return "Post";
-  const kind = normalizeKind(item.kind);
-  if (kind === "prayer_request") return "Prayer request";
-  if (kind === "praise") return "Praise";
-  if (kind === "update") return "Update";
-  return "Reflection";
+  return feedItemLabel(item);
 }
 
 function kindIcon(item: FeedItem) {
   if (item.type === "check_in") return "check-circle" as const;
-  const kind = normalizeKind(item.kind);
-  if (kind === "prayer_request") return "heart" as const;
-  if (kind === "praise") return "star" as const;
-  if (kind === "update") return "send" as const;
-  return "edit-3" as const;
+  return entryKindIcon(item.kind);
 }
 
 function defaultTitle(item: FeedItem) {
-  if (item.type === "check_in") return moodLabel(item.mood);
-  const kind = normalizeKind(item.kind);
-  if (kind === "prayer_request") return "Please pray";
-  if (kind === "praise") return "Grateful for a new day";
-  if (kind === "update") return "A small update";
-  return "Shared reflection";
+  return productDefaultFeedTitle(item, moodLabel);
 }
 
 function FeedPostCard({
@@ -126,7 +115,9 @@ function FeedPostCard({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
-  const isPrayer = item.type === "post" && normalizeKind(item.kind) === "prayer_request";
+  const itemKind = feedItemKind(item);
+  const isPrayer = item.type === "post" && itemKind === "prayer_request";
+  const actionLabel = actionLabels[itemKind];
 
   function runMenuAction(action: () => void) {
     suppressOpenRef.current = true;
@@ -258,7 +249,7 @@ function FeedPostCard({
               style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
             >
               <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
-              <Text style={{ color: colors.muted, fontWeight: "700" }}>{prayerCount}</Text>
+              <Text style={{ color: colors.muted, fontWeight: "700" }}>{actionLabel} {prayerCount}</Text>
             </Pressable>
             <Pressable
               onPress={(event) => {
@@ -281,7 +272,6 @@ function FeedPostCard({
 export function HomeScreen() {
   const { state, dispatch } = useKoino();
   const params = useLocalSearchParams<{ checkIn?: string; compose?: string }>();
-  const [filter, setFilter] = useState<FeedFilter>("all");
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
   const [mood, setMood] = useState(4);
@@ -290,6 +280,7 @@ export function HomeScreen() {
   const [shareCheckIn, setShareCheckIn] = useState(true);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
+  const [composerVisibility, setComposerVisibility] = useState<EntryVisibility>(visibility.private);
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
@@ -339,11 +330,12 @@ export function HomeScreen() {
       }));
     return [...checkIns, ...posts]
       .filter((item) => {
-        if (filter === "all") return true;
-        return item.type === "post" && normalizeKind(item.kind) === filter;
+        return true;
       })
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [filter, state.checkIns, state.currentGroupId, state.posts]);
+  }, [state.checkIns, state.currentGroupId, state.posts]);
+  const recentActivity = feedItems.slice(0, 2);
+  const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
 
   function resetCheckIn() {
     setCheckInStep("choose");
@@ -353,8 +345,9 @@ export function HomeScreen() {
     setShareCheckIn(true);
   }
 
-  function openComposer(kind: EntryKind, item?: FeedItem) {
+  function openComposer(kind: EntryKind, item?: FeedItem, defaultVisibility: EntryVisibility = visibility.private) {
     setComposerKind(kind);
+    setComposerVisibility(defaultVisibility);
     setEditingItem(item);
     setComposerTitle(item?.type === "post" ? item.title ?? "" : "");
     setComposerBody(item?.body ?? "");
@@ -371,13 +364,15 @@ export function HomeScreen() {
   useEffect(() => {
     if (!params.compose || params.compose === lastComposeParamRef.current) return;
     lastComposeParamRef.current = params.compose;
-    openComposer(filter === "all" ? "reflection" : filter);
-  }, [filter, params.compose]);
+    openComposer("reflection");
+  }, [params.compose]);
 
   async function submitComposer() {
     if (!composerBody.trim()) return;
     if (editingItem?.type === "post") {
       await dispatch({ type: "editPost", id: editingItem.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+    } else if (composerVisibility === visibility.private) {
+      await dispatch({ type: "createJournalEntry", entryKind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
     } else {
       await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
@@ -430,20 +425,45 @@ export function HomeScreen() {
           resetCheckIn();
           setCheckInVisible(true);
         }}
-        onCreate={() => openComposer(filter === "all" ? "reflection" : filter)}
+        onCreate={() => openComposer("reflection")}
       />
 
-      <FilterChips
-        value={filter}
-        onChange={setFilter}
-        options={[
-          { label: "All", value: "all" },
-          { label: "Reflection", value: "reflection" },
-          { label: "Prayer requests", value: "prayer_request" },
-          { label: "Praise", value: "praise" },
-          { label: "Updates", value: "update" },
-        ]}
-      />
+      <View style={{ gap: 10 }}>
+        <SectionHeading>Today rhythm</SectionHeading>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          <RhythmAction icon="plus" label="Check in" onPress={() => setCheckInVisible(true)} />
+          <RhythmAction icon="heart" label="Pray for someone" onPress={() => {
+            if (openPrayer) {
+              const prayer = itemPrayerState(openPrayer);
+              setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
+            }
+          }} />
+          <RhythmAction icon="edit-3" label="Write reflection" onPress={() => openComposer("reflection")} />
+          <RhythmAction icon="book-open" label="Read Scripture" onPress={() => router.push("/(tabs)/bible" as never)} />
+        </View>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        <SectionHeading>{openPrayer ? "Someone to pray for" : "Open prayer"}</SectionHeading>
+        <Card>
+          {openPrayer ? (
+            <>
+              <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
+                {openPrayer.type === "post" ? openPrayer.title || defaultTitle(openPrayer) : defaultTitle(openPrayer)}
+              </Text>
+              <BodyText muted numberOfLines={2}>{openPrayer.body}</BodyText>
+              <PrimaryButton icon="heart" onPress={() => {
+                const prayer = itemPrayerState(openPrayer);
+                setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
+              }}>
+                Pray
+              </PrimaryButton>
+            </>
+          ) : (
+            <BodyText muted>No open prayer requests right now.</BodyText>
+          )}
+        </Card>
+      </View>
 
       {state.authError ? (
         <Card>
@@ -451,12 +471,14 @@ export function HomeScreen() {
         </Card>
       ) : null}
 
-      {feedItems.length === 0 ? (
-        <Card>
-          <BodyText muted>This room is quiet right now. Start with a check-in or a small reflection.</BodyText>
-        </Card>
+      <View style={{ gap: 10 }}>
+        <SectionHeading>Recent room activity</SectionHeading>
+      {recentActivity.length === 0 ? (
+          <Card>
+            <BodyText muted>This room is quiet right now. Start with a check-in or a small reflection.</BodyText>
+          </Card>
       ) : (
-        feedItems.map((item) => {
+        recentActivity.map((item) => {
           const authorName = userById.get(item.userId) ?? "Someone";
           const authorImage = userImageById.get(item.userId);
           const prayer = itemPrayerState(item);
@@ -473,7 +495,7 @@ export function HomeScreen() {
               replyCount={replies.length}
               onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
               onEdit={() => {
-                if (item.type === "post") openComposer(normalizeKind(item.kind), item);
+                if (item.type === "post") openComposer(normalizeEntryKind(item.kind), item, visibility.room);
               }}
               onDelete={() => deleteItem(item)}
               onReply={() => router.push(`/feed/${item.type}/${item.id}` as never)}
@@ -488,6 +510,7 @@ export function HomeScreen() {
           );
         })
       )}
+      </View>
 
       <CheckInModal
         visible={checkInVisible}
@@ -525,17 +548,22 @@ export function HomeScreen() {
         }}
       />
 
-      <ComposerModal
+      <SharedComposer
         visible={composerVisible}
+        context="today"
         kind={composerKind}
+        entryVisibility={composerVisibility}
         title={composerTitle}
         body={composerBody}
         verses={composerVerses}
         editing={Boolean(editingItem)}
         onKind={setComposerKind}
+        onVisibility={setComposerVisibility}
         onTitle={setComposerTitle}
         onBody={setComposerBody}
         onVerses={setComposerVerses}
+        roomName={group?.name}
+        roomImage={group?.image}
         onClose={() => {
           setComposerVisible(false);
           setEditingItem(undefined);
@@ -554,6 +582,17 @@ export function HomeScreen() {
         }}
       />
     </AppScreen>
+  );
+}
+
+function RhythmAction({ icon, label, onPress }: { icon: ComponentProps<typeof Feather>["name"]; label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ flexBasis: "47%", flexGrow: 1 }}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: 58, padding: 12 }}>
+        <Feather name={icon} size={18} color={colors.olive} />
+        <Text style={{ color: colors.ink, flex: 1, fontSize: 14, fontWeight: "900" }}>{label}</Text>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -715,71 +754,4 @@ function CheckInModal({
   );
 }
 
-function ComposerModal({
-  body,
-  editing,
-  kind,
-  onBody,
-  onClose,
-  onKind,
-  onSubmit,
-  onTitle,
-  onVerses,
-  title,
-  verses,
-  visible,
-}: {
-  body: string;
-  editing: boolean;
-  kind: EntryKind;
-  onBody: (value: string) => void;
-  onClose: () => void;
-  onKind: (kind: EntryKind) => void;
-  onSubmit: () => void;
-  onTitle: (value: string) => void;
-  onVerses: (verses: BibleVerse[]) => void;
-  title: string;
-  verses: BibleVerse[];
-  visible: boolean;
-}) {
-  return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <AppScreen>
-        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Close" icon="x" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{editing ? "Update" : "Post"}</Text>
-        </View>
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{editing ? "Edit your entry" : "Write your entry"}</Text>
-          <FilterChips
-            value={kind}
-            onChange={onKind}
-            options={[
-              { label: "Reflection", value: "reflection" },
-              { label: "Prayer", value: "prayer_request" },
-              { label: "Praise", value: "praise" },
-              { label: "Update", value: "update" },
-            ]}
-          />
-        </View>
-        <TextInputField value={title} onChangeText={onTitle} placeholder={kind === "prayer_request" ? "Please pray for..." : "Title (optional)"} />
-        <View style={{ gap: 8 }}>
-          <TextInputField
-            multiline
-            maxLength={MAX_BODY_LENGTH}
-            value={body}
-            onChangeText={(value) => onBody(value.slice(0, MAX_BODY_LENGTH))}
-            placeholder="Share, reflect or ask for prayer..."
-            style={{ minHeight: 170 }}
-          />
-          <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{body.length}/{MAX_BODY_LENGTH}</Text>
-        </View>
-        <BibleVerseField verses={verses} onChange={onVerses} />
-        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit}>
-          {editing ? "Update entry" : "Post entry"}
-        </PrimaryButton>
-      </AppScreen>
-    </Modal>
-  );
-}
 

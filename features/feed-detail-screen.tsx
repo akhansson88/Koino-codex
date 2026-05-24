@@ -5,6 +5,14 @@ import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import {
+  actionLabels,
+  actionPastLabels,
+  defaultFeedTitle as productDefaultFeedTitle,
+  entryKindIcon,
+  feedItemKind,
+  feedItemLabel,
+} from "@/state/product";
 import type { FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
@@ -48,28 +56,16 @@ function moodLabel(mood: number) {
 }
 
 function kindLabel(item: FeedItem) {
-  if (item.type === "check_in") return "Check-in";
-  if (item.kind === "prayer_request") return "Prayer request";
-  if (item.kind === "praise") return "Praise";
-  if (item.kind === "update") return "Update";
-  if (item.kind === "post") return "Post";
-  return "Reflection";
+  return feedItemLabel(item);
 }
 
 function kindIcon(item: FeedItem) {
   if (item.type === "check_in") return "check-circle" as const;
-  if (item.kind === "prayer_request") return "heart" as const;
-  if (item.kind === "praise") return "star" as const;
-  if (item.kind === "update") return "send" as const;
-  return "edit-3" as const;
+  return entryKindIcon(item.kind);
 }
 
 function defaultTitle(item: FeedItem) {
-  if (item.type === "check_in") return moodLabel(item.mood);
-  if (item.kind === "prayer_request") return "Please pray";
-  if (item.kind === "praise") return "Grateful for a new day";
-  if (item.kind === "update") return "A small update";
-  return "Shared reflection";
+  return productDefaultFeedTitle(item, moodLabel);
 }
 
 function targetTypeFor(item: FeedItem) {
@@ -162,6 +158,9 @@ export function FeedDetailScreen() {
 
   const authorName = userById.get(item.userId) ?? "Someone";
   const authorImage = userImageById.get(item.userId);
+  const itemKind = feedItemKind(item);
+  const actionLabel = prayer?.prayed && itemKind === "prayer_request" ? "Prayed" : actionLabels[itemKind];
+  const actionPastLabel = actionPastLabels[itemKind];
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -174,6 +173,10 @@ export function FeedDetailScreen() {
     if (!item || !targetType) return;
     if (prayer?.prayed) {
       dispatch({ type: "unpray", targetType, targetId: item.id });
+      return;
+    }
+    if (feedItemKind(item) !== "prayer_request") {
+      dispatch({ type: "finishPrayer", targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
       return;
     }
     setPrayerTarget({ targetType, targetId: item.id, body: item.body });
@@ -205,11 +208,11 @@ export function FeedDetailScreen() {
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
         <PrimaryButton icon="heart" onPress={togglePrayer} style={{ minHeight: 58 }}>
-          {prayer?.prayed ? "Prayed" : "Pray"}
+          {actionLabel}
         </PrimaryButton>
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-            Prayed by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
+            {actionPastLabel} by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
           </Text>
           {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
         </View>
@@ -253,7 +256,7 @@ export function FeedDetailScreen() {
           <TextInputField
             value={replyDraft}
             onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
-            placeholder="Write an encouragement..."
+            placeholder={itemKind === "update" ? "Write a response..." : itemKind === "praise" ? "Write an amen..." : "Write an encouragement..."}
             style={{ flex: 1 }}
           />
           <Pressable

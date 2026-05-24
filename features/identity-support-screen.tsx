@@ -169,7 +169,7 @@ export function IdentitySupportScreen() {
       </View>
 
       <View style={{ gap: 10 }}>
-        <SectionHeading muted>Community</SectionHeading>
+        <SectionHeading muted>Room</SectionHeading>
         <Card>
           {group ? (
             <>
@@ -190,12 +190,12 @@ export function IdentitySupportScreen() {
           ) : (
             <BodyText muted>No room selected.</BodyText>
           )}
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/settings")}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/room" as never)}>
             <Row icon="settings">
               <Text style={{ color: colors.ink, fontWeight: "900" }}>Manage room</Text>
             </Row>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/settings")}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/room" as never)}>
             <Row icon="plus">
               <Text style={{ color: colors.ink, fontWeight: "900" }}>Join another room</Text>
             </Row>

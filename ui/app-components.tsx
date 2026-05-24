@@ -117,7 +117,7 @@ export function CurrentRoomHeader() {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push("/settings" as never)}
+      onPress={() => router.push("/(tabs)/room" as never)}
       style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 10 }}
     >
       <RoomImage image={group?.image} name={group?.name} size={44} />

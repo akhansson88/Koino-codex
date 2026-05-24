@@ -17,7 +17,7 @@ export default function Index() {
   }
 
   if (state.currentUserId) {
-    return <Redirect href={state.currentGroupId ? "/(tabs)" : "/(tabs)/settings"} />;
+    return <Redirect href={(state.currentGroupId ? "/(tabs)" : "/(tabs)/room") as never} />;
   }
 
   return <OnboardingScreen />;
