@@ -228,6 +228,7 @@ function versesForVersion(versionId?: BibleVersionId) {
 }
 
 function bookAliasKey(value: string) {
+  value = value.replace(/\u2019/g, "'").replace(/`/g, "'");
   return value
     .replace(/[’`]/g, "'")
     .toLowerCase()
@@ -249,6 +250,7 @@ function normalizeBibleReferenceBook(book: string) {
 }
 
 export function normalizeBibleReference(reference: string) {
+  reference = reference.replace(/[\u2013\u2014]/g, "-");
   const cleanedReference = reference.replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
   const match = cleanedReference.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
   if (!match) return cleanedReference;

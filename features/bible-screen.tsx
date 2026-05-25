@@ -295,8 +295,39 @@ function chapterLabel(position: BiblePosition) {
   return `${position.book} ${position.chapter}`;
 }
 
-function bibleTopicEndpoint(topic: string) {
-  return `/api/bible-topic?topic=${encodeURIComponent(topic)}`;
+const productionBibleTopicApiOrigin = "https://spontaneous-jalebi-46756a.netlify.app";
+
+function bibleTopicEndpoints(topic: string) {
+  const path = `/api/bible-topic?topic=${encodeURIComponent(topic)}`;
+  if (Platform.OS === "web") return [path];
+  return [`${productionBibleTopicApiOrigin}${path}`];
+}
+
+async function fetchBibleTopic(topic: string) {
+  let lastError: unknown;
+
+  for (const endpoint of bibleTopicEndpoints(topic)) {
+    try {
+      const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+      const data = (await response.json().catch(() => ({}))) as Partial<BibleTopicResult> & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || `Topic request failed with ${response.status}`);
+      }
+      if (!Array.isArray(data.references)) {
+        throw new Error("The topic response did not include Bible references.");
+      }
+      return {
+        count: typeof data.count === "number" ? data.count : data.references.length,
+        references: data.references.filter((reference): reference is string => typeof reference === "string" && reference.trim().length > 0),
+        sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
+        topic: typeof data.topic === "string" ? data.topic : topic,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Could not load this topic.");
 }
 
 function topicTitle(value: string) {
@@ -1115,22 +1146,7 @@ export function BibleScreen() {
     setTopicError(undefined);
     setTopicLoading(true);
 
-    fetch(bibleTopicEndpoint(nextTopic), { headers: { Accept: "application/json" } })
-      .then(async (response) => {
-        const data = (await response.json().catch(() => ({}))) as Partial<BibleTopicResult> & { error?: string };
-        if (!response.ok) {
-          throw new Error(data.error || `Topic request failed with ${response.status}`);
-        }
-        if (!Array.isArray(data.references)) {
-          throw new Error("The topic response did not include Bible references.");
-        }
-        return {
-          count: typeof data.count === "number" ? data.count : data.references.length,
-          references: data.references.filter((reference): reference is string => typeof reference === "string" && reference.trim().length > 0),
-          sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
-          topic: typeof data.topic === "string" ? data.topic : nextTopic,
-        };
-      })
+    void fetchBibleTopic(nextTopic)
       .then((result) => {
         if (topicRequestRef.current !== requestId) return;
         setTopicResult(result);
