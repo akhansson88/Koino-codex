@@ -6,7 +6,7 @@ import { bibleVersionFor, buildBibleVerse, kjvBooks, type BibleVersionId, verses
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
-import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VerseCard } from "@/ui/app-components";
+import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
 import { colors } from "@/ui/theme";
 
 export function BibleVerseField({
@@ -42,7 +42,7 @@ export function BibleVerseField({
           {selectedVerses.map((verse) => (
             <View key={`${verse.reference}-${verse.text}`} style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <VerseCard verse={verse} compact />
+                <VersePreviewCard verse={verse} compact />
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${verse.reference}`} onPress={() => removeVerse(verse.reference)} style={{ padding: 8 }}>
                 <Feather name="x" size={18} color={colors.olive} />
@@ -161,7 +161,7 @@ export function BibleVersePicker({
             onSelect={(value) => setEndVerse(Number(value))}
           />
         </View>
-        <VerseCard verse={preview} />
+        <VersePreviewCard verse={preview} showOpenIndicator={false} />
         <PrimaryButton disabled={!preview} icon="book-open" onPress={() => preview && onSelect(preview)}>
           Add {preview?.reference ?? "verse"}
         </PrimaryButton>

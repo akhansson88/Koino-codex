@@ -28,7 +28,7 @@ export const postTypes: { value: EntryKind; label: string; composerLabel: string
   { value: "scripture", label: "Scripture", composerLabel: "Scripture" },
 ];
 
-export const composerPostTypes = postTypes.filter((type) => type.value !== "scripture");
+export const composerPostTypes = postTypes;
 
 export const journalEntryTypes: { value: JournalEntryType; label: string; icon: "edit-3" | "heart" | "check-circle" | "sun" | "book-open" }[] = [
   { value: "reflection", label: "Reflection", icon: "edit-3" },

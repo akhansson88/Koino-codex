@@ -533,34 +533,83 @@ export function AvatarStack({ names }: { names: string[] }) {
   );
 }
 
-export function VerseCard({ verse, compact = false }: { verse?: BibleVerse; compact?: boolean }) {
+type VerseActionHandlers = {
+  onAddToJournal?: (verse: BibleVerse) => void;
+  onOpenInBible?: (verse: BibleVerse) => void;
+  onShareToRoom?: (verse: BibleVerse) => void;
+};
+
+function verseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
+  return `${verse.reference}|${verse.translation ?? ""}`;
+}
+
+export function VersePreviewCard({
+  compact = false,
+  onAddToJournal,
+  onOpenInBible,
+  onShareToRoom,
+  showOpenIndicator = true,
+  verse,
+}: VerseActionHandlers & {
+  compact?: boolean;
+  showOpenIndicator?: boolean;
+  verse?: BibleVerse;
+}) {
   const { state } = useKoino();
   const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
+  const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
+  const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
   return (
-    <View
-      style={{
-        alignItems: compact ? "flex-start" : "center",
-        backgroundColor: colors.input,
-        borderColor: colors.line,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 12,
-        padding: compact ? 12 : 14,
-      }}
-    >
-      <Ionicons name="sunny-outline" size={20} color={colors.olive} />
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>{displayVerse.text}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-          {displayVerse.reference}
-          {displayVerse.translation ? ` (${displayVerse.translation})` : ""}
-        </Text>
-      </View>
-    </View>
+    <>
+      <Pressable
+        accessibilityLabel={`Open ${displayVerse.reference}`}
+        accessibilityRole="button"
+        onPress={(event) => {
+          event.stopPropagation();
+          setDetailVisible(true);
+        }}
+        style={{
+          alignItems: compact ? "flex-start" : "center",
+          backgroundColor: colors.input,
+          borderColor: colors.line,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 12,
+          padding: compact ? 12 : 14,
+        }}
+      >
+        <Ionicons name="sunny-outline" size={20} color={colors.olive} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+            <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
+              {displayVerse.reference}
+            </Text>
+            {displayVerse.translation ? <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
+          </View>
+          <Text numberOfLines={compact ? 3 : 5} style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>
+            {displayVerse.text}
+          </Text>
+          {showOpenIndicator ? <Text style={{ color: colors.gold, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}
+        </View>
+      </Pressable>
+      <VerseDetailSheet
+        onAddToJournal={onAddToJournal}
+        onClose={() => setDetailVisible(false)}
+        onOpenInBible={onOpenInBible}
+        onShareToRoom={onShareToRoom}
+        saved={saved}
+        verse={displayVerse}
+        visible={detailVisible}
+      />
+    </>
   );
+}
+
+export function VerseCard(props: Parameters<typeof VersePreviewCard>[0]) {
+  return <VersePreviewCard {...props} />;
 }
 
 export function bibleVerses(verse?: BibleVerse, verses?: BibleVerse[]) {
@@ -568,15 +617,130 @@ export function bibleVerses(verse?: BibleVerse, verses?: BibleVerse[]) {
   return verse ? [verse] : [];
 }
 
-export function VerseList({ verse, verses, compact = false }: { verse?: BibleVerse; verses?: BibleVerse[]; compact?: boolean }) {
+export function VerseList({
+  compact = false,
+  onAddToJournal,
+  onOpenInBible,
+  onShareToRoom,
+  verse,
+  verses,
+}: VerseActionHandlers & { verse?: BibleVerse; verses?: BibleVerse[]; compact?: boolean }) {
   const visibleVerses = bibleVerses(verse, verses);
   if (visibleVerses.length === 0) return null;
   return (
     <View style={{ gap: 8 }}>
       {visibleVerses.map((item) => (
-        <VerseCard key={`${item.reference}-${item.text}`} verse={item} compact={compact} />
+        <VersePreviewCard
+          key={`${item.reference}-${item.text}`}
+          compact={compact}
+          onAddToJournal={onAddToJournal}
+          onOpenInBible={onOpenInBible}
+          onShareToRoom={onShareToRoom}
+          verse={item}
+        />
       ))}
     </View>
+  );
+}
+
+export function VerseDetailSheet({
+  onAddToJournal,
+  onClose,
+  onOpenInBible,
+  onShareToRoom,
+  saved,
+  verse,
+  visible,
+}: VerseActionHandlers & {
+  onClose: () => void;
+  saved?: boolean;
+  verse?: BibleVerse;
+  visible: boolean;
+}) {
+  const { dispatch } = useKoino();
+  const [busy, setBusy] = useState(false);
+  if (!verse) return null;
+  const currentVerse = verse;
+
+  async function saveVerse() {
+    if (busy) return;
+    setBusy(true);
+    await dispatch({ type: "saveVerse", verse: currentVerse });
+    setBusy(false);
+  }
+
+  async function addToJournal() {
+    if (onAddToJournal) {
+      onClose();
+      onAddToJournal(currentVerse);
+      return;
+    }
+    await dispatch({
+      type: "createJournalEntry",
+      body: `Scripture note for ${currentVerse.reference}.`,
+      entryKind: "scripture",
+      journalType: "scripture_note",
+      title: currentVerse.reference,
+      verse: currentVerse,
+      verses: [currentVerse],
+      shareWithGroup: false,
+    });
+    onClose();
+  }
+
+  async function shareToRoom() {
+    if (onShareToRoom) {
+      onClose();
+      onShareToRoom(currentVerse);
+      return;
+    }
+    await dispatch({
+      type: "createPost",
+      body: "A Scripture for today.",
+      kind: "scripture",
+      title: currentVerse.reference,
+      verse: currentVerse,
+      verses: [currentVerse],
+    });
+    onClose();
+  }
+
+  function openInBible() {
+    onClose();
+    if (onOpenInBible) {
+      onOpenInBible(currentVerse);
+      return;
+    }
+    router.push("/(tabs)/bible" as never);
+  }
+
+  return (
+    <BottomSheet title={verse.reference} visible={visible} onClose={onClose}>
+      <View style={{ gap: 6 }}>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900" }}>{verse.translation ?? "Bible"}</Text>
+        <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "800", lineHeight: 26 }}>
+          {verse.text}
+        </Text>
+      </View>
+      {verse.contextBefore || verse.contextAfter ? (
+        <Card style={{ backgroundColor: colors.cream }}>
+          {verse.contextBefore ? <BodyText muted>{verse.contextBefore}</BodyText> : null}
+          {verse.contextAfter ? <BodyText muted>{verse.contextAfter}</BodyText> : null}
+        </Card>
+      ) : null}
+      <PrimaryButton disabled={busy || saved} icon="bookmark" onPress={saveVerse}>
+        {saved ? "Saved verse" : "Save verse"}
+      </PrimaryButton>
+      <SecondaryButton icon="book-open" onPress={addToJournal}>
+        Add to Journal
+      </SecondaryButton>
+      <SecondaryButton icon="users" onPress={shareToRoom}>
+        Share to Room
+      </SecondaryButton>
+      <SecondaryButton icon="corner-up-right" onPress={openInBible}>
+        Open in Bible
+      </SecondaryButton>
+    </BottomSheet>
   );
 }
 

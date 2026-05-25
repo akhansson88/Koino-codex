@@ -39,10 +39,25 @@ export type Membership = {
   createdAt: string;
 };
 
-export type BibleVerse = {
+export type ScriptureReference = {
+  id?: Id;
+  book?: string;
+  chapter?: number;
+  startVerse?: number;
+  endVerse?: number;
+  referenceText?: string;
   reference: string;
   text: string;
   translation?: string;
+  contextBefore?: string;
+  contextAfter?: string;
+};
+
+export type BibleVerse = ScriptureReference;
+
+export type SavedVerse = ScriptureReference & {
+  id: Id;
+  savedAt: string;
 };
 
 export type EntryKind = "reflection" | "prayer_request" | "praise" | "update" | "scripture";
@@ -167,6 +182,7 @@ export type KoinoState = {
   replies: Reply[];
   commentReactions: CommentReaction[];
   journalEntries: JournalEntry[];
+  savedVerses: SavedVerse[];
   supportIntents: SupportIntent[];
 };
 

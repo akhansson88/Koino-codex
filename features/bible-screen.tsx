@@ -4,7 +4,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-au
 import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
-import { useNavigation } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -30,6 +30,7 @@ import {
   bibleChapterVerses,
   bibleCrossReferences,
   bibleVerseFromReference,
+  buildBibleVerse,
   bibleVersionFor,
   bibleVersions,
   type BibleCrossReference,
@@ -46,10 +47,12 @@ import {
 } from "@/features/bible-kjv";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
-import { BodyText, Card, IconButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
+import { visibility, type EntryVisibility } from "@/state/product";
+import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
 import { openLinkInApp } from "@/ui/open-link";
+import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
-import type { BibleVerse } from "@/state/types";
+import type { BibleVerse, EntryKind, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -382,7 +385,7 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 }
 
 export function BibleScreen() {
-  const { state } = useKoino();
+  const { state, dispatch } = useKoino();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -438,6 +441,13 @@ export function BibleScreen() {
   const [topicResult, setTopicResult] = useState<BibleTopicResult | undefined>();
   const [topicError, setTopicError] = useState<string | undefined>();
   const [topicLoading, setTopicLoading] = useState(false);
+  const [scriptureComposerVisible, setScriptureComposerVisible] = useState(false);
+  const [scriptureComposerContext, setScriptureComposerContext] = useState<"journal" | "room">("journal");
+  const [scriptureComposerKind, setScriptureComposerKind] = useState<EntryKind>("scripture");
+  const [scriptureComposerVisibility, setScriptureComposerVisibility] = useState<EntryVisibility>(visibility.private);
+  const [scriptureComposerTitle, setScriptureComposerTitle] = useState("");
+  const [scriptureComposerBody, setScriptureComposerBody] = useState("");
+  const [scriptureComposerVerses, setScriptureComposerVerses] = useState<BibleVerse[]>([]);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
@@ -489,7 +499,8 @@ export function BibleScreen() {
               ? "Complete the voice service prompt, then playback will continue."
             : bridgeReady
               ? `Ready to listen from ${referenceLabel(audioPosition)}`
-              : "Loading voice service...";
+            : "Loading voice service...";
+  const group = state.groups.find((item) => item.id === state.currentGroupId);
 
   useEffect(() => {
     positionRef.current = position;
@@ -1052,7 +1063,38 @@ export function BibleScreen() {
     setSelectedVersePosition(nextPosition);
   }, []);
 
+  const verseForPosition = useCallback(
+    (target?: BiblePosition) => {
+      if (!target) return undefined;
+      return buildBibleVerse(target.book, target.chapter, target.verse, target.verse, bibleVersionId);
+    },
+    [bibleVersionId],
+  );
+
+  const openScriptureComposer = useCallback((context: "journal" | "room", kind: EntryKind, verse: BibleVerse, body = "") => {
+    setScriptureComposerContext(context);
+    setScriptureComposerKind(kind);
+    setScriptureComposerVisibility(context === "room" ? visibility.room : visibility.private);
+    setScriptureComposerTitle(verse.reference);
+    setScriptureComposerBody(body);
+    setScriptureComposerVerses([verse]);
+    setScriptureComposerVisible(true);
+  }, []);
+
+  const openVerseInReader = useCallback(
+    (verse: BibleVerse) => {
+      const match = /^(.+?)\s+(\d+):(\d+)/.exec(verse.reference);
+      if (!match) {
+        router.push("/(tabs)/bible" as never);
+        return;
+      }
+      jumpToPosition({ book: match[1], chapter: Number(match[2]), verse: Number(match[3]) });
+    },
+    [jumpToPosition],
+  );
+
   const handleVerseAction = useCallback((action: "pray" | "journal" | "save" | "share" | "references") => {
+    const selectedVerse = verseForPosition(selectedVersePosition);
     if (action === "references") {
       if (selectedVersePosition) {
         setCrossReferencePosition(selectedVersePosition);
@@ -1060,9 +1102,54 @@ export function BibleScreen() {
       setSelectedVersePosition(undefined);
       return;
     }
-    // TODO: Wire these calm response actions into prayer, journal, saved-verse, and room-sharing flows.
+    if (!selectedVerse) {
+      setSelectedVersePosition(undefined);
+      return;
+    }
+    if (action === "save") {
+      void dispatch({ type: "saveVerse", verse: selectedVerse });
+    }
+    if (action === "journal") {
+      openScriptureComposer("journal", "scripture", selectedVerse);
+    }
+    if (action === "share") {
+      openScriptureComposer("room", "scripture", selectedVerse, "A Scripture for today.");
+    }
+    if (action === "pray") {
+      openScriptureComposer("journal", "prayer_request", selectedVerse, "Praying with this Scripture.");
+    }
     setSelectedVersePosition(undefined);
-  }, [selectedVersePosition]);
+  }, [dispatch, openScriptureComposer, selectedVersePosition, verseForPosition]);
+
+  async function submitScriptureComposer() {
+    if (!scriptureComposerBody.trim()) return;
+    const verse = scriptureComposerVerses[0];
+    if (scriptureComposerVisibility === visibility.room) {
+      await dispatch({
+        type: "createPost",
+        body: scriptureComposerBody,
+        kind: scriptureComposerKind,
+        title: scriptureComposerTitle,
+        verse,
+        verses: scriptureComposerVerses,
+      });
+    } else {
+      await dispatch({
+        type: "createJournalEntry",
+        body: scriptureComposerBody,
+        entryKind: scriptureComposerKind,
+        journalType: scriptureComposerKind === "prayer_request" ? "prayer" : scriptureComposerKind === "scripture" ? "scripture_note" : "reflection",
+        title: scriptureComposerTitle,
+        verse,
+        verses: scriptureComposerVerses,
+        shareWithGroup: false,
+      });
+    }
+    setScriptureComposerVisible(false);
+    setScriptureComposerBody("");
+    setScriptureComposerTitle("");
+    setScriptureComposerVerses([]);
+  }
 
   const handleReflectionAction = useCallback((_action: "journal" | "pray" | "save") => {
     // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
@@ -1224,6 +1311,15 @@ export function BibleScreen() {
             value={reflectionText}
           />
 
+          <SavedVersesSection
+            onAddToJournal={(verse) => openScriptureComposer("journal", "scripture", verse)}
+            onOpenInBible={openVerseInReader}
+            onRemove={(id) => dispatch({ type: "removeSavedVerse", id })}
+            onShareToRoom={(verse) => openScriptureComposer("room", "scripture", verse, "A Scripture for today.")}
+            palette={readerPalette}
+            verses={state.savedVerses}
+          />
+
           <NextChapterCard
             nextChapter={nextChapter}
             onPress={() => nextChapter && jumpToPosition(nextChapter)}
@@ -1305,6 +1401,24 @@ export function BibleScreen() {
         references={topicResult?.references ?? []}
         topic={selectedTopic}
         visible={topicDetailVisible}
+      />
+      <SharedComposer
+        visible={scriptureComposerVisible}
+        context={scriptureComposerContext}
+        kind={scriptureComposerKind}
+        entryVisibility={scriptureComposerVisibility}
+        title={scriptureComposerTitle}
+        body={scriptureComposerBody}
+        verses={scriptureComposerVerses}
+        onKind={setScriptureComposerKind}
+        onVisibility={setScriptureComposerVisibility}
+        onTitle={setScriptureComposerTitle}
+        onBody={setScriptureComposerBody}
+        onVerses={setScriptureComposerVerses}
+        onClose={() => setScriptureComposerVisible(false)}
+        onSubmit={submitScriptureComposer}
+        roomName={group?.name}
+        roomImage={group?.image}
       />
       <AudioVoicePicker
         onClose={() => setVoicePickerVisible(false)}
@@ -2466,6 +2580,62 @@ function SmallPillButton({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function SavedVersesSection({
+  onAddToJournal,
+  onOpenInBible,
+  onRemove,
+  onShareToRoom,
+  palette,
+  verses,
+}: {
+  onAddToJournal: (verse: BibleVerse) => void;
+  onOpenInBible: (verse: BibleVerse) => void;
+  onRemove: (id: string) => void;
+  onShareToRoom: (verse: BibleVerse) => void;
+  palette: ReaderPalette;
+  verses: SavedVerse[];
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: palette.surface,
+        borderColor: palette.line,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        gap: 12,
+        padding: 16,
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+        <Text style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>Saved verses</Text>
+        <Feather name="bookmark" size={18} color={palette.accent} />
+      </View>
+      {verses.length === 0 ? (
+        <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>
+          No saved verses yet. Save a verse to return to it later.
+        </Text>
+      ) : (
+        verses.slice(0, 5).map((verse) => (
+          <View key={verse.id} style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <VersePreviewCard
+                compact
+                onAddToJournal={onAddToJournal}
+                onOpenInBible={onOpenInBible}
+                onShareToRoom={onShareToRoom}
+                verse={verse}
+              />
+            </View>
+            <Pressable accessibilityLabel={`Remove ${verse.reference}`} accessibilityRole="button" onPress={() => onRemove(verse.id)} style={{ padding: 8 }}>
+              <Feather name="trash-2" size={18} color={colors.danger} />
+            </Pressable>
+          </View>
+        ))
+      )}
+    </View>
   );
 }
 

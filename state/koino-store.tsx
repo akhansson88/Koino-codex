@@ -24,6 +24,7 @@ import {
   PrayerReaction,
   PrayerSession,
   Reply,
+  SavedVerse,
   SupportIntent,
   User,
   HeartMood,
@@ -104,6 +105,8 @@ type Action =
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
   | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
   | { type: "deleteJournalEntry"; id: Id }
+  | { type: "saveVerse"; verse: BibleVerse }
+  | { type: "removeSavedVerse"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
 
@@ -144,6 +147,14 @@ function asArray<T extends { id: string }>(value: unknown): T[] {
 function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[] }) {
   if (action.verses?.length) return action.verses.slice(0, 5);
   return action.verse ? [action.verse] : [];
+}
+
+function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
+  return `${verse.reference}_${verse.translation ?? "default"}`
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function authMessage(error: unknown) {
@@ -366,6 +377,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [replies, setReplies] = useState<Reply[]>([]);
   const [commentReactions, setCommentReactions] = useState<CommentReaction[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
   const [theme, setTheme] = useState<ThemeName>("light");
@@ -391,6 +403,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setReplies([]);
     setCommentReactions([]);
     setJournalEntries([]);
+    setSavedVerses([]);
     setSupportIntents([]);
   }, []);
 
@@ -546,12 +559,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
     const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
+    const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     const unsubs = [
       onValue(journalRef, (snapshot) => setJournalEntries(asArray<JournalEntry>(snapshot.val()))),
       onValue(privateCheckInsRef, (snapshot) => setPrivateCheckIns(asArray<CheckIn>(snapshot.val()))),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
+      onValue(savedVersesRef, (snapshot) => setSavedVerses(asArray<SavedVerse>(snapshot.val()).sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt)))),
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
@@ -617,6 +632,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       replies,
       commentReactions,
       journalEntries,
+      savedVerses,
       supportIntents,
     };
   }, [
@@ -638,6 +654,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     profile,
     profileReady,
     replies,
+    savedVerses,
     supportIntents,
     userGroupsReady,
   ]);
@@ -1156,6 +1173,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
 
               await update(ref(database), updates);
+              return;
+            }
+            case "saveVerse": {
+              if (!firebaseUser) return;
+              const key = savedVerseId(action.verse);
+              if (!key) return;
+              const savedVerse: SavedVerse = {
+                ...action.verse,
+                id: key,
+                referenceText: action.verse.referenceText ?? action.verse.reference,
+                savedAt: now(),
+              };
+              await set(ref(database, `savedVerses/${firebaseUser.uid}/${key}`), savedVerse);
+              return;
+            }
+            case "removeSavedVerse": {
+              if (!firebaseUser) return;
+              await remove(ref(database, `savedVerses/${firebaseUser.uid}/${action.id}`));
               return;
             }
             case "createSupportIntent": {

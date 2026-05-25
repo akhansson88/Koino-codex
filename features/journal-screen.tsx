@@ -105,14 +105,14 @@ export function JournalScreen() {
     return [...privateEntries, ...sharedCheckIns].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   }, [state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries]);
 
-  function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private) {
+  function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
     const kind = composerKindForJournalType(type);
     setJournalType(type);
     setEntryKind(kind);
     setEntryVisibility(share);
-    setTitle("");
-    setBody("");
-    setVerses([]);
+    setTitle(attachedVerse ? attachedVerse.reference : "");
+    setBody(initialBody);
+    setVerses(attachedVerse ? [attachedVerse] : []);
     setEditingEntry(undefined);
     setComposerVisible(true);
   }
@@ -226,6 +226,8 @@ export function JournalScreen() {
               userImage={user?.image}
               onOpen={() => router.push(`/journal/${entry.id}` as never)}
               onEdit={() => editEntry(entry)}
+              onAddToJournal={(verse) => beginEntry("scripture_note", visibility.private, verse)}
+              onShareToRoom={(verse) => beginEntry("scripture_note", visibility.room, verse, "A Scripture for today.")}
               onDelete={() =>
                 confirmAction({
                   title: "Delete entry?",
@@ -293,14 +295,18 @@ function JournalEntryCard({
   entry,
   onDelete,
   onEdit,
+  onAddToJournal,
   onOpen,
+  onShareToRoom,
   userImage,
   userName,
 }: {
   entry: DisplayEntry;
   onDelete: () => void;
   onEdit: () => void;
+  onAddToJournal: (verse: BibleVerse) => void;
   onOpen: () => void;
+  onShareToRoom: (verse: BibleVerse) => void;
   userImage?: JournalEntry["verse"] extends never ? never : Parameters<typeof Avatar>[0]["image"];
   userName: string;
 }) {
@@ -327,7 +333,7 @@ function JournalEntryCard({
         </Text>
         <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>{entry.body}</ExpandableBodyText>
         {mood ? <BodyText muted>{mood}</BodyText> : null}
-        <VerseList verse={entry.verse} verses={entry.verses} compact />
+        <VerseList verse={entry.verse} verses={entry.verses} compact onAddToJournal={onAddToJournal} onShareToRoom={onShareToRoom} />
       </Pressable>
       <LinkPreview text={entry.body} />
       {entry.isSharedCheckIn ? null : (

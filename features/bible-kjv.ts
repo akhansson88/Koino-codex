@@ -435,7 +435,12 @@ export function buildBibleVerse(book: string, chapter: number, startVerse: numbe
   }
 
   return {
+    book: normalizedBook,
+    chapter,
+    endVerse: lastVerse,
     reference: `${normalizedBook} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
+    referenceText: `${normalizedBook} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
+    startVerse: firstVerse,
     text: parts.join(" "),
     translation: version.translation,
   };
@@ -449,7 +454,8 @@ export function bibleVerseFromReference(reference: string, versionId?: BibleVers
 }
 
 export function bibleVerseForVersion(verse: BibleVerse, versionId?: BibleVersionId): BibleVerse {
-  return bibleVerseFromReference(verse.reference, versionId) ?? verse;
+  const resolved = bibleVerseFromReference(verse.reference, versionId);
+  return resolved ? { ...verse, ...resolved, id: verse.id } : verse;
 }
 
 export function buildKjvVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse): BibleVerse | undefined {
