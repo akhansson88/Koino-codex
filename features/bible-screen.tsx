@@ -5,8 +5,9 @@ import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import { useNavigation } from "expo-router";
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -28,6 +29,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import {
   bibleChapterVerses,
   bibleCrossReferences,
+  bibleVerseFromReference,
   bibleVersionFor,
   bibleVersions,
   type BibleCrossReference,
@@ -47,6 +49,9 @@ import { useKoino } from "@/state/koino-store";
 import { BodyText, Card, IconButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
 import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius } from "@/ui/theme";
+import type { BibleVerse } from "@/state/types";
+
+type FeatherName = ComponentProps<typeof Feather>["name"];
 
 const readerFonts = [
   { id: "serif", label: "Serif" },
@@ -108,6 +113,30 @@ type PendingAudioTransfer = {
   chunks: string[];
   totalChunks: number;
 };
+
+type BibleTopicResult = {
+  count: number;
+  references: string[];
+  sourceUrl: string;
+  topic: string;
+};
+
+type SuggestedTopic = {
+  icon: FeatherName;
+  title: string;
+  subtitle: string;
+  tone: "peach" | "green" | "rose" | "blue";
+};
+
+const suggestedTopics: SuggestedTopic[] = [
+  { icon: "cloud-rain", title: "Anxiety", subtitle: "God's peace in the middle of worry", tone: "peach" },
+  { icon: "sunrise", title: "Hope", subtitle: "God's promises for your future", tone: "green" },
+  { icon: "heart", title: "Forgiveness", subtitle: "Freedom through God's grace", tone: "rose" },
+  { icon: "user", title: "Identity", subtitle: "Who you are in Christ", tone: "peach" },
+  { icon: "users", title: "Loneliness", subtitle: "God is with you", tone: "green" },
+  { icon: "compass", title: "Purpose", subtitle: "Living with meaning", tone: "rose" },
+  { icon: "message-circle", title: "Prayer", subtitle: "How to talk with God", tone: "peach" },
+];
 
 const defaultPosition = normalizeBiblePosition({ book: "John", chapter: 3, verse: 1 });
 const defaultFontId: BibleReaderFontId = "serif";
@@ -266,6 +295,18 @@ function chapterLabel(position: BiblePosition) {
   return `${position.book} ${position.chapter}`;
 }
 
+function bibleTopicEndpoint(topic: string) {
+  return `/api/bible-topic?topic=${encodeURIComponent(topic)}`;
+}
+
+function topicTitle(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
 function isChapterSwipeGesture(dx: number, dy: number) {
   return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
 }
@@ -362,6 +403,7 @@ export function BibleScreen() {
   const audioPositionRef = useRef<BiblePosition>(defaultPosition);
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const topicRequestRef = useRef(0);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
@@ -390,6 +432,12 @@ export function BibleScreen() {
   const [puterTokenModalVisible, setPuterTokenModalVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [crossReferencePosition, setCrossReferencePosition] = useState<BiblePosition | undefined>();
+  const [topicsVisible, setTopicsVisible] = useState(false);
+  const [topicDetailVisible, setTopicDetailVisible] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [topicResult, setTopicResult] = useState<BibleTopicResult | undefined>();
+  const [topicError, setTopicError] = useState<string | undefined>();
+  const [topicLoading, setTopicLoading] = useState(false);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
@@ -1055,6 +1103,56 @@ export function BibleScreen() {
     };
   }, [audioPlayer, cleanupAudioFile, clearAudioPrepareTimeout]);
 
+  const openTopic = useCallback((topic: string) => {
+    const nextTopic = topic.trim();
+    if (!nextTopic) return;
+
+    const requestId = topicRequestRef.current + 1;
+    topicRequestRef.current = requestId;
+    setSelectedTopic(nextTopic);
+    setTopicDetailVisible(true);
+    setTopicResult(undefined);
+    setTopicError(undefined);
+    setTopicLoading(true);
+
+    fetch(bibleTopicEndpoint(nextTopic), { headers: { Accept: "application/json" } })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as Partial<BibleTopicResult> & { error?: string };
+        if (!response.ok) {
+          throw new Error(data.error || `Topic request failed with ${response.status}`);
+        }
+        if (!Array.isArray(data.references)) {
+          throw new Error("The topic response did not include Bible references.");
+        }
+        return {
+          count: typeof data.count === "number" ? data.count : data.references.length,
+          references: data.references.filter((reference): reference is string => typeof reference === "string" && reference.trim().length > 0),
+          sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
+          topic: typeof data.topic === "string" ? data.topic : nextTopic,
+        };
+      })
+      .then((result) => {
+        if (topicRequestRef.current !== requestId) return;
+        setTopicResult(result);
+      })
+      .catch((error: unknown) => {
+        if (topicRequestRef.current !== requestId) return;
+        setTopicError(error instanceof Error ? error.message : "Could not load this topic.");
+      })
+      .finally(() => {
+        if (topicRequestRef.current === requestId) {
+          setTopicLoading(false);
+        }
+      });
+  }, []);
+
+  function closeTopics() {
+    topicRequestRef.current += 1;
+    setTopicsVisible(false);
+    setTopicDetailVisible(false);
+    setTopicLoading(false);
+  }
+
   function changeFontSize(delta: number) {
     setFontSize((current) => normalizeFontSize(current + delta));
   }
@@ -1078,6 +1176,7 @@ export function BibleScreen() {
         onBack={handleReaderBack}
         onOpenPicker={() => setPickerVisible(true)}
         onOpenSettings={() => setSettingsVisible(true)}
+        onOpenTopics={() => setTopicsVisible(true)}
         palette={readerPalette}
         subtitle={bibleVersion.label}
         title={chapterLabel(position)}
@@ -1194,6 +1293,19 @@ export function BibleScreen() {
         versionLabel={bibleVersion.label}
         visible={pickerVisible}
       />
+      <BibleTopicsModal onClose={closeTopics} onSelectTopic={openTopic} palette={readerPalette} visible={topicsVisible} />
+      <BibleTopicDetailModal
+        bibleVersionId={bibleVersionId}
+        bibleVersionLabel={bibleVersion.label}
+        error={topicError}
+        loading={topicLoading}
+        onBack={() => setTopicDetailVisible(false)}
+        onClose={closeTopics}
+        palette={readerPalette}
+        references={topicResult?.references ?? []}
+        topic={selectedTopic}
+        visible={topicDetailVisible}
+      />
       <AudioVoicePicker
         onClose={() => setVoicePickerVisible(false)}
         onSelect={chooseAudioVoice}
@@ -1231,7 +1343,7 @@ function ReaderCircleButton({
 }: {
   accessibilityLabel: string;
   disabled?: boolean;
-  icon?: "arrow-left" | "book-open" | "chevron-down" | "volume-2" | "x" | "chevron-up";
+  icon?: FeatherName;
   onPress: () => void;
   palette: ReaderPalette;
   text?: string;
@@ -1271,6 +1383,7 @@ function BibleReaderHeader({
   onBack,
   onOpenPicker,
   onOpenSettings,
+  onOpenTopics,
   palette,
   subtitle,
   title,
@@ -1284,6 +1397,7 @@ function BibleReaderHeader({
   onBack: () => void;
   onOpenPicker: () => void;
   onOpenSettings: () => void;
+  onOpenTopics: () => void;
   palette: ReaderPalette;
   subtitle: string;
   title: string;
@@ -1307,7 +1421,7 @@ function BibleReaderHeader({
           accessibilityLabel="Choose Bible chapter"
           accessibilityRole="button"
           onPress={onOpenPicker}
-          style={{ alignItems: "center", left: 96, paddingHorizontal: 8, position: "absolute", right: 96, top: 7 }}
+          style={{ alignItems: "center", left: 58, paddingHorizontal: 8, position: "absolute", right: 150, top: 7 }}
         >
           <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
             <Text numberOfLines={1} style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>
@@ -1328,9 +1442,355 @@ function BibleReaderHeader({
             onPress={onAudioPress}
             palette={palette}
           />
+          <ReaderCircleButton accessibilityLabel="Open Bible topics" icon="hash" onPress={onOpenTopics} palette={palette} />
           <ReaderCircleButton accessibilityLabel="Open reading settings" onPress={onOpenSettings} palette={palette} text="Aa" />
         </View>
       </View>
+    </View>
+  );
+}
+
+function BibleTopicsModal({
+  onClose,
+  onSelectTopic,
+  palette,
+  visible,
+}: {
+  onClose: () => void;
+  onSelectTopic: (topic: string) => void;
+  palette: ReaderPalette;
+  visible: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!visible) {
+      setQuery("");
+    }
+  }, [visible]);
+
+  function submitSearch() {
+    const topic = query.trim();
+    if (topic) {
+      onSelectTopic(topic);
+    }
+  }
+
+  return (
+    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
+      <View style={{ backgroundColor: palette.background, flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            alignItems: "center",
+            gap: 22,
+            paddingBottom: Math.max(30, insets.bottom + 24),
+            paddingHorizontal: 20,
+            paddingTop: insets.top + 14,
+          }}
+        >
+          <View style={{ alignItems: "center", maxWidth: 430, minHeight: 56, width: "100%" }}>
+            <View style={{ position: "absolute", right: 0, top: 0 }}>
+              <ReaderCircleButton accessibilityLabel="Close Bible topics" icon="x" onPress={onClose} palette={palette} />
+            </View>
+          </View>
+
+          <View style={{ alignItems: "center", gap: 8, maxWidth: 430, width: "100%" }}>
+            <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900", textAlign: "center" }}>Explore Scripture by topic</Text>
+            <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19, maxWidth: 240, textAlign: "center" }}>
+              Find verses for what you are walking through.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: palette.surface,
+              borderColor: palette.line,
+              borderCurve: "continuous",
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 10,
+              maxWidth: 430,
+              minHeight: 50,
+              paddingHorizontal: 14,
+              width: "100%",
+              ...platformShadow({
+                boxShadow: "0 8px 20px rgba(11, 18, 32, 0.045)",
+                color: palette.shadow,
+                offset: { width: 0, height: 8 },
+                opacity: 0.045,
+                radius: 18,
+              }),
+            }}
+          >
+            <Feather name="search" size={16} color={palette.muted} />
+            <TextInput
+              autoCapitalize="words"
+              autoCorrect
+              onChangeText={setQuery}
+              onSubmitEditing={submitSearch}
+              placeholder="Search topics..."
+              placeholderTextColor={palette.muted}
+              returnKeyType="search"
+              style={{ color: palette.text, flex: 1, fontSize: 14, fontWeight: "700", minHeight: 48, paddingVertical: 0 }}
+              value={query}
+            />
+          </View>
+
+          <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
+            <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>Suggested topics</Text>
+            <View
+              style={{
+                backgroundColor: palette.surface,
+                borderColor: palette.line,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                overflow: "hidden",
+                ...platformShadow({
+                  boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+                  color: palette.shadow,
+                  offset: { width: 0, height: 10 },
+                  opacity: 0.055,
+                  radius: 24,
+                }),
+              }}
+            >
+              {suggestedTopics.map((topic, index) => (
+                <SuggestedTopicRow
+                  key={topic.title}
+                  onPress={() => onSelectTopic(topic.title)}
+                  palette={palette}
+                  showDivider={index < suggestedTopics.length - 1}
+                  topic={topic}
+                />
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function SuggestedTopicRow({
+  onPress,
+  palette,
+  showDivider,
+  topic,
+}: {
+  onPress: () => void;
+  palette: ReaderPalette;
+  showDivider: boolean;
+  topic: SuggestedTopic;
+}) {
+  const tone = {
+    blue: { background: "#E7EEF7", color: "#365778" },
+    green: { background: "#E7F1DD", color: "#58712D" },
+    peach: { background: "#FFF0E5", color: "#A45118" },
+    rose: { background: "#FCEDE8", color: "#B35A48" },
+  }[topic.tone];
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        borderBottomColor: showDivider ? palette.line : "transparent",
+        borderBottomWidth: 1,
+        flexDirection: "row",
+        gap: 12,
+        minHeight: 68,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: tone.background,
+          borderRadius: 999,
+          height: 38,
+          justifyContent: "center",
+          width: 38,
+        }}
+      >
+        <Feather name={topic.icon} size={17} color={tone.color} />
+      </View>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
+          {topic.title}
+        </Text>
+        <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "700" }}>
+          {topic.subtitle}
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={17} color={palette.muted} />
+    </Pressable>
+  );
+}
+
+function BibleTopicDetailModal({
+  bibleVersionId,
+  bibleVersionLabel,
+  error,
+  loading,
+  onBack,
+  onClose,
+  palette,
+  references,
+  topic,
+  visible,
+}: {
+  bibleVersionId: BibleVersionId;
+  bibleVersionLabel: string;
+  error?: string;
+  loading: boolean;
+  onBack: () => void;
+  onClose: () => void;
+  palette: ReaderPalette;
+  references: string[];
+  topic: string;
+  visible: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const resolvedVerses = useMemo(
+    () =>
+      references.map((reference) => ({
+        reference,
+        verse: bibleVerseFromReference(reference, bibleVersionId),
+      })),
+    [bibleVersionId, references],
+  );
+  const title = topicTitle(topic || "Topic");
+
+  return (
+    <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
+      <View style={{ backgroundColor: palette.background, flex: 1 }}>
+        <View
+          style={{
+            alignItems: "center",
+            borderBottomColor: palette.line,
+            borderBottomWidth: 1,
+            flexDirection: "row",
+            gap: 12,
+            paddingBottom: 14,
+            paddingHorizontal: 18,
+            paddingTop: insets.top + 12,
+          }}
+        >
+          <ReaderCircleButton accessibilityLabel="Back to Bible topics" icon="arrow-left" onPress={onBack} palette={palette} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text numberOfLines={1} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>
+              {title}
+            </Text>
+            <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>
+              {loading ? "Searching OpenBible..." : `${references.length} references - ${bibleVersionLabel}`}
+            </Text>
+          </View>
+          <ReaderCircleButton accessibilityLabel="Close Bible topics" icon="x" onPress={onClose} palette={palette} />
+        </View>
+
+        <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            alignSelf: "center",
+            gap: 12,
+            maxWidth: 720,
+            paddingBottom: Math.max(32, insets.bottom + 24),
+            paddingHorizontal: 18,
+            paddingTop: 18,
+            width: "100%",
+          }}
+        >
+          {loading ? (
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: palette.surface,
+                borderColor: palette.line,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                gap: 12,
+                padding: 22,
+              }}
+            >
+              <ActivityIndicator color={palette.accent} />
+              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "800" }}>Searching for {title.toLowerCase()} verses...</Text>
+            </View>
+          ) : error ? (
+            <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, gap: 8, padding: 16 }}>
+              <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>Could not load this topic</Text>
+              <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
+                {error}
+              </Text>
+            </View>
+          ) : resolvedVerses.length > 0 ? (
+            resolvedVerses.map((item, index) => <TopicVerseCard key={`${item.reference}-${index}`} bibleVersionLabel={bibleVersionLabel} item={item} palette={palette} />)
+          ) : (
+            <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
+              <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "800", lineHeight: 20 }}>No Bible references were found for this topic.</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function TopicVerseCard({
+  bibleVersionLabel,
+  item,
+  palette,
+}: {
+  bibleVersionLabel: string;
+  item: { reference: string; verse?: BibleVerse };
+  palette: ReaderPalette;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: palette.surface,
+        borderColor: palette.line,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        gap: 9,
+        padding: 15,
+        ...platformShadow({
+          boxShadow: "0 8px 20px rgba(11, 18, 32, 0.045)",
+          color: palette.shadow,
+          offset: { width: 0, height: 8 },
+          opacity: 0.045,
+          radius: 18,
+        }),
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+        <View style={{ alignItems: "center", backgroundColor: palette.peach, borderRadius: 999, height: 28, justifyContent: "center", width: 28 }}>
+          <Feather name="book-open" size={14} color={palette.accent} />
+        </View>
+        <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
+          {item.reference}
+        </Text>
+      </View>
+      {item.verse ? (
+        <>
+          <Text selectable style={{ color: palette.text, fontSize: 16, fontWeight: "500", lineHeight: 25 }}>
+            {item.verse.text}
+          </Text>
+          <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{item.verse.translation ?? bibleVersionLabel}</Text>
+        </>
+      ) : (
+        <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
+          This reference is not available in {bibleVersionLabel} yet.
+        </Text>
+      )}
     </View>
   );
 }

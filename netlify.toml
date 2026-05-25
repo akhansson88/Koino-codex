@@ -6,6 +6,11 @@
   directory = "netlify/functions"
 
 [[redirects]]
+  from = "/api/bible-topic"
+  to = "/.netlify/functions/bible-topic"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

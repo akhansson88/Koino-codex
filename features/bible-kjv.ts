@@ -84,6 +84,7 @@ const osisBookByName: Record<string, string> = {
   Psalms: "Ps",
   Proverbs: "Prov",
   Ecclesiastes: "Eccl",
+  "Solomon's Song": "Song",
   "Song of Solomon": "Song",
   Isaiah: "Isa",
   Jeremiah: "Jer",
@@ -151,7 +152,7 @@ const sv1917BookNameMap: BookNameMap = {
   Habackuk: "Habakkuk",
   Hesekiel: "Ezekiel",
   Hosea: "Hosea",
-  "Höga Visan": "Song of Solomon",
+  "Höga Visan": "Solomon's Song",
   "Jakobs' brev": "James",
   Jeremia: "Jeremiah",
   Jesaja: "Isaiah",
@@ -224,6 +225,36 @@ function cleanVerseText(value: string) {
 
 function versesForVersion(versionId?: BibleVersionId) {
   return bibleVersionFor(versionId).verses;
+}
+
+function bookAliasKey(value: string) {
+  return value
+    .replace(/[’`]/g, "'")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+const bibleBookAliases = new Map<string, string>([
+  ...kjvBooks.map((book) => [bookAliasKey(book.name), book.name] as const),
+  ["psalm", "Psalms"],
+  ["psalms", "Psalms"],
+  ["songofsolomon", "Solomon's Song"],
+  ["songofsongs", "Solomon's Song"],
+  ["solomonssong", "Solomon's Song"],
+  ["canticles", "Solomon's Song"],
+]);
+
+function normalizeBibleReferenceBook(book: string) {
+  return bibleBookAliases.get(bookAliasKey(book)) ?? book.trim();
+}
+
+export function normalizeBibleReference(reference: string) {
+  const cleanedReference = reference.replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
+  const match = cleanedReference.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+  if (!match) return cleanedReference;
+
+  const book = normalizeBibleReferenceBook(match[1]);
+  return `${book} ${Number(match[2])}:${Number(match[3])}${match[4] ? `-${Number(match[4])}` : ""}`;
 }
 
 function crossReferenceKey(position: BiblePosition) {
@@ -334,7 +365,8 @@ export function bibleCrossReferences(position: BiblePosition, versionId?: BibleV
 }
 
 export function normalizeBiblePosition(position?: Partial<BiblePosition> | null): BiblePosition {
-  const book = kjvBooks.find((item) => item.name === position?.book) ?? defaultBook;
+  const normalizedBookName = typeof position?.book === "string" ? normalizeBibleReferenceBook(position.book) : undefined;
+  const book = kjvBooks.find((item) => item.name === normalizedBookName) ?? defaultBook;
   const chapter = book.chapters.includes(Number(position?.chapter)) ? Number(position?.chapter) : book.chapters[0] ?? 1;
   const verses = versesForChapter(book.name, chapter);
   const verse = verses.includes(Number(position?.verse)) ? Number(position?.verse) : verses[0] ?? 1;
@@ -389,6 +421,7 @@ export function nextBibleChapter(bookName: string, chapter: number): BiblePositi
 }
 
 export function buildBibleVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse, versionId?: BibleVersionId): BibleVerse | undefined {
+  const normalizedBook = normalizeBibleReferenceBook(book);
   const firstVerse = Math.min(startVerse, endVerse);
   const lastVerse = Math.max(startVerse, endVerse);
   const version = bibleVersionFor(versionId);
@@ -396,20 +429,20 @@ export function buildBibleVerse(book: string, chapter: number, startVerse: numbe
   const parts: string[] = [];
 
   for (let verse = firstVerse; verse <= lastVerse; verse += 1) {
-    const text = verseMap[`${book} ${chapter}:${verse}`];
+    const text = verseMap[`${normalizedBook} ${chapter}:${verse}`];
     if (!text) return undefined;
     parts.push(cleanVerseText(text));
   }
 
   return {
-    reference: `${book} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
+    reference: `${normalizedBook} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
     text: parts.join(" "),
     translation: version.translation,
   };
 }
 
 export function bibleVerseFromReference(reference: string, versionId?: BibleVersionId): BibleVerse | undefined {
-  const match = reference.match(/^(.+) (\d+):(\d+)(?:-(\d+))?$/);
+  const match = normalizeBibleReference(reference).match(/^(.+) (\d+):(\d+)(?:-(\d+))?$/);
   if (!match) return undefined;
 
   return buildBibleVerse(match[1], Number(match[2]), Number(match[3]), match[4] ? Number(match[4]) : Number(match[3]), versionId);
