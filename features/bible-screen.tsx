@@ -438,6 +438,7 @@ export function BibleScreen() {
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const topicRequestRef = useRef(0);
+  const chapterSwipeStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
@@ -1186,22 +1187,31 @@ export function BibleScreen() {
     // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
   }, []);
 
-  const chapterSwipeResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => isChapterSwipeGesture(gesture.dx, gesture.dy),
-        onMoveShouldSetPanResponderCapture: (_event, gesture) => isChapterSwipeGesture(gesture.dx, gesture.dy),
-        onPanResponderRelease: (_event, gesture) => {
-          if (Math.abs(gesture.dx) < 74 || Math.abs(gesture.dy) > 48) return;
-          if (gesture.dx < 0 && nextChapter) {
-            jumpToPosition(nextChapter);
-            return;
-          }
-          if (gesture.dx > 0 && previousChapter) {
-            jumpToPosition(previousChapter);
-          }
-        },
-      }),
+  const handleChapterTouchStart = useCallback((event: { nativeEvent: { pageX?: number; pageY?: number } }) => {
+    const { pageX, pageY } = event.nativeEvent;
+    if (typeof pageX !== "number" || typeof pageY !== "number") return;
+    chapterSwipeStartRef.current = { x: pageX, y: pageY };
+  }, []);
+
+  const handleChapterTouchEnd = useCallback(
+    (event: { nativeEvent: { pageX?: number; pageY?: number } }) => {
+      const start = chapterSwipeStartRef.current;
+      chapterSwipeStartRef.current = undefined;
+      const { pageX, pageY } = event.nativeEvent;
+      if (!start || typeof pageX !== "number" || typeof pageY !== "number") return;
+
+      const dx = pageX - start.x;
+      const dy = pageY - start.y;
+      if (!isChapterSwipeGesture(dx, dy)) return;
+
+      if (dx < 0 && nextChapter) {
+        jumpToPosition(nextChapter);
+        return;
+      }
+      if (dx > 0 && previousChapter) {
+        jumpToPosition(previousChapter);
+      }
+    },
     [jumpToPosition, nextChapter, previousChapter],
   );
 
@@ -1288,10 +1298,11 @@ export function BibleScreen() {
 
       <ScrollView
         ref={scrollRef}
-        {...chapterSwipeResponder.panHandlers}
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         onScroll={handleScroll}
+        onTouchEnd={handleChapterTouchEnd}
+        onTouchStart={handleChapterTouchStart}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
