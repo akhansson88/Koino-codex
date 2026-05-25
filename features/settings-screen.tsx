@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Image, Platform, Pressable, Share, Text, View } from "react-native";
 
@@ -101,7 +101,7 @@ function defaultTitle(item: FeedItem) {
 
 export function SettingsScreen() {
   const { state, dispatch } = useKoino();
-  const [roomView, setRoomView] = useState<RoomView>("rooms");
+  const [roomView, setRoomView] = useState<RoomView>("detail");
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("feed");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
@@ -173,6 +173,13 @@ export function SettingsScreen() {
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
   const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
+
+  useFocusEffect(
+    useCallback(() => {
+      setRoomView("detail");
+      setDetailTab("feed");
+    }, []),
+  );
 
   function openComposer(kind: EntryKind = "reflection") {
     setComposerKind(kind);
@@ -374,28 +381,33 @@ export function SettingsScreen() {
     router.replace("/");
   }
 
+  function openRoomOverview() {
+    setRoomView("rooms");
+    setJoinSheetVisible(false);
+    setManageSheetVisible(false);
+  }
+
   if (roomView === "detail" && group) {
     return (
       <>
         <AppScreen>
-          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingTop: 18 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back to my room"
-              onPress={() => setRoomView("rooms")}
-              style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}
-            >
-              <Feather name="arrow-left" size={18} color={colors.ink} />
-            </Pressable>
-            <Feather name="more-horizontal" size={22} color={colors.ink} />
-          </View>
-
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingTop: 18 }}>
             <RoomImage image={group.image} name={group.name} size={52} />
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 3 }}>
               <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
               <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open room options"
+              onPress={openRoomOverview}
+              style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}
+            >
+              <Feather name="more-horizontal" size={20} color={colors.ink} />
+            </Pressable>
+          </View>
+
+          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "flex-end" }}>
             <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 14 }}>
               New
             </PrimaryButton>
@@ -500,6 +512,7 @@ export function SettingsScreen() {
                 setCurrentGroupName(group.name);
                 setManageSheetVisible(true);
               }}
+              onSwitchRoom={openRoomOverview}
             />
           ) : null}
         </AppScreen>
@@ -521,6 +534,63 @@ export function SettingsScreen() {
           roomName={group.name}
           roomImage={group.image}
         />
+        <BottomSheet title="Manage room" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
+          <Card style={{ gap: 0, padding: 0 }}>
+            <View style={{ paddingHorizontal: 14 }}>
+              <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename room</Text>
+                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Room name" style={{ marginTop: 8 }} />
+                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your room</Text> : null}
+              </Row>
+            </View>
+            <View style={{ backgroundColor: colors.line, height: 1 }} />
+            <View style={{ paddingHorizontal: 14 }}>
+              <Row icon="image" onPress={ownsGroup ? handleChooseRoomImage : undefined}>
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                  <RoomImage image={group.image} name={group.name} size={42} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group.image ? "Change room image" : "Add room image"}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new room image" : "Only the owner can change this"}</Text>
+                  </View>
+                </View>
+              </Row>
+            </View>
+            {group.image ? (
+              <>
+                <View style={{ backgroundColor: colors.line, height: 1 }} />
+                <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
+                  <Row icon="trash-2" tone="danger">
+                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room image</Text>
+                    <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
+                  </Row>
+                </Pressable>
+              </>
+            ) : null}
+            <View style={{ backgroundColor: colors.line, height: 1 }} />
+            <View style={{ paddingHorizontal: 14 }}>
+              <Row icon="user" onPress={() => undefined}>
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Hand over ownership to another member</Text>
+              </Row>
+            </View>
+            <View style={{ backgroundColor: colors.line, height: 1 }} />
+            <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
+              <Row icon="log-out">
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave room</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this room</Text>
+              </Row>
+            </Pressable>
+            <View style={{ backgroundColor: colors.line, height: 1 }} />
+            <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
+              <Row icon="trash-2" tone="danger">
+                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room</Text>
+                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this room</Text>
+              </Row>
+            </Pressable>
+          </Card>
+          <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
+        </BottomSheet>
+        <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
       </>
     );
   }
@@ -595,7 +665,11 @@ export function SettingsScreen() {
               <Pressable
                 accessibilityRole="button"
                 key={room.id}
-                onPress={() => dispatch({ type: "switchGroup", id: room.id })}
+                onPress={() => {
+                  dispatch({ type: "switchGroup", id: room.id });
+                  setDetailTab("feed");
+                  setRoomView("detail");
+                }}
                 style={{
                   alignItems: "center",
                   borderBottomColor: colors.line,
@@ -894,12 +968,14 @@ function AboutRoomPanel({
   memberships,
   onInvite,
   onManage,
+  onSwitchRoom,
 }: {
   group: Group;
   memberCount: number;
   memberships: Membership[];
   onInvite: () => void;
   onManage: () => void;
+  onSwitchRoom: () => void;
 }) {
   return (
     <View style={{ gap: 12 }}>
@@ -940,6 +1016,9 @@ function AboutRoomPanel({
       </Card>
       <SecondaryButton icon="settings" onPress={onManage}>
         Manage room
+      </SecondaryButton>
+      <SecondaryButton icon="repeat" onPress={onSwitchRoom}>
+        Switch or join room
       </SecondaryButton>
     </View>
   );
