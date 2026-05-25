@@ -1410,18 +1410,19 @@ function BibleReaderHeader({
         paddingBottom: 10,
         paddingHorizontal: 18,
         paddingTop: topInset + 10,
+        position: "relative",
+        zIndex: 20,
       }}
     >
-      <View style={{ height: 54, justifyContent: "center" }}>
-        <View style={{ left: 0, position: "absolute", top: 6 }}>
-          <ReaderCircleButton accessibilityLabel={leftLabel} icon={leftIcon} onPress={onBack} palette={palette} />
-        </View>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: 54 }}>
+        <ReaderCircleButton accessibilityLabel={leftLabel} icon={leftIcon} onPress={onBack} palette={palette} />
 
         <Pressable
           accessibilityLabel="Choose Bible chapter"
           accessibilityRole="button"
+          hitSlop={10}
           onPress={onOpenPicker}
-          style={{ alignItems: "center", left: 58, paddingHorizontal: 8, position: "absolute", right: 150, top: 7 }}
+          style={{ alignItems: "center", flex: 1, minWidth: 0, paddingHorizontal: 4 }}
         >
           <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
             <Text numberOfLines={1} style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>
@@ -1434,7 +1435,7 @@ function BibleReaderHeader({
           </Text>
         </Pressable>
 
-        <View style={{ flexDirection: "row", gap: 8, position: "absolute", right: 0, top: 6 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <ReaderCircleButton
             accessibilityLabel={audioActive ? "Pause audio Bible" : "Play audio Bible"}
             disabled={audioDisabled}
