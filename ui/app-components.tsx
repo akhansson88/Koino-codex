@@ -9,6 +9,8 @@ import { bibleVerseForVersion } from "@/features/bible-kjv";
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
+import { splitLinkText } from "@/ui/link-utils";
+import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -587,9 +589,30 @@ export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: 
 }
 
 export function BodyText({ children, muted = false, style, ...props }: PropsWithChildren<TextProps & { muted?: boolean; style?: StyleProp<TextStyle> }>) {
+  const content =
+    typeof children === "string"
+      ? splitLinkText(children).map((part, index) =>
+          part.url ? (
+            <Text
+              accessibilityRole="link"
+              key={`${part.url}-${index}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                void openLinkInApp(part.url ?? "");
+              }}
+              style={{ color: muted ? colors.olive : colors.gold, fontWeight: "900", textDecorationLine: "underline" }}
+            >
+              {part.text}
+            </Text>
+          ) : (
+            part.text
+          ),
+        )
+      : children;
+
   return (
     <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
-      {children}
+      {content}
     </Text>
   );
 }

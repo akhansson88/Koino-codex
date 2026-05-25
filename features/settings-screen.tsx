@@ -33,7 +33,9 @@ import {
 } from "@/ui/app-components";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
+import { LinkPreview } from "@/ui/link-preview";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
+import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors } from "@/ui/theme";
@@ -488,12 +490,7 @@ export function SettingsScreen() {
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Room code</Text>
-                  <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-                    <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
-                      {group.inviteCode}
-                    </Text>
-                    <Feather name="copy" size={16} color={colors.muted} />
-                  </View>
+                  <RoomCodeCopy code={group.inviteCode} />
                 </View>
                 <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
                   Invite
@@ -707,6 +704,7 @@ function RoomFeedCard({
         </Text>
         <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>{item.body || "No words today, just presence."}</ExpandableBodyText>
       </Pressable>
+      <LinkPreview text={item.body} />
 
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <SecondaryButton icon="heart" onPress={onAction} style={{ flex: 1 }}>

@@ -4,7 +4,6 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-au
 import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
-import * as WebBrowser from "expo-web-browser";
 import { useNavigation } from "expo-router";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -46,6 +45,7 @@ import {
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import { BodyText, Card, IconButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
+import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 const readerFonts = [
@@ -898,7 +898,7 @@ export function BibleScreen() {
   );
 
   const openPuterDashboard = useCallback(async () => {
-    await WebBrowser.openBrowserAsync(puterDashboardUrl);
+    await openLinkInApp(puterDashboardUrl);
   }, []);
 
   const savePuterAuthToken = useCallback(async () => {

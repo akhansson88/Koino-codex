@@ -20,6 +20,7 @@ import {
 } from "@/ui/app-components";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
+import { LinkPreview } from "@/ui/link-preview";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors } from "@/ui/theme";
@@ -173,6 +174,7 @@ export function JournalScreen() {
                 <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>{entry.body}</ExpandableBodyText>
                 <VerseList verse={entry.verse} verses={entry.verses} compact />
               </Pressable>
+              <LinkPreview text={entry.body} />
               {entry.isSharedCheckIn ? null : (
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                   <SecondaryButton icon="edit-2" onPress={() => editEntry(entry)} style={{ flex: 1 }}>

@@ -7,6 +7,7 @@ import { useKoino } from "@/state/koino-store";
 import { actionLabels, entryKindLabel } from "@/state/product";
 import type { EntryKind } from "@/state/types";
 import { AppScreen, Avatar, BodyText, Card, IconButton, PrimaryButton, RoomImage, SectionHeading, VerseList } from "@/ui/app-components";
+import { LinkPreview } from "@/ui/link-preview";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
@@ -77,6 +78,7 @@ export function JournalDetailScreen() {
       <View style={{ gap: 12 }}>
         <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>{entry.title || entryKindLabel(entry.entryKind)}</Text>
         <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{entry.body}</BodyText>
+        <LinkPreview text={entry.body} />
       </View>
       <VerseList verse={entry.verse} verses={entry.verses} />
       <View style={{ gap: 8 }}>

@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Linking, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { useKoino } from "@/state/koino-store";
@@ -20,7 +19,9 @@ import {
   SecondaryButton,
 } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
+import { openLinkInApp } from "@/ui/open-link";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
+import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { colors } from "@/ui/theme";
 
 function memberLabel(count: number) {
@@ -182,8 +183,7 @@ export function IdentitySupportScreen() {
               </View>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
                 <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Room code</Text>
-                <Text selectable style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{group.inviteCode}</Text>
-                <Feather name="copy" size={15} color={colors.muted} />
+                <RoomCodeCopy code={group.inviteCode} fontSize={14} iconSize={15} />
               </View>
               <PrimaryButton icon="share-2" onPress={() => undefined}>Invite button</PrimaryButton>
             </>
@@ -208,7 +208,7 @@ export function IdentitySupportScreen() {
         <Card>
           <Row icon="heart">
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Support KOINO</Text>
-            <BodyText muted>KOINO is supported by voluntary giving. Payments happen securely outside the app.</BodyText>
+            <BodyText muted>KOINO is supported by voluntary giving. Payments open inside the app.</BodyText>
           </Row>
           <FilterChips
             value={amount}
@@ -225,10 +225,10 @@ export function IdentitySupportScreen() {
             onPress={() => {
               const resolvedAmount = Number(amount === "custom" ? "50" : amount);
               dispatch({ type: "createSupportIntent", amount: resolvedAmount });
-              Linking.openURL("https://example.com/koino-support").catch(() => undefined);
+              openLinkInApp("https://example.com/koino-support").catch(() => undefined);
             }}
           >
-            Continue externally
+            Continue
           </PrimaryButton>
         </Card>
         <Card style={{ gap: 0, padding: 0 }}>

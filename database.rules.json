@@ -532,7 +532,7 @@
         ".read": "auth != null && auth.uid == $uid",
         "$entryId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('entryKind').exists() || newData.child('entryKind').val() == 'reflection' || newData.child('entryKind').val() == 'prayer_request' || newData.child('entryKind').val() == 'praise' || newData.child('entryKind').val() == 'update') && (!newData.child('mood').exists() || newData.child('mood').isNumber()) && (!newData.child('sharedPostId').exists() || newData.child('sharedPostId').isString()) && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))) && (!newData.child('verses').exists() || newData.child('verses').hasChild('0')))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('title').exists() || newData.child('title').isString()) && (!newData.child('entryKind').exists() || newData.child('entryKind').val() == 'reflection' || newData.child('entryKind').val() == 'prayer_request' || newData.child('entryKind').val() == 'praise' || newData.child('entryKind').val() == 'update') && (!newData.child('mood').exists() || newData.child('mood').isNumber()) && (!newData.child('sharedPostId').exists() || newData.child('sharedPostId').isString()) && (!newData.child('verse').exists() || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))) && (!newData.child('verses').exists() || newData.child('verses').hasChild('0')))",
           "id": {
             ".validate": "newData.val() == $entryId"
           },
@@ -541,6 +541,9 @@
           },
           "body": {
             ".validate": "newData.isString()"
+          },
+          "title": {
+            ".validate": "newData.val() == null || newData.isString()"
           },
           "images": {
             "$imageIndex": {
@@ -597,7 +600,7 @@
             ".validate": "newData.isString()"
           },
           "$other": {
-            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'body' || $other == 'images' || $other == 'source' || $other == 'entryKind' || $other == 'mood' || $other == 'verse' || $other == 'verses' || $other == 'sharedPostId' || $other == 'createdAt' || $other == 'updatedAt'"
+            ".validate": "newData.val() == null || $other == 'id' || $other == 'userId' || $other == 'body' || $other == 'title' || $other == 'images' || $other == 'source' || $other == 'entryKind' || $other == 'mood' || $other == 'verse' || $other == 'verses' || $other == 'sharedPostId' || $other == 'createdAt' || $other == 'updatedAt'"
           }
         }
       }

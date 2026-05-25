@@ -35,6 +35,7 @@ import {
 } from "@/ui/app-components";
 import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
+import { LinkPreview } from "@/ui/link-preview";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
@@ -223,6 +224,7 @@ function FeedPostCard({
             {item.body || "No words today, just presence."}
           </ExpandableBodyText>
         </Pressable>
+        <LinkPreview text={item.body} />
 
         <VerseList verse={item.verse} verses={item.verses} compact />
 
@@ -452,6 +454,7 @@ export function HomeScreen() {
                 {openPrayer.type === "post" ? openPrayer.title || defaultTitle(openPrayer) : defaultTitle(openPrayer)}
               </Text>
               <BodyText muted numberOfLines={2}>{openPrayer.body}</BodyText>
+              <LinkPreview text={openPrayer.body} />
               <PrimaryButton icon="heart" onPress={() => {
                 const prayer = itemPrayerState(openPrayer);
                 setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });

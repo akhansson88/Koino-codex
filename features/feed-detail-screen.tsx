@@ -26,6 +26,7 @@ import {
   TextInputField,
   VerseList,
 } from "@/ui/app-components";
+import { LinkPreview } from "@/ui/link-preview";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
@@ -205,6 +206,7 @@ export function FeedDetailScreen() {
             {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
           </Text>
           <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{item.body || "No words today, just presence."}</BodyText>
+          <LinkPreview text={item.body} />
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
         <PrimaryButton icon="heart" onPress={togglePrayer} style={{ minHeight: 58 }}>
@@ -247,6 +249,7 @@ export function FeedDetailScreen() {
                     ) : null}
                   </View>
                   <BodyText>{reply.body}</BodyText>
+                  <LinkPreview text={reply.body} />
                 </View>
               ))
             )}
