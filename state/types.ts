@@ -45,7 +45,7 @@ export type BibleVerse = {
   translation?: string;
 };
 
-export type EntryKind = "reflection" | "prayer_request" | "praise" | "update";
+export type EntryKind = "reflection" | "prayer_request" | "praise" | "update" | "scripture";
 
 export type CheckIn = {
   id: Id;

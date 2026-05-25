@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Modal, Pressable, Text, View } from "react-native";
 
-import { EntryVisibility, postTypes, visibility } from "@/state/product";
+import { EntryVisibility, composerPostTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
@@ -75,7 +75,7 @@ export function SharedComposer({
           <FilterChips
             value={kind}
             onChange={onKind}
-            options={postTypes.map((type) => ({ label: type.composerLabel, value: type.value }))}
+            options={composerPostTypes.map((type) => ({ label: type.composerLabel, value: type.value }))}
           />
         </View>
 
