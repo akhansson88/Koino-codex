@@ -17,6 +17,7 @@ import {
   Group,
   Id,
   JournalEntry,
+  JournalEntryType,
   KoinoState,
   Membership,
   Post,
@@ -25,6 +26,7 @@ import {
   Reply,
   SupportIntent,
   User,
+  HeartMood,
 } from "@/state/types";
 
 
@@ -86,7 +88,7 @@ type Action =
   | { type: "uploadUserAvatar"; localUri: string }
   | { type: "deleteUserAvatar" }
   | { type: "deleteGroup"; id: Id }
-  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
   | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
@@ -99,8 +101,8 @@ type Action =
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
   | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
-  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
+  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
+  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
@@ -873,10 +875,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   const entry: JournalEntry = {
                     id: id("journal"),
                     userId: firebaseUser.uid,
+                    journalType: "heart_checkin",
                     body: action.reflectionText.trim() || "Private check-in",
                     source: "private_check_in",
                     entryKind: "reflection",
                     mood: action.mood,
+                    ...(action.heartMood ? { heartMood: action.heartMood } : {}),
+                    isPrivate: true,
                     ...(verses[0] ? { verse: verses[0], verses } : {}),
                     createdAt: timestamp,
                     updatedAt: timestamp,
@@ -1086,10 +1091,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const entry: JournalEntry = {
                 id: id("journal"),
                 userId: firebaseUser.uid,
+                journalType: action.journalType ?? (action.entryKind === "prayer_request" ? "prayer" : action.entryKind === "praise" ? "answered_prayer" : action.entryKind === "scripture" ? "scripture_note" : "reflection"),
                 ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                 body: action.body.trim(),
                 source: "manual",
                 entryKind: action.entryKind ?? "reflection",
+                ...(action.heartMood ? { heartMood: action.heartMood } : {}),
+                isPrivate: !postId,
                 ...(verses[0] ? { verse: verses[0], verses } : {}),
                 ...(postId ? { sharedPostId: postId } : {}),
                 createdAt: timestamp,
@@ -1121,6 +1129,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 body: action.body.trim(),
                 title: action.title?.trim() || null,
                 entryKind: action.entryKind ?? null,
+                journalType: action.journalType ?? null,
+                heartMood: action.heartMood ?? null,
                 verse: actionVerses(action)[0] ?? null,
                 verses: actionVerses(action).length ? actionVerses(action) : null,
                 sharedPostId: action.sharedPostId ?? null,

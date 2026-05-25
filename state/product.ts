@@ -1,4 +1,4 @@
-import type { EntryKind, FeedItem } from "@/state/types";
+import type { EntryKind, FeedItem, HeartMood, JournalEntry, JournalEntryType } from "@/state/types";
 
 export const tabs = ["Bible", "Today", "Journal", "Room"] as const;
 
@@ -29,6 +29,41 @@ export const postTypes: { value: EntryKind; label: string; composerLabel: string
 ];
 
 export const composerPostTypes = postTypes.filter((type) => type.value !== "scripture");
+
+export const journalEntryTypes: { value: JournalEntryType; label: string; icon: "edit-3" | "heart" | "check-circle" | "sun" | "book-open" }[] = [
+  { value: "reflection", label: "Reflection", icon: "edit-3" },
+  { value: "prayer", label: "Prayer", icon: "heart" },
+  { value: "answered_prayer", label: "Answered prayer", icon: "check-circle" },
+  { value: "heart_checkin", label: "Heart check-in", icon: "sun" },
+  { value: "scripture_note", label: "Scripture note", icon: "book-open" },
+];
+
+export const heartMoods: { value: HeartMood; label: string; description: string; icon: "sun" | "heart" | "cloud" | "wind" | "trending-up" | "moon" }[] = [
+  { value: "peaceful", label: "Peaceful", description: "Calm and at rest", icon: "sun" },
+  { value: "grateful", label: "Grateful", description: "Thankful for God's goodness", icon: "heart" },
+  { value: "heavy", label: "Heavy", description: "Carrying some burden", icon: "cloud" },
+  { value: "anxious", label: "Anxious", description: "Needing God's peace", icon: "wind" },
+  { value: "hopeful", label: "Hopeful", description: "Looking forward with trust", icon: "trending-up" },
+  { value: "tired", label: "Tired", description: "Physically or emotionally worn", icon: "moon" },
+];
+
+export function journalEntryTypeFor(entry: Pick<JournalEntry, "journalType" | "entryKind" | "source">): JournalEntryType {
+  if (entry.journalType) return entry.journalType;
+  if (entry.source === "private_check_in") return "heart_checkin";
+  if (entry.entryKind === "prayer_request") return "prayer";
+  if (entry.entryKind === "praise") return "answered_prayer";
+  if (entry.entryKind === "scripture") return "scripture_note";
+  return "reflection";
+}
+
+export function journalEntryTypeLabel(entry: Pick<JournalEntry, "journalType" | "entryKind" | "source">) {
+  const type = journalEntryTypeFor(entry);
+  return journalEntryTypes.find((item) => item.value === type)?.label ?? "Reflection";
+}
+
+export function heartMoodLabel(value?: HeartMood) {
+  return heartMoods.find((mood) => mood.value === value)?.label;
+}
 
 export const postTypeLabels = {
   reflection: "Reflection",

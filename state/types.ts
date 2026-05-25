@@ -46,6 +46,8 @@ export type BibleVerse = {
 };
 
 export type EntryKind = "reflection" | "prayer_request" | "praise" | "update" | "scripture";
+export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
+export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
 
 export type CheckIn = {
   id: Id;
@@ -118,15 +120,19 @@ export type CommentReaction = {
 export type JournalEntry = {
   id: Id;
   userId: Id;
+  journalType?: JournalEntryType;
   title?: string;
   body: string;
   images?: string[];
   source: "manual" | "private_check_in";
   entryKind?: EntryKind;
   mood?: number;
+  heartMood?: HeartMood;
   verse?: BibleVerse;
   verses?: BibleVerse[];
   sharedPostId?: Id;
+  linkedPrayerRequestId?: Id;
+  isPrivate?: boolean;
   createdAt: string;
   updatedAt: string;
 };

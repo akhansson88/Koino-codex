@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Modal, Pressable, Text, View } from "react-native";
 
-import { EntryVisibility, composerPostTypes, visibility } from "@/state/product";
+import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
@@ -9,9 +9,13 @@ import { colors } from "@/ui/theme";
 
 const MAX_BODY_LENGTH = 500;
 
-function primaryActionLabel(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean) {
+function primaryActionLabel(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
   if (editing) return "Update entry";
   if (context === "room" || entryVisibility === visibility.room) return "Post entry";
+  if (context === "journal" && kind === "prayer_request") return "Save prayer";
+  if (context === "journal" && kind === "praise") return "Save answered prayer";
+  if (context === "journal" && kind === "scripture") return "Save Scripture note";
+  if (context === "journal") return "Save reflection";
   return "Save entry";
 }
 
@@ -59,8 +63,9 @@ export function SharedComposer({
   visible: boolean;
 }) {
   const showVisibility = context !== "room";
-  const actionLabel = primaryActionLabel(context, entryVisibility, editing);
+  const actionLabel = primaryActionLabel(context, entryVisibility, editing, kind);
   const activeRoomName = roomName ?? "Room";
+  const typeOptions = context === "journal" ? postTypes : composerPostTypes;
 
   return (
     <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
@@ -75,14 +80,14 @@ export function SharedComposer({
           <FilterChips
             value={kind}
             onChange={onKind}
-            options={composerPostTypes.map((type) => ({ label: type.composerLabel, value: type.value }))}
+            options={typeOptions.map((type) => ({ label: type.composerLabel, value: type.value }))}
           />
         </View>
 
         <TextInputField
           value={title}
           onChangeText={onTitle}
-          placeholder={kind === "prayer_request" ? "Please pray for..." : "Title (optional)"}
+          placeholder={kind === "prayer_request" ? "Prayer title (optional)" : kind === "praise" ? "Answered prayer title" : kind === "scripture" ? "Scripture note title" : "Title (optional)"}
         />
 
         <View style={{ gap: 8 }}>
@@ -91,7 +96,7 @@ export function SharedComposer({
             maxLength={MAX_BODY_LENGTH}
             value={body}
             onChangeText={(value) => onBody(value.slice(0, MAX_BODY_LENGTH))}
-            placeholder={kind === "prayer_request" ? "Share the prayer request..." : "Share, reflect, or write one honest sentence..."}
+            placeholder={kind === "prayer_request" ? "Write your prayer..." : kind === "praise" ? "How did God answer?" : kind === "scripture" ? "What is this Scripture stirring in you?" : "Share, reflect, or write one honest sentence..."}
             style={{ minHeight: 170 }}
           />
           <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>
