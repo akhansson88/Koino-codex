@@ -12,6 +12,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build": "expo export --platform web",
+    "deploy:preview": "npm run build && netlify deploy --dir dist --functions netlify/functions",
+    "deploy:netlify": "npm run build && netlify deploy --prod --dir dist --functions netlify/functions",
     "typecheck": "tsc --noEmit",
     "video:studio": "remotion studio remotion/src/index.ts",
     "video:render": "remotion render remotion/src/index.ts KoinoLaunchTeaser out/koino-launch-teaser.mp4",
