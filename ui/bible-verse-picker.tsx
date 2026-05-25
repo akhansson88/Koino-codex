@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
-import { buildKjvVerse, kjvBooks, versesForChapter } from "@/features/bible-kjv";
+import { bibleVersionFor, buildBibleVerse, kjvBooks, type BibleVersionId, versesForChapter } from "@/features/bible-kjv";
+import { usePreferredBibleVersion } from "@/features/bible-preferences";
+import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
 import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VerseCard } from "@/ui/app-components";
 import { colors } from "@/ui/theme";
@@ -14,6 +16,8 @@ export function BibleVerseField({
   onChange: (verses: BibleVerse[]) => void;
   verses: BibleVerse[];
 }) {
+  const { state } = useKoino();
+  const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [pickerVisible, setPickerVisible] = useState(false);
   const selectedVerses = verses.slice(0, 5);
   const canAddVerse = selectedVerses.length < 5;
@@ -61,6 +65,7 @@ export function BibleVerseField({
       ) : null}
       {canAddVerse ? (
         <BibleVersePicker
+          bibleVersionId={preferredBibleVersion}
           visible={pickerVisible}
           onBack={() => setPickerVisible(false)}
           onSelect={(nextVerse) => {
@@ -83,10 +88,12 @@ export function primaryBibleVerse(verses: BibleVerse[]) {
 }
 
 export function BibleVersePicker({
+  bibleVersionId,
   onBack,
   onSelect,
   visible,
 }: {
+  bibleVersionId: BibleVersionId;
   onBack: () => void;
   onSelect: (verse: BibleVerse) => void;
   visible: boolean;
@@ -101,7 +108,8 @@ export function BibleVersePicker({
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? firstBook;
   const chapterVerses = versesForChapter(selectedBook, selectedChapter);
   const selectableBooks = kjvBooks.filter((item) => item.name.toLowerCase().includes(bookQuery.trim().toLowerCase()));
-  const preview = buildKjvVerse(selectedBook, selectedChapter, startVerse, endVerse);
+  const bibleVersion = bibleVersionFor(bibleVersionId);
+  const preview = buildBibleVerse(selectedBook, selectedChapter, startVerse, endVerse, bibleVersionId);
 
   function chooseBook(name: string) {
     const nextBook = kjvBooks.find((item) => item.name === name);
@@ -129,7 +137,7 @@ export function BibleVersePicker({
     <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Choose a KJV verse</Text>
+          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Choose a {bibleVersion.label} verse</Text>
           <IconButton accessibilityLabel="Close verse picker" icon="x" onPress={onBack} />
         </View>
         <TextInputField value={bookQuery} onChangeText={setBookQuery} placeholder="Search books" />

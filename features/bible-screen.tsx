@@ -43,6 +43,7 @@ import {
   previousBibleChapter,
   versesForChapter,
 } from "@/features/bible-kjv";
+import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import { BodyText, Card, IconButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
 import { colors, platformShadow, radius } from "@/ui/theme";
@@ -109,7 +110,6 @@ type PendingAudioTransfer = {
 };
 
 const defaultPosition = normalizeBiblePosition({ book: "John", chapter: 3, verse: 1 });
-const defaultBibleVersionId: BibleVersionId = "sv1917";
 const defaultFontId: BibleReaderFontId = "serif";
 const defaultFontSize = 18;
 const defaultReaderTheme: BibleReaderThemeId = "light";
@@ -133,10 +133,6 @@ const fallbackAudioVoices: AudioVoice[] = [
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Deep narration" },
   { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", description: "Measured tone" },
 ];
-
-function readerStorageKey(userId?: string) {
-  return userId ? `koino.bibleReader.${userId}` : undefined;
-}
 
 function puterTokenStorageKey(userId?: string) {
   return userId ? `koino.puterAuthToken.${userId}` : "koino.puterAuthToken";
@@ -268,6 +264,10 @@ function referenceLabel(position: BiblePosition) {
 
 function chapterLabel(position: BiblePosition) {
   return `${position.book} ${position.chapter}`;
+}
+
+function isChapterSwipeGesture(dx: number, dy: number) {
+  return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
 }
 
 type ReaderPalette = {
@@ -525,6 +525,7 @@ export function BibleScreen() {
         showTemporaryHighlight(nextPreferences.position);
         setAudioVoice(normalizeStoredVoice(nextPreferences.audioVoiceId, nextPreferences.audioVoiceName));
         setBibleVersionId(nextPreferences.bibleVersionId);
+        notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
         setFontSize(nextPreferences.fontSize);
         setReaderTheme(nextPreferences.readerTheme);
@@ -723,6 +724,7 @@ export function BibleScreen() {
   const chooseBibleVersion = useCallback(
     (nextVersionId: BibleVersionId) => {
       setBibleVersionId(nextVersionId);
+      notifyBibleVersionPreferenceChanged(nextVersionId);
       if (audioPlaybackState === "playing" || audioPlaybackState === "preparing" || audioPlaybackState === "paused") {
         stopAudioPlayback("idle");
       }
@@ -1021,7 +1023,8 @@ export function BibleScreen() {
   const chapterSwipeResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 44 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.8,
+        onMoveShouldSetPanResponder: (_event, gesture) => isChapterSwipeGesture(gesture.dx, gesture.dy),
+        onMoveShouldSetPanResponderCapture: (_event, gesture) => isChapterSwipeGesture(gesture.dx, gesture.dy),
         onPanResponderRelease: (_event, gesture) => {
           if (Math.abs(gesture.dx) < 74 || Math.abs(gesture.dy) > 48) return;
           if (gesture.dx < 0 && nextChapter) {

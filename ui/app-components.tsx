@@ -5,6 +5,8 @@ import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, Scro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 
+import { bibleVerseForVersion } from "@/features/bible-kjv";
+import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
 import { colors, platformShadow, radius } from "@/ui/theme";
@@ -530,7 +532,10 @@ export function AvatarStack({ names }: { names: string[] }) {
 }
 
 export function VerseCard({ verse, compact = false }: { verse?: BibleVerse; compact?: boolean }) {
+  const { state } = useKoino();
+  const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   if (!verse) return null;
+  const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   return (
     <View
       style={{
@@ -546,8 +551,11 @@ export function VerseCard({ verse, compact = false }: { verse?: BibleVerse; comp
     >
       <Ionicons name="sunny-outline" size={20} color={colors.olive} />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>{verse.text}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{verse.reference}</Text>
+        <Text style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>{displayVerse.text}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+          {displayVerse.reference}
+          {displayVerse.translation ? ` (${displayVerse.translation})` : ""}
+        </Text>
       </View>
     </View>
   );

@@ -406,6 +406,17 @@ export function buildBibleVerse(book: string, chapter: number, startVerse: numbe
   };
 }
 
+export function bibleVerseFromReference(reference: string, versionId?: BibleVersionId): BibleVerse | undefined {
+  const match = reference.match(/^(.+) (\d+):(\d+)(?:-(\d+))?$/);
+  if (!match) return undefined;
+
+  return buildBibleVerse(match[1], Number(match[2]), Number(match[3]), match[4] ? Number(match[4]) : Number(match[3]), versionId);
+}
+
+export function bibleVerseForVersion(verse: BibleVerse, versionId?: BibleVersionId): BibleVerse {
+  return bibleVerseFromReference(verse.reference, versionId) ?? verse;
+}
+
 export function buildKjvVerse(book: string, chapter: number, startVerse: number, endVerse = startVerse): BibleVerse | undefined {
   return buildBibleVerse(book, chapter, startVerse, endVerse, "kjv");
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
 import { Image, Platform, Pressable, Share, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -205,6 +206,13 @@ export function SettingsScreen() {
     });
   }
 
+  async function handleSignOut() {
+    setJoinSheetVisible(false);
+    setManageSheetVisible(false);
+    await dispatch({ type: "signOut" });
+    router.replace("/");
+  }
+
   return (
     <>
     <AppScreen>
@@ -324,6 +332,10 @@ export function SettingsScreen() {
           Manage room
         </SecondaryButton>
       ) : null}
+
+      <SecondaryButton icon="log-out" onPress={handleSignOut}>
+        Log out
+      </SecondaryButton>
 
       <BottomSheet title="Join another room" visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
