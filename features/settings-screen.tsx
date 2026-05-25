@@ -7,18 +7,22 @@ import { Image, Platform, Pressable, Share, Text, View } from "react-native";
 import {
   EntryVisibility,
   actionLabels,
+  actionPastLabels,
   defaultFeedTitle as productDefaultFeedTitle,
   entryKindIcon,
   feedItemKind,
   feedItemLabel,
   normalizeEntryKind,
+  prayerFilters,
+  roomTabs,
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id, Membership } from "@/state/types";
 import {
   AppScreen,
   Avatar,
+  AvatarStack,
   BodyText,
   BottomSheet,
   Card,
@@ -30,18 +34,19 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
+  VerseList,
 } from "@/ui/app-components";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
-import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors } from "@/ui/theme";
 
 type RoomView = "rooms" | "detail";
-type RoomDetailTab = "feed" | "prayer" | "checkins" | "about";
+type RoomDetailTab = (typeof roomTabs)[number]["value"];
+type PrayerFilter = (typeof prayerFilters)[number]["value"];
 
 const FEED_BODY_PREVIEW_LINES = 3;
 
@@ -98,6 +103,7 @@ export function SettingsScreen() {
   const { state, dispatch } = useKoino();
   const [roomView, setRoomView] = useState<RoomView>("rooms");
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("feed");
+  const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [manageSheetVisible, setManageSheetVisible] = useState(false);
   const [joinInviteCode, setJoinInviteCode] = useState("");
@@ -113,7 +119,6 @@ export function SettingsScreen() {
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
-  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -155,11 +160,16 @@ export function SettingsScreen() {
       }));
     return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const visibleFeedItems = feedItems.filter((item) => {
-    if (detailTab === "prayer") return item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request";
-    if (detailTab === "checkins") return item.type === "check_in";
-    return detailTab === "feed";
+  const prayerRequests = feedItems.filter(
+    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request",
+  );
+  const visiblePrayerRequests = prayerRequests.filter((item) => {
+    if (item.type !== "post") return false;
+    if (prayerFilter === "open") return !item.answeredAt;
+    if (prayerFilter === "answered") return Boolean(item.answeredAt);
+    return true;
   });
+  const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
   const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
@@ -194,7 +204,28 @@ export function SettingsScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
       targetType,
+      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
     };
+  }
+
+  function itemReplies(item: FeedItem) {
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    return state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
+  }
+
+  function prayForItem(item: FeedItem) {
+    const prayer = itemPrayerState(item);
+    if (prayer.prayed) return;
+    dispatch({ type: "finishPrayer", targetType: prayer.targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
+  }
+
+  function togglePostAction(item: FeedItem) {
+    const prayer = itemPrayerState(item);
+    if (prayer.prayed) {
+      dispatch({ type: "unpray", targetType: prayer.targetType, targetId: item.id });
+      return;
+    }
+    prayForItem(item);
   }
 
   async function handleInvite() {
@@ -373,54 +404,104 @@ export function SettingsScreen() {
           <FilterChips
             value={detailTab}
             onChange={setDetailTab}
-            options={[
-              { label: "Feed", value: "feed" },
-              { label: "Prayer", value: "prayer" },
-              { label: "Check-ins", value: "checkins" },
-              { label: "About", value: "about" },
-            ]}
+            options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
           />
 
+          {detailTab === "feed" ? (
+            feedItems.length === 0 ? (
+              <Card>
+                <BodyText muted>This room is quiet right now.</BodyText>
+              </Card>
+            ) : (
+              feedItems.map((item) => {
+                const prayer = itemPrayerState(item);
+                return (
+                  <PostCard
+                    key={`${item.type}-${item.id}`}
+                    authorImage={userImageById.get(item.userId)}
+                    authorName={userById.get(item.userId) ?? "Someone"}
+                    item={item}
+                    actionCount={prayer.count}
+                    actionSelected={prayer.prayed}
+                    replyCount={itemReplies(item).length}
+                    onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                    onAction={() => togglePostAction(item)}
+                  />
+                );
+              })
+            )
+          ) : null}
+
+          {detailTab === "prayer" ? (
+            <View style={{ gap: 12 }}>
+              <FilterChips value={prayerFilter} onChange={setPrayerFilter} options={prayerFilters.map((filter) => ({ label: filter.label, value: filter.value }))} />
+              {visiblePrayerRequests.length === 0 ? (
+                <Card>
+                  <BodyText muted>{prayerFilter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
+                </Card>
+              ) : (
+                visiblePrayerRequests.map((item) => {
+                  const prayer = itemPrayerState(item);
+                  return (
+                    <PrayerRequestCard
+                      key={item.id}
+                      authorImage={userImageById.get(item.userId)}
+                      authorName={userById.get(item.userId) ?? "Someone"}
+                      item={item}
+                      ownsItem={item.userId === state.currentUserId}
+                      prayed={prayer.prayed}
+                      prayedBy={prayer.prayedBy}
+                      prayerCount={prayer.count}
+                      onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                      onPray={() => prayForItem(item)}
+                      onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: item.id })}
+                    />
+                  );
+                })
+              )}
+            </View>
+          ) : null}
+
+          {detailTab === "checkins" ? (
+            <View style={{ gap: 12 }}>
+              <Card>
+                <SectionHeading>This week's check-in</SectionHeading>
+                <BodyText muted>Take a moment to check in with God and with your group.</BodyText>
+                <PrimaryButton icon="check-circle" onPress={() => router.push("/(tabs)?checkIn=1" as never)}>
+                  Check in now
+                </PrimaryButton>
+              </Card>
+              <SectionHeading>Recent check-ins</SectionHeading>
+              {sharedCheckIns.length === 0 ? (
+                <Card>
+                  <BodyText muted>No shared check-ins yet.</BodyText>
+                </Card>
+              ) : (
+                sharedCheckIns.map((item) => (
+                  <CheckInCard
+                    key={item.id}
+                    authorImage={userImageById.get(item.userId)}
+                    authorName={userById.get(item.userId) ?? "Someone"}
+                    item={item}
+                    onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                  />
+                ))
+              )}
+            </View>
+          ) : null}
+
           {detailTab === "about" ? (
-            <Card>
-              <SectionHeading>About this room</SectionHeading>
-              <BodyText muted>{group.name} is your current room for shared reflection, prayer, check-ins, and encouragement.</BodyText>
-              <View style={{ backgroundColor: colors.line, height: 1 }} />
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Room code</Text>
-              <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.inviteCode}</Text>
-            </Card>
-          ) : visibleFeedItems.length === 0 ? (
-            <Card>
-              <BodyText muted>
-                {detailTab === "prayer" ? "No open prayer requests yet." : detailTab === "checkins" ? "No shared check-ins yet." : "This room is quiet right now."}
-              </BodyText>
-            </Card>
-          ) : (
-            visibleFeedItems.map((item) => {
-              const authorName = userById.get(item.userId) ?? "Someone";
-              const prayer = itemPrayerState(item);
-              return (
-                <RoomFeedCard
-                  key={`${item.type}-${item.id}`}
-                  authorImage={userImageById.get(item.userId)}
-                  authorName={authorName}
-                  item={item}
-                  actionCount={prayer.count}
-                  actionSelected={prayer.prayed}
-                  onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                  onAction={() => {
-                    if (prayer.prayed) {
-                      dispatch({ type: "unpray", targetType: prayer.targetType, targetId: item.id });
-                    } else if (feedItemKind(item) === "prayer_request") {
-                      setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body });
-                    } else {
-                      dispatch({ type: "finishPrayer", targetType: prayer.targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
-                    }
-                  }}
-                />
-              );
-            })
-          )}
+            <AboutRoomPanel
+              group={group}
+              memberCount={memberCount}
+              memberships={state.memberships}
+              onInvite={handleInvite}
+              onManage={() => {
+                setCurrentGroupName(group.name);
+                setManageSheetVisible(true);
+              }}
+            />
+          ) : null}
         </AppScreen>
         <SharedComposer
           visible={composerVisible}
@@ -439,16 +520,6 @@ export function SettingsScreen() {
           onSubmit={submitComposer}
           roomName={group.name}
           roomImage={group.image}
-        />
-        <PrayerMoment
-          target={prayerTarget}
-          onClose={() => setPrayerTarget(undefined)}
-          onFinish={(status, startedAt) => {
-            if (prayerTarget) {
-              dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt });
-            }
-            setPrayerTarget(undefined);
-          }}
         />
       </>
     );
@@ -664,7 +735,7 @@ export function SettingsScreen() {
 
 export const RoomScreen = SettingsScreen;
 
-function RoomFeedCard({
+function PostCard({
   actionCount,
   actionSelected,
   authorImage,
@@ -672,6 +743,7 @@ function RoomFeedCard({
   item,
   onAction,
   onOpen,
+  replyCount,
 }: {
   actionCount: number;
   actionSelected: boolean;
@@ -680,12 +752,14 @@ function RoomFeedCard({
   item: FeedItem;
   onAction: () => void;
   onOpen: () => void;
+  replyCount: number;
 }) {
   const itemKind = feedItemKind(item);
   const actionLabel = actionSelected && itemKind === "prayer_request" ? "Prayed" : actionLabels[itemKind];
+  const answered = item.type === "post" && itemKind === "prayer_request" && Boolean(item.answeredAt);
 
   return (
-    <Card style={{ padding: 16 }}>
+    <Card style={{ borderColor: itemKind === "prayer_request" ? colors.gold : colors.line, padding: 16 }}>
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
         <Avatar image={authorImage} name={authorName} size={42} tone={itemKind === "prayer_request" ? "orange" : "green"} />
         <View style={{ flex: 1, gap: 2 }}>
@@ -694,7 +768,7 @@ function RoomFeedCard({
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Feather name={item.type === "check_in" ? "check-circle" : entryKindIcon(item.kind)} size={13} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{feedItemLabel(item)}</Text>
+          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{answered ? "Answered prayer" : feedItemLabel(item)}</Text>
         </View>
       </View>
 
@@ -705,13 +779,168 @@ function RoomFeedCard({
         <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>{item.body || "No words today, just presence."}</ExpandableBodyText>
       </Pressable>
       <LinkPreview text={item.body} />
+      <VerseList verse={item.verse} verses={item.verses} compact />
 
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        <SecondaryButton icon="heart" onPress={onAction} style={{ flex: 1 }}>
+        <SecondaryButton icon={itemKind === "prayer_request" ? "users" : "heart"} onPress={onAction} style={{ flex: 1 }}>
           {actionLabel}
         </SecondaryButton>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{actionCount}</Text>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{actionCount}</Text>
+          <Feather name="message-circle" size={17} color={colors.muted} />
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{replyCount}</Text>
+          <Feather name="more-horizontal" size={18} color={colors.ink} />
+        </View>
       </View>
     </Card>
+  );
+}
+
+function PrayerRequestCard({
+  authorImage,
+  authorName,
+  item,
+  onMarkAnswered,
+  onOpen,
+  onPray,
+  ownsItem,
+  prayed,
+  prayedBy,
+  prayerCount,
+}: {
+  authorImage?: GroupImage;
+  authorName: string;
+  item: Extract<FeedItem, { type: "post" }>;
+  onMarkAnswered: () => void;
+  onOpen: () => void;
+  onPray: () => void;
+  ownsItem: boolean;
+  prayed: boolean;
+  prayedBy: string[];
+  prayerCount: number;
+}) {
+  const answered = Boolean(item.answeredAt);
+  return (
+    <Card style={{ borderColor: answered ? colors.line : colors.gold, padding: 16 }}>
+      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
+        <Avatar image={authorImage} name={authorName} size={40} tone="orange" />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+        </View>
+        <View style={{ backgroundColor: answered ? "#E7F1DD" : colors.accentSubtle, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 }}>
+          <Text style={{ color: answered ? "#58712D" : colors.gold, fontSize: 12, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+        </View>
+      </View>
+      <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
+        <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{item.title || defaultTitle(item)}</Text>
+        <BodyText muted numberOfLines={3}>{item.body}</BodyText>
+      </Pressable>
+      <VerseList verse={item.verse} verses={item.verses} compact />
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+        {prayedBy.length ? <AvatarStack names={prayedBy} /> : null}
+        <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>Prayed by {prayerCount} {prayerCount === 1 ? "member" : "members"}</Text>
+      </View>
+      {answered ? (
+        <SecondaryButton icon="check-circle" onPress={onOpen}>
+          View answered prayer
+        </SecondaryButton>
+      ) : (
+        <PrimaryButton disabled={prayed} icon="users" onPress={onPray} style={{ minHeight: 48 }}>
+          {prayed ? "Prayed" : "Pray"}
+        </PrimaryButton>
+      )}
+      {ownsItem && !answered ? (
+        <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
+          Mark answered
+        </SecondaryButton>
+      ) : null}
+    </Card>
+  );
+}
+
+function CheckInCard({
+  authorImage,
+  authorName,
+  item,
+  onOpen,
+}: {
+  authorImage?: GroupImage;
+  authorName: string;
+  item: Extract<FeedItem, { type: "check_in" }>;
+  onOpen: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onOpen}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+        <Avatar image={authorImage} name={authorName} size={38} tone="green" />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          {item.body ? <BodyText muted numberOfLines={2}>{item.body}</BodyText> : null}
+        </View>
+        <View style={{ alignItems: "center", gap: 4 }}>
+          <Feather name="smile" size={20} color={colors.olive} />
+          <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{moodLabel(item.mood)}</Text>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+function AboutRoomPanel({
+  group,
+  memberCount,
+  memberships,
+  onInvite,
+  onManage,
+}: {
+  group: Group;
+  memberCount: number;
+  memberships: Membership[];
+  onInvite: () => void;
+  onManage: () => void;
+}) {
+  return (
+    <View style={{ gap: 12 }}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
+        <RoomImage image={group.image} name={group.name} size={58} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+        </View>
+      </Card>
+      <Card>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Room code</Text>
+        <RoomCodeCopy code={group.inviteCode} />
+        <PrimaryButton icon="share-2" onPress={onInvite}>
+          Invite
+        </PrimaryButton>
+      </Card>
+      <Card style={{ gap: 0, padding: 0 }}>
+        {memberships.map((membership, index) => (
+          <View
+            key={membership.id}
+            style={{
+              alignItems: "center",
+              borderBottomColor: colors.line,
+              borderBottomWidth: index === memberships.length - 1 ? 0 : 1,
+              flexDirection: "row",
+              gap: 10,
+              padding: 14,
+            }}
+          >
+            <Avatar name={membership.userName} size={36} tone={membership.role === "owner" ? "orange" : "green"} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Room owner" : "Member"}</Text>
+            </View>
+          </View>
+        ))}
+      </Card>
+      <SecondaryButton icon="settings" onPress={onManage}>
+        Manage room
+      </SecondaryButton>
+    </View>
   );
 }

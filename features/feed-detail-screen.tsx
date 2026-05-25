@@ -27,7 +27,6 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
-import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
 
 const MAX_REPLY_LENGTH = 500;
@@ -81,7 +80,6 @@ export function FeedDetailScreen() {
   const navigation = useNavigation();
   const [replyDraft, setReplyDraft] = useState("");
   const [allowRemove, setAllowRemove] = useState(false);
-  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const item = useMemo<FeedItem | undefined>(() => {
@@ -128,6 +126,13 @@ export function FeedDetailScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
       prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+      activity: reactions
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+        .map((reaction) => ({
+          id: reaction.id,
+          name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
+          createdAt: reaction.createdAt,
+        })),
     };
   }, [item, state.currentUserId, state.prayerReactions, targetType, userById]);
 
@@ -160,6 +165,9 @@ export function FeedDetailScreen() {
   const authorName = userById.get(item.userId) ?? "Someone";
   const authorImage = userImageById.get(item.userId);
   const itemKind = feedItemKind(item);
+  const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
+  const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
+  const ownsItem = item.userId === state.currentUserId;
   const actionLabel = prayer?.prayed && itemKind === "prayer_request" ? "Prayed" : actionLabels[itemKind];
   const actionPastLabel = actionPastLabels[itemKind];
 
@@ -176,11 +184,7 @@ export function FeedDetailScreen() {
       dispatch({ type: "unpray", targetType, targetId: item.id });
       return;
     }
-    if (feedItemKind(item) !== "prayer_request") {
-      dispatch({ type: "finishPrayer", targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
-      return;
-    }
-    setPrayerTarget({ targetType, targetId: item.id, body: item.body });
+    dispatch({ type: "finishPrayer", targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
   }
 
   return (
@@ -209,15 +213,57 @@ export function FeedDetailScreen() {
           <LinkPreview text={item.body} />
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
-        <PrimaryButton icon="heart" onPress={togglePrayer} style={{ minHeight: 58 }}>
-          {actionLabel}
-        </PrimaryButton>
+        {prayerAnswered ? (
+          <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
+            <Feather name="check-circle" size={20} color={colors.olive} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Answered prayer</Text>
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</Text>
+            </View>
+          </Card>
+        ) : (
+          <PrimaryButton disabled={isPrayerRequest && prayer?.prayed} icon={isPrayerRequest ? "users" : "heart"} onPress={togglePrayer} style={{ minHeight: 58 }}>
+            {actionLabel}
+          </PrimaryButton>
+        )}
+        {ownsItem && isPrayerRequest && !prayerAnswered ? (
+          <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
+        ) : null}
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
             {actionPastLabel} by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
           </Text>
           {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
         </View>
+        {isPrayerRequest ? (
+          <View style={{ gap: 12 }}>
+            <SectionHeading>Prayer activity</SectionHeading>
+            <Card style={{ gap: 0, padding: 0 }}>
+              {prayer?.activity.length ? (
+                prayer.activity.map((activity, index) => (
+                  <View
+                    key={activity.id}
+                    style={{
+                      borderBottomColor: colors.line,
+                      borderBottomWidth: index === prayer.activity.length - 1 ? 0 : 1,
+                      flexDirection: "row",
+                      gap: 10,
+                      padding: 14,
+                    }}
+                  >
+                    <Feather name="users" size={18} color={colors.gold} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{activity.name} prayed</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(activity.createdAt)}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <BodyText muted style={{ padding: 14 }}>No prayer activity yet.</BodyText>
+              )}
+            </Card>
+          </View>
+        ) : null}
         <View style={{ gap: 12 }}>
           <SectionHeading>Encouragement</SectionHeading>
           <Card style={{ gap: 0, padding: 0 }}>
@@ -278,16 +324,30 @@ export function FeedDetailScreen() {
           </Pressable>
         </View>
       </AppScreen>
-      <PrayerMoment
-        target={prayerTarget}
-        onClose={() => setPrayerTarget(undefined)}
-        onFinish={(status, startedAt) => {
-          if (prayerTarget) {
-            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt });
-          }
-          setPrayerTarget(undefined);
-        }}
-      />
     </KeyboardAvoidingView>
+  );
+}
+
+function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 9,
+        justifyContent: "center",
+        minHeight: 50,
+        paddingHorizontal: 16,
+      }}
+    >
+      <Feather name="check-circle" size={18} color={colors.olive} />
+      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>Mark answered</Text>
+    </Pressable>
   );
 }
