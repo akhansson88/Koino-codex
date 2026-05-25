@@ -100,7 +100,7 @@ type Action =
   | { type: "deleteReply"; id: Id }
   | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id }
+  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
@@ -1086,6 +1086,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const entry: JournalEntry = {
                 id: id("journal"),
                 userId: firebaseUser.uid,
+                ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                 body: action.body.trim(),
                 source: "manual",
                 entryKind: action.entryKind ?? "reflection",
@@ -1118,6 +1119,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser) return;
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
+                title: action.title?.trim() || null,
                 entryKind: action.entryKind ?? null,
                 verse: actionVerses(action)[0] ?? null,
                 verses: actionVerses(action).length ? actionVerses(action) : null,

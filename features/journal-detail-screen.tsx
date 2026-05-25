@@ -4,17 +4,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { actionLabels, entryKindLabel } from "@/state/product";
 import type { EntryKind } from "@/state/types";
 import { AppScreen, Avatar, BodyText, Card, IconButton, PrimaryButton, RoomImage, SectionHeading, VerseList } from "@/ui/app-components";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors } from "@/ui/theme";
-
-const entryTypes: { kind: EntryKind; title: string }[] = [
-  { kind: "reflection", title: "Reflection" },
-  { kind: "prayer_request", title: "Prayer request" },
-  { kind: "praise", title: "Praise" },
-  { kind: "update", title: "Update" },
-];
 
 function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -22,10 +16,6 @@ function routeParam(value: string | string[] | undefined) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function entryTitle(kind?: EntryKind) {
-  return entryTypes.find((item) => item.kind === kind)?.title ?? "Reflection";
 }
 
 export function JournalDetailScreen() {
@@ -85,7 +75,7 @@ export function JournalDetailScreen() {
         </View>
       </View>
       <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>{entryTitle(entry.entryKind)}</Text>
+        <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>{entry.title || entryKindLabel(entry.entryKind)}</Text>
         <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{entry.body}</BodyText>
       </View>
       <VerseList verse={entry.verse} verses={entry.verses} />
@@ -104,7 +94,7 @@ export function JournalDetailScreen() {
         </Card>
       </View>
       <PrimaryButton icon="heart" onPress={() => setPrayerTarget({ targetType: "journal_entry", targetId: entry.id, body: entry.body })}>
-        Pray
+        {actionLabels[entry.entryKind ?? "reflection"]}
       </PrimaryButton>
       <PrayerMoment
         target={prayerTarget}
