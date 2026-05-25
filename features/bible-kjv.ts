@@ -1,4 +1,5 @@
 import kjvVerseMap from "@/assets/bible/kjv-verses-1769.json";
+import reformationsbibelnVerseMap from "@/assets/bible/reformationsbibeln.json";
 import sv1917VerseMap from "@/assets/bible/sv1917-verses.json";
 import crossReferenceMap from "@/assets/bible/cross-references/cross_references.json";
 import type { BibleVerse } from "@/state/types";
@@ -202,6 +203,7 @@ function normalizeVerseMapBookNames(verseMap: VerseMap, bookNameMap: BookNameMap
 export const bibleVersions = [
   { id: "kjv", label: "KJV", translation: "KJV", verses: versesByReference },
   { id: "sv1917", label: "Bibel 1917", translation: "Bibel 1917", verses: normalizeVerseMapBookNames(sv1917VerseMap as VerseMap, sv1917BookNameMap) },
+  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", verses: reformationsbibelnVerseMap as VerseMap },
 ] as const;
 
 export type BibleVersionId = (typeof bibleVersions)[number]["id"];
