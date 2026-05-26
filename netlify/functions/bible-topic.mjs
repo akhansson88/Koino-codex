@@ -1,9 +1,26 @@
+const corsHeaders = {
+  "Access-Control-Allow-Headers": "Accept, Content-Type",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Origin": "*",
+};
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
+      ...corsHeaders,
       "Cache-Control": "no-store",
       "Content-Type": "application/json",
+    },
+  });
+}
+
+function optionsResponse() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...corsHeaders,
+      "Cache-Control": "no-store",
     },
   });
 }
@@ -58,6 +75,10 @@ function parseReferences(html) {
 
 export default async function bibleTopic(request) {
   try {
+    if (request.method === "OPTIONS") {
+      return optionsResponse();
+    }
+
     const requestUrl = new URL(request.url);
     const rawTopic = requestUrl.searchParams.get("topic") || "";
     const slug = topicSlug(rawTopic);

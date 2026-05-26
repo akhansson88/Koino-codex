@@ -1373,6 +1373,7 @@ export function BibleScreen() {
     const requestId = topicRequestRef.current + 1;
     topicRequestRef.current = requestId;
     setSelectedTopic(nextTopic);
+    setTopicsVisible(true);
     setTopicDetailVisible(true);
     setTopicResult(undefined);
     setTopicError(undefined);
@@ -1567,18 +1568,21 @@ export function BibleScreen() {
         versionLabel={bibleVersion.label}
         visible={pickerVisible}
       />
-      <BibleTopicsModal onClose={closeTopics} onSelectTopic={openTopic} palette={readerPalette} visible={topicsVisible} />
-      <BibleTopicDetailModal
+      <BibleTopicsModal
         bibleVersionId={bibleVersionId}
         bibleVersionLabel={bibleVersion.label}
+        detailVisible={topicDetailVisible}
         error={topicError}
         loading={topicLoading}
-        onBack={() => setTopicDetailVisible(false)}
+        onBack={() => {
+          setTopicDetailVisible(false);
+        }}
         onClose={closeTopics}
+        onSelectTopic={openTopic}
         palette={readerPalette}
         references={topicResult?.references ?? []}
         topic={selectedTopic}
-        visible={topicDetailVisible}
+        visible={topicsVisible}
       />
       <SharedComposer
         visible={scriptureComposerVisible}
@@ -1744,24 +1748,53 @@ function BibleReaderHeader({
 }
 
 function BibleTopicsModal({
+  bibleVersionId,
+  bibleVersionLabel,
+  detailVisible,
+  error,
+  loading,
+  onBack,
   onClose,
   onSelectTopic,
   palette,
+  references,
+  topic,
   visible,
 }: {
+  bibleVersionId: BibleVersionId;
+  bibleVersionLabel: string;
+  detailVisible: boolean;
+  error?: string;
+  loading: boolean;
+  onBack: () => void;
   onClose: () => void;
   onSelectTopic: (topic: string) => void;
   palette: ReaderPalette;
+  references: BibleTopicReference[];
+  topic: string;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const slideX = useRef(new Animated.Value(0)).current;
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!visible) {
       setQuery("");
+      slideX.setValue(0);
     }
-  }, [visible]);
+  }, [slideX, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    Animated.timing(slideX, {
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      toValue: detailVisible ? -width : 0,
+      useNativeDriver: true,
+    }).start();
+  }, [detailVisible, slideX, visible, width]);
 
   function submitSearch() {
     const topic = query.trim();
@@ -1771,8 +1804,17 @@ function BibleTopicsModal({
   }
 
   return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.background, flex: 1 }}>
+    <Modal animationType="slide" visible={visible} onRequestClose={detailVisible ? onBack : onClose}>
+      <View style={{ backgroundColor: palette.background, flex: 1, overflow: "hidden" }}>
+        <Animated.View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            transform: [{ translateX: slideX }],
+            width: width * 2,
+          }}
+        >
+          <View style={{ backgroundColor: palette.background, flex: 1, width }}>
         <ScrollView
           contentInsetAdjustmentBehavior="never"
           keyboardShouldPersistTaps="handled"
@@ -1865,6 +1907,21 @@ function BibleTopicsModal({
             </View>
           </View>
         </ScrollView>
+          </View>
+          <View style={{ backgroundColor: palette.background, flex: 1, width }}>
+            <BibleTopicDetailPane
+              bibleVersionId={bibleVersionId}
+              bibleVersionLabel={bibleVersionLabel}
+              error={error}
+              loading={loading}
+              onBack={onBack}
+              onClose={onClose}
+              palette={palette}
+              references={references}
+              topic={topic}
+            />
+          </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -1928,7 +1985,7 @@ function SuggestedTopicRow({
   );
 }
 
-function BibleTopicDetailModal({
+function BibleTopicDetailPane({
   bibleVersionId,
   bibleVersionLabel,
   error,
@@ -1938,7 +1995,6 @@ function BibleTopicDetailModal({
   palette,
   references,
   topic,
-  visible,
 }: {
   bibleVersionId: BibleVersionId;
   bibleVersionLabel: string;
@@ -1949,7 +2005,6 @@ function BibleTopicDetailModal({
   palette: ReaderPalette;
   references: BibleTopicReference[];
   topic: string;
-  visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const resolvedVerses = useMemo(
@@ -1964,8 +2019,7 @@ function BibleTopicDetailModal({
   const title = topicTitle(topic || "Topic");
 
   return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
-      <View style={{ backgroundColor: palette.background, flex: 1 }}>
+    <View style={{ backgroundColor: palette.background, flex: 1 }}>
         <View
           style={{
             alignItems: "center",
@@ -2033,8 +2087,7 @@ function BibleTopicDetailModal({
             </View>
           )}
         </ScrollView>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
