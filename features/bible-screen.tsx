@@ -119,9 +119,14 @@ type PendingAudioTransfer = {
 
 type BibleTopicResult = {
   count: number;
-  references: string[];
+  references: BibleTopicReference[];
   sourceUrl: string;
   topic: string;
+};
+
+type BibleTopicReference = {
+  reference: string;
+  votes: number;
 };
 
 type SuggestedTopic = {
@@ -328,16 +333,33 @@ async function fetchBibleTopic(topic: string) {
   for (const endpoint of bibleTopicEndpoints(topic)) {
     try {
       const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
-      const data = (await response.json().catch(() => ({}))) as Partial<BibleTopicResult> & { error?: string };
+      const data = (await response.json().catch(() => ({}))) as Partial<Omit<BibleTopicResult, "references">> & { error?: string; references?: unknown };
       if (!response.ok) {
         throw new Error(data.error || `Topic request failed with ${response.status}`);
       }
       if (!Array.isArray(data.references)) {
         throw new Error("The topic response did not include Bible references.");
       }
+      const references = data.references
+        .map((item): BibleTopicReference | undefined => {
+          if (typeof item === "string") {
+            const reference = item.trim();
+            return reference ? { reference, votes: 0 } : undefined;
+          }
+          if (!item || typeof item !== "object") return undefined;
+          const candidate = item as { reference?: unknown; votes?: unknown };
+          const reference = typeof candidate.reference === "string" ? candidate.reference.trim() : "";
+          if (!reference) return undefined;
+          return {
+            reference,
+            votes: typeof candidate.votes === "number" && Number.isFinite(candidate.votes) ? candidate.votes : 0,
+          };
+        })
+        .filter((item): item is BibleTopicReference => Boolean(item))
+        .sort((a, b) => b.votes - a.votes || a.reference.localeCompare(b.reference));
       return {
-        count: typeof data.count === "number" ? data.count : data.references.length,
-        references: data.references.filter((reference): reference is string => typeof reference === "string" && reference.trim().length > 0),
+        count: typeof data.count === "number" ? data.count : references.length,
+        references,
         sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
         topic: typeof data.topic === "string" ? data.topic : topic,
       };
@@ -1926,16 +1948,17 @@ function BibleTopicDetailModal({
   onBack: () => void;
   onClose: () => void;
   palette: ReaderPalette;
-  references: string[];
+  references: BibleTopicReference[];
   topic: string;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const resolvedVerses = useMemo(
     () =>
-      references.map((reference) => ({
-        reference,
-        verse: bibleVerseFromReference(reference, bibleVersionId),
+      references.map((item) => ({
+        reference: item.reference,
+        verse: bibleVerseFromReference(item.reference, bibleVersionId),
+        votes: item.votes,
       })),
     [bibleVersionId, references],
   );
@@ -2022,9 +2045,11 @@ function TopicVerseCard({
   palette,
 }: {
   bibleVersionLabel: string;
-  item: { reference: string; verse?: BibleVerse };
+  item: { reference: string; verse?: BibleVerse; votes: number };
   palette: ReaderPalette;
 }) {
+  const voteLabel = `${item.votes.toLocaleString()} ${item.votes === 1 ? "vote" : "votes"}`;
+
   return (
     <View
       style={{
@@ -2050,6 +2075,20 @@ function TopicVerseCard({
         <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
           {item.reference}
         </Text>
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: palette.peach,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            justifyContent: "center",
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+          }}
+        >
+          <Text style={{ color: palette.accent, fontSize: 11, fontWeight: "900" }}>{voteLabel}</Text>
+        </View>
       </View>
       {item.verse ? (
         <>

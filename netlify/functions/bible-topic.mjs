@@ -27,19 +27,33 @@ function topicSlug(value) {
     .replace(/^_+|_+$/g, "");
 }
 
+function parseVoteCount(value) {
+  const match = value.match(/([\d,]+)\s+helpful\s+votes?/i);
+  if (!match) return 0;
+  return Number(match[1].replace(/,/g, "")) || 0;
+}
+
 function parseReferences(html) {
   const references = [];
   const seen = new Set();
-  const headingPattern = /<h3[^>]*>\s*<a\b[^>]*>([^<]+)<\/a>/gi;
+  const headingPattern = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
+  const referencePattern = /<a\b[^>]*class="[^"]*\bbibleref\b[^"]*"[^>]*>([^<]+)<\/a>/i;
 
-  for (const match of html.matchAll(headingPattern)) {
-    const reference = decodeHtml(match[1]);
+  for (const headingMatch of html.matchAll(headingPattern)) {
+    const heading = headingMatch[1];
+    const referenceMatch = heading.match(referencePattern);
+    if (!referenceMatch) continue;
+
+    const reference = decodeHtml(referenceMatch[1]);
     if (!reference || seen.has(reference)) continue;
     seen.add(reference);
-    references.push(reference);
+    references.push({
+      reference,
+      votes: parseVoteCount(decodeHtml(heading.replace(/<[^>]+>/g, " "))),
+    });
   }
 
-  return references;
+  return references.sort((a, b) => b.votes - a.votes || a.reference.localeCompare(b.reference));
 }
 
 export default async function bibleTopic(request) {
