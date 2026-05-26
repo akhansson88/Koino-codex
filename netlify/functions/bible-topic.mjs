@@ -2,7 +2,7 @@ function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      "Cache-Control": status === 200 ? "public, max-age=3600" : "no-store",
+      "Cache-Control": "no-store",
       "Content-Type": "application/json",
     },
   });

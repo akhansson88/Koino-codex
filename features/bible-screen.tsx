@@ -322,8 +322,7 @@ function chapterLabel(position: BiblePosition) {
 const productionBibleTopicApiOrigin = "https://spontaneous-jalebi-46756a.netlify.app";
 
 function bibleTopicEndpoints(topic: string) {
-  const path = `/api/bible-topic?topic=${encodeURIComponent(topic)}`;
-  if (Platform.OS === "web") return [path];
+  const path = `/api/bible-topic?topic=${encodeURIComponent(topic)}&v=votes`;
   return [`${productionBibleTopicApiOrigin}${path}`];
 }
 
