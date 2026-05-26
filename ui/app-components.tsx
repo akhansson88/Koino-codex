@@ -548,10 +548,12 @@ export function VersePreviewCard({
   onAddToJournal,
   onOpenInBible,
   onShareToRoom,
+  showFullText = false,
   showOpenIndicator = true,
   verse,
 }: VerseActionHandlers & {
   compact?: boolean;
+  showFullText?: boolean;
   showOpenIndicator?: boolean;
   verse?: BibleVerse;
 }) {
@@ -589,7 +591,7 @@ export function VersePreviewCard({
             </Text>
             {displayVerse.translation ? <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
           </View>
-          <Text numberOfLines={compact ? 3 : 5} style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>
+          <Text numberOfLines={showFullText ? undefined : compact ? 3 : 5} style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>
             {displayVerse.text}
           </Text>
           {showOpenIndicator ? <Text style={{ color: colors.gold, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}

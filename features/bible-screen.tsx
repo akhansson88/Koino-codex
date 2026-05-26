@@ -172,6 +172,7 @@ const fallbackAudioVoices: AudioVoice[] = [
 ];
 
 type ReaderToast = {
+  detail?: string;
   message: string;
   tone: "success" | "error";
 };
@@ -183,8 +184,37 @@ type PendingVerseComposerAction = {
 
 type ChapterSwipeDirection = "idle" | "previous" | "next";
 
+type SelectedVerseRange = {
+  end: number;
+  start: number;
+};
+
 function savedVerseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
   return `${verse.reference}|${verse.translation ?? ""}`;
+}
+
+function selectedVerseRangesFor(verses: number[]): SelectedVerseRange[] {
+  const sortedVerses = Array.from(new Set(verses)).sort((a, b) => a - b);
+  const ranges: SelectedVerseRange[] = [];
+
+  sortedVerses.forEach((verse) => {
+    const previousRange = ranges[ranges.length - 1];
+    if (previousRange && verse === previousRange.end + 1) {
+      previousRange.end = verse;
+      return;
+    }
+
+    ranges.push({ end: verse, start: verse });
+  });
+
+  return ranges;
+}
+
+function selectedVerseReferenceLabel(position: Pick<BiblePosition, "book" | "chapter">, ranges: SelectedVerseRange[]) {
+  if (ranges.length === 0) return "";
+
+  const rangeLabels = ranges.map((range) => (range.start === range.end ? String(range.start) : `${range.start}-${range.end}`));
+  return `${position.book} ${position.chapter}:${rangeLabels.join(", ")}`;
 }
 
 function puterTokenStorageKey(userId?: string) {
@@ -485,6 +515,7 @@ export function BibleScreen() {
   const topicRequestRef = useRef(0);
   const chapterSwipeX = useRef(new Animated.Value(0)).current;
   const chapterSwipeAnimatingRef = useRef(false);
+  const verseLongPressActiveRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
@@ -501,6 +532,7 @@ export function BibleScreen() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
+  const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [reflectionText, setReflectionText] = useState("");
   const [audioError, setAudioError] = useState<string | undefined>();
   const [audioPlaybackState, setAudioPlaybackState] = useState<AudioPlaybackState>("idle");
@@ -527,6 +559,7 @@ export function BibleScreen() {
   const [scriptureComposerBody, setScriptureComposerBody] = useState("");
   const [scriptureComposerVerses, setScriptureComposerVerses] = useState<BibleVerse[]>([]);
   const [readerToast, setReaderToast] = useState<ReaderToast | undefined>();
+  const [selectionSaving, setSelectionSaving] = useState(false);
   const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
   const [chapterSwipeActive, setChapterSwipeActive] = useState(false);
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
@@ -536,6 +569,8 @@ export function BibleScreen() {
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const readerPalette = useMemo(() => readerPaletteFor(readerTheme), [readerTheme]);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
+  const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
+  const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
   const chapterCrossReferenceAvailability = useMemo(
     () =>
       Object.fromEntries(
@@ -562,6 +597,15 @@ export function BibleScreen() {
   const audioIsPreparing = audioPlaybackState === "preparing";
   const audioIsPlaying = audioPlaybackState === "playing";
   const audioMiniPlayerVisible = audioPlaybackState === "playing" || audioPlaybackState === "paused";
+  const selectedVerseBarVisible = selectedVerseRanges.length > 0;
+  const selectedVerseBarBottom = audioMiniPlayerVisible ? Math.max(166, insets.bottom + 150) : Math.max(88, insets.bottom + 68);
+  const defaultReaderBottomPadding = audioMiniPlayerVisible ? Math.max(190, insets.bottom + 166) : Math.max(126, insets.bottom + 106);
+  const readerBottomPadding = selectedVerseBarVisible ? Math.max(defaultReaderBottomPadding, selectedVerseBarBottom + 112) : defaultReaderBottomPadding;
+  const readerToastBottom = selectedVerseBarVisible
+    ? selectedVerseBarBottom + 94
+    : audioMiniPlayerVisible
+      ? Math.max(188, insets.bottom + 170)
+      : Math.max(82, insets.bottom + 62);
   const audioHighlightActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const readerCanGoBack = navigation.canGoBack();
   const audioStatusLabel =
@@ -707,6 +751,10 @@ export function BibleScreen() {
     return () => clearTimeout(timeout);
   }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showCrossReferences, showFootnotes, showVerseNumbers, storageKey]);
 
+  useEffect(() => {
+    setSelectedVerseNumbers([]);
+  }, [position.book, position.chapter]);
+
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
     if (typeof offset !== "number") return false;
@@ -723,6 +771,7 @@ export function BibleScreen() {
 
       if (!sameChapter) {
         verseOffsetsRef.current = {};
+        setSelectedVerseNumbers([]);
       }
 
       if (shouldScroll) {
@@ -1132,10 +1181,35 @@ export function BibleScreen() {
     setPickerVisible(true);
   }, [navigation]);
 
-  const handleVerseLongPress = useCallback((verse: number) => {
+  const handleVersePressIn = useCallback(() => {
+    verseLongPressActiveRef.current = false;
+  }, []);
+
+  const handleVersePress = useCallback((verse: number) => {
+    if (verseLongPressActiveRef.current) {
+      verseLongPressActiveRef.current = false;
+      return;
+    }
+
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
     positionRef.current = nextPosition;
     setPosition(nextPosition);
+    setSelectedVersePosition(undefined);
+    setSelectedVerseNumbers((current) => {
+      if (current.includes(verse)) {
+        return current.filter((item) => item !== verse);
+      }
+
+      return [...current, verse].sort((a, b) => a - b);
+    });
+  }, []);
+
+  const handleVerseLongPress = useCallback((verse: number) => {
+    verseLongPressActiveRef.current = true;
+    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+    positionRef.current = nextPosition;
+    setPosition(nextPosition);
+    setSelectedVerseNumbers([]);
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
       highlightTimeoutRef.current = undefined;
@@ -1151,6 +1225,39 @@ export function BibleScreen() {
     },
     [bibleVersionId],
   );
+
+  const handleSaveSelectedVerses = useCallback(async () => {
+    if (selectionSaving || selectedVerseRanges.length === 0) return;
+
+    const selectedVerses = selectedVerseRanges
+      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
+      .filter((verse): verse is BibleVerse => Boolean(verse));
+
+    if (selectedVerses.length === 0) {
+      setReaderToast({ detail: "Try selecting the verses again.", message: "Could not save selection", tone: "error" });
+      return;
+    }
+
+    const unsavedVerses = selectedVerses.filter((selectedVerse) => !state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse)));
+
+    if (unsavedVerses.length === 0) {
+      setReaderToast({ detail: "Every selected reference is already saved.", message: "Selection already saved", tone: "error" });
+      return;
+    }
+
+    setSelectionSaving(true);
+    try {
+      await Promise.all(unsavedVerses.map((verse) => dispatch({ type: "saveVerse", verse })));
+      setSelectedVerseNumbers([]);
+      setReaderToast({
+        detail: unsavedVerses.length === 1 ? "You can find it under saved verses." : "You can find them under saved verses.",
+        message: unsavedVerses.length === 1 ? "Selection saved" : `${unsavedVerses.length} selections saved`,
+        tone: "success",
+      });
+    } finally {
+      setSelectionSaving(false);
+    }
+  }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving, state.savedVerses]);
 
   const openScriptureComposer = useCallback((context: "journal" | "room", kind: EntryKind, verse: BibleVerse, body = "") => {
     setScriptureComposerContext(context);
@@ -1442,7 +1549,7 @@ export function BibleScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           alignSelf: "stretch",
-          paddingBottom: audioMiniPlayerVisible ? Math.max(190, insets.bottom + 166) : Math.max(126, insets.bottom + 106),
+          paddingBottom: readerBottomPadding,
           paddingHorizontal: 22,
           paddingTop: compactMode ? 12 : 18,
         }}
@@ -1457,12 +1564,15 @@ export function BibleScreen() {
             compactMode={compactMode}
             crossReferenceAvailability={chapterCrossReferenceAvailability}
             highlightedPosition={highlightedPosition}
+            onVersePress={handleVersePress}
+            onVersePressIn={handleVersePressIn}
             onVerseLayout={handleVerseLayout}
             onVerseLongPress={handleVerseLongPress}
             palette={readerPalette}
             position={position}
             readerLineHeight={readerLineHeight}
             readerTextStyle={readerTextStyle}
+            selectedVerseNumbers={selectedVerseNumbers}
             selectedVersePosition={selectedVersePosition}
             showCrossReferences={showCrossReferences}
             showVerseNumbers={showVerseNumbers}
@@ -1515,7 +1625,20 @@ export function BibleScreen() {
         />
       ) : null}
 
-      <ReaderToastMessage bottom={audioMiniPlayerVisible ? Math.max(188, insets.bottom + 170) : Math.max(82, insets.bottom + 62)} palette={readerPalette} toast={readerToast} />
+      {selectedVerseBarVisible ? (
+        <SelectedVerseSuggestionBar
+          bottom={selectedVerseBarBottom}
+          maxWidth={contentWidth}
+          onClear={() => setSelectedVerseNumbers([])}
+          onSave={handleSaveSelectedVerses}
+          palette={readerPalette}
+          reference={selectedVerseReference}
+          saving={selectionSaving}
+          verseCount={selectedVerseNumbers.length}
+        />
+      ) : null}
+
+      <ReaderToastMessage bottom={readerToastBottom} palette={readerPalette} toast={readerToast} />
 
       <VerseActionSheet
         onAction={handleVerseAction}
@@ -2164,12 +2287,15 @@ function BibleText({
   compactMode,
   crossReferenceAvailability,
   highlightedPosition,
+  onVersePress,
+  onVersePressIn,
   onVerseLayout,
   onVerseLongPress,
   palette,
   position,
   readerLineHeight,
   readerTextStyle,
+  selectedVerseNumbers,
   selectedVersePosition,
   showCrossReferences,
   showVerseNumbers,
@@ -2180,12 +2306,15 @@ function BibleText({
   compactMode: boolean;
   crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
+  onVersePress: (verse: number) => void;
+  onVersePressIn: () => void;
   onVerseLayout: (verse: number, offset: number) => void;
   onVerseLongPress: (verse: number) => void;
   palette: ReaderPalette;
   position: BiblePosition;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
+  selectedVerseNumbers: number[];
   selectedVersePosition?: BiblePosition;
   showCrossReferences: boolean;
   showVerseNumbers: boolean;
@@ -2204,6 +2333,11 @@ function BibleText({
     fontWeight: "800",
     lineHeight: readerLineHeight,
   };
+  const selectedTextStyle: TextStyle = {
+    textDecorationColor: palette.accent,
+    textDecorationLine: "underline",
+    textDecorationStyle: "dotted",
+  };
 
   return (
     <View style={{ gap: compactMode ? 4 : 7 }}>
@@ -2221,7 +2355,9 @@ function BibleText({
           selectedVersePosition?.book === position.book &&
           selectedVersePosition.chapter === position.chapter &&
           selectedVersePosition.verse === item.verse;
-        const selected = highlighted || audioHighlighted || actionSelected;
+        const surfaceSelected = highlighted || audioHighlighted || actionSelected;
+        const tapSelected = selectedVerseNumbers.includes(item.verse);
+        const selected = surfaceSelected || tapSelected;
         const isFirstVerse = index === 0;
         const showReferenceMarker = showCrossReferences && Boolean(crossReferenceAvailability[item.verse]);
         const marker = showReferenceMarker ? <Text style={markerStyle}> * </Text> : null;
@@ -2235,12 +2371,14 @@ function BibleText({
             delayLongPress={1000}
             onLayout={(event) => onVerseLayout(item.verse, event.nativeEvent.layout.y)}
             onLongPress={() => onVerseLongPress(item.verse)}
+            onPress={() => onVersePress(item.verse)}
+            onPressIn={onVersePressIn}
             style={{
-              backgroundColor: selected ? palette.peach : "transparent",
-              borderColor: selected ? palette.line : "transparent",
+              backgroundColor: surfaceSelected ? palette.peach : "transparent",
+              borderColor: surfaceSelected ? palette.line : "transparent",
               borderRadius: radius.md,
               borderWidth: 1,
-              paddingHorizontal: selected ? 10 : 0,
+              paddingHorizontal: surfaceSelected ? 10 : 0,
               paddingVertical: compactMode ? 5 : 8,
             }}
           >
@@ -2261,14 +2399,14 @@ function BibleText({
                 <Text style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
                   {marker}
-                  {item.text}
+                  <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
                 </Text>
               </View>
             ) : (
               <Text style={readerTextStyle}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
                 {marker}
-                {item.text}
+                <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
               </Text>
             )}
           </Pressable>
@@ -2342,12 +2480,111 @@ function ChapterSwipeIndicator({
   );
 }
 
+function SelectedVerseSuggestionBar({
+  bottom,
+  maxWidth,
+  onClear,
+  onSave,
+  palette,
+  reference,
+  saving,
+  verseCount,
+}: {
+  bottom: number;
+  maxWidth?: number;
+  onClear: () => void;
+  onSave: () => void;
+  palette: ReaderPalette;
+  reference: string;
+  saving: boolean;
+  verseCount: number;
+}) {
+  return (
+    <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, zIndex: 30 }}>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.surface,
+          borderColor: palette.line,
+          borderRadius: radius.xl,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 10,
+          maxWidth,
+          padding: 10,
+          width: "100%",
+          ...platformShadow({
+            boxShadow: "0 14px 32px rgba(11, 18, 32, 0.16)",
+            color: palette.shadow,
+            offset: { width: 0, height: 12 },
+            opacity: 0.15,
+            radius: 26,
+          }),
+        }}
+      >
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
+            {reference}
+          </Text>
+          <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
+            {verseCount} {verseCount === 1 ? "verse" : "verses"} selected
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Clear selected verses"
+          accessibilityRole="button"
+          disabled={saving}
+          onPress={onClear}
+          style={{
+            alignItems: "center",
+            backgroundColor: palette.input,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            height: 44,
+            justifyContent: "center",
+            opacity: saving ? 0.58 : 1,
+            width: 44,
+          }}
+        >
+          <Feather name="x" size={18} color={palette.accent} />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Save selected verses ${reference}`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
+          disabled={saving}
+          onPress={onSave}
+          style={{
+            alignItems: "center",
+            backgroundColor: saving ? palette.line : palette.peach,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            flexDirection: "row",
+            gap: 8,
+            justifyContent: "center",
+            minHeight: 44,
+            opacity: saving ? 0.68 : 1,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
+          <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
+            {saving ? "Saving..." : "Save selection"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function ReaderToastMessage({ bottom, palette, toast }: { bottom: number; palette: ReaderPalette; toast?: ReaderToast }) {
   if (!toast) return null;
 
   const isError = toast.tone === "error";
   const icon = isError ? "alert-circle" : "check";
-  const detail = isError ? "Du hittar den redan under sparade verser." : "Du hittar den under sparade verser.";
+  const detail = toast.detail ?? (isError ? "Du hittar den redan under sparade verser." : "Du hittar den under sparade verser.");
 
   return (
     <View
@@ -3122,6 +3359,7 @@ function SavedVersesSection({
                 onAddToJournal={onAddToJournal}
                 onOpenInBible={onOpenInBible}
                 onShareToRoom={onShareToRoom}
+                showFullText
                 verse={verse}
               />
             </View>
