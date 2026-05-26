@@ -166,6 +166,22 @@ const fallbackAudioVoices: AudioVoice[] = [
   { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", description: "Measured tone" },
 ];
 
+type ReaderToast = {
+  message: string;
+  tone: "success" | "error";
+};
+
+type PendingVerseComposerAction = {
+  action: "journal" | "pray" | "share";
+  verse: BibleVerse;
+};
+
+type ChapterSwipeDirection = "idle" | "previous" | "next";
+
+function savedVerseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
+  return `${verse.reference}|${verse.translation ?? ""}`;
+}
+
 function puterTokenStorageKey(userId?: string) {
   return userId ? `koino.puterAuthToken.${userId}` : "koino.puterAuthToken";
 }
@@ -345,6 +361,14 @@ function isChapterSwipeGesture(dx: number, dy: number) {
   return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
 }
 
+const chapterSwipeActivationDistance = 9;
+const chapterSwipeDistanceRatio = 0.24;
+const chapterSwipeVelocity = 0.7;
+
+function chapterSwipeBadgeLabel(position?: BiblePosition) {
+  return position ? String(position.chapter) : "";
+}
+
 type ReaderPalette = {
   accent: string;
   background: string;
@@ -438,7 +462,8 @@ export function BibleScreen() {
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const topicRequestRef = useRef(0);
-  const chapterSwipeStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  const chapterSwipeX = useRef(new Animated.Value(0)).current;
+  const chapterSwipeAnimatingRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
@@ -480,6 +505,10 @@ export function BibleScreen() {
   const [scriptureComposerTitle, setScriptureComposerTitle] = useState("");
   const [scriptureComposerBody, setScriptureComposerBody] = useState("");
   const [scriptureComposerVerses, setScriptureComposerVerses] = useState<BibleVerse[]>([]);
+  const [readerToast, setReaderToast] = useState<ReaderToast | undefined>();
+  const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
+  const [chapterSwipeActive, setChapterSwipeActive] = useState(false);
+  const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
@@ -613,7 +642,6 @@ export function BibleScreen() {
         audioPositionRef.current = nextPreferences.audioPosition;
         setPosition(nextPreferences.position);
         setAudioPosition(nextPreferences.audioPosition);
-        showTemporaryHighlight(nextPreferences.position);
         setAudioVoice(normalizeStoredVoice(nextPreferences.audioVoiceId, nextPreferences.audioVoiceName));
         setBibleVersionId(nextPreferences.bibleVersionId);
         notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
@@ -667,7 +695,7 @@ export function BibleScreen() {
   }, []);
 
   const jumpToPosition = useCallback(
-    (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = true) => {
+    (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = false) => {
       const normalized = normalizeBiblePosition(nextPosition);
       const current = positionRef.current;
       const sameChapter = current.book === normalized.book && current.chapter === normalized.chapter;
@@ -1083,7 +1111,7 @@ export function BibleScreen() {
     setPickerVisible(true);
   }, [navigation]);
 
-  const handleVersePress = useCallback((verse: number) => {
+  const handleVerseLongPress = useCallback((verse: number) => {
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
     positionRef.current = nextPosition;
     setPosition(nextPosition);
@@ -1125,33 +1153,43 @@ export function BibleScreen() {
     [jumpToPosition],
   );
 
-  const handleVerseAction = useCallback((action: "pray" | "journal" | "save" | "share" | "references") => {
+  const handleVerseAction = useCallback((action: "pray" | "journal" | "save" | "share") => {
     const selectedVerse = verseForPosition(selectedVersePosition);
-    if (action === "references") {
-      if (selectedVersePosition) {
-        setCrossReferencePosition(selectedVersePosition);
-      }
-      setSelectedVersePosition(undefined);
-      return;
-    }
     if (!selectedVerse) {
       setSelectedVersePosition(undefined);
       return;
     }
+    setSelectedVersePosition(undefined);
     if (action === "save") {
-      void dispatch({ type: "saveVerse", verse: selectedVerse });
+      const savedAlready = state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse));
+      if (savedAlready) {
+        setReaderToast({ message: "Versen är redan sparad", tone: "error" });
+        return;
+      }
+      void dispatch({ type: "saveVerse", verse: selectedVerse }).then(() => {
+        setReaderToast({ message: "Sparad i dina verser", tone: "success" });
+      });
+      return;
     }
+
+    setPendingVerseComposerAction({ action, verse: selectedVerse });
+  }, [dispatch, selectedVersePosition, state.savedVerses, verseForPosition]);
+
+  const handleVerseActionSheetClosed = useCallback(() => {
+    if (!pendingVerseComposerAction) return;
+    const { action, verse } = pendingVerseComposerAction;
+    setPendingVerseComposerAction(undefined);
+
     if (action === "journal") {
-      openScriptureComposer("journal", "scripture", selectedVerse);
+      openScriptureComposer("journal", "scripture", verse);
     }
     if (action === "share") {
-      openScriptureComposer("room", "scripture", selectedVerse, "A Scripture for today.");
+      openScriptureComposer("room", "scripture", verse, "A Scripture for today.");
     }
     if (action === "pray") {
-      openScriptureComposer("journal", "prayer_request", selectedVerse, "Praying with this Scripture.");
+      openScriptureComposer("journal", "prayer_request", verse, "Praying with this Scripture.");
     }
-    setSelectedVersePosition(undefined);
-  }, [dispatch, openScriptureComposer, selectedVersePosition, verseForPosition]);
+  }, [openScriptureComposer, pendingVerseComposerAction]);
 
   async function submitScriptureComposer() {
     if (!scriptureComposerBody.trim()) return;
@@ -1187,32 +1225,102 @@ export function BibleScreen() {
     // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
   }, []);
 
-  const handleChapterTouchStart = useCallback((event: { nativeEvent: { pageX?: number; pageY?: number } }) => {
-    const { pageX, pageY } = event.nativeEvent;
-    if (typeof pageX !== "number" || typeof pageY !== "number") return;
-    chapterSwipeStartRef.current = { x: pageX, y: pageY };
+  const shouldCaptureChapterSwipe = useCallback(
+    (dx: number, dy: number) => {
+      if (chapterSwipeAnimatingRef.current) return false;
+      const hasTarget = dx < 0 ? Boolean(nextChapter) : Boolean(previousChapter);
+      return hasTarget && Math.abs(dx) > chapterSwipeActivationDistance && Math.abs(dx) > Math.abs(dy) * 1.25;
+    },
+    [nextChapter, previousChapter],
+  );
+
+  const resetChapterSwipe = useCallback(() => {
+    chapterSwipeAnimatingRef.current = false;
+    setChapterSwipeActive(false);
+    setChapterSwipeDirection("idle");
   }, []);
 
-  const handleChapterTouchEnd = useCallback(
-    (event: { nativeEvent: { pageX?: number; pageY?: number } }) => {
-      const start = chapterSwipeStartRef.current;
-      chapterSwipeStartRef.current = undefined;
-      const { pageX, pageY } = event.nativeEvent;
-      if (!start || typeof pageX !== "number" || typeof pageY !== "number") return;
+  const chapterSwipePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
+        onMoveShouldSetPanResponderCapture: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
+        onPanResponderGrant: () => {
+          chapterSwipeX.stopAnimation();
+          setChapterSwipeActive(true);
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const target = gesture.dx < 0 ? nextChapter : previousChapter;
+          const direction: ChapterSwipeDirection = gesture.dx < 0 ? "next" : "previous";
+          if (!target) {
+            chapterSwipeX.setValue(0);
+            setChapterSwipeDirection("idle");
+            return;
+          }
 
-      const dx = pageX - start.x;
-      const dy = pageY - start.y;
-      if (!isChapterSwipeGesture(dx, dy)) return;
+          const maxDrag = Math.max(96, width * 0.42);
+          const clampedDx = Math.max(-maxDrag, Math.min(maxDrag, gesture.dx));
+          chapterSwipeX.setValue(clampedDx);
+          setChapterSwipeDirection(direction);
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          const target = gesture.dx < 0 ? nextChapter : previousChapter;
+          const direction: ChapterSwipeDirection = gesture.dx < 0 ? "next" : "previous";
+          const hasCommittedDistance = Math.abs(gesture.dx) >= Math.max(86, width * chapterSwipeDistanceRatio);
+          const hasCommittedVelocity = Math.abs(gesture.vx) >= chapterSwipeVelocity;
 
-      if (dx < 0 && nextChapter) {
-        jumpToPosition(nextChapter);
-        return;
-      }
-      if (dx > 0 && previousChapter) {
-        jumpToPosition(previousChapter);
-      }
-    },
-    [jumpToPosition, nextChapter, previousChapter],
+          if (!target || !(hasCommittedDistance || hasCommittedVelocity) || !isChapterSwipeGesture(gesture.dx, gesture.dy)) {
+            Animated.spring(chapterSwipeX, {
+              damping: 20,
+              stiffness: 210,
+              toValue: 0,
+              useNativeDriver: true,
+            }).start(() => resetChapterSwipe());
+            return;
+          }
+
+          chapterSwipeAnimatingRef.current = true;
+          setChapterSwipeDirection(direction);
+          Animated.timing(chapterSwipeX, {
+            duration: 180,
+            easing: Easing.out(Easing.cubic),
+            toValue: direction === "next" ? -width : width,
+            useNativeDriver: true,
+          }).start(({ finished }) => {
+            if (!finished) {
+              resetChapterSwipe();
+              return;
+            }
+
+            const entryX = direction === "next" ? width : -width;
+            chapterSwipeX.setValue(entryX);
+            jumpToPosition(target, true, false);
+            requestAnimationFrame(() => {
+              Animated.timing(chapterSwipeX, {
+                duration: 220,
+                easing: Easing.out(Easing.cubic),
+                toValue: 0,
+                useNativeDriver: true,
+              }).start(() => {
+                resetChapterSwipe();
+              });
+            });
+          });
+        },
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminate: () => {
+          Animated.spring(chapterSwipeX, {
+            damping: 20,
+            stiffness: 210,
+            toValue: 0,
+            useNativeDriver: true,
+          }).start(() => {
+            resetChapterSwipe();
+          });
+        },
+        onShouldBlockNativeResponder: () => true,
+      }),
+    [chapterSwipeX, jumpToPosition, nextChapter, previousChapter, resetChapterSwipe, shouldCaptureChapterSwipe, width],
   );
 
   useEffect(() => {
@@ -1230,6 +1338,12 @@ export function BibleScreen() {
       cleanupAudioFile();
     };
   }, [audioPlayer, cleanupAudioFile, clearAudioPrepareTimeout]);
+
+  useEffect(() => {
+    if (!readerToast) return;
+    const timeout = setTimeout(() => setReaderToast(undefined), 2200);
+    return () => clearTimeout(timeout);
+  }, [readerToast]);
 
   const openTopic = useCallback((topic: string) => {
     const nextTopic = topic.trim();
@@ -1301,9 +1415,8 @@ export function BibleScreen() {
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         onScroll={handleScroll}
-        onTouchEnd={handleChapterTouchEnd}
-        onTouchStart={handleChapterTouchStart}
         scrollEventThrottle={16}
+        scrollEnabled={!chapterSwipeActive}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           alignSelf: "stretch",
@@ -1312,7 +1425,10 @@ export function BibleScreen() {
           paddingTop: compactMode ? 12 : 18,
         }}
       >
-        <View style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, width: "100%" }}>
+        <Animated.View
+          {...chapterSwipePanResponder.panHandlers}
+          style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
+        >
           <BibleText
             audioHighlightActive={audioHighlightActive}
             audioPosition={audioPosition}
@@ -1320,7 +1436,7 @@ export function BibleScreen() {
             crossReferenceAvailability={chapterCrossReferenceAvailability}
             highlightedPosition={highlightedPosition}
             onVerseLayout={handleVerseLayout}
-            onVersePress={handleVersePress}
+            onVerseLongPress={handleVerseLongPress}
             palette={readerPalette}
             position={position}
             readerLineHeight={readerLineHeight}
@@ -1352,8 +1468,16 @@ export function BibleScreen() {
             onPress={() => nextChapter && jumpToPosition(nextChapter)}
             palette={readerPalette}
           />
-        </View>
+        </Animated.View>
       </ScrollView>
+
+      <ChapterSwipeIndicator
+        direction={chapterSwipeDirection}
+        nextChapter={nextChapter}
+        palette={readerPalette}
+        previousChapter={previousChapter}
+        progress={chapterSwipeX}
+      />
 
       {audioMiniPlayerVisible ? (
         <CompactAudioPlayer
@@ -1369,11 +1493,17 @@ export function BibleScreen() {
         />
       ) : null}
 
+      <ReaderToastMessage bottom={audioMiniPlayerVisible ? Math.max(188, insets.bottom + 170) : Math.max(82, insets.bottom + 62)} palette={readerPalette} toast={readerToast} />
+
       <VerseActionSheet
         onAction={handleVerseAction}
+        bibleVersionId={bibleVersionId}
         onClose={() => setSelectedVersePosition(undefined)}
+        onClosed={handleVerseActionSheetClosed}
+        onReadChapter={readCrossReferenceChapter}
         palette={readerPalette}
         position={selectedVersePosition}
+        readerTextStyle={readerTextStyle}
         visible={Boolean(selectedVersePosition)}
       />
       <ReadingSettingsSheet
@@ -1944,7 +2074,7 @@ function BibleText({
   crossReferenceAvailability,
   highlightedPosition,
   onVerseLayout,
-  onVersePress,
+  onVerseLongPress,
   palette,
   position,
   readerLineHeight,
@@ -1960,7 +2090,7 @@ function BibleText({
   crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
   onVerseLayout: (verse: number, offset: number) => void;
-  onVersePress: (verse: number) => void;
+  onVerseLongPress: (verse: number) => void;
   palette: ReaderPalette;
   position: BiblePosition;
   readerLineHeight: number;
@@ -2011,8 +2141,9 @@ function BibleText({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             key={item.reference}
+            delayLongPress={1000}
             onLayout={(event) => onVerseLayout(item.verse, event.nativeEvent.layout.y)}
-            onPress={() => onVersePress(item.verse)}
+            onLongPress={() => onVerseLongPress(item.verse)}
             style={{
               backgroundColor: selected ? palette.peach : "transparent",
               borderColor: selected ? palette.line : "transparent",
@@ -2036,14 +2167,14 @@ function BibleText({
                 >
                   {position.chapter}
                 </Text>
-                <Text selectable style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
+                <Text style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
                   {marker}
                   {item.text}
                 </Text>
               </View>
             ) : (
-              <Text selectable style={readerTextStyle}>
+              <Text style={readerTextStyle}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
                 {marker}
                 {item.text}
@@ -2056,27 +2187,220 @@ function BibleText({
   );
 }
 
+function ChapterSwipeIndicator({
+  direction,
+  nextChapter,
+  palette,
+  previousChapter,
+  progress,
+}: {
+  direction: ChapterSwipeDirection;
+  nextChapter?: BiblePosition;
+  palette: ReaderPalette;
+  previousChapter?: BiblePosition;
+  progress: Animated.Value;
+}) {
+  const target = direction === "next" ? nextChapter : direction === "previous" ? previousChapter : undefined;
+  if (!target || direction === "idle") return null;
+
+  const isNext = direction === "next";
+  const opacity = progress.interpolate({
+    inputRange: isNext ? [-84, -24, 0] : [0, 24, 84],
+    outputRange: isNext ? [1, 0.72, 0] : [0, 0.72, 1],
+    extrapolate: "clamp",
+  });
+  const nudge = progress.interpolate({
+    inputRange: isNext ? [-120, 0] : [0, 120],
+    outputRange: isNext ? [0, 12] : [-12, 0],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        opacity,
+        position: "absolute",
+        top: "47%",
+        transform: [{ translateX: nudge }],
+        ...(isNext ? { right: 22 } : { left: 22 }),
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.sheet,
+          borderColor: palette.line,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          height: 54,
+          justifyContent: "center",
+          width: 54,
+          ...platformShadow({
+            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+            color: palette.shadow,
+            offset: { width: 0, height: 8 },
+            opacity: 0.13,
+            radius: 18,
+          }),
+        }}
+      >
+        <Text style={{ color: palette.muted, fontSize: 20, fontVariant: ["tabular-nums"], fontWeight: "900" }}>{chapterSwipeBadgeLabel(target)}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+function ReaderToastMessage({ bottom, palette, toast }: { bottom: number; palette: ReaderPalette; toast?: ReaderToast }) {
+  if (!toast) return null;
+
+  const isError = toast.tone === "error";
+  const icon = isError ? "alert-circle" : "check";
+  const detail = isError ? "Du hittar den redan under sparade verser." : "Du hittar den under sparade verser.";
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        alignItems: "center",
+        bottom,
+        left: 18,
+        position: "absolute",
+        right: 18,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.sheet,
+          borderColor: palette.line,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 12,
+          maxWidth: 360,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          ...platformShadow({
+            boxShadow: "0 12px 28px rgba(11, 18, 32, 0.18)",
+            color: palette.shadow,
+            offset: { width: 0, height: 10 },
+            opacity: 0.16,
+            radius: 22,
+          }),
+        }}
+      >
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: palette.peach,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            height: 34,
+            justifyContent: "center",
+            width: 34,
+          }}
+        >
+          <Feather name={icon} size={18} color={isError ? colors.danger : palette.accent} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>{toast.message}</Text>
+          <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>{detail}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function VerseActionSheet({
   onAction,
+  bibleVersionId,
   onClose,
+  onClosed,
+  onReadChapter,
   palette,
   position,
+  readerTextStyle,
   visible,
 }: {
-  onAction: (action: "pray" | "journal" | "save" | "share" | "references") => void;
+  onAction: (action: "pray" | "journal" | "save" | "share") => void;
+  bibleVersionId: BibleVersionId;
   onClose: () => void;
+  onClosed: () => void;
+  onReadChapter: (position: BiblePosition) => void;
   palette: ReaderPalette;
   position?: BiblePosition;
+  readerTextStyle: TextStyle;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  if (!visible || !position) return null;
+  const { height } = useWindowDimensions();
+  const slideProgress = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(visible);
+  const [displayedPosition, setDisplayedPosition] = useState(position);
+  const [view, setView] = useState<"actions" | "references">("actions");
+  const references = useMemo(() => (displayedPosition ? bibleCrossReferences(displayedPosition, bibleVersionId) : []), [bibleVersionId, displayedPosition]);
+  const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
+  const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
+
+  useEffect(() => {
+    if (visible && position) {
+      setDisplayedPosition(position);
+      setView("actions");
+      setMounted(true);
+      slideProgress.stopAnimation();
+      slideProgress.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.timing(slideProgress, {
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    slideProgress.stopAnimation();
+    Animated.timing(slideProgress, {
+      duration: 190,
+      easing: Easing.in(Easing.cubic),
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      setMounted(false);
+      setDisplayedPosition(undefined);
+      onClosed();
+    });
+  }, [mounted, onClosed, position, slideProgress, visible]);
+
+  if (!mounted || !displayedPosition) return null;
+
+  const sheetTranslateY = slideProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [height, 0],
+  });
 
   return (
-    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
+    <Modal transparent visible={mounted} onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            backgroundColor: palette.dim,
+            bottom: 0,
+            left: 0,
+            opacity: slideProgress,
+            position: "absolute",
+            right: 0,
+            top: 0,
+          }}
+        />
         <Pressable accessibilityLabel="Close verse actions" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <View
+        <Animated.View
           style={{
             backgroundColor: palette.sheet,
             borderTopLeftRadius: radius.xxl,
@@ -2086,6 +2410,9 @@ function VerseActionSheet({
             paddingBottom: Math.max(28, insets.bottom + 20),
             paddingHorizontal: 20,
             paddingTop: 16,
+            elevation: 2,
+            transform: [{ translateY: sheetTranslateY }],
+            zIndex: 1,
             ...platformShadow({
               boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
               color: palette.shadow,
@@ -2098,14 +2425,65 @@ function VerseActionSheet({
           <View style={{ alignItems: "center", paddingBottom: 20 }}>
             <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
           </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
+          {view === "actions" ? (
+            <ScrollView showsVerticalScrollIndicator={false}>
             <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle="Gör denna vers till ett böneämne" title="Be för detta" />
             <VerseSheetAction icon="book-open" onPress={() => onAction("journal")} palette={palette} subtitle="Reflektera över denna vers" title="Skriv i journalen" />
             <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle="Spara till dina favoritverser" title="Spara vers" />
             <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle="Dela med ditt rum (valfritt)" title="Dela till rum" />
-            <VerseSheetAction icon="link-2" onPress={() => onAction("references")} palette={palette} subtitle="Se relaterade bibelställen" title="Visa korsreferenser" />
-          </ScrollView>
-        </View>
+            <VerseSheetAction icon="link-2" onPress={() => setView("references")} palette={palette} subtitle="Se relaterade bibelställen" title="Visa korsreferenser" />
+            </ScrollView>
+          ) : (
+            <View style={{ gap: 14 }}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                <ReaderCircleButton accessibilityLabel="Back to verse actions" icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
+                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition)}</Text>
+                </View>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+                {references.length > 0 ? (
+                  references.map((reference, index) => (
+                    <View
+                      key={`${reference.source}-${index}`}
+                      style={{
+                        borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
+                        borderBottomWidth: 1,
+                        gap: 8,
+                        paddingBottom: 18,
+                        paddingTop: index === 0 ? 0 : 18,
+                      }}
+                    >
+                      <Pressable
+                        accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          onClose();
+                          onReadChapter(reference.startPosition);
+                        }}
+                        style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
+                      >
+                        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                          <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
+                          <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
+                          <Feather name="arrow-right" size={17} color={palette.accent} />
+                        </View>
+                        <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
+                          {reference.text}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))
+                ) : (
+                  <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
+                    <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>Inga korsreferenser för denna vers ännu</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          )}
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -2851,6 +3229,7 @@ function CrossReferenceSheet({
                       <Text selectable style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>
                         {reference.reference}
                       </Text>
+                      <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
                       <Feather name="arrow-right" size={17} color={palette.accent} />
                     </View>
                     <Text selectable numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
