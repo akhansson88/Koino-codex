@@ -2285,7 +2285,6 @@ function BibleText({
   audioHighlightActive,
   audioPosition,
   compactMode,
-  crossReferenceAvailability,
   highlightedPosition,
   onVersePress,
   onVersePressIn,
@@ -2297,7 +2296,6 @@ function BibleText({
   readerTextStyle,
   selectedVerseNumbers,
   selectedVersePosition,
-  showCrossReferences,
   showVerseNumbers,
   verses,
 }: {
@@ -2327,12 +2325,6 @@ function BibleText({
     fontWeight: "800",
     lineHeight: readerLineHeight,
   };
-  const markerStyle: TextStyle = {
-    color: palette.accent,
-    fontSize: Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) - 8),
-    fontWeight: "800",
-    lineHeight: readerLineHeight,
-  };
   const selectedTextStyle: TextStyle = {
     textDecorationColor: palette.accent,
     textDecorationLine: "underline",
@@ -2359,9 +2351,6 @@ function BibleText({
         const tapSelected = selectedVerseNumbers.includes(item.verse);
         const selected = surfaceSelected || tapSelected;
         const isFirstVerse = index === 0;
-        const showReferenceMarker = showCrossReferences && Boolean(crossReferenceAvailability[item.verse]);
-        const marker = showReferenceMarker ? <Text style={markerStyle}> * </Text> : null;
-
         return (
           <Pressable
             accessibilityLabel={`${position.book} ${position.chapter}:${item.verse}`}
@@ -2398,14 +2387,12 @@ function BibleText({
                 </Text>
                 <Text style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                  {marker}
                   <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
                 </Text>
               </View>
             ) : (
               <Text style={readerTextStyle}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                {marker}
                 <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
               </Text>
             )}
