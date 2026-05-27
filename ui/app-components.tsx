@@ -14,6 +14,7 @@ import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
+const webWrappingTextStyle = Platform.OS === "web" ? ({ overflowWrap: "anywhere", wordBreak: "break-word" } as TextStyle) : null;
 
 export function initials(name?: string) {
   return (name || "K")
@@ -563,7 +564,7 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
-  const verseTextStyle: TextStyle = { color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
+  const verseTextStyle: TextStyle = { color: colors.ink, flexShrink: 1, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
   return (
     <>
       <Pressable
@@ -585,7 +586,7 @@ export function VersePreviewCard({
         }}
       >
         <Ionicons name="sunny-outline" size={20} color={colors.olive} />
-        <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
             <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
               {displayVerse.reference}
@@ -597,7 +598,7 @@ export function VersePreviewCard({
               {displayVerse.text}
             </ExpandableBodyText>
           ) : (
-            <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
+            <Text numberOfLines={compact ? 3 : 5} style={[verseTextStyle, webWrappingTextStyle]}>
               {displayVerse.text}
             </Text>
           )}
@@ -784,7 +785,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
       : children;
 
   return (
-    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
+    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, flexShrink: 1, fontSize: 15, fontWeight: "500", lineHeight: 22 }, webWrappingTextStyle, style]}>
       {content}
     </Text>
   );
@@ -834,7 +835,7 @@ export function ExpandableBodyText({
   return (
     <View style={{ gap: 6 }}>
       <Animated.View style={[{ overflow: "hidden" }, hasMeasured ? { height: heightAnimation } : null]}>
-        <BodyText muted={muted} numberOfLines={hasMeasured ? undefined : collapsedLines} style={style}>
+        <BodyText muted={muted} numberOfLines={expanded ? undefined : collapsedLines} style={style}>
           {children}
         </BodyText>
       </Animated.View>
