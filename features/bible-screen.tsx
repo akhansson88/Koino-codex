@@ -2325,10 +2325,11 @@ function BibleText({
     fontWeight: "800",
     lineHeight: readerLineHeight,
   };
-  const selectedTextStyle: TextStyle = {
+  const selectedTextStyle: TextStyle & { textUnderlineOffset?: number } = {
     textDecorationColor: palette.accent,
     textDecorationLine: "underline",
     textDecorationStyle: "dotted",
+    textUnderlineOffset: 3,
   };
 
   return (
