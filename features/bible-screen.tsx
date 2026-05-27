@@ -224,6 +224,10 @@ function selectedVerseReferenceLabel(position: Pick<BiblePosition, "book" | "cha
   return `${position.book} ${position.chapter}:${rangeLabels.join(", ")}`;
 }
 
+function verseRangesOverlap(first: SelectedVerseRange, second: SelectedVerseRange) {
+  return first.start <= second.end && second.start <= first.end;
+}
+
 function highlightTime(highlight: BibleHighlight) {
   const parsed = Date.parse(highlight.updatedAt || highlight.createdAt);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -604,6 +608,19 @@ export function BibleScreen() {
 
     return byVerse;
   }, [bibleVersion.translation, position.book, position.chapter, state.bibleHighlights]);
+  const selectedHighlightIds = useMemo(() => {
+    if (selectedVerseRanges.length === 0) return [];
+
+    return state.bibleHighlights
+      .filter(
+        (highlight) =>
+          highlight.book === position.book &&
+          highlight.chapter === position.chapter &&
+          highlight.translation === bibleVersion.translation &&
+          selectedVerseRanges.some((range) => verseRangesOverlap(range, { start: highlight.startVerse, end: highlight.endVerse })),
+      )
+      .map((highlight) => highlight.id);
+  }, [bibleVersion.translation, position.book, position.chapter, selectedVerseRanges, state.bibleHighlights]);
   const chapterCrossReferenceAvailability = useMemo(
     () =>
       Object.fromEntries(
@@ -1318,6 +1335,23 @@ export function BibleScreen() {
     }
   }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving]);
 
+  const handleDeleteSelectedHighlights = useCallback(async () => {
+    if (selectionSaving || selectedHighlightIds.length === 0) return;
+
+    setSelectionSaving(true);
+    try {
+      await Promise.all(selectedHighlightIds.map((id) => dispatch({ type: "removeBibleHighlight", id })));
+      setSelectedVerseNumbers([]);
+      setReaderToast({
+        detail: selectedHighlightIds.length === 1 ? "Highlight removed from this Bible." : "Highlights removed from this Bible.",
+        message: selectedHighlightIds.length === 1 ? "Highlight deleted" : "Highlights deleted",
+        tone: "success",
+      });
+    } finally {
+      setSelectionSaving(false);
+    }
+  }, [dispatch, selectedHighlightIds, selectionSaving]);
+
   const openScriptureComposer = useCallback((context: "journal" | "room", kind: EntryKind, verse: BibleVerse, body = "") => {
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
@@ -1688,8 +1722,10 @@ export function BibleScreen() {
       {selectedVerseBarVisible ? (
         <SelectedVerseSuggestionBar
           bottom={selectedVerseBarBottom}
+          canDeleteHighlight={selectedHighlightIds.length > 0}
           maxWidth={contentWidth}
           onClear={() => setSelectedVerseNumbers([])}
+          onDeleteHighlight={handleDeleteSelectedHighlights}
           onHighlight={handleHighlightSelectedVerses}
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
@@ -2415,6 +2451,7 @@ function BibleText({
         const surfaceSelected = highlighted || audioHighlighted || actionSelected;
         const tapSelected = selectedVerseNumbers.includes(item.verse);
         const selected = surfaceSelected || tapSelected || Boolean(persistedHighlightColor);
+        const verseTextStyle = [persistedHighlightColor ? { backgroundColor: persistedHighlightColor } : undefined, tapSelected ? selectedTextStyle : undefined];
         const isFirstVerse = index === 0;
         return (
           <Pressable
@@ -2428,11 +2465,11 @@ function BibleText({
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
             style={{
-              backgroundColor: surfaceSelected ? palette.peach : persistedHighlightColor ?? "transparent",
+              backgroundColor: surfaceSelected ? palette.peach : "transparent",
               borderColor: surfaceSelected ? palette.line : "transparent",
               borderRadius: radius.md,
               borderWidth: 1,
-              paddingHorizontal: surfaceSelected || persistedHighlightColor ? 10 : 0,
+              paddingHorizontal: surfaceSelected ? 10 : 0,
               paddingVertical: compactMode ? 5 : 8,
             }}
           >
@@ -2452,13 +2489,13 @@ function BibleText({
                 </Text>
                 <Text style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                  <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
+                  <Text style={verseTextStyle}>{item.text}</Text>
                 </Text>
               </View>
             ) : (
               <Text style={readerTextStyle}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                <Text style={tapSelected ? selectedTextStyle : undefined}>{item.text}</Text>
+                <Text style={verseTextStyle}>{item.text}</Text>
               </Text>
             )}
           </Pressable>
@@ -2534,8 +2571,10 @@ function ChapterSwipeIndicator({
 
 function SelectedVerseSuggestionBar({
   bottom,
+  canDeleteHighlight,
   maxWidth,
   onClear,
+  onDeleteHighlight,
   onHighlight,
   onSave,
   palette,
@@ -2544,8 +2583,10 @@ function SelectedVerseSuggestionBar({
   verseCount,
 }: {
   bottom: number;
+  canDeleteHighlight: boolean;
   maxWidth?: number;
   onClear: () => void;
+  onDeleteHighlight: () => void;
   onHighlight: (color: BibleHighlightColor) => void;
   onSave: () => void;
   palette: ReaderPalette;
@@ -2629,7 +2670,8 @@ function SelectedVerseSuggestionBar({
             </Text>
           </Pressable>
         </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 14, justifyContent: "center", minHeight: 38 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center", minHeight: 38 }}>
+          <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>Highlight:</Text>
           {bibleHighlightColors.map((option) => (
             <Pressable
               accessibilityLabel={`${option.label} ${reference}`}
@@ -2651,6 +2693,28 @@ function SelectedVerseSuggestionBar({
               }}
             />
           ))}
+          {canDeleteHighlight ? (
+            <Pressable
+              accessibilityLabel={`Delete highlight ${reference}`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              onPress={onDeleteHighlight}
+              style={{
+                alignItems: "center",
+                backgroundColor: palette.input,
+                borderColor: palette.line,
+                borderRadius: 999,
+                borderWidth: 1,
+                height: 34,
+                justifyContent: "center",
+                opacity: saving ? 0.58 : 1,
+                width: 34,
+              }}
+            >
+              <Feather name="trash-2" size={15} color={colors.danger} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>
