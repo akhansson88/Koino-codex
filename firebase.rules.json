@@ -407,6 +407,54 @@
       }
     },
 
+    "bibleHighlights": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$highlightId": {
+          ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $highlightId && newData.child('book').isString() && newData.child('chapter').isNumber() && newData.child('startVerse').isNumber() && newData.child('endVerse').isNumber() && newData.child('reference').isString() && newData.child('color').isString() && newData.child('color').val().matches(/^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('colorId').exists() || newData.child('colorId').val() == null || newData.child('colorId').isString()) && (!newData.child('translation').exists() || newData.child('translation').val() == null || newData.child('translation').isString()))",
+          "id": { ".validate": "newData.val() == $highlightId" },
+          "colorId": { ".validate": "newData.val() == null || newData.isString()" },
+          "book": { ".validate": "newData.isString()" },
+          "chapter": { ".validate": "newData.isNumber()" },
+          "startVerse": { ".validate": "newData.isNumber()" },
+          "endVerse": { ".validate": "newData.isNumber()" },
+          "reference": { ".validate": "newData.isString()" },
+          "translation": { ".validate": "newData.val() == null || newData.isString()" },
+          "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/)" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "bibleHighlightColors": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$colorId": {
+          ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $colorId && newData.child('hex').isString() && newData.child('hex').val().matches(/^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) && newData.child('label').isString() && newData.child('createdAt').isString() && newData.child('updatedAt').isString())",
+          "id": { ".validate": "newData.val() == $colorId" },
+          "hex": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/)" },
+          "label": { ".validate": "newData.isString()" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "bibleHighlightColorSettings": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.val() == null || newData.child('seededAt').isString()",
+        "seededAt": { ".validate": "newData.isString()" },
+        "$other": { ".validate": false }
+      }
+    },
+
     "supportIntents": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",

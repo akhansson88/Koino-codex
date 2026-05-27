@@ -3,7 +3,7 @@ import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
 
 import type { PrayerSessionTargetType } from "@/state/types";
 import { brandPalette, colors } from "@/ui/theme";
-import { SmokeBreathing } from "@/ui/smoke-breathing";
+import { VoicePrayerCircle } from "@/ui/voice-prayer-circle";
 
 const PRAYER_COMPLETE_DELAY_MS = 15_000;
 
@@ -59,8 +59,8 @@ export function PrayerMoment({
   return (
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
       <View style={{ flex: 1, backgroundColor: colors.cream }}>
-        <SmokeBreathing fullScreen primaryColor={colors.gold} secondaryColor={colors.moss} />
         <View style={{ flex: 1, justifyContent: "center", gap: 26, padding: 26 }}>
+          <VoicePrayerCircle size={320} />
           <View
             style={{
               backgroundColor: colors.paper,

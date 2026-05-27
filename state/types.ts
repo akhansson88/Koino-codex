@@ -60,6 +60,30 @@ export type SavedVerse = ScriptureReference & {
   savedAt: string;
 };
 
+export type BibleHighlightColor = string;
+
+export type BibleHighlightPaletteColor = {
+  id: Id;
+  hex: BibleHighlightColor;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BibleHighlight = {
+  id: Id;
+  colorId?: Id;
+  book: string;
+  chapter: number;
+  startVerse: number;
+  endVerse: number;
+  reference: string;
+  translation?: string;
+  color: BibleHighlightColor;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type EntryKind = "reflection" | "prayer_request" | "praise" | "update" | "scripture";
 export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
 export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
@@ -183,6 +207,8 @@ export type KoinoState = {
   commentReactions: CommentReaction[];
   journalEntries: JournalEntry[];
   savedVerses: SavedVerse[];
+  bibleHighlights: BibleHighlight[];
+  bibleHighlightColors: BibleHighlightPaletteColor[];
   supportIntents: SupportIntent[];
 };
 
