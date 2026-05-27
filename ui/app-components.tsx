@@ -803,19 +803,22 @@ export function ExpandableBodyText({
   const hasMeasuredRef = useRef(false);
   const [expanded, setExpanded] = useState(false);
   const [fullHeight, setFullHeight] = useState(0);
-  const hasMeasured = fullHeight > 0;
-  const canExpand = fullHeight > collapsedHeight + 1;
-  const visibleHeight = canExpand ? (expanded ? fullHeight : collapsedHeight) : fullHeight || collapsedHeight;
+  const [fullLineCount, setFullLineCount] = useState(0);
+  const measuredFullHeight = fullHeight || fullLineCount * collapsedLineHeight;
+  const hasMeasured = measuredFullHeight > 0;
+  const canExpand = fullLineCount > collapsedLines || measuredFullHeight > collapsedHeight + 1;
+  const visibleHeight = canExpand ? (expanded ? measuredFullHeight : collapsedHeight) : measuredFullHeight || collapsedHeight;
 
   useEffect(() => {
     hasMeasuredRef.current = false;
     setFullHeight(0);
+    setFullLineCount(0);
     setExpanded(false);
     heightAnimation.setValue(collapsedHeight);
   }, [children, collapsedHeight, heightAnimation]);
 
   useEffect(() => {
-    if (!fullHeight) return;
+    if (!measuredFullHeight) return;
     if (!hasMeasuredRef.current) {
       hasMeasuredRef.current = true;
       heightAnimation.setValue(visibleHeight);
@@ -826,7 +829,7 @@ export function ExpandableBodyText({
       toValue: visibleHeight,
       useNativeDriver: false,
     }).start();
-  }, [fullHeight, heightAnimation, visibleHeight]);
+  }, [heightAnimation, measuredFullHeight, visibleHeight]);
 
   return (
     <View style={{ gap: 6 }}>
@@ -838,6 +841,7 @@ export function ExpandableBodyText({
       <BodyText
         muted={muted}
         onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
+        onTextLayout={(event) => setFullLineCount(event.nativeEvent.lines.length)}
         style={[style, { left: 0, opacity: 0, position: "absolute", right: 0, zIndex: -1 }]}
       >
         {children}
