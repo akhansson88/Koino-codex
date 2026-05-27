@@ -138,6 +138,10 @@ function localDayKey(value: string | Date) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+function normalizeProfileName(value?: string | null) {
+  return value?.trim().replace(/\s+/g, " ").toLocaleLowerCase() ?? "";
+}
+
 function id(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -663,12 +667,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, [firebaseUser, profile?.currentGroupId]);
 
   const state = useMemo<KoinoState>(() => {
-    const memberUsers = memberships.map<User>((membership) => ({
-      id: membership.userId,
-      name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
-      image: membership.userId === profile?.id ? profile.image : undefined,
-      createdAt: membership.createdAt,
-    }));
+    const profileNameKey = normalizeProfileName(profile?.name);
+    const memberUsers = memberships.map<User>((membership) => {
+      const isCurrentProfile = membership.userId === profile?.id;
+      const matchesCurrentProfileName = Boolean(profileNameKey && normalizeProfileName(membership.userName) === profileNameKey);
+
+      return {
+        id: membership.userId,
+        name: membership.userName || (isCurrentProfile ? profile.name : "Someone"),
+        image: isCurrentProfile || matchesCurrentProfileName ? profile?.image : undefined,
+        createdAt: membership.createdAt,
+      };
+    });
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
 
     return {
