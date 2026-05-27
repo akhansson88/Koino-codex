@@ -14,7 +14,6 @@ import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
-const webWrappingTextStyle = Platform.OS === "web" ? ({ overflowWrap: "anywhere", wordBreak: "break-word" } as TextStyle) : null;
 
 export function initials(name?: string) {
   return (name || "K")
@@ -564,7 +563,7 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
-  const verseTextStyle: TextStyle = { color: colors.ink, flexShrink: 1, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
+  const verseTextStyle: TextStyle = { color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
   return (
     <>
       <Pressable
@@ -586,7 +585,7 @@ export function VersePreviewCard({
         }}
       >
         <Ionicons name="sunny-outline" size={20} color={colors.olive} />
-        <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+        <View style={{ flex: 1, gap: 4 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
             <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
               {displayVerse.reference}
@@ -598,7 +597,7 @@ export function VersePreviewCard({
               {displayVerse.text}
             </ExpandableBodyText>
           ) : (
-            <Text numberOfLines={compact ? 3 : 5} style={[verseTextStyle, webWrappingTextStyle]}>
+            <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
               {displayVerse.text}
             </Text>
           )}
@@ -785,7 +784,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
       : children;
 
   return (
-    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, flexShrink: 1, fontSize: 15, fontWeight: "500", lineHeight: 22 }, webWrappingTextStyle, style]}>
+    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
       {content}
     </Text>
   );
@@ -804,22 +803,19 @@ export function ExpandableBodyText({
   const hasMeasuredRef = useRef(false);
   const [expanded, setExpanded] = useState(false);
   const [fullHeight, setFullHeight] = useState(0);
-  const [fullLineCount, setFullLineCount] = useState(0);
-  const measuredFullHeight = fullHeight || fullLineCount * collapsedLineHeight;
-  const hasMeasured = measuredFullHeight > 0;
-  const canExpand = fullLineCount > collapsedLines || measuredFullHeight > collapsedHeight + 1;
-  const visibleHeight = canExpand ? (expanded ? measuredFullHeight : collapsedHeight) : measuredFullHeight || collapsedHeight;
+  const hasMeasured = fullHeight > 0;
+  const canExpand = fullHeight > collapsedHeight + 1;
+  const visibleHeight = canExpand ? (expanded ? fullHeight : collapsedHeight) : fullHeight || collapsedHeight;
 
   useEffect(() => {
     hasMeasuredRef.current = false;
     setFullHeight(0);
-    setFullLineCount(0);
     setExpanded(false);
     heightAnimation.setValue(collapsedHeight);
   }, [children, collapsedHeight, heightAnimation]);
 
   useEffect(() => {
-    if (!measuredFullHeight) return;
+    if (!fullHeight) return;
     if (!hasMeasuredRef.current) {
       hasMeasuredRef.current = true;
       heightAnimation.setValue(visibleHeight);
@@ -830,19 +826,18 @@ export function ExpandableBodyText({
       toValue: visibleHeight,
       useNativeDriver: false,
     }).start();
-  }, [heightAnimation, measuredFullHeight, visibleHeight]);
+  }, [fullHeight, heightAnimation, visibleHeight]);
 
   return (
     <View style={{ gap: 6 }}>
       <Animated.View style={[{ overflow: "hidden" }, hasMeasured ? { height: heightAnimation } : null]}>
-        <BodyText muted={muted} numberOfLines={expanded ? undefined : collapsedLines} style={style}>
+        <BodyText muted={muted} numberOfLines={hasMeasured ? undefined : collapsedLines} style={style}>
           {children}
         </BodyText>
       </Animated.View>
       <BodyText
         muted={muted}
         onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
-        onTextLayout={(event) => setFullLineCount(event.nativeEvent.lines.length)}
         style={[style, { left: 0, opacity: 0, position: "absolute", right: 0, zIndex: -1 }]}
       >
         {children}
