@@ -9,6 +9,8 @@ import { activePrivateCheckIns } from "@/state/check-ins";
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
+  BibleHighlight,
+  BibleHighlightColor,
   CheckIn,
   CommentReaction,
   CommentReactionKind,
@@ -107,6 +109,8 @@ type Action =
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }
+  | { type: "highlightVerses"; color: BibleHighlightColor; verses: BibleVerse[] }
+  | { type: "removeBibleHighlight"; id: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
 
@@ -155,6 +159,12 @@ function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+const bibleHighlightColors: BibleHighlightColor[] = ["#FFF200", "#4DF06A", "#09C6DF", "#FFC166"];
+
+function isBibleHighlightColor(value: unknown): value is BibleHighlightColor {
+  return typeof value === "string" && bibleHighlightColors.includes(value as BibleHighlightColor);
 }
 
 function authMessage(error: unknown) {
@@ -378,6 +388,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [commentReactions, setCommentReactions] = useState<CommentReaction[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
+  const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
   const [theme, setTheme] = useState<ThemeName>("light");
@@ -404,6 +415,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setCommentReactions([]);
     setJournalEntries([]);
     setSavedVerses([]);
+    setBibleHighlights([]);
     setSupportIntents([]);
   }, []);
 
@@ -560,6 +572,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
+    const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     const unsubs = [
@@ -567,6 +580,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(privateCheckInsRef, (snapshot) => setPrivateCheckIns(asArray<CheckIn>(snapshot.val()))),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
       onValue(savedVersesRef, (snapshot) => setSavedVerses(asArray<SavedVerse>(snapshot.val()).sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt)))),
+      onValue(bibleHighlightsRef, (snapshot) =>
+        setBibleHighlights(
+          asArray<BibleHighlight>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
+        ),
+      ),
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
@@ -633,6 +651,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       commentReactions,
       journalEntries,
       savedVerses,
+      bibleHighlights,
       supportIntents,
     };
   }, [
@@ -655,6 +674,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     profileReady,
     replies,
     savedVerses,
+    bibleHighlights,
     supportIntents,
     userGroupsReady,
   ]);
@@ -1193,6 +1213,42 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await remove(ref(database, `savedVerses/${firebaseUser.uid}/${action.id}`));
               return;
             }
+            case "highlightVerses": {
+              if (!firebaseUser || !isBibleHighlightColor(action.color)) return;
+              const timestamp = now();
+              const highlights = action.verses
+                .map((verse): BibleHighlight | undefined => {
+                  const key = savedVerseId(verse);
+                  if (!key || !verse.book || typeof verse.chapter !== "number" || typeof verse.startVerse !== "number") return undefined;
+                  const existing = bibleHighlights.find((highlight) => highlight.id === key);
+                  return {
+                    id: key,
+                    book: verse.book,
+                    chapter: verse.chapter,
+                    startVerse: verse.startVerse,
+                    endVerse: verse.endVerse ?? verse.startVerse,
+                    reference: verse.reference,
+                    ...(verse.translation ? { translation: verse.translation } : {}),
+                    color: action.color,
+                    createdAt: existing?.createdAt ?? timestamp,
+                    updatedAt: timestamp,
+                  };
+                })
+                .filter((item): item is BibleHighlight => Boolean(item));
+
+              if (highlights.length === 0) return;
+
+              const updates = Object.fromEntries(
+                highlights.map((highlight) => [`bibleHighlights/${firebaseUser.uid}/${highlight.id}`, highlight]),
+              );
+              await update(ref(database), updates);
+              return;
+            }
+            case "removeBibleHighlight": {
+              if (!firebaseUser) return;
+              await remove(ref(database, `bibleHighlights/${firebaseUser.uid}/${action.id}`));
+              return;
+            }
             case "createSupportIntent": {
               if (!firebaseUser) return;
               const intent: SupportIntent = {
@@ -1243,6 +1299,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
     },
     [
+      bibleHighlights,
       checkIns,
       clearUserSession,
       commentReactions,

@@ -52,7 +52,7 @@ import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHead
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
-import type { BibleVerse, EntryKind, SavedVerse } from "@/state/types";
+import type { BibleHighlight, BibleHighlightColor, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -189,6 +189,13 @@ type SelectedVerseRange = {
   start: number;
 };
 
+const bibleHighlightColors: { color: BibleHighlightColor; label: string }[] = [
+  { color: "#FFF200", label: "Yellow highlight" },
+  { color: "#4DF06A", label: "Green highlight" },
+  { color: "#09C6DF", label: "Cyan highlight" },
+  { color: "#FFC166", label: "Peach highlight" },
+];
+
 function savedVerseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
   return `${verse.reference}|${verse.translation ?? ""}`;
 }
@@ -215,6 +222,11 @@ function selectedVerseReferenceLabel(position: Pick<BiblePosition, "book" | "cha
 
   const rangeLabels = ranges.map((range) => (range.start === range.end ? String(range.start) : `${range.start}-${range.end}`));
   return `${position.book} ${position.chapter}:${rangeLabels.join(", ")}`;
+}
+
+function highlightTime(highlight: BibleHighlight) {
+  const parsed = Date.parse(highlight.updatedAt || highlight.createdAt);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function puterTokenStorageKey(userId?: string) {
@@ -571,6 +583,27 @@ export function BibleScreen() {
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
+  const chapterHighlightByVerse = useMemo(() => {
+    const highlights = state.bibleHighlights
+      .filter(
+        (highlight) =>
+          highlight.book === position.book &&
+          highlight.chapter === position.chapter &&
+          highlight.translation === bibleVersion.translation,
+      )
+      .sort((a, b) => highlightTime(b) - highlightTime(a));
+    const byVerse: Record<number, BibleHighlightColor> = {};
+
+    highlights.forEach((highlight) => {
+      for (let verse = highlight.startVerse; verse <= highlight.endVerse; verse += 1) {
+        if (!byVerse[verse]) {
+          byVerse[verse] = highlight.color;
+        }
+      }
+    });
+
+    return byVerse;
+  }, [bibleVersion.translation, position.book, position.chapter, state.bibleHighlights]);
   const chapterCrossReferenceAvailability = useMemo(
     () =>
       Object.fromEntries(
@@ -600,9 +633,9 @@ export function BibleScreen() {
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
   const selectedVerseBarBottom = audioMiniPlayerVisible ? Math.max(166, insets.bottom + 150) : Math.max(88, insets.bottom + 68);
   const defaultReaderBottomPadding = audioMiniPlayerVisible ? Math.max(190, insets.bottom + 166) : Math.max(126, insets.bottom + 106);
-  const readerBottomPadding = selectedVerseBarVisible ? Math.max(defaultReaderBottomPadding, selectedVerseBarBottom + 112) : defaultReaderBottomPadding;
+  const readerBottomPadding = selectedVerseBarVisible ? Math.max(defaultReaderBottomPadding, selectedVerseBarBottom + 158) : defaultReaderBottomPadding;
   const readerToastBottom = selectedVerseBarVisible
-    ? selectedVerseBarBottom + 94
+    ? selectedVerseBarBottom + 138
     : audioMiniPlayerVisible
       ? Math.max(188, insets.bottom + 170)
       : Math.max(82, insets.bottom + 62);
@@ -1259,6 +1292,32 @@ export function BibleScreen() {
     }
   }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving, state.savedVerses]);
 
+  const handleHighlightSelectedVerses = useCallback(async (color: BibleHighlightColor) => {
+    if (selectionSaving || selectedVerseRanges.length === 0) return;
+
+    const selectedVerses = selectedVerseRanges
+      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
+      .filter((verse): verse is BibleVerse => Boolean(verse));
+
+    if (selectedVerses.length === 0) {
+      setReaderToast({ detail: "Try selecting the verses again.", message: "Could not highlight selection", tone: "error" });
+      return;
+    }
+
+    setSelectionSaving(true);
+    try {
+      await dispatch({ type: "highlightVerses", color, verses: selectedVerses });
+      setSelectedVerseNumbers([]);
+      setReaderToast({
+        detail: selectedVerses.length === 1 ? "Highlight saved to this Bible." : "Highlights saved to this Bible.",
+        message: selectedVerses.length === 1 ? "Verse highlighted" : "Verses highlighted",
+        tone: "success",
+      });
+    } finally {
+      setSelectionSaving(false);
+    }
+  }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving]);
+
   const openScriptureComposer = useCallback((context: "journal" | "room", kind: EntryKind, verse: BibleVerse, body = "") => {
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
@@ -1561,6 +1620,7 @@ export function BibleScreen() {
           <BibleText
             audioHighlightActive={audioHighlightActive}
             audioPosition={audioPosition}
+            chapterHighlightByVerse={chapterHighlightByVerse}
             compactMode={compactMode}
             crossReferenceAvailability={chapterCrossReferenceAvailability}
             highlightedPosition={highlightedPosition}
@@ -1630,6 +1690,7 @@ export function BibleScreen() {
           bottom={selectedVerseBarBottom}
           maxWidth={contentWidth}
           onClear={() => setSelectedVerseNumbers([])}
+          onHighlight={handleHighlightSelectedVerses}
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
           reference={selectedVerseReference}
@@ -2284,6 +2345,7 @@ function TopicVerseCard({
 function BibleText({
   audioHighlightActive,
   audioPosition,
+  chapterHighlightByVerse,
   compactMode,
   highlightedPosition,
   onVersePress,
@@ -2301,6 +2363,7 @@ function BibleText({
 }: {
   audioHighlightActive: boolean;
   audioPosition: BiblePosition;
+  chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   compactMode: boolean;
   crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
@@ -2348,9 +2411,10 @@ function BibleText({
           selectedVersePosition?.book === position.book &&
           selectedVersePosition.chapter === position.chapter &&
           selectedVersePosition.verse === item.verse;
+        const persistedHighlightColor = chapterHighlightByVerse[item.verse];
         const surfaceSelected = highlighted || audioHighlighted || actionSelected;
         const tapSelected = selectedVerseNumbers.includes(item.verse);
-        const selected = surfaceSelected || tapSelected;
+        const selected = surfaceSelected || tapSelected || Boolean(persistedHighlightColor);
         const isFirstVerse = index === 0;
         return (
           <Pressable
@@ -2364,11 +2428,11 @@ function BibleText({
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
             style={{
-              backgroundColor: surfaceSelected ? palette.peach : "transparent",
+              backgroundColor: surfaceSelected ? palette.peach : persistedHighlightColor ?? "transparent",
               borderColor: surfaceSelected ? palette.line : "transparent",
               borderRadius: radius.md,
               borderWidth: 1,
-              paddingHorizontal: surfaceSelected ? 10 : 0,
+              paddingHorizontal: surfaceSelected || persistedHighlightColor ? 10 : 0,
               paddingVertical: compactMode ? 5 : 8,
             }}
           >
@@ -2472,6 +2536,7 @@ function SelectedVerseSuggestionBar({
   bottom,
   maxWidth,
   onClear,
+  onHighlight,
   onSave,
   palette,
   reference,
@@ -2481,6 +2546,7 @@ function SelectedVerseSuggestionBar({
   bottom: number;
   maxWidth?: number;
   onClear: () => void;
+  onHighlight: (color: BibleHighlightColor) => void;
   onSave: () => void;
   palette: ReaderPalette;
   reference: string;
@@ -2491,13 +2557,12 @@ function SelectedVerseSuggestionBar({
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, zIndex: 30 }}>
       <View
         style={{
-          alignItems: "center",
+          alignItems: "stretch",
           backgroundColor: palette.surface,
           borderColor: palette.line,
           borderRadius: radius.xl,
           borderWidth: 1,
-          flexDirection: "row",
-          gap: 10,
+          gap: 9,
           maxWidth,
           padding: 10,
           width: "100%",
@@ -2510,58 +2575,83 @@ function SelectedVerseSuggestionBar({
           }),
         }}
       >
-        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
-            {reference}
-          </Text>
-          <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
-            {verseCount} {verseCount === 1 ? "verse" : "verses"} selected
-          </Text>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
+              {reference}
+            </Text>
+            <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
+              {verseCount} {verseCount === 1 ? "verse" : "verses"} selected
+            </Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Clear selected verses"
+            accessibilityRole="button"
+            disabled={saving}
+            onPress={onClear}
+            style={{
+              alignItems: "center",
+              backgroundColor: palette.input,
+              borderColor: palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              height: 44,
+              justifyContent: "center",
+              opacity: saving ? 0.58 : 1,
+              width: 44,
+            }}
+          >
+            <Feather name="x" size={18} color={palette.accent} />
+          </Pressable>
+          <Pressable
+            accessibilityLabel={`Save selected verses ${reference}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
+            onPress={onSave}
+            style={{
+              alignItems: "center",
+              backgroundColor: saving ? palette.line : palette.peach,
+              borderColor: palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 8,
+              justifyContent: "center",
+              minHeight: 44,
+              opacity: saving ? 0.68 : 1,
+              paddingHorizontal: 12,
+            }}
+          >
+            <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
+            <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
+              {saving ? "Saving..." : "Save selection"}
+            </Text>
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityLabel="Clear selected verses"
-          accessibilityRole="button"
-          disabled={saving}
-          onPress={onClear}
-          style={{
-            alignItems: "center",
-            backgroundColor: palette.input,
-            borderColor: palette.line,
-            borderRadius: 999,
-            borderWidth: 1,
-            height: 44,
-            justifyContent: "center",
-            opacity: saving ? 0.58 : 1,
-            width: 44,
-          }}
-        >
-          <Feather name="x" size={18} color={palette.accent} />
-        </Pressable>
-        <Pressable
-          accessibilityLabel={`Save selected verses ${reference}`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: saving }}
-          disabled={saving}
-          onPress={onSave}
-          style={{
-            alignItems: "center",
-            backgroundColor: saving ? palette.line : palette.peach,
-            borderColor: palette.line,
-            borderRadius: 999,
-            borderWidth: 1,
-            flexDirection: "row",
-            gap: 8,
-            justifyContent: "center",
-            minHeight: 44,
-            opacity: saving ? 0.68 : 1,
-            paddingHorizontal: 12,
-          }}
-        >
-          <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
-          <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
-            {saving ? "Saving..." : "Save selection"}
-          </Text>
-        </Pressable>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 14, justifyContent: "center", minHeight: 38 }}>
+          {bibleHighlightColors.map((option) => (
+            <Pressable
+              accessibilityLabel={`${option.label} ${reference}`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              key={option.color}
+              onPress={() => onHighlight(option.color)}
+              style={{
+                alignItems: "center",
+                backgroundColor: option.color,
+                borderColor: palette.line,
+                borderRadius: 999,
+                borderWidth: 1,
+                height: 34,
+                justifyContent: "center",
+                opacity: saving ? 0.58 : 1,
+                width: 34,
+              }}
+            />
+          ))}
+        </View>
       </View>
     </View>
   );

@@ -407,6 +407,27 @@
       }
     },
 
+    "bibleHighlights": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$highlightId": {
+          ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $highlightId && newData.child('book').isString() && newData.child('chapter').isNumber() && newData.child('startVerse').isNumber() && newData.child('endVerse').isNumber() && newData.child('reference').isString() && newData.child('color').isString() && (newData.child('color').val() == '#FFF200' || newData.child('color').val() == '#4DF06A' || newData.child('color').val() == '#09C6DF' || newData.child('color').val() == '#FFC166') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('translation').exists() || newData.child('translation').val() == null || newData.child('translation').isString()))",
+          "id": { ".validate": "newData.val() == $highlightId" },
+          "book": { ".validate": "newData.isString()" },
+          "chapter": { ".validate": "newData.isNumber()" },
+          "startVerse": { ".validate": "newData.isNumber()" },
+          "endVerse": { ".validate": "newData.isNumber()" },
+          "reference": { ".validate": "newData.isString()" },
+          "translation": { ".validate": "newData.val() == null || newData.isString()" },
+          "color": { ".validate": "newData.val() == '#FFF200' || newData.val() == '#4DF06A' || newData.val() == '#09C6DF' || newData.val() == '#FFC166'" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
     "supportIntents": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
