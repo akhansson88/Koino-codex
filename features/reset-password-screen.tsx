@@ -43,7 +43,7 @@ export function ResetPasswordScreen() {
   const canSubmit = hasResetCode && newPassword.length >= 6 && newPassword === confirmPassword && !isSubmitting;
 
   async function handleResetPassword() {
-    if (!resetCode) return;
+    if (!canSubmit || !resetCode) return;
 
     setHasSubmitted(true);
     setMessage("");
@@ -77,20 +77,24 @@ export function ResetPasswordScreen() {
                 <Field
                   value={newPassword}
                   onChangeText={setNewPassword}
+                  onSubmitEditing={handleResetPassword}
                   placeholder="New password"
                   autoCapitalize="none"
                   autoComplete="new-password"
                   autoCorrect={false}
+                  returnKeyType="next"
                   secureTextEntry
                   textContentType="newPassword"
                 />
                 <Field
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
+                  onSubmitEditing={handleResetPassword}
                   placeholder="Confirm new password"
                   autoCapitalize="none"
                   autoComplete="new-password"
                   autoCorrect={false}
+                  returnKeyType="done"
                   secureTextEntry
                   textContentType="newPassword"
                 />

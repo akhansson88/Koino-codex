@@ -400,7 +400,16 @@ function HeartCheckInSheet({
         </View>
         <View style={{ gap: 8 }}>
           <SectionHeading>What is on your heart?</SectionHeading>
-          <TextInputField multiline value={note} onChangeText={onNote} placeholder="A short honest sentence..." style={{ minHeight: 112 }} />
+          <TextInputField
+            multiline
+            value={note}
+            onChangeText={onNote}
+            onSubmitEditing={onSubmit}
+            placeholder="A short honest sentence..."
+            returnKeyType="done"
+            style={{ minHeight: 112 }}
+            submitBehavior="submit"
+          />
         </View>
         <BibleVerseField verses={verses} onChange={onVerses} />
         <PrimaryButton icon="check-circle" onPress={onSubmit}>

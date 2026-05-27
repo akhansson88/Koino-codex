@@ -2320,10 +2320,11 @@ function BibleText({
 }) {
   const verseNumberStyle: TextStyle = {
     color: palette.muted,
-    fontSize: Math.max(11, Number(readerTextStyle.fontSize ?? defaultFontSize) - 6),
+    fontSize: Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.58),
     fontVariant: ["tabular-nums"],
     fontWeight: "800",
     lineHeight: readerLineHeight,
+    verticalAlign: "top",
   };
   const selectedTextStyle: TextStyle = {
     textDecorationColor: palette.accent,
@@ -3226,8 +3227,11 @@ function ChapterReflectionCard({
       <TextInput
         multiline
         onChangeText={onChangeText}
+        onSubmitEditing={() => onAction("save")}
         placeholder="Skriv din reflektion..."
         placeholderTextColor={palette.muted}
+        returnKeyType="done"
+        submitBehavior="submit"
         value={value}
         style={{
           backgroundColor: palette.input,
@@ -3694,8 +3698,11 @@ function PuterTokenModal({
               autoCorrect={false}
               multiline
               onChangeText={onChangeAuthToken}
+              onSubmitEditing={onSave}
               placeholder="Paste Puter auth token"
+              returnKeyType="done"
               secureTextEntry={false}
+              submitBehavior="submit"
               value={authTokenInput}
             />
             <SecondaryButton icon="check" onPress={onSave} style={{ minHeight: 44, paddingHorizontal: 14 }}>

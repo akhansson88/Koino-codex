@@ -305,7 +305,9 @@ export function FeedDetailScreen() {
           <TextInputField
             value={replyDraft}
             onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
+            onSubmitEditing={sendReply}
             placeholder={itemKind === "update" ? "Write a response..." : itemKind === "praise" ? "Write an amen..." : "Write an encouragement..."}
+            returnKeyType="send"
             style={{ flex: 1 }}
           />
           <Pressable

@@ -141,23 +141,6 @@ function FeedPostCard({
             <Feather name={kindIcon(item)} size={13} color={colors.gold} />
             <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
           </View>
-          {ownsItem ? (
-            <View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Post options"
-                hitSlop={8}
-                onPressIn={(event) => event.stopPropagation()}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
-                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-              >
-                <Feather name="more-horizontal" size={20} color={colors.ink} />
-              </Pressable>
-            </View>
-          ) : null}
         </View>
 
         {ownsItem && menuOpen ? (
@@ -170,8 +153,8 @@ function FeedPostCard({
               minWidth: 118,
               paddingVertical: 4,
               position: "absolute",
+              bottom: 50,
               right: 14,
-              top: 50,
               zIndex: 40,
               ...platformShadow({
                 boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
@@ -240,6 +223,22 @@ function FeedPostCard({
               {prayed ? "Prayed" : "Pray"}
             </PrimaryButton>
             <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "700" }}>{prayerCount} prayed</Text>
+            <View style={{ flex: 1 }} />
+            {ownsItem ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Post options"
+                hitSlop={8}
+                onPressIn={(event) => event.stopPropagation()}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((current) => !current);
+                }}
+                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
+              >
+                <Feather name="more-horizontal" size={19} color={colors.ink} />
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           <View style={{ alignItems: "center", flexDirection: "row", gap: 22 }}>
@@ -264,7 +263,21 @@ function FeedPostCard({
               <Text style={{ color: colors.muted, fontWeight: "700" }}>{replyCount}</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
-            <Feather name="more-horizontal" size={19} color={colors.ink} />
+            {ownsItem ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Post options"
+                hitSlop={8}
+                onPressIn={(event) => event.stopPropagation()}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((current) => !current);
+                }}
+                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
+              >
+                <Feather name="more-horizontal" size={19} color={colors.ink} />
+              </Pressable>
+            ) : null}
           </View>
         )}
       </Card>
@@ -701,7 +714,16 @@ function CheckInModal({
             </View>
             <View style={{ gap: 8 }}>
               <SectionHeading>Add a thought (optional)</SectionHeading>
-              <TextInputField multiline maxLength={350} value={note} onChangeText={onNote} placeholder="Thankful for a quiet morning and time with God." />
+              <TextInputField
+                multiline
+                maxLength={350}
+                value={note}
+                onChangeText={onNote}
+                onSubmitEditing={onSubmit}
+                placeholder="Thankful for a quiet morning and time with God."
+                returnKeyType="send"
+                submitBehavior="submit"
+              />
               <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
             </View>
             <BibleVerseField verses={verses} onChange={onVerses} />

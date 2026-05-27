@@ -87,7 +87,9 @@ export function SharedComposer({
         <TextInputField
           value={title}
           onChangeText={onTitle}
+          onSubmitEditing={onSubmit}
           placeholder={kind === "prayer_request" ? "Prayer title (optional)" : kind === "praise" ? "Answered prayer title" : kind === "scripture" ? "Scripture note title" : "Title (optional)"}
+          returnKeyType="send"
         />
 
         <View style={{ gap: 8 }}>
@@ -96,8 +98,11 @@ export function SharedComposer({
             maxLength={MAX_BODY_LENGTH}
             value={body}
             onChangeText={(value) => onBody(value.slice(0, MAX_BODY_LENGTH))}
+            onSubmitEditing={onSubmit}
             placeholder={kind === "prayer_request" ? "Write your prayer..." : kind === "praise" ? "How did God answer?" : kind === "scripture" ? "What is this Scripture stirring in you?" : "Share, reflect, or write one honest sentence..."}
+            returnKeyType="send"
             style={{ minHeight: 170 }}
+            submitBehavior="submit"
           />
           <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>
             {body.length}/{MAX_BODY_LENGTH}

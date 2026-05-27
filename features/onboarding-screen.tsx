@@ -51,6 +51,21 @@ export function OnboardingScreen() {
     }
   }
 
+  function handleAuthSubmit() {
+    if (!canAuth) return;
+    dispatch(authMode === "signIn" ? { type: "signIn", email, password } : { type: "signUp", email, password, name });
+  }
+
+  function handleSessionSubmit() {
+    if (!canContinue) return;
+    dispatch({
+      type: "createSession",
+      name,
+      groupName: groupMode === "create" ? groupName : undefined,
+      inviteCode: groupMode === "join" ? inviteCode : undefined,
+    });
+  }
+
   return (
     <Screen>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
@@ -75,22 +90,26 @@ export function OnboardingScreen() {
                   <Choice label="Create account" selected={authMode === "signUp"} onPress={() => setAuthMode("signUp")} />
                 </View>
                 {authMode === "signUp" ? (
-                  <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+                  <Field value={name} onChangeText={setName} onSubmitEditing={handleAuthSubmit} placeholder="Your name" autoCapitalize="words" returnKeyType="next" />
                 ) : null}
                 <Field
                   value={email}
                   onChangeText={setEmail}
+                  onSubmitEditing={handleAuthSubmit}
                   placeholder="Email"
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType={Platform.OS === "web" ? "default" : "email-address"}
+                  returnKeyType="next"
                 />
                 <Field
                   value={password}
                   onChangeText={setPassword}
+                  onSubmitEditing={handleAuthSubmit}
                   placeholder="Password"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  returnKeyType="done"
                   secureTextEntry
                 />
                 {state.authError ? <Body muted>{state.authError}</Body> : null}
@@ -99,13 +118,7 @@ export function OnboardingScreen() {
 
               <PillButton
                 disabled={!canAuth}
-                onPress={() =>
-                  dispatch(
-                    authMode === "signIn"
-                      ? { type: "signIn", email, password }
-                      : { type: "signUp", email, password, name },
-                  )
-                }
+                onPress={handleAuthSubmit}
               >
                 {authMode === "signIn" ? "Sign in" : "Create account"}
               </PillButton>
@@ -119,7 +132,7 @@ export function OnboardingScreen() {
             <>
               <Card>
                 <Body>What should your group call you?</Body>
-                <Field value={name} onChangeText={setName} placeholder="Your name" autoCapitalize="words" />
+                <Field value={name} onChangeText={setName} onSubmitEditing={handleSessionSubmit} placeholder="Your name" autoCapitalize="words" returnKeyType="next" />
                 <Body muted>Signed in as {state.authEmail ?? "your account"}.</Body>
               </Card>
 
@@ -130,23 +143,16 @@ export function OnboardingScreen() {
                   <Choice label="Create room" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
                 </View>
                 {groupMode === "join" ? (
-                  <Field value={inviteCode} onChangeText={setInviteCode} placeholder="Group code" autoCapitalize="characters" />
+                  <Field value={inviteCode} onChangeText={setInviteCode} onSubmitEditing={handleSessionSubmit} placeholder="Group code" autoCapitalize="characters" returnKeyType="join" />
                 ) : (
-                  <Field value={groupName} onChangeText={setGroupName} placeholder="Group name" />
+                  <Field value={groupName} onChangeText={setGroupName} onSubmitEditing={handleSessionSubmit} placeholder="Group name" returnKeyType="done" />
                 )}
                 {state.authError ? <Body muted>{state.authError}</Body> : null}
               </Card>
 
               <PillButton
                 disabled={!canContinue}
-                onPress={() =>
-                  dispatch({
-                    type: "createSession",
-                    name,
-                    groupName: groupMode === "create" ? groupName : undefined,
-                    inviteCode: groupMode === "join" ? inviteCode : undefined,
-                  })
-                }
+                onPress={handleSessionSubmit}
               >
                 Enter the rhythm
               </PillButton>

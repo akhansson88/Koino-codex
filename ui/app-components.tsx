@@ -1,7 +1,7 @@
 import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
-import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
+import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 
@@ -563,6 +563,7 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
+  const verseTextStyle: TextStyle = { color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
   return (
     <>
       <Pressable
@@ -591,9 +592,15 @@ export function VersePreviewCard({
             </Text>
             {displayVerse.translation ? <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
           </View>
-          <Text numberOfLines={showFullText ? undefined : compact ? 3 : 5} style={{ color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 }}>
-            {displayVerse.text}
-          </Text>
+          {showFullText ? (
+            <ExpandableBodyText collapsedLines={compact ? 3 : 5} style={verseTextStyle}>
+              {displayVerse.text}
+            </ExpandableBodyText>
+          ) : (
+            <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
+              {displayVerse.text}
+            </Text>
+          )}
           {showOpenIndicator ? <Text style={{ color: colors.gold, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}
         </View>
       </Pressable>
@@ -789,7 +796,9 @@ export function ExpandableBodyText({
   muted = false,
   style,
 }: PropsWithChildren<{ collapsedLines?: number; muted?: boolean; style?: StyleProp<TextStyle> }>) {
-  const collapsedHeight = collapsedLines * 22;
+  const flattenedStyle = StyleSheet.flatten(style);
+  const collapsedLineHeight = typeof flattenedStyle?.lineHeight === "number" ? flattenedStyle.lineHeight : 22;
+  const collapsedHeight = collapsedLines * collapsedLineHeight;
   const heightAnimation = useRef(new Animated.Value(collapsedHeight)).current;
   const hasMeasuredRef = useRef(false);
   const [expanded, setExpanded] = useState(false);

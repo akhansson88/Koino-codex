@@ -539,7 +539,7 @@ export function SettingsScreen() {
             <View style={{ paddingHorizontal: 14 }}>
               <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
                 <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename room</Text>
-                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Room name" style={{ marginTop: 8 }} />
+                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Room name" returnKeyType="done" style={{ marginTop: 8 }} />
                 {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your room</Text> : null}
               </Row>
             </View>
@@ -724,7 +724,7 @@ export function SettingsScreen() {
       <BottomSheet title="Join another room" visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a room code</Text>
-          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} placeholder="Room code" />
+          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Room code" returnKeyType="join" />
           <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
             Join by code
           </PrimaryButton>
@@ -736,7 +736,7 @@ export function SettingsScreen() {
         </View>
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new room</Text>
-          <TextInputField value={newGroupName} onChangeText={setNewGroupName} placeholder="New room name" />
+          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New room name" returnKeyType="done" />
           <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
             Create new room
           </PrimaryButton>
@@ -750,7 +750,7 @@ export function SettingsScreen() {
           <View style={{ paddingHorizontal: 14 }}>
             <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename room</Text>
-              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} placeholder="Room name" style={{ marginTop: 8 }} />
+              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Room name" returnKeyType="done" style={{ marginTop: 8 }} />
               {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your room</Text> : null}
             </Row>
           </View>
