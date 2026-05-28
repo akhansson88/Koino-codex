@@ -15,7 +15,7 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, HeartMood, JournalEntry, JournalEntryType } from "@/state/types";
+import type { BibleVerse, EntryKind, HeartMood, JournalEntry, JournalEntryType, ProfileImage } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -40,6 +40,16 @@ const JOURNAL_BODY_PREVIEW_LINES = 3;
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function formatPrayerDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.floor(seconds / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) return `${h} h and ${m} min`;
+  if (h > 0) return `${h} h`;
+  return `${m} min`;
 }
 
 function moodNumber(mood: HeartMood) {
@@ -130,6 +140,15 @@ export function JournalScreen() {
       }));
     return [...privateEntries, ...sharedCheckIns].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   }, [state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries]);
+
+  const prayerNotifications = useMemo(() => {
+    return state.prayerNotifications
+      .map((notification) => {
+        const prayEr = state.users.find((u) => u.id === notification.userId);
+        return { notification, prayErName: prayEr?.name ?? "Someone", prayErImage: prayEr?.image };
+      })
+      .sort((a, b) => Date.parse(b.notification.createdAt) - Date.parse(a.notification.createdAt));
+  }, [state.prayerNotifications, state.users]);
 
   function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
     const kind = composerKindForJournalType(type);
@@ -313,7 +332,16 @@ export function JournalScreen() {
             <BodyText muted>{state.authError}</BodyText>
           </Card>
         ) : null}
-        {entries.length === 0 ? (
+        {prayerNotifications.map(({ notification, prayErName, prayErImage }) => (
+          <PrayerNotificationCard
+            key={`prayer-${notification.id}`}
+            prayErName={prayErName}
+            prayErImage={prayErImage}
+            durationSeconds={notification.durationSeconds}
+            createdAt={notification.createdAt}
+          />
+        ))}
+        {entries.length === 0 && prayerNotifications.length === 0 ? (
           <Card>
             <BodyText muted>No journal entries yet. Start with one honest sentence.</BodyText>
           </Card>
@@ -324,7 +352,7 @@ export function JournalScreen() {
               entry={entry}
               userName={user?.name ?? "You"}
               userImage={user?.image}
-              onOpen={() => router.push(`/journal/${entry.id}` as never)}
+              onOpen={() => router.push(`/me/${entry.id}` as never)}
               onEdit={() => editEntry(entry)}
               onAddToJournal={(verse) => beginEntry("scripture_note", visibility.private, verse)}
               onShareToRoom={(verse) => beginEntry("scripture_note", visibility.room, verse, "A Scripture for today.")}
@@ -446,6 +474,35 @@ function JournalEntryCard({
           </Pressable>
         </View>
       )}
+    </Card>
+  );
+}
+
+function PrayerNotificationCard({
+  prayErName,
+  prayErImage,
+  durationSeconds,
+  createdAt,
+}: {
+  prayErName: string;
+  prayErImage?: ProfileImage;
+  durationSeconds: number;
+  createdAt: string;
+}) {
+  const duration = formatPrayerDuration(durationSeconds);
+  return (
+    <Card>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+        <Avatar image={prayErImage} name={prayErName} size={38} tone="pink" />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{prayErName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatDate(createdAt)}</Text>
+        </View>
+        <Feather name="heart" size={13} color={colors.gold} />
+      </View>
+      <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>
+        {prayErName} prayed for you{duration ? ` for ${duration}` : ""}
+      </Text>
     </Card>
   );
 }

@@ -90,7 +90,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="journal"
+        name="me"
         options={{
           title: tabs[2],
           tabBarLabel: tabs[2],

@@ -163,7 +163,7 @@ export type Post = {
   createdAt: string;
 };
 
-export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply";
+export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply" | "user";
 export type PrayerReactionTargetType = "post" | "check_in" | "reply";
 export type ReplyTargetType = "post" | "check_in";
 export type PrayerSession = {
@@ -171,9 +171,20 @@ export type PrayerSession = {
   userId: Id;
   targetType: PrayerSessionTargetType;
   targetId: Id;
+  recipientUserId?: Id;
   startedAt: string;
   completedAt?: string;
   status: "completed" | "skipped";
+};
+
+export type PrayerNotification = {
+  id: Id;
+  userId: Id;
+  recipientUserId: Id;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  createdAt: string;
 };
 
 export type PrayerReaction = {
@@ -242,6 +253,7 @@ export type KoinoState = {
   privateCheckIns: CheckIn[];
   posts: Post[];
   prayerSessions: PrayerSession[];
+  prayerNotifications: PrayerNotification[];
   prayerReactions: PrayerReaction[];
   replies: Reply[];
   journalEntries: JournalEntry[];

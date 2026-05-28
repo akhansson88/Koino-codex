@@ -35,7 +35,7 @@ function RootNavigator() {
         <Stack.Screen name="reset-password" options={{ gestureEnabled: false, headerShown: false }} />
         <Stack.Screen name="identity" options={{ headerShown: false }} />
         <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
-        <Stack.Screen name="journal/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
       </Stack>
     </>

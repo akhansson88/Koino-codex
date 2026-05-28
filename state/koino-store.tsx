@@ -26,6 +26,7 @@ import {
   KoinoState,
   Membership,
   Post,
+  PrayerNotification,
   PrayerReaction,
   PrayerSession,
   Reply,
@@ -109,7 +110,7 @@ type Action =
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
-  | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string }
+  | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string; recipientUserId?: Id }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
@@ -484,6 +485,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [privateCheckIns, setPrivateCheckIns] = useState<CheckIn[]>([]);
   const [posts, setPosts] = useState<KoinoState["posts"]>([]);
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
+  const [prayerNotifications, setPrayerNotifications] = useState<PrayerNotification[]>([]);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
@@ -516,6 +518,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setPrivateCheckIns([]);
     setPosts([]);
     setPrayerSessions([]);
+    setPrayerNotifications([]);
     setPrayerReactions([]);
     setReplies([]);
     setJournalEntries([]);
@@ -681,6 +684,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
     const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
+    const prayerNotificationsRef = ref(database, `prayerNotifications/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     const bibleHighlightColorsRef = ref(database, `bibleHighlightColors/${firebaseUser.uid}`);
@@ -692,6 +696,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(journalRef, (snapshot) => setJournalEntries(asArray<JournalEntry>(snapshot.val()))),
       onValue(privateCheckInsRef, (snapshot) => setPrivateCheckIns(asArray<CheckIn>(snapshot.val()))),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
+      onValue(prayerNotificationsRef, (snapshot) =>
+        setPrayerNotifications(asArray<PrayerNotification>(snapshot.val()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))),
+      ),
       onValue(savedVersesRef, (snapshot) => setSavedVerses(asArray<SavedVerse>(snapshot.val()).sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt)))),
       onValue(bibleHighlightsRef, (snapshot) =>
         setBibleHighlights(
@@ -809,6 +816,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       privateCheckIns,
       posts,
       prayerSessions,
+      prayerNotifications,
       prayerReactions,
       replies,
       journalEntries,
@@ -833,6 +841,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     journalEntries,
     memberships,
     posts,
+    prayerNotifications,
     privateCheckIns,
     prayerReactions,
     prayerSessions,
@@ -1194,15 +1203,19 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 if (!profile?.currentGroupId || !checkIns.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) return;
               } else if (action.targetType === "reply") {
                 if (!profile?.currentGroupId || !replies.some((item) => item.id === action.targetId)) return;
+              } else if (action.targetType === "user") {
+                if (!action.recipientUserId) return;
               } else {
                 if (!journalEntries.some((item) => item.id === action.targetId && item.userId === firebaseUser.uid)) return;
               }
               const completedAt = now();
+              const durationSeconds = Math.max(0, Math.floor((Date.parse(completedAt) - Date.parse(action.startedAt)) / 1000));
               const session: PrayerSession = {
                 id: id("prayersession"),
                 userId: firebaseUser.uid,
                 targetType: action.targetType,
                 targetId: action.targetId,
+                ...(action.recipientUserId ? { recipientUserId: action.recipientUserId } : {}),
                 startedAt: action.startedAt,
                 completedAt,
                 status: action.status,
@@ -1210,7 +1223,20 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
               await set(ref(database, `prayerSessions/${firebaseUser.uid}/${session.id}`), session);
 
-              if (action.status === "completed" && action.targetType !== "journal_entry" && profile?.currentGroupId) {
+              if (action.status === "completed" && action.targetType === "user" && action.recipientUserId && action.recipientUserId !== firebaseUser.uid) {
+                const notification: PrayerNotification = {
+                  id: id("prayernotification"),
+                  userId: firebaseUser.uid,
+                  recipientUserId: action.recipientUserId,
+                  startedAt: action.startedAt,
+                  completedAt,
+                  durationSeconds,
+                  createdAt: completedAt,
+                };
+                await set(ref(database, `prayerNotifications/${action.recipientUserId}/${notification.id}`), notification);
+              }
+
+              if (action.status === "completed" && action.targetType !== "journal_entry" && action.targetType !== "user" && profile?.currentGroupId) {
                 const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
                 const reaction: PrayerReaction = {
                   id: reactionId,

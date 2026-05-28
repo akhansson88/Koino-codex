@@ -432,14 +432,33 @@
         ".read": "auth != null && auth.uid == $uid",
         "$sessionId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $sessionId && newData.child('userId').val() == $uid && (newData.child('targetType').val() == 'post' || newData.child('targetType').val() == 'check_in' || newData.child('targetType').val() == 'journal_entry' || newData.child('targetType').val() == 'reply') && newData.child('targetId').isString() && newData.child('startedAt').isString() && (newData.child('status').val() == 'completed' || newData.child('status').val() == 'skipped') && (!newData.child('completedAt').exists() || newData.child('completedAt').val() == null || newData.child('completedAt').isString()))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $sessionId && newData.child('userId').val() == $uid && (newData.child('targetType').val() == 'post' || newData.child('targetType').val() == 'check_in' || newData.child('targetType').val() == 'journal_entry' || newData.child('targetType').val() == 'reply' || newData.child('targetType').val() == 'user') && newData.child('targetId').isString() && newData.child('startedAt').isString() && (newData.child('status').val() == 'completed' || newData.child('status').val() == 'skipped') && (!newData.child('completedAt').exists() || newData.child('completedAt').val() == null || newData.child('completedAt').isString()) && (!newData.child('recipientUserId').exists() || newData.child('recipientUserId').val() == null || newData.child('recipientUserId').isString()))",
           "id": { ".validate": "newData.val() == $sessionId" },
           "userId": { ".validate": "newData.val() == $uid" },
-          "targetType": { ".validate": "newData.val() == 'post' || newData.val() == 'check_in' || newData.val() == 'journal_entry' || newData.val() == 'reply'" },
+          "targetType": { ".validate": "newData.val() == 'post' || newData.val() == 'check_in' || newData.val() == 'journal_entry' || newData.val() == 'reply' || newData.val() == 'user'" },
           "targetId": { ".validate": "newData.isString()" },
+          "recipientUserId": { ".validate": "newData.val() == null || newData.isString()" },
           "startedAt": { ".validate": "newData.isString()" },
           "completedAt": { ".validate": "newData.val() == null || newData.isString()" },
           "status": { ".validate": "newData.val() == 'completed' || newData.val() == 'skipped'" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "prayerNotifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$notificationId": {
+          ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('userId').val() == auth.uid) || (data.exists() && !newData.exists() && data.child('userId').val() == auth.uid))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $notificationId && newData.child('userId').isString() && newData.child('recipientUserId').val() == $uid && newData.child('startedAt').isString() && newData.child('completedAt').isString() && newData.child('durationSeconds').isNumber() && newData.child('createdAt').isString())",
+          "id": { ".validate": "newData.val() == $notificationId" },
+          "userId": { ".validate": "newData.isString()" },
+          "recipientUserId": { ".validate": "newData.val() == $uid" },
+          "startedAt": { ".validate": "newData.isString()" },
+          "completedAt": { ".validate": "newData.isString()" },
+          "durationSeconds": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "createdAt": { ".validate": "newData.isString()" },
           "$other": { ".validate": false }
         }
       }

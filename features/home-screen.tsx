@@ -20,6 +20,7 @@ import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
+  Avatar,
   BodyText,
   Card,
   CurrentRoomHeader,
@@ -81,6 +82,7 @@ export function HomeScreen() {
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [memberSelectVisible, setMemberSelectVisible] = useState(false);
   const [visiblePostCount, setVisiblePostCount] = useState(INITIAL_POST_COUNT);
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
@@ -277,13 +279,8 @@ export function HomeScreen() {
           </Card>
         ) : null}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          <RhythmAction icon="heart" label="Pray for someone" onPress={() => {
-            if (openPrayer) {
-              const prayer = itemPrayerState(openPrayer);
-              setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
-            }
-          }} />
           <RhythmAction icon="edit-3" label="Write entry" onPress={() => openComposer("reflection", undefined, visibility.room)} />
+          <RhythmAction icon="heart" label="Pray for someone" onPress={() => setMemberSelectVisible(true)} />
         </View>
       </View>
 
@@ -430,13 +427,53 @@ export function HomeScreen() {
       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
-        onFinish={(status, startedAt) => {
+        onFinish={(status, startedAt, completedAt) => {
           if (prayerTarget) {
-            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt });
+            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt, recipientUserId: prayerTarget.recipientUserId });
           }
           setPrayerTarget(undefined);
         }}
       />
+
+      <Modal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
+        <AppScreen>
+          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+            <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
+            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
+            <View style={{ width: 38 }} />
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>Who would you like to pray for?</Text>
+            <BodyText muted>Select a member from your group.</BodyText>
+          </View>
+          <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
+            {state.users.filter((u) => u.id !== state.currentUserId).map((member) => (
+              <Pressable
+                accessibilityRole="button"
+                key={member.id}
+                onPress={() => {
+                  setMemberSelectVisible(false);
+                  setPrayerTarget({ targetType: "user", targetId: member.id, body: "", recipientUserId: member.id });
+                }}
+              >
+                <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
+                  <Avatar image={member.image} name={member.name} size={46} tone="green" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
+                  </View>
+                  <Feather name="heart" size={18} color={colors.gold} />
+                </Card>
+              </Pressable>
+            ))}
+            {state.users.filter((u) => u.id !== state.currentUserId).length === 0 ? (
+              <Card>
+                <BodyText muted>No other members in this group yet.</BodyText>
+              </Card>
+            ) : null}
+          </ScrollView>
+        </AppScreen>
+      </Modal>
       </ScrollView>
     </AppScreen>
   );

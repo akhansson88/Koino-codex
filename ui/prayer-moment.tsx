@@ -7,7 +7,7 @@ import { VoicePrayerCircle } from "@/ui/voice-prayer-circle";
 
 const PRAYER_COMPLETE_DELAY_MS = 15_000;
 
-export type PrayerMomentTarget = { targetType: PrayerSessionTargetType; targetId: string; body: string };
+export type PrayerMomentTarget = { targetType: PrayerSessionTargetType; targetId: string; body: string; recipientUserId?: string };
 
 export function PrayerMoment({
   target,
@@ -16,7 +16,7 @@ export function PrayerMoment({
 }: {
   target?: PrayerMomentTarget;
   onClose: () => void;
-  onFinish: (status: "completed" | "skipped", startedAt: string) => void;
+  onFinish: (status: "completed" | "skipped", startedAt: string, completedAt: string) => void;
 }) {
   const completeProgressAnimation = useRef(new Animated.Value(0)).current;
   const [startedAt, setStartedAt] = useState(new Date().toISOString());
@@ -83,7 +83,7 @@ export function PrayerMoment({
             <Pressable
               accessibilityState={{ disabled: !canCompletePrayer }}
               disabled={!canCompletePrayer}
-              onPress={() => onFinish("completed", startedAt)}
+              onPress={() => onFinish("completed", startedAt, new Date().toISOString())}
               style={{
                 alignItems: "center",
                 backgroundColor: canCompletePrayer ? colors.gold : colors.disabled,
@@ -109,7 +109,7 @@ export function PrayerMoment({
                 I have prayed
               </Text>
             </Pressable>
-            <Pressable onPress={() => onFinish("skipped", startedAt)} style={{ alignItems: "center", padding: 16 }}>
+            <Pressable onPress={() => onFinish("skipped", startedAt, new Date().toISOString())} style={{ alignItems: "center", padding: 16 }}>
               <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>Skip for now</Text>
             </Pressable>
             <Pressable onPress={onClose} style={{ alignItems: "center", padding: 8 }}>
