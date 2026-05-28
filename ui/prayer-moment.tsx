@@ -60,7 +60,7 @@ export function PrayerMoment({
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
       <View style={{ flex: 1, backgroundColor: colors.cream }}>
         <View style={{ flex: 1, justifyContent: "center", gap: 26, padding: 26 }}>
-          <VoicePrayerCircle size={320} />
+          <VoicePrayerCircle size={240} />
           <View
             style={{
               backgroundColor: colors.paper,

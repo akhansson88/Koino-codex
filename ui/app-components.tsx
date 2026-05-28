@@ -205,18 +205,18 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
 export function HeartPromptCard({
   image,
   name,
-  onCreate,
   onPress,
   subtitle = "Share, reflect or ask for prayer...",
 }: {
   image?: GroupImage;
   name?: string;
-  onCreate: () => void;
   onPress: () => void;
   subtitle?: string;
 }) {
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
       style={{
         alignItems: "center",
         backgroundColor: colors.paper,
@@ -234,17 +234,12 @@ export function HeartPromptCard({
         }),
       }}
     >
-      <Pressable accessibilityRole="button" onPress={onPress} style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}>
-        <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-          <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
-        </View>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Create new entry"
-        onPress={onCreate}
+      <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
+        <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
+      </View>
+      <View
         style={{
           alignItems: "center",
           backgroundColor: colors.accentSubtle,
@@ -257,8 +252,8 @@ export function HeartPromptCard({
         }}
       >
         <Feather name="plus" size={23} color={colors.olive} />
-      </Pressable>
-    </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -521,12 +516,12 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
   return <Avatar name={name ?? "Room"} size={size} tone="blue" />;
 }
 
-export function AvatarStack({ names }: { names: string[] }) {
+export function AvatarStack({ users, size = 42 }: { users: { name: string; image?: GroupImage }[]; size?: number }) {
   return (
-    <View style={{ flexDirection: "row", height: 42 }}>
-      {names.slice(0, 4).map((name, index) => (
-        <View key={`${name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -10 }}>
-          <Avatar name={name} size={42} tone={index % 2 ? "orange" : "pink"} />
+    <View style={{ flexDirection: "row", height: size }}>
+      {users.slice(0, 4).map((user, index) => (
+        <View key={`${user.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -(size * 0.4) }}>
+          <Avatar image={user.image} name={user.name} size={size} tone={index % 2 ? "orange" : "pink"} />
         </View>
       ))}
     </View>

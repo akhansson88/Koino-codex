@@ -1,16 +1,13 @@
 import type { ComponentProps } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
-  actionLabels,
   defaultFeedTitle as productDefaultFeedTitle,
-  entryKindIcon,
-  feedItemKind,
   feedItemLabel,
   normalizeEntryKind,
   visibility,
@@ -19,11 +16,9 @@ import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
-  Avatar,
   BodyText,
   Card,
   CurrentRoomHeader,
-  ExpandableBodyText,
   HeartPromptCard,
   IconButton,
   PrimaryButton,
@@ -31,8 +26,8 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  VerseList,
 } from "@/ui/app-components";
+import { PostCard } from "@/ui/post-card";
 import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
@@ -42,7 +37,8 @@ import { colors, platformShadow, radius } from "@/ui/theme";
 
 type CheckInStep = "choose" | "details" | "thanks";
 
-const FEED_BODY_PREVIEW_LINES = 3;
+const INITIAL_POST_COUNT = 10;
+const LOAD_MORE_POST_COUNT = 20;
 
 const moodOptions = [
   { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
@@ -78,210 +74,8 @@ function kindLabel(item: FeedItem) {
   return feedItemLabel(item);
 }
 
-function kindIcon(item: FeedItem) {
-  if (item.type === "check_in") return "check-circle" as const;
-  return entryKindIcon(item.kind);
-}
-
 function defaultTitle(item: FeedItem) {
   return productDefaultFeedTitle(item, moodLabel);
-}
-
-function FeedPostCard({
-  authorImage,
-  authorName,
-  item,
-  onDelete,
-  onEdit,
-  onOpen,
-  onPray,
-  onReply,
-  ownsItem,
-  prayed,
-  prayerCount,
-  replyCount,
-}: {
-  authorImage?: GroupImage;
-  authorName: string;
-  item: FeedItem;
-  onDelete: () => void;
-  onEdit: () => void;
-  onOpen: () => void;
-  onPray: () => void;
-  onReply: () => void;
-  ownsItem: boolean;
-  prayed: boolean;
-  prayerCount: number;
-  replyCount: number;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const suppressOpenRef = useRef(false);
-  const itemKind = feedItemKind(item);
-  const isPrayer = item.type === "post" && itemKind === "prayer_request";
-  const actionLabel = actionLabels[itemKind];
-
-  function runMenuAction(action: () => void) {
-    suppressOpenRef.current = true;
-    setMenuOpen(false);
-    action();
-    setTimeout(() => {
-      suppressOpenRef.current = false;
-    }, 250);
-  }
-
-  return (
-      <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
-        <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
-          <Avatar image={authorImage} name={authorName} size={42} tone={isPrayer ? "orange" : "green"} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-          </View>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Feather name={kindIcon(item)} size={13} color={colors.gold} />
-            <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
-          </View>
-        </View>
-
-        {ownsItem && menuOpen ? (
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              minWidth: 118,
-              paddingVertical: 4,
-              position: "absolute",
-              bottom: 50,
-              right: 14,
-              zIndex: 40,
-              ...platformShadow({
-                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-                elevation: 12,
-                offset: { width: 0, height: 10 },
-                opacity: 0.14,
-                radius: 24,
-              }),
-            }}
-          >
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onEdit);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="edit-2" size={14} color={colors.ink} />
-              <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
-            </Pressable>
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onDelete);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="trash-2" size={14} color={colors.danger} />
-              <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <Pressable
-          onPress={() => {
-            if (menuOpen || suppressOpenRef.current) {
-              setMenuOpen(false);
-              return;
-            }
-            onOpen();
-          }}
-          style={{ gap: 8 }}
-        >
-          <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
-            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
-          </Text>
-          <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
-            {item.body || "No words today, just presence."}
-          </ExpandableBodyText>
-        </Pressable>
-        <LinkPreview text={item.body} />
-
-        <VerseList verse={item.verse} verses={item.verses} compact />
-
-        {isPrayer ? (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-            <PrimaryButton
-              icon="heart"
-              onPress={() => {
-                onPray();
-              }}
-              style={{ flex: 1, minHeight: 50 }}
-            >
-              {prayed ? "Prayed" : "Pray"}
-            </PrimaryButton>
-            <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "700" }}>{prayerCount} prayed</Text>
-            <View style={{ flex: 1 }} />
-            {ownsItem ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Post options"
-                hitSlop={8}
-                onPressIn={(event) => event.stopPropagation()}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
-                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-              >
-                <Feather name="more-horizontal" size={19} color={colors.ink} />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 22 }}>
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                onPray();
-              }}
-              style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-            >
-              <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
-              <Text style={{ color: colors.muted, fontWeight: "700" }}>{actionLabel} {prayerCount}</Text>
-            </Pressable>
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                onReply();
-              }}
-              style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-            >
-              <Feather name="message-circle" size={21} color={colors.ink} />
-              <Text style={{ color: colors.muted, fontWeight: "700" }}>{replyCount}</Text>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            {ownsItem ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Post options"
-                hitSlop={8}
-                onPressIn={(event) => event.stopPropagation()}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
-                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-              >
-                <Feather name="more-horizontal" size={19} color={colors.ink} />
-              </Pressable>
-            ) : null}
-          </View>
-        )}
-      </Card>
-  );
 }
 
 export function HomeScreen() {
@@ -301,6 +95,7 @@ export function HomeScreen() {
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [visiblePostCount, setVisiblePostCount] = useState(INITIAL_POST_COUNT);
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -349,7 +144,8 @@ export function HomeScreen() {
       })
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const recentActivity = feedItems.slice(0, 2);
+  const recentActivity = feedItems.slice(0, visiblePostCount);
+  const hasMorePosts = visiblePostCount < feedItems.length;
   const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
 
   function resetCheckIn() {
@@ -379,7 +175,7 @@ export function HomeScreen() {
   useEffect(() => {
     if (!params.compose || params.compose === lastComposeParamRef.current) return;
     lastComposeParamRef.current = params.compose;
-    openComposer("reflection");
+    openComposer("reflection", undefined, visibility.room);
   }, [params.compose]);
 
   async function submitComposer() {
@@ -407,7 +203,7 @@ export function HomeScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
       targetType,
-      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
     };
   }
 
@@ -428,8 +224,27 @@ export function HomeScreen() {
     });
   }
 
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+      if (distanceFromBottom < 100 && hasMorePosts) {
+        setVisiblePostCount((prev) => Math.min(prev + LOAD_MORE_POST_COUNT, feedItems.length));
+      }
+    },
+    [hasMorePosts, feedItems.length],
+  );
+
   return (
-    <AppScreen topInset={false}>
+    <AppScreen scroll={false} topInset={false}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="never"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: 112, paddingTop: 18 }}
+      >
       <CurrentRoomHeader />
 
       <HeartPromptCard
@@ -440,21 +255,18 @@ export function HomeScreen() {
           resetCheckIn();
           setCheckInVisible(true);
         }}
-        onCreate={() => openComposer("reflection")}
       />
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Today rhythm</SectionHeading>
+        <SectionHeading>Group rhythm</SectionHeading>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          <RhythmAction icon="plus" label="Check in" onPress={() => setCheckInVisible(true)} />
           <RhythmAction icon="heart" label="Pray for someone" onPress={() => {
             if (openPrayer) {
               const prayer = itemPrayerState(openPrayer);
               setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
             }
           }} />
-          <RhythmAction icon="edit-3" label="Write reflection" onPress={() => openComposer("reflection")} />
-          <RhythmAction icon="book-open" label="Read Scripture" onPress={() => router.push("/(tabs)/bible" as never)} />
+          <RhythmAction icon="edit-3" label="Write entry" onPress={() => openComposer("reflection", undefined, visibility.room)} />
         </View>
       </View>
 
@@ -488,7 +300,7 @@ export function HomeScreen() {
       ) : null}
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Recent room activity</SectionHeading>
+        <SectionHeading>Group Activity</SectionHeading>
       {recentActivity.length === 0 ? (
           <Card>
             <BodyText muted>This room is quiet right now. Start with a check-in or a small reflection.</BodyText>
@@ -500,13 +312,14 @@ export function HomeScreen() {
           const prayer = itemPrayerState(item);
           const replies = itemReplies(item);
           return (
-            <FeedPostCard
+            <PostCard
               key={`${item.type}-${item.id}`}
               authorImage={authorImage}
               authorName={authorName}
               item={item}
               ownsItem={item.userId === state.currentUserId}
               prayed={prayer.prayed}
+              prayedBy={prayer.prayedBy}
               prayerCount={prayer.count}
               replyCount={replies.length}
               onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
@@ -597,6 +410,7 @@ export function HomeScreen() {
           setPrayerTarget(undefined);
         }}
       />
+      </ScrollView>
     </AppScreen>
   );
 }

@@ -17,8 +17,6 @@ import {
   BiblePlanProgress,
   BiblePlanReading,
   CheckIn,
-  CommentReaction,
-  CommentReactionKind,
   BibleVerse,
   EntryKind,
   Group,
@@ -115,7 +113,7 @@ type Action =
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
-  | { type: "toggleCommentReaction"; replyId: Id; kind: CommentReactionKind }
+
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
   | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
   | { type: "deleteJournalEntry"; id: Id }
@@ -378,10 +376,9 @@ async function deleteUserAvatarStoragePath(path?: string) {
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
-  const [replySnapshot, reactionSnapshot, commentReactionSnapshot] = await Promise.all([
+  const [replySnapshot, reactionSnapshot] = await Promise.all([
     get(ref(database, `replies/${groupId}`)),
     get(ref(database, `prayerReactions/${groupId}`)),
-    get(ref(database, `commentReactions/${groupId}`)),
   ]);
   const childDeletes: Record<string, null> = {};
   const ownedChildDeletes: Record<string, null> = {};
@@ -403,15 +400,6 @@ async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "che
       childDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
       if (reaction.userId === ownerId) {
         ownedChildDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
-      }
-    });
-
-  asArray<CommentReaction>(commentReactionSnapshot.val())
-    .filter((reaction) => childReplyIds.has(reaction.replyId))
-    .forEach((reaction) => {
-      childDeletes[`commentReactions/${groupId}/${reaction.id}`] = null;
-      if (reaction.userId === ownerId) {
-        ownedChildDeletes[`commentReactions/${groupId}/${reaction.id}`] = null;
       }
     });
 
@@ -454,7 +442,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
-  const [commentReactions, setCommentReactions] = useState<CommentReaction[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
@@ -487,7 +474,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setPrayerSessions([]);
     setPrayerReactions([]);
     setReplies([]);
-    setCommentReactions([]);
     setJournalEntries([]);
     setSavedVerses([]);
     setBibleHighlights([]);
@@ -716,7 +702,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setPosts([]);
       setReplies([]);
       setPrayerReactions([]);
-      setCommentReactions([]);
       setGroupBiblePlan(undefined);
       setGroupBiblePlanProgress([]);
       return;
@@ -728,7 +713,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const postsRef = ref(database, `posts/${groupId}`);
     const repliesRef = ref(database, `replies/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
-    const commentReactionsRef = ref(database, `commentReactions/${groupId}`);
     const groupBiblePlanRef = ref(database, `groupBiblePlans/${groupId}/active`);
 
     const unsubs = [
@@ -737,7 +721,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
-      onValue(commentReactionsRef, (snapshot) => setCommentReactions(asArray<CommentReaction>(snapshot.val()))),
       onValue(groupBiblePlanRef, (snapshot) => setGroupBiblePlan(snapshot.exists() ? (snapshot.val() as BiblePlan) : undefined)),
     ];
 
@@ -784,7 +767,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerSessions,
       prayerReactions,
       replies,
-      commentReactions,
       journalEntries,
       savedVerses,
       bibleHighlights,
@@ -809,7 +791,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     posts,
     privateCheckIns,
     prayerReactions,
-    commentReactions,
     prayerSessions,
     profile,
     profileReady,
@@ -1011,7 +992,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 [`posts/${action.id}`]: null,
                 [`replies/${action.id}`]: null,
                 [`prayerReactions/${action.id}`]: null,
-                [`commentReactions/${action.id}`]: null,
               };
 
               members.forEach((member) => {
@@ -1230,41 +1210,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 }, {});
               await update(ref(database), {
                 ...reactionDeletes,
-                ...commentReactions
-                  .filter((reaction) => reaction.replyId === action.id)
-                  .reduce<Record<string, null>>((deletes, reaction) => {
-                    deletes[`commentReactions/${profile.currentGroupId}/${reaction.id}`] = null;
-                    return deletes;
-                  }, {}),
                 [`replies/${profile.currentGroupId}/${action.id}`]: null,
-              });
-              return;
-            }
-            case "toggleCommentReaction": {
-              if (!firebaseUser || !profile?.currentGroupId) return;
-              if (!replies.some((reply) => reply.id === action.replyId)) return;
-              const reactionId = `${firebaseUser.uid}_${action.replyId}_${action.kind}`;
-              const existing = commentReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid);
-              if (existing) {
-                await remove(ref(database, `commentReactions/${profile.currentGroupId}/${reactionId}`));
-                return;
-              }
-              const userReplyReactions = commentReactions.filter(
-                (reaction) => reaction.userId === firebaseUser.uid && reaction.replyId === action.replyId,
-              );
-              const reaction: CommentReaction = {
-                id: reactionId,
-                userId: firebaseUser.uid,
-                replyId: action.replyId,
-                kind: action.kind,
-                createdAt: now(),
-              };
-              await update(ref(database), {
-                ...userReplyReactions.reduce<Record<string, null>>((deletes, currentReaction) => {
-                  deletes[`commentReactions/${profile.currentGroupId}/${currentReaction.id}`] = null;
-                  return deletes;
-                }, {}),
-                [`commentReactions/${profile.currentGroupId}/${reactionId}`]: reaction,
               });
               return;
             }
@@ -1673,7 +1619,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       bibleHighlights,
       checkIns,
       clearUserSession,
-      commentReactions,
       firebaseUser,
       groupBiblePlan,
       groupBiblePlanProgress,

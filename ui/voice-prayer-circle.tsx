@@ -59,16 +59,14 @@ const fragmentShaderSource = `
   }
 
   vec3 themePalette(float t) {
-    vec3 deepCoral = vec3(0.67, 0.29, 0.20);
-    vec3 roseClay = vec3(0.86, 0.42, 0.31);
-    vec3 primary = vec3(0.961, 0.604, 0.388);
-    vec3 peach = vec3(1.00, 0.73, 0.55);
-    vec3 cream = vec3(0.99, 0.88, 0.75);
+    vec3 rose = vec3(0.965, 0.502, 0.502);
+    vec3 warmRose = vec3(0.971, 0.573, 0.475);
+    vec3 coralOrange = vec3(0.976, 0.647, 0.453);
+    vec3 tangerine = vec3(0.976, 0.694, 0.431);
 
-    vec3 color = mix(deepCoral, roseClay, smoothstep(0.00, 0.32, t));
-    color = mix(color, primary, smoothstep(0.25, 0.60, t));
-    color = mix(color, peach, smoothstep(0.52, 0.82, t));
-    color = mix(color, cream, smoothstep(0.78, 1.00, t));
+    vec3 color = mix(rose, warmRose, smoothstep(0.00, 0.35, t));
+    color = mix(color, coralOrange, smoothstep(0.30, 0.65, t));
+    color = mix(color, tangerine, smoothstep(0.60, 1.00, t));
     return color;
   }
 
@@ -80,7 +78,7 @@ const fragmentShaderSource = `
     vec3 background = vec3(0.980, 0.961, 0.933);
 
     float breath = 0.5 + 0.5 * sin(t * 1.15);
-    float radius = 0.438 + 0.007 * sin(t * 1.15);
+    float radius = 0.438 + 0.025 * sin(t * 1.15);
     float circle = 1.0 - smoothstep(radius, radius + 0.010, r);
     float edge = smoothstep(radius - 0.095, radius, r);
 
@@ -89,7 +87,22 @@ const fragmentShaderSource = `
     vec2 vortexA = p - driftA;
     vec2 vortexB = p - driftB;
 
-    vec2 flow = p;
+    vec2 windDir = normalize(vec2(
+      0.6 * sin(t * 0.18) + 0.3 * sin(t * 0.41 + 1.7),
+      0.4 * cos(t * 0.15) + 0.2 * cos(t * 0.33 + 2.3)
+    ));
+    float windStrength = 0.025 + 0.015 * sin(t * 0.27);
+    vec2 wind = windDir * windStrength;
+
+    vec2 turbulence = vec2(
+      fbm(p * 3.5 + vec2(t * 0.4, t * 0.3)) - 0.5,
+      fbm(p * 3.5 + vec2(5.2 - t * 0.35, 7.1 + t * 0.28)) - 0.5
+    ) * 0.035;
+
+    float gravityBias = -0.012;
+    vec2 gravity = vec2(0.0, gravityBias * (1.0 - smoothstep(0.0, 0.55, r)));
+
+    vec2 flow = p + wind + turbulence + gravity;
     flow = rotate2d(0.15 * sin(t * 0.35)) * flow;
 
     float largeCloud = fbm(flow * 1.05 + vec2(t * 0.025, -t * 0.018));
@@ -124,17 +137,17 @@ const fragmentShaderSource = `
     tone = clamp(tone, 0.0, 1.0);
 
     vec3 color = themePalette(tone);
-    color = mix(color, vec3(0.62, 0.25, 0.18), softShadow * 0.15);
-    color = mix(color, vec3(1.00, 0.89, 0.78), movingBloom * 0.30);
+    color = mix(color, vec3(0.85, 0.38, 0.38), softShadow * 0.15);
+    color = mix(color, vec3(1.00, 0.82, 0.72), movingBloom * 0.30);
 
-    color = mix(color, vec3(0.94, 0.50, 0.34), edge * 0.16);
+    color = mix(color, vec3(0.965, 0.502, 0.502), edge * 0.16);
     color *= 1.0 - edge * 0.030;
 
-    color += vec3(0.961, 0.604, 0.388) * (0.025 + 0.025 * breath) * (1.0 - edge * 0.55);
+    color += vec3(0.965, 0.502, 0.502) * (0.025 + 0.025 * breath) * (1.0 - edge * 0.55);
 
     vec3 finalColor = mix(background, color, circle);
 
-    gl_FragColor = vec4(finalColor, 1.0);
+    gl_FragColor = vec4(finalColor * circle, circle);
   }
 `;
 
@@ -149,7 +162,7 @@ function VoicePrayerCircleWeb({ size }: { size: number }) {
 
     const context = canvas.getContext("webgl", {
       antialias: true,
-      alpha: false,
+      alpha: true,
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
     });

@@ -6,11 +6,7 @@ import { Image, Platform, Pressable, Share, Text, View } from "react-native";
 
 import {
   EntryVisibility,
-  actionLabels,
-  actionPastLabels,
   defaultFeedTitle as productDefaultFeedTitle,
-  entryKindIcon,
-  feedItemKind,
   feedItemLabel,
   normalizeEntryKind,
   prayerFilters,
@@ -22,11 +18,9 @@ import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id, Membership
 import {
   AppScreen,
   Avatar,
-  AvatarStack,
   BodyText,
   BottomSheet,
   Card,
-  ExpandableBodyText,
   FilterChips,
   PrimaryButton,
   RoomImage,
@@ -34,7 +28,6 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  VerseList,
 } from "@/ui/app-components";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
@@ -42,13 +35,12 @@ import { LinkPreview } from "@/ui/link-preview";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
+import { PostCard } from "@/ui/post-card";
 import { colors } from "@/ui/theme";
 
 type RoomView = "rooms" | "detail";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
-
-const FEED_BODY_PREVIEW_LINES = 3;
 
 function memberLabel(count: number) {
   return `${count} ${count === 1 ? "member" : "members"}`;
@@ -211,7 +203,7 @@ export function SettingsScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
       targetType,
-      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
     };
   }
 
@@ -433,11 +425,13 @@ export function SettingsScreen() {
                     authorImage={userImageById.get(item.userId)}
                     authorName={userById.get(item.userId) ?? "Someone"}
                     item={item}
-                    actionCount={prayer.count}
-                    actionSelected={prayer.prayed}
+                    ownsItem={item.userId === state.currentUserId}
+                    prayed={prayer.prayed}
+                    prayedBy={prayer.prayedBy}
+                    prayerCount={prayer.count}
                     replyCount={itemReplies(item).length}
                     onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                    onAction={() => togglePostAction(item)}
+                    onPray={() => togglePostAction(item)}
                   />
                 );
               })
@@ -455,7 +449,7 @@ export function SettingsScreen() {
                 visiblePrayerRequests.map((item) => {
                   const prayer = itemPrayerState(item);
                   return (
-                    <PrayerRequestCard
+                    <PostCard
                       key={item.id}
                       authorImage={userImageById.get(item.userId)}
                       authorName={userById.get(item.userId) ?? "Someone"}
@@ -464,9 +458,9 @@ export function SettingsScreen() {
                       prayed={prayer.prayed}
                       prayedBy={prayer.prayedBy}
                       prayerCount={prayer.count}
+                      replyCount={itemReplies(item).length}
                       onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
                       onPray={() => prayForItem(item)}
-                      onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: item.id })}
                     />
                   );
                 })
@@ -808,130 +802,6 @@ export function SettingsScreen() {
 }
 
 export const RoomScreen = SettingsScreen;
-
-function PostCard({
-  actionCount,
-  actionSelected,
-  authorImage,
-  authorName,
-  item,
-  onAction,
-  onOpen,
-  replyCount,
-}: {
-  actionCount: number;
-  actionSelected: boolean;
-  authorImage?: GroupImage;
-  authorName: string;
-  item: FeedItem;
-  onAction: () => void;
-  onOpen: () => void;
-  replyCount: number;
-}) {
-  const itemKind = feedItemKind(item);
-  const actionLabel = actionSelected && itemKind === "prayer_request" ? "Prayed" : actionLabels[itemKind];
-  const answered = item.type === "post" && itemKind === "prayer_request" && Boolean(item.answeredAt);
-
-  return (
-    <Card style={{ borderColor: itemKind === "prayer_request" ? colors.gold : colors.line, padding: 16 }}>
-      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
-        <Avatar image={authorImage} name={authorName} size={42} tone={itemKind === "prayer_request" ? "orange" : "green"} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather name={item.type === "check_in" ? "check-circle" : entryKindIcon(item.kind)} size={13} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{answered ? "Answered prayer" : feedItemLabel(item)}</Text>
-        </View>
-      </View>
-
-      <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
-        <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
-          {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
-        </Text>
-        <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>{item.body || "No words today, just presence."}</ExpandableBodyText>
-      </Pressable>
-      <LinkPreview text={item.body} />
-      <VerseList verse={item.verse} verses={item.verses} compact />
-
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        <SecondaryButton icon={itemKind === "prayer_request" ? "users" : "heart"} onPress={onAction} style={{ flex: 1 }}>
-          {actionLabel}
-        </SecondaryButton>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{actionCount}</Text>
-          <Feather name="message-circle" size={17} color={colors.muted} />
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{replyCount}</Text>
-          <Feather name="more-horizontal" size={18} color={colors.ink} />
-        </View>
-      </View>
-    </Card>
-  );
-}
-
-function PrayerRequestCard({
-  authorImage,
-  authorName,
-  item,
-  onMarkAnswered,
-  onOpen,
-  onPray,
-  ownsItem,
-  prayed,
-  prayedBy,
-  prayerCount,
-}: {
-  authorImage?: GroupImage;
-  authorName: string;
-  item: Extract<FeedItem, { type: "post" }>;
-  onMarkAnswered: () => void;
-  onOpen: () => void;
-  onPray: () => void;
-  ownsItem: boolean;
-  prayed: boolean;
-  prayedBy: string[];
-  prayerCount: number;
-}) {
-  const answered = Boolean(item.answeredAt);
-  return (
-    <Card style={{ borderColor: answered ? colors.line : colors.gold, padding: 16 }}>
-      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
-        <Avatar image={authorImage} name={authorName} size={40} tone="orange" />
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-        </View>
-        <View style={{ backgroundColor: answered ? "#E7F1DD" : colors.accentSubtle, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 }}>
-          <Text style={{ color: answered ? "#58712D" : colors.gold, fontSize: 12, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
-        </View>
-      </View>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{item.title || defaultTitle(item)}</Text>
-        <BodyText muted numberOfLines={3}>{item.body}</BodyText>
-      </Pressable>
-      <VerseList verse={item.verse} verses={item.verses} compact />
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        {prayedBy.length ? <AvatarStack names={prayedBy} /> : null}
-        <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>Prayed by {prayerCount} {prayerCount === 1 ? "member" : "members"}</Text>
-      </View>
-      {answered ? (
-        <SecondaryButton icon="check-circle" onPress={onOpen}>
-          View answered prayer
-        </SecondaryButton>
-      ) : (
-        <PrimaryButton disabled={prayed} icon="users" onPress={onPray} style={{ minHeight: 48 }}>
-          {prayed ? "Prayed" : "Pray"}
-        </PrimaryButton>
-      )}
-      {ownsItem && !answered ? (
-        <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
-          Mark answered
-        </SecondaryButton>
-      ) : null}
-    </Card>
-  );
-}
 
 function CheckInCard({
   authorImage,

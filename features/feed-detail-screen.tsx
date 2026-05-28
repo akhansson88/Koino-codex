@@ -125,7 +125,7 @@ export function FeedDetailScreen() {
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
-      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
       activity: reactions
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
         .map((reaction) => ({
@@ -134,7 +134,7 @@ export function FeedDetailScreen() {
           createdAt: reaction.createdAt,
         })),
     };
-  }, [item, state.currentUserId, state.prayerReactions, targetType, userById]);
+  }, [item, state.currentUserId, state.prayerReactions, targetType, userById, userImageById]);
 
   usePreventRemove(Boolean(replyDraft.trim()) && !allowRemove, ({ data }) => {
     Alert.alert("Discard reply?", "Your draft encouragement has not been sent.", [
@@ -233,7 +233,7 @@ export function FeedDetailScreen() {
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
             {actionPastLabel} by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
           </Text>
-          {prayer?.prayedBy.length ? <AvatarStack names={prayer.prayedBy} /> : null}
+          {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
         </View>
         {isPrayerRequest ? (
           <View style={{ gap: 12 }}>

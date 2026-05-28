@@ -193,7 +193,6 @@ export function JournalScreen() {
         name={user?.name ?? state.authEmail ?? "K"}
         subtitle="Take a quiet moment with God."
         onPress={() => setCheckInVisible(true)}
-        onCreate={() => setCheckInVisible(true)}
       />
 
       <View style={{ gap: 10 }}>
