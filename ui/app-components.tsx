@@ -516,12 +516,12 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
   return <Avatar name={name ?? "Room"} size={size} tone="blue" />;
 }
 
-export function AvatarStack({ names }: { names: string[] }) {
+export function AvatarStack({ users, size = 42 }: { users: { name: string; image?: GroupImage }[]; size?: number }) {
   return (
-    <View style={{ flexDirection: "row", height: 42 }}>
-      {names.slice(0, 4).map((name, index) => (
-        <View key={`${name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -10 }}>
-          <Avatar name={name} size={42} tone={index % 2 ? "orange" : "pink"} />
+    <View style={{ flexDirection: "row", height: size }}>
+      {users.slice(0, 4).map((user, index) => (
+        <View key={`${user.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -(size * 0.24) }}>
+          <Avatar image={user.image} name={user.name} size={size} tone={index % 2 ? "orange" : "pink"} />
         </View>
       ))}
     </View>

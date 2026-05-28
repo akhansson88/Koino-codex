@@ -203,7 +203,7 @@ export function HomeScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: prayedByUserIds.length,
       targetType,
-      prayedBy: prayedByUserIds.map((userId) => userById.get(userId) ?? "Someone"),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
     };
   }
 
@@ -319,6 +319,7 @@ export function HomeScreen() {
               item={item}
               ownsItem={item.userId === state.currentUserId}
               prayed={prayer.prayed}
+              prayedBy={prayer.prayedBy}
               prayerCount={prayer.count}
               replyCount={replies.length}
               onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}

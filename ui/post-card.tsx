@@ -11,6 +11,7 @@ import {
 import type { FeedItem, GroupImage } from "@/state/types";
 import {
   Avatar,
+  AvatarStack,
   Card,
   ExpandableBodyText,
 } from "@/ui/app-components";
@@ -64,6 +65,7 @@ export function PostCard({
   onReply,
   ownsItem,
   prayed,
+  prayedBy,
   prayerCount,
   replyCount,
 }: {
@@ -77,6 +79,7 @@ export function PostCard({
   onReply?: () => void;
   ownsItem: boolean;
   prayed: boolean;
+  prayedBy?: { name: string; image?: GroupImage }[];
   prayerCount: number;
   replyCount: number;
 }) {
@@ -184,7 +187,7 @@ export function PostCard({
         >
           <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
           <Text style={{ color: colors.muted, fontWeight: "700" }}>
-            {prayed ? `${prayerCount} Prayed` : "Pray"}
+            {prayed ? "Prayed" : "Pray"}
           </Text>
         </Pressable>
         {onReply ? (
@@ -216,6 +219,14 @@ export function PostCard({
           </Pressable>
         ) : null}
       </View>
+      {prayedBy && prayedBy.length > 0 ? (
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
+          <AvatarStack users={prayedBy} size={24} />
+          <Text style={{ color: colors.muted, fontWeight: "700" }}>
+            {prayerCount} {prayerCount === 1 ? "person" : "people"} prayed
+          </Text>
+        </View>
+      ) : null}
     </Card>
   );
 }
