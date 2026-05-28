@@ -12,6 +12,10 @@ import {
   BibleHighlight,
   BibleHighlightColor,
   BibleHighlightPaletteColor,
+  BiblePassageReference,
+  BiblePlan,
+  BiblePlanProgress,
+  BiblePlanReading,
   CheckIn,
   CommentReaction,
   CommentReactionKind,
@@ -74,6 +78,13 @@ type Profile = User & {
 
 type CreatePostKind = EntryKind;
 
+type BiblePlanDraft = {
+  id?: Id;
+  title: string;
+  startDate: string;
+  readings: Record<string, BiblePlanReading>;
+};
+
 type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
@@ -108,6 +119,12 @@ type Action =
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
   | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
   | { type: "deleteJournalEntry"; id: Id }
+  | { type: "createOrReplaceGroupBiblePlan"; plan: BiblePlanDraft }
+  | { type: "createOrReplacePrivateBiblePlan"; plan: BiblePlanDraft }
+  | { type: "markGroupBiblePlanRead"; planId: Id; readingId: Id; dateKey?: string }
+  | { type: "saveGroupBiblePlanReflection"; planId: Id; readingId: Id; reflectionText: string; reflectionVisibility: BiblePlanProgress["reflectionVisibility"]; dateKey?: string }
+  | { type: "markPrivateBiblePlanRead"; planId: Id; readingId: Id; dateKey?: string }
+  | { type: "savePrivateBiblePlanReflection"; planId: Id; readingId: Id; reflectionText: string; dateKey?: string }
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }
   | { type: "highlightVerses"; color: BibleHighlightColor; colorId?: Id; verses: BibleVerse[] }
@@ -154,6 +171,42 @@ function asArray<T extends { id: string }>(value: unknown): T[] {
 function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[] }) {
   if (action.verses?.length) return action.verses.slice(0, 5);
   return action.verse ? [action.verse] : [];
+}
+
+function passageReference(passage: BiblePassageReference): BiblePassageReference {
+  return {
+    ...(passage.id ? { id: passage.id } : {}),
+    ...(passage.book ? { book: passage.book } : {}),
+    ...(typeof passage.chapter === "number" ? { chapter: passage.chapter } : {}),
+    ...(typeof passage.startVerse === "number" ? { startVerse: passage.startVerse } : {}),
+    ...(typeof passage.endVerse === "number" ? { endVerse: passage.endVerse } : {}),
+    reference: passage.reference.trim(),
+    ...(passage.translation ? { translation: passage.translation } : {}),
+  };
+}
+
+function planReadings(readings: Record<string, BiblePlanReading>) {
+  return Object.fromEntries(
+    Object.entries(readings)
+      .map(([key, reading]) => {
+        const passage = passageReference(reading.passage);
+        if (!passage.reference) return undefined;
+        const readingId = reading.id?.trim() || key;
+        const normalized: BiblePlanReading = {
+          id: readingId,
+          day: reading.day,
+          ...(reading.dateKey ? { dateKey: reading.dateKey } : {}),
+          passage,
+          ...(reading.prompt?.trim() ? { prompt: reading.prompt.trim() } : {}),
+        };
+        return [key, normalized] as const;
+      })
+      .filter((entry): entry is readonly [string, BiblePlanReading] => Boolean(entry)),
+  );
+}
+
+function planReadingFor(plan: BiblePlan | undefined, readingId: Id) {
+  return Object.values(plan?.readings ?? {}).find((reading) => reading.id === readingId);
 }
 
 function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
@@ -406,6 +459,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
   const [bibleHighlightColors, setBibleHighlightColors] = useState<BibleHighlightPaletteColor[]>([]);
+  const [groupBiblePlan, setGroupBiblePlan] = useState<BiblePlan | undefined>();
+  const [groupBiblePlanProgress, setGroupBiblePlanProgress] = useState<BiblePlanProgress[]>([]);
+  const [privateBiblePlan, setPrivateBiblePlan] = useState<BiblePlan | undefined>();
+  const [privateBiblePlanProgress, setPrivateBiblePlanProgress] = useState<BiblePlanProgress[]>([]);
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
   const [theme, setTheme] = useState<ThemeName>("light");
@@ -413,6 +470,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const themeRef = useRef<ThemeName>("light");
   const hasStoredThemeRef = useRef(false);
   const isThemeSyncPendingRef = useRef(false);
+  const todayDateKey = localDayKey(new Date());
 
   const clearUserSession = useCallback(() => {
     setFirebaseUser(null);
@@ -434,6 +492,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setSavedVerses([]);
     setBibleHighlights([]);
     setBibleHighlightColors([]);
+    setGroupBiblePlan(undefined);
+    setGroupBiblePlanProgress([]);
+    setPrivateBiblePlan(undefined);
+    setPrivateBiblePlanProgress([]);
     setSupportIntents([]);
   }, []);
 
@@ -593,6 +655,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     const bibleHighlightColorsRef = ref(database, `bibleHighlightColors/${firebaseUser.uid}`);
     const bibleHighlightColorSettingsRef = ref(database, `bibleHighlightColorSettings/${firebaseUser.uid}`);
+    const privateBiblePlanRef = ref(database, `privateBiblePlans/${firebaseUser.uid}/active`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     const unsubs = [
@@ -625,11 +688,26 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           [`bibleHighlightColorSettings/${firebaseUser.uid}/seededAt`]: timestamp,
         });
       }),
+      onValue(privateBiblePlanRef, (snapshot) => setPrivateBiblePlan(snapshot.exists() ? (snapshot.val() as BiblePlan) : undefined)),
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
   }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser || !privateBiblePlan?.id) {
+      setPrivateBiblePlanProgress([]);
+      return;
+    }
+
+    const progressRef = ref(database, `privateBiblePlanProgress/${firebaseUser.uid}/${privateBiblePlan.id}/${todayDateKey}`);
+    const unsubscribe = onValue(progressRef, (snapshot) => {
+      setPrivateBiblePlanProgress(snapshot.exists() ? [snapshot.val() as BiblePlanProgress] : []);
+    });
+
+    return unsubscribe;
+  }, [firebaseUser, privateBiblePlan?.id, todayDateKey]);
 
   useEffect(() => {
     if (!firebaseUser || !profile?.currentGroupId) {
@@ -639,6 +717,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setReplies([]);
       setPrayerReactions([]);
       setCommentReactions([]);
+      setGroupBiblePlan(undefined);
+      setGroupBiblePlanProgress([]);
       return;
     }
 
@@ -649,6 +729,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const repliesRef = ref(database, `replies/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
     const commentReactionsRef = ref(database, `commentReactions/${groupId}`);
+    const groupBiblePlanRef = ref(database, `groupBiblePlans/${groupId}/active`);
 
     const unsubs = [
       onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
@@ -657,10 +738,25 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
       onValue(commentReactionsRef, (snapshot) => setCommentReactions(asArray<CommentReaction>(snapshot.val()))),
+      onValue(groupBiblePlanRef, (snapshot) => setGroupBiblePlan(snapshot.exists() ? (snapshot.val() as BiblePlan) : undefined)),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
   }, [firebaseUser, profile?.currentGroupId]);
+
+  useEffect(() => {
+    if (!firebaseUser || !profile?.currentGroupId || !groupBiblePlan?.id) {
+      setGroupBiblePlanProgress([]);
+      return;
+    }
+
+    const progressRef = ref(database, `groupBiblePlanProgress/${profile.currentGroupId}/${groupBiblePlan.id}/${todayDateKey}`);
+    const unsubscribe = onValue(progressRef, (snapshot) => {
+      setGroupBiblePlanProgress(asArray<BiblePlanProgress>(snapshot.val()));
+    });
+
+    return unsubscribe;
+  }, [firebaseUser, groupBiblePlan?.id, profile?.currentGroupId, todayDateKey]);
 
   const state = useMemo<KoinoState>(() => {
     const memberUsers = memberships.map<User>((membership) => ({
@@ -693,6 +789,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       savedVerses,
       bibleHighlights,
       bibleHighlightColors,
+      groupBiblePlan,
+      groupBiblePlanProgress,
+      privateBiblePlan,
+      privateBiblePlanProgress,
       supportIntents,
     };
   }, [
@@ -717,6 +817,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     savedVerses,
     bibleHighlights,
     bibleHighlightColors,
+    groupBiblePlan,
+    groupBiblePlanProgress,
+    privateBiblePlan,
+    privateBiblePlanProgress,
     supportIntents,
     userGroupsReady,
   ]);
@@ -902,6 +1006,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 [`inviteCodes/${groupToDelete.inviteCode}`]: null,
                 [`groupMembers/${action.id}`]: null,
                 [`checkIns/${action.id}`]: null,
+                [`groupBiblePlans/${action.id}`]: null,
+                [`groupBiblePlanProgress/${action.id}`]: null,
                 [`posts/${action.id}`]: null,
                 [`replies/${action.id}`]: null,
                 [`prayerReactions/${action.id}`]: null,
@@ -1237,6 +1343,171 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database), updates);
               return;
             }
+            case "createOrReplaceGroupBiblePlan": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const group = groups.find((item) => item.id === profile.currentGroupId);
+              if (!group || group.ownerId !== firebaseUser.uid) return;
+              const timestamp = now();
+              const readings = planReadings(action.plan.readings);
+              if (!action.plan.title.trim() || Object.keys(readings).length === 0) return;
+              const existing = groupBiblePlan?.ownerId === profile.currentGroupId ? groupBiblePlan : undefined;
+              const plan: BiblePlan = {
+                id: action.plan.id?.trim() || existing?.id || id("bibleplan"),
+                scope: "group",
+                ownerId: profile.currentGroupId,
+                title: action.plan.title.trim(),
+                status: "active",
+                startDate: action.plan.startDate,
+                createdBy: existing?.createdBy ?? firebaseUser.uid,
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+                readings,
+              };
+              await set(ref(database, `groupBiblePlans/${profile.currentGroupId}/active`), plan);
+              return;
+            }
+            case "createOrReplacePrivateBiblePlan": {
+              if (!firebaseUser) return;
+              const timestamp = now();
+              const readings = planReadings(action.plan.readings);
+              if (!action.plan.title.trim() || Object.keys(readings).length === 0) return;
+              const plan: BiblePlan = {
+                id: action.plan.id?.trim() || privateBiblePlan?.id || id("bibleplan"),
+                scope: "private",
+                ownerId: firebaseUser.uid,
+                title: action.plan.title.trim(),
+                status: "active",
+                startDate: action.plan.startDate,
+                createdBy: privateBiblePlan?.createdBy ?? firebaseUser.uid,
+                createdAt: privateBiblePlan?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+                readings,
+              };
+              await set(ref(database, `privateBiblePlans/${firebaseUser.uid}/active`), plan);
+              return;
+            }
+            case "markGroupBiblePlanRead": {
+              if (!firebaseUser || !profile?.currentGroupId || groupBiblePlan?.id !== action.planId) return;
+              const reading = planReadingFor(groupBiblePlan, action.readingId);
+              if (!reading) return;
+              const timestamp = now();
+              const dateKey = action.dateKey ?? reading.dateKey ?? todayDateKey;
+              const existing = groupBiblePlanProgress.find((item) => item.userId === firebaseUser.uid && item.readingId === action.readingId);
+              const progress: BiblePlanProgress = {
+                id: firebaseUser.uid,
+                planId: action.planId,
+                readingId: action.readingId,
+                userId: firebaseUser.uid,
+                dateKey,
+                read: true,
+                ...(existing?.reflectionText ? { reflectionText: existing.reflectionText } : {}),
+                reflectionVisibility: existing?.reflectionVisibility ?? "private",
+                ...(existing?.journalEntryId ? { journalEntryId: existing.journalEntryId } : {}),
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `groupBiblePlanProgress/${profile.currentGroupId}/${action.planId}/${dateKey}/${firebaseUser.uid}`), progress);
+              return;
+            }
+            case "saveGroupBiblePlanReflection": {
+              if (!firebaseUser || !profile?.currentGroupId || groupBiblePlan?.id !== action.planId) return;
+              const reading = planReadingFor(groupBiblePlan, action.readingId);
+              if (!reading) return;
+              const timestamp = now();
+              const dateKey = action.dateKey ?? reading.dateKey ?? todayDateKey;
+              const existing = groupBiblePlanProgress.find((item) => item.userId === firebaseUser.uid && item.readingId === action.readingId);
+              const progress: BiblePlanProgress = {
+                id: firebaseUser.uid,
+                planId: action.planId,
+                readingId: action.readingId,
+                userId: firebaseUser.uid,
+                dateKey,
+                read: existing?.read ?? true,
+                reflectionText: action.reflectionText.trim(),
+                reflectionVisibility: action.reflectionVisibility,
+                ...(existing?.journalEntryId ? { journalEntryId: existing.journalEntryId } : {}),
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `groupBiblePlanProgress/${profile.currentGroupId}/${action.planId}/${dateKey}/${firebaseUser.uid}`), progress);
+              return;
+            }
+            case "markPrivateBiblePlanRead": {
+              if (!firebaseUser || privateBiblePlan?.id !== action.planId) return;
+              const reading = planReadingFor(privateBiblePlan, action.readingId);
+              if (!reading) return;
+              const timestamp = now();
+              const dateKey = action.dateKey ?? reading.dateKey ?? todayDateKey;
+              const existing = privateBiblePlanProgress.find((item) => item.readingId === action.readingId);
+              const progress: BiblePlanProgress = {
+                id: dateKey,
+                planId: action.planId,
+                readingId: action.readingId,
+                userId: firebaseUser.uid,
+                dateKey,
+                read: true,
+                ...(existing?.reflectionText ? { reflectionText: existing.reflectionText } : {}),
+                reflectionVisibility: "private",
+                ...(existing?.journalEntryId ? { journalEntryId: existing.journalEntryId } : {}),
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `privateBiblePlanProgress/${firebaseUser.uid}/${action.planId}/${dateKey}`), progress);
+              return;
+            }
+            case "savePrivateBiblePlanReflection": {
+              if (!firebaseUser || privateBiblePlan?.id !== action.planId) return;
+              const reading = planReadingFor(privateBiblePlan, action.readingId);
+              if (!reading) return;
+              const timestamp = now();
+              const dateKey = action.dateKey ?? reading.dateKey ?? todayDateKey;
+              const existing = privateBiblePlanProgress.find((item) => item.readingId === action.readingId);
+              const reflectionText = action.reflectionText.trim();
+              const linkedEntry = journalEntries.find(
+                (entry) =>
+                  entry.userId === firebaseUser.uid &&
+                  entry.source === "bible_plan" &&
+                  entry.biblePlanId === action.planId &&
+                  entry.biblePlanReadingId === action.readingId,
+              );
+              const journalEntryId = reflectionText ? existing?.journalEntryId ?? linkedEntry?.id ?? id("journal") : existing?.journalEntryId ?? linkedEntry?.id;
+              const progress: BiblePlanProgress = {
+                id: dateKey,
+                planId: action.planId,
+                readingId: action.readingId,
+                userId: firebaseUser.uid,
+                dateKey,
+                read: existing?.read ?? true,
+                reflectionText,
+                reflectionVisibility: "private",
+                ...(journalEntryId ? { journalEntryId } : {}),
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+              };
+              const updates: Record<string, unknown> = {
+                [`privateBiblePlanProgress/${firebaseUser.uid}/${action.planId}/${dateKey}`]: progress,
+              };
+              if (reflectionText && journalEntryId) {
+                const entry: JournalEntry = {
+                  id: journalEntryId,
+                  userId: firebaseUser.uid,
+                  journalType: "scripture_note",
+                  title: reading.passage.reference,
+                  body: reflectionText,
+                  source: "bible_plan",
+                  entryKind: "scripture",
+                  passage: reading.passage,
+                  biblePlanId: action.planId,
+                  biblePlanReadingId: action.readingId,
+                  isPrivate: true,
+                  createdAt: linkedEntry?.createdAt ?? timestamp,
+                  updatedAt: timestamp,
+                };
+                updates[`journalEntries/${firebaseUser.uid}/${journalEntryId}`] = entry;
+              }
+              await update(ref(database), updates);
+              return;
+            }
             case "saveVerse": {
               if (!firebaseUser) return;
               const key = savedVerseId(action.verse);
@@ -1404,14 +1675,19 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       clearUserSession,
       commentReactions,
       firebaseUser,
+      groupBiblePlan,
+      groupBiblePlanProgress,
       groups,
       journalEntries,
       posts,
       prayerReactions,
       privateCheckIns,
+      privateBiblePlan,
+      privateBiblePlanProgress,
       profile?.currentGroupId,
       profile?.name,
       replies,
+      todayDateKey,
       userMemberships,
     ],
   );
