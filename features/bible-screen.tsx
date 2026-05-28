@@ -1505,12 +1505,21 @@ export function BibleScreen() {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
-        onMoveShouldSetPanResponderCapture: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
         onPanResponderGrant: () => {
           chapterSwipeX.stopAnimation();
           setChapterSwipeActive(true);
         },
         onPanResponderMove: (_event, gesture) => {
+          if (Math.abs(gesture.dy) > Math.abs(gesture.dx) * 2 && Math.abs(gesture.dy) > 30) {
+            Animated.spring(chapterSwipeX, {
+              damping: 20,
+              stiffness: 210,
+              toValue: 0,
+              useNativeDriver: true,
+            }).start(() => resetChapterSwipe());
+            return;
+          }
+
           const target = gesture.dx < 0 ? nextChapter : previousChapter;
           const direction: ChapterSwipeDirection = gesture.dx < 0 ? "next" : "previous";
           if (!target) {
@@ -1568,7 +1577,7 @@ export function BibleScreen() {
             });
           });
         },
-        onPanResponderTerminationRequest: () => false,
+        onPanResponderTerminationRequest: () => true,
         onPanResponderTerminate: () => {
           Animated.spring(chapterSwipeX, {
             damping: 20,
@@ -1579,7 +1588,7 @@ export function BibleScreen() {
             resetChapterSwipe();
           });
         },
-        onShouldBlockNativeResponder: () => true,
+        onShouldBlockNativeResponder: () => false,
       }),
     [chapterSwipeX, jumpToPosition, nextChapter, previousChapter, resetChapterSwipe, shouldCaptureChapterSwipe, width],
   );
