@@ -80,13 +80,33 @@ export function JournalScreen() {
   const [checkInMood, setCheckInMood] = useState<HeartMood>("peaceful");
   const [checkInNote, setCheckInNote] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
+  const [planReflectionVisible, setPlanReflectionVisible] = useState(false);
+  const [planReflectionText, setPlanReflectionText] = useState("");
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const privatePlanReadings = useMemo(() => sortedBiblePlanReadings(state.privateBiblePlan), [state.privateBiblePlan]);
   const privatePlanReading = useMemo(() => todayBiblePlanReading(state.privateBiblePlan, todayKey), [state.privateBiblePlan, todayKey]);
-  const privatePlanCompleted = Boolean(privatePlanReading && state.privateBiblePlanProgress.some((item) => item.read && item.readingId === privatePlanReading.id));
+  const privatePlanProgress = useMemo(
+    () => (privatePlanReading ? state.privateBiblePlanProgress.find((item) => item.readingId === privatePlanReading.id) : undefined),
+    [privatePlanReading, state.privateBiblePlanProgress],
+  );
+  const privatePlanLinkedEntry = useMemo(
+    () =>
+      state.privateBiblePlan && privatePlanReading
+        ? state.journalEntries.find(
+            (entry) =>
+              entry.userId === state.currentUserId &&
+              entry.source === "bible_plan" &&
+              entry.biblePlanId === state.privateBiblePlan?.id &&
+              entry.biblePlanReadingId === privatePlanReading.id,
+          )
+        : undefined,
+    [privatePlanReading, state.currentUserId, state.journalEntries, state.privateBiblePlan],
+  );
+  const privatePlanCompleted = Boolean(privatePlanProgress?.read);
+  const savedPlanReflection = privatePlanProgress?.reflectionText || privatePlanLinkedEntry?.body || "";
   const entries = useMemo<DisplayEntry[]>(() => {
     const privateEntries: DisplayEntry[] = state.journalEntries
       .filter((entry) => entry.userId === state.currentUserId)
@@ -187,6 +207,23 @@ export function JournalScreen() {
     setCheckInVerses([]);
   }
 
+  function openPlanReflection() {
+    setPlanReflectionText(savedPlanReflection);
+    setPlanReflectionVisible(true);
+  }
+
+  async function submitPlanReflection() {
+    if (!state.privateBiblePlan || !privatePlanReading || !planReflectionText.trim()) return;
+    await dispatch({
+      type: "savePrivateBiblePlanReflection",
+      planId: state.privateBiblePlan.id,
+      readingId: privatePlanReading.id,
+      reflectionText: planReflectionText,
+      dateKey: todayKey,
+    });
+    setPlanReflectionVisible(false);
+  }
+
   useEffect(() => {
     if (!params.newEntry) return;
     beginEntry("reflection", visibility.private);
@@ -213,14 +250,41 @@ export function JournalScreen() {
               dateKey: todayKey,
             })
           }
+          onReflect={openPlanReflection}
           passageReference={privatePlanReading.passage.reference}
           planTitle={state.privateBiblePlan.title}
           progressLabel={privatePlanCompleted ? "Read today" : "Not read yet"}
+          reflectLabel={savedPlanReflection ? "Edit reflection" : "Reflect"}
           rhythmLabel="Private Scripture rhythm"
         />
       ) : state.privateBiblePlan ? (
         <Card>
           <BodyText muted>No Bible Plan reading scheduled for today.</BodyText>
+        </Card>
+      ) : null}
+
+      {planReflectionVisible && state.privateBiblePlan && privatePlanReading ? (
+        <Card>
+          <SectionHeading>Private reflection</SectionHeading>
+          <BodyText muted>{privatePlanReading.passage.reference}</BodyText>
+          <TextInputField
+            multiline
+            value={planReflectionText}
+            onChangeText={setPlanReflectionText}
+            onSubmitEditing={submitPlanReflection}
+            placeholder="Write a private thought or prayer..."
+            returnKeyType="done"
+            style={{ minHeight: 118 }}
+            submitBehavior="submit"
+          />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <SecondaryButton onPress={() => setPlanReflectionVisible(false)} style={{ flex: 1 }}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton disabled={!planReflectionText.trim()} icon="check-circle" onPress={submitPlanReflection} style={{ flex: 1 }}>
+              Save
+            </PrimaryButton>
+          </View>
         </Card>
       ) : null}
 
