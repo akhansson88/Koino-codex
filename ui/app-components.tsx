@@ -520,7 +520,7 @@ export function AvatarStack({ users, size = 42 }: { users: { name: string; image
   return (
     <View style={{ flexDirection: "row", height: size }}>
       {users.slice(0, 4).map((user, index) => (
-        <View key={`${user.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -(size * 0.24) }}>
+        <View key={`${user.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -(size * 0.4) }}>
           <Avatar image={user.image} name={user.name} size={size} tone={index % 2 ? "orange" : "pink"} />
         </View>
       ))}
