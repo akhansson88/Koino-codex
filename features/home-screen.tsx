@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
 
 import { BiblePlanCard } from "@/features/bible-plan-card";
+import { BiblePlanReflectionEditor } from "@/features/bible-plan-reflection-editor";
 import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
@@ -324,28 +325,16 @@ export function HomeScreen() {
           </Card>
         ) : null}
         {groupPlanReflectionVisible && state.groupBiblePlan && groupPlanReading ? (
-          <Card>
-            <SectionHeading>Group reflection</SectionHeading>
-            <BodyText muted>{groupPlanReading.passage.reference}</BodyText>
-            <TextInputField
-              multiline
-              value={groupPlanReflectionText}
-              onChangeText={setGroupPlanReflectionText}
-              onSubmitEditing={submitGroupPlanReflection}
-              placeholder="Share a brief reflection with your group..."
-              returnKeyType="done"
-              style={{ minHeight: 112 }}
-              submitBehavior="submit"
-            />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <SecondaryButton onPress={() => setGroupPlanReflectionVisible(false)} style={{ flex: 1 }}>
-                Cancel
-              </SecondaryButton>
-              <PrimaryButton disabled={!groupPlanReflectionText.trim()} icon="send" onPress={submitGroupPlanReflection} style={{ flex: 1 }}>
-                Save
-              </PrimaryButton>
-            </View>
-          </Card>
+          <BiblePlanReflectionEditor
+            onCancel={() => setGroupPlanReflectionVisible(false)}
+            onChangeText={setGroupPlanReflectionText}
+            onSave={submitGroupPlanReflection}
+            passageReference={groupPlanReading.passage.reference}
+            placeholder="Share a brief reflection with your group..."
+            saveIcon="send"
+            title="Group reflection"
+            value={groupPlanReflectionText}
+          />
         ) : null}
         {visibleGroupPlanReflections.length > 0 ? (
           <Card>

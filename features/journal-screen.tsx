@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, Text, View } from "react-native";
 
 import { BiblePlanCard } from "@/features/bible-plan-card";
+import { BiblePlanReflectionEditor } from "@/features/bible-plan-reflection-editor";
 import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import {
   EntryVisibility,
@@ -283,28 +284,15 @@ export function JournalScreen() {
       ) : null}
 
       {planReflectionVisible && state.privateBiblePlan && privatePlanReading ? (
-        <Card>
-          <SectionHeading>Private reflection</SectionHeading>
-          <BodyText muted>{privatePlanReading.passage.reference}</BodyText>
-          <TextInputField
-            multiline
-            value={planReflectionText}
-            onChangeText={setPlanReflectionText}
-            onSubmitEditing={submitPlanReflection}
-            placeholder="Write a private thought or prayer..."
-            returnKeyType="done"
-            style={{ minHeight: 118 }}
-            submitBehavior="submit"
-          />
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <SecondaryButton onPress={() => setPlanReflectionVisible(false)} style={{ flex: 1 }}>
-              Cancel
-            </SecondaryButton>
-            <PrimaryButton disabled={!planReflectionText.trim()} icon="check-circle" onPress={submitPlanReflection} style={{ flex: 1 }}>
-              Save
-            </PrimaryButton>
-          </View>
-        </Card>
+        <BiblePlanReflectionEditor
+          onCancel={() => setPlanReflectionVisible(false)}
+          onChangeText={setPlanReflectionText}
+          onSave={submitPlanReflection}
+          passageReference={privatePlanReading.passage.reference}
+          placeholder="Write a private thought or prayer..."
+          title="Private reflection"
+          value={planReflectionText}
+        />
       ) : null}
 
       <Card>
