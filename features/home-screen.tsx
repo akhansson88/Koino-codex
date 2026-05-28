@@ -1,8 +1,8 @@
 import type { ComponentProps } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
@@ -41,6 +41,9 @@ import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type CheckInStep = "choose" | "details" | "thanks";
+
+const INITIAL_POST_COUNT = 10;
+const LOAD_MORE_POST_COUNT = 20;
 
 const FEED_BODY_PREVIEW_LINES = 3;
 
@@ -301,6 +304,7 @@ export function HomeScreen() {
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [visiblePostCount, setVisiblePostCount] = useState(INITIAL_POST_COUNT);
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -349,7 +353,8 @@ export function HomeScreen() {
       })
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const recentActivity = feedItems.slice(0, 2);
+  const recentActivity = feedItems.slice(0, visiblePostCount);
+  const hasMorePosts = visiblePostCount < feedItems.length;
   const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
 
   function resetCheckIn() {
@@ -379,7 +384,7 @@ export function HomeScreen() {
   useEffect(() => {
     if (!params.compose || params.compose === lastComposeParamRef.current) return;
     lastComposeParamRef.current = params.compose;
-    openComposer("reflection");
+    openComposer("reflection", undefined, visibility.room);
   }, [params.compose]);
 
   async function submitComposer() {
@@ -428,8 +433,27 @@ export function HomeScreen() {
     });
   }
 
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+      if (distanceFromBottom < 100 && hasMorePosts) {
+        setVisiblePostCount((prev) => Math.min(prev + LOAD_MORE_POST_COUNT, feedItems.length));
+      }
+    },
+    [hasMorePosts, feedItems.length],
+  );
+
   return (
-    <AppScreen topInset={false}>
+    <AppScreen scroll={false} topInset={false}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="never"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: 112, paddingTop: 18 }}
+      >
       <CurrentRoomHeader />
 
       <HeartPromptCard
@@ -443,17 +467,15 @@ export function HomeScreen() {
       />
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Today rhythm</SectionHeading>
+        <SectionHeading>Group rhythm</SectionHeading>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          <RhythmAction icon="plus" label="Check in" onPress={() => setCheckInVisible(true)} />
           <RhythmAction icon="heart" label="Pray for someone" onPress={() => {
             if (openPrayer) {
               const prayer = itemPrayerState(openPrayer);
               setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
             }
           }} />
-          <RhythmAction icon="edit-3" label="Write reflection" onPress={() => openComposer("reflection")} />
-          <RhythmAction icon="book-open" label="Read Scripture" onPress={() => router.push("/(tabs)/bible" as never)} />
+          <RhythmAction icon="edit-3" label="Write entry" onPress={() => openComposer("reflection", undefined, visibility.room)} />
         </View>
       </View>
 
@@ -487,7 +509,7 @@ export function HomeScreen() {
       ) : null}
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Recent room activity</SectionHeading>
+        <SectionHeading>Group Activity</SectionHeading>
       {recentActivity.length === 0 ? (
           <Card>
             <BodyText muted>This room is quiet right now. Start with a check-in or a small reflection.</BodyText>
@@ -596,6 +618,7 @@ export function HomeScreen() {
           setPrayerTarget(undefined);
         }}
       />
+      </ScrollView>
     </AppScreen>
   );
 }
