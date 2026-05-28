@@ -84,6 +84,8 @@ export function HomeScreen() {
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
   const [visiblePostCount, setVisiblePostCount] = useState(INITIAL_POST_COUNT);
+  const [groupPlanReflectionVisible, setGroupPlanReflectionVisible] = useState(false);
+  const [groupPlanReflectionText, setGroupPlanReflectionText] = useState("");
   const lastComposeParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -144,6 +146,29 @@ export function HomeScreen() {
   );
   const groupPlanReadCount = groupPlanReadUserIds.size;
   const groupPlanCompletedByCurrentUser = Boolean(state.currentUserId && groupPlanReadUserIds.has(state.currentUserId));
+  const currentGroupPlanProgress = useMemo(
+    () =>
+      groupPlanReading && state.currentUserId
+        ? state.groupBiblePlanProgress.find((item) => item.userId === state.currentUserId && item.readingId === groupPlanReading.id)
+        : undefined,
+    [groupPlanReading, state.currentUserId, state.groupBiblePlanProgress],
+  );
+  const savedGroupPlanReflection = currentGroupPlanProgress?.reflectionText ?? "";
+  const groupPlanReflections = useMemo(
+    () =>
+      groupPlanReading
+        ? state.groupBiblePlanProgress
+            .filter(
+              (item) =>
+                item.readingId === groupPlanReading.id &&
+                item.reflectionVisibility === "group" &&
+                Boolean(item.reflectionText?.trim()),
+            )
+            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        : [],
+    [groupPlanReading, state.groupBiblePlanProgress],
+  );
+  const visibleGroupPlanReflections = groupPlanReflections.slice(0, 3);
 
   function resetCheckIn() {
     setCheckInStep("choose");
@@ -221,6 +246,24 @@ export function HomeScreen() {
     });
   }
 
+  function openGroupPlanReflection() {
+    setGroupPlanReflectionText(savedGroupPlanReflection);
+    setGroupPlanReflectionVisible(true);
+  }
+
+  async function submitGroupPlanReflection() {
+    if (!state.groupBiblePlan || !groupPlanReading || !groupPlanReflectionText.trim()) return;
+    await dispatch({
+      type: "saveGroupBiblePlanReflection",
+      planId: state.groupBiblePlan.id,
+      readingId: groupPlanReading.id,
+      reflectionText: groupPlanReflectionText,
+      reflectionVisibility: "group",
+      dateKey: todayKey,
+    });
+    setGroupPlanReflectionVisible(false);
+  }
+
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
@@ -268,14 +311,58 @@ export function HomeScreen() {
                 dateKey: todayKey,
               })
             }
+            onReflect={openGroupPlanReflection}
             passageReference={groupPlanReading.passage.reference}
             planTitle={state.groupBiblePlan.title}
             progressLabel={`${groupPlanReadCount} read today`}
+            reflectLabel={savedGroupPlanReflection ? "Edit reflection" : "Share reflection"}
             rhythmLabel="Shared Scripture rhythm"
           />
         ) : state.groupBiblePlan ? (
           <Card>
             <BodyText muted>No Bible Plan reading scheduled for today.</BodyText>
+          </Card>
+        ) : null}
+        {groupPlanReflectionVisible && state.groupBiblePlan && groupPlanReading ? (
+          <Card>
+            <SectionHeading>Group reflection</SectionHeading>
+            <BodyText muted>{groupPlanReading.passage.reference}</BodyText>
+            <TextInputField
+              multiline
+              value={groupPlanReflectionText}
+              onChangeText={setGroupPlanReflectionText}
+              onSubmitEditing={submitGroupPlanReflection}
+              placeholder="Share a brief reflection with your group..."
+              returnKeyType="done"
+              style={{ minHeight: 112 }}
+              submitBehavior="submit"
+            />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <SecondaryButton onPress={() => setGroupPlanReflectionVisible(false)} style={{ flex: 1 }}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton disabled={!groupPlanReflectionText.trim()} icon="send" onPress={submitGroupPlanReflection} style={{ flex: 1 }}>
+                Save
+              </PrimaryButton>
+            </View>
+          </Card>
+        ) : null}
+        {visibleGroupPlanReflections.length > 0 ? (
+          <Card>
+            <SectionHeading>Shared reflections</SectionHeading>
+            <View style={{ gap: 12 }}>
+              {visibleGroupPlanReflections.map((reflection) => (
+                <View key={reflection.id} style={{ gap: 4 }}>
+                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                    {userById.get(reflection.userId) ?? "Someone"}
+                  </Text>
+                  <BodyText muted>{reflection.reflectionText}</BodyText>
+                </View>
+              ))}
+            </View>
+            {groupPlanReflections.length > visibleGroupPlanReflections.length ? (
+              <BodyText muted>More reflections will be available here soon.</BodyText>
+            ) : null}
           </Card>
         ) : null}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
