@@ -100,6 +100,7 @@ export function HomeScreen() {
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
+  const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
     (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
@@ -269,6 +270,16 @@ export function HomeScreen() {
           <RhythmAction icon="edit-3" label="Write entry" onPress={() => openComposer("reflection", undefined, visibility.room)} />
         </View>
       </View>
+
+      {ownsGroup ? (
+        <Card>
+          <SectionHeading>Internal test</SectionHeading>
+          <BodyText muted>{state.groupBiblePlan ? `Active group plan: ${state.groupBiblePlan.title}` : "No active group Bible plan."}</BodyText>
+          <SecondaryButton icon="book-open" onPress={() => dispatch({ type: "createSampleGroupBiblePlan" })}>
+            Create sample group plan
+          </SecondaryButton>
+        </Card>
+      ) : null}
 
       <View style={{ gap: 10 }}>
         <SectionHeading>{openPrayer ? "Someone to pray for" : "Open prayer"}</SectionHeading>

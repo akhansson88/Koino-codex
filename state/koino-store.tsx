@@ -119,6 +119,8 @@ type Action =
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "createOrReplaceGroupBiblePlan"; plan: BiblePlanDraft }
   | { type: "createOrReplacePrivateBiblePlan"; plan: BiblePlanDraft }
+  | { type: "createSampleGroupBiblePlan" }
+  | { type: "createSamplePrivateBiblePlan" }
   | { type: "markGroupBiblePlanRead"; planId: Id; readingId: Id; dateKey?: string }
   | { type: "saveGroupBiblePlanReflection"; planId: Id; readingId: Id; reflectionText: string; reflectionVisibility: BiblePlanProgress["reflectionVisibility"]; dateKey?: string }
   | { type: "markPrivateBiblePlanRead"; planId: Id; readingId: Id; dateKey?: string }
@@ -151,6 +153,12 @@ function localDayKey(value: string | Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function addLocalDays(value: Date, days: number) {
+  const nextDate = new Date(value);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
 }
 
 function id(prefix: string) {
@@ -205,6 +213,42 @@ function planReadings(readings: Record<string, BiblePlanReading>) {
 
 function planReadingFor(plan: BiblePlan | undefined, readingId: Id) {
   return Object.values(plan?.readings ?? {}).find((reading) => reading.id === readingId);
+}
+
+function sampleBiblePlanDraft(title: string): BiblePlanDraft {
+  const today = new Date();
+  const day1 = localDayKey(today);
+  const day2 = localDayKey(addLocalDays(today, 1));
+  const day3 = localDayKey(addLocalDays(today, 2));
+
+  return {
+    id: "sample_three_day_rhythm",
+    title,
+    startDate: day1,
+    readings: {
+      day_1: {
+        id: "day_1",
+        day: 1,
+        dateKey: day1,
+        passage: { reference: "Philippians 2:1-11" },
+        prompt: "Notice the shape of Christlike humility.",
+      },
+      day_2: {
+        id: "day_2",
+        day: 2,
+        dateKey: day2,
+        passage: { reference: "Psalm 23" },
+        prompt: "Reflect on God's care and presence.",
+      },
+      day_3: {
+        id: "day_3",
+        day: 3,
+        dateKey: day3,
+        passage: { reference: "Matthew 6:9-13" },
+        prompt: "Pray slowly through the Lord's Prayer.",
+      },
+    },
+  };
 }
 
 function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
@@ -1328,6 +1372,46 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: privateBiblePlan?.createdAt ?? timestamp,
                 updatedAt: timestamp,
                 readings,
+              };
+              await set(ref(database, `privateBiblePlans/${firebaseUser.uid}/active`), plan);
+              return;
+            }
+            case "createSampleGroupBiblePlan": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const group = groups.find((item) => item.id === profile.currentGroupId);
+              if (!group || group.ownerId !== firebaseUser.uid) return;
+              const timestamp = now();
+              const samplePlan = sampleBiblePlanDraft("Sample group Bible plan");
+              const plan: BiblePlan = {
+                id: samplePlan.id ?? id("bibleplan"),
+                scope: "group",
+                ownerId: profile.currentGroupId,
+                title: samplePlan.title,
+                status: "active",
+                startDate: samplePlan.startDate,
+                createdBy: firebaseUser.uid,
+                createdAt: groupBiblePlan?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+                readings: planReadings(samplePlan.readings),
+              };
+              await set(ref(database, `groupBiblePlans/${profile.currentGroupId}/active`), plan);
+              return;
+            }
+            case "createSamplePrivateBiblePlan": {
+              if (!firebaseUser) return;
+              const timestamp = now();
+              const samplePlan = sampleBiblePlanDraft("Sample private Bible plan");
+              const plan: BiblePlan = {
+                id: samplePlan.id ?? id("bibleplan"),
+                scope: "private",
+                ownerId: firebaseUser.uid,
+                title: samplePlan.title,
+                status: "active",
+                startDate: samplePlan.startDate,
+                createdBy: firebaseUser.uid,
+                createdAt: privateBiblePlan?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+                readings: planReadings(samplePlan.readings),
               };
               await set(ref(database, `privateBiblePlans/${firebaseUser.uid}/active`), plan);
               return;

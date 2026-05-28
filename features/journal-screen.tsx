@@ -195,6 +195,14 @@ export function JournalScreen() {
         onPress={() => setCheckInVisible(true)}
       />
 
+      <Card>
+        <SectionHeading>Internal test</SectionHeading>
+        <BodyText muted>{state.privateBiblePlan ? `Active private plan: ${state.privateBiblePlan.title}` : "No active private Bible plan."}</BodyText>
+        <SecondaryButton icon="book-open" onPress={() => dispatch({ type: "createSamplePrivateBiblePlan" })}>
+          Create sample private plan
+        </SecondaryButton>
+      </Card>
+
       <View style={{ gap: 10 }}>
         <SectionHeading>Quick actions</SectionHeading>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
