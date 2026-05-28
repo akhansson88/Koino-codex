@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
 import {
@@ -7,6 +7,7 @@ import {
   entryKindIcon,
   feedItemKind,
   feedItemLabel,
+  moodOptionForValue,
 } from "@/state/product";
 import type { FeedItem, GroupImage } from "@/state/types";
 import {
@@ -33,16 +34,8 @@ function formatRelativeTime(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-function moodLabel(mood: number) {
-  if (mood >= 5) return "Joyful";
-  if (mood >= 4) return "Peaceful";
-  if (mood <= 1) return "Struggling";
-  if (mood <= 2) return "Heavy";
-  return "Okay";
-}
-
 function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, moodLabel);
+  return productDefaultFeedTitle(item, (mood) => moodOptionForValue(mood).label);
 }
 
 function kindLabel(item: FeedItem) {
@@ -108,6 +101,37 @@ export function PostCard({
           <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
         </View>
       </View>
+
+      {item.type === "check_in" ? (
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: colors.accentSubtle,
+            borderRadius: 12,
+            flexDirection: "row",
+            gap: 12,
+            marginTop: 10,
+            padding: 12,
+          }}
+        >
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: colors.paper,
+              borderRadius: 999,
+              height: 36,
+              justifyContent: "center",
+              width: 36,
+            }}
+          >
+            <Ionicons name={moodOptionForValue(item.mood).icon} size={20} color={colors.olive} />
+          </View>
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{moodOptionForValue(item.mood).label}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{moodOptionForValue(item.mood).description}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {ownsItem && menuOpen ? (
         <View

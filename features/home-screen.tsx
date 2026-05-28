@@ -9,6 +9,8 @@ import {
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
   feedItemLabel,
+  moodLabel as productMoodLabel,
+  moodOptions,
   normalizeEntryKind,
   visibility,
 } from "@/state/product";
@@ -40,14 +42,6 @@ type CheckInStep = "choose" | "details" | "thanks";
 const INITIAL_POST_COUNT = 10;
 const LOAD_MORE_POST_COUNT = 20;
 
-const moodOptions = [
-  { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
-  { value: 4, label: "Peaceful", description: "Calm and at rest", icon: "leaf-outline" as const },
-  { value: 3, label: "Okay", description: "Doing alright", icon: "happy-outline" as const },
-  { value: 2, label: "Heavy", description: "Carrying some burden", icon: "cloud-outline" as const },
-  { value: 1, label: "Struggling", description: "Finding today difficult", icon: "rainy-outline" as const },
-];
-
 function formatRelativeTime(value: string) {
   const created = Date.parse(value);
   if (Number.isNaN(created)) return "";
@@ -66,16 +60,12 @@ function localDayKey(value: string | Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function moodLabel(mood: number) {
-  return moodOptions.find((option) => option.value === mood)?.label ?? (mood >= 4 ? "Peaceful" : mood <= 2 ? "Heavy" : "Okay");
-}
-
 function kindLabel(item: FeedItem) {
   return feedItemLabel(item);
 }
 
 function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, moodLabel);
+  return productDefaultFeedTitle(item, productMoodLabel);
 }
 
 export function HomeScreen() {

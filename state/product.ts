@@ -65,6 +65,22 @@ export function heartMoodLabel(value?: HeartMood) {
   return heartMoods.find((mood) => mood.value === value)?.label;
 }
 
+export const moodOptions = [
+  { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
+  { value: 4, label: "Peaceful", description: "Calm and at rest", icon: "leaf-outline" as const },
+  { value: 3, label: "Okay", description: "Doing alright", icon: "happy-outline" as const },
+  { value: 2, label: "Heavy", description: "Carrying some burden", icon: "cloud-outline" as const },
+  { value: 1, label: "Struggling", description: "Finding today difficult", icon: "rainy-outline" as const },
+];
+
+export function moodOptionForValue(mood: number) {
+  return moodOptions.find((option) => option.value === mood) ?? moodOptions[2];
+}
+
+export function moodLabel(mood: number) {
+  return moodOptionForValue(mood).label;
+}
+
 export const postTypeLabels = {
   reflection: "Reflection",
   prayer_request: "Prayer request",

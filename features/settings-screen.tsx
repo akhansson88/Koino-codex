@@ -8,6 +8,7 @@ import {
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
   feedItemLabel,
+  moodLabel,
   normalizeEntryKind,
   prayerFilters,
   roomTabs,
@@ -77,14 +78,6 @@ function formatRelativeTime(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function moodLabel(mood: number) {
-  if (mood >= 5) return "Joyful";
-  if (mood >= 4) return "Peaceful";
-  if (mood <= 1) return "Struggling";
-  if (mood <= 2) return "Heavy";
-  return "Okay";
 }
 
 function defaultTitle(item: FeedItem) {
