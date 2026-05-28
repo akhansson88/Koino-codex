@@ -95,7 +95,7 @@ export default function TabLayout() {
           title: tabs[2],
           tabBarLabel: tabs[2],
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "book" : "book-outline"} color={color} size={size} />
+            <Ionicons name={focused ? "person" : "person-outline"} color={color} size={size} />
           ),
         }}
       />
