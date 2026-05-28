@@ -89,7 +89,22 @@ const fragmentShaderSource = `
     vec2 vortexA = p - driftA;
     vec2 vortexB = p - driftB;
 
-    vec2 flow = p;
+    vec2 windDir = normalize(vec2(
+      0.6 * sin(t * 0.18) + 0.3 * sin(t * 0.41 + 1.7),
+      0.4 * cos(t * 0.15) + 0.2 * cos(t * 0.33 + 2.3)
+    ));
+    float windStrength = 0.025 + 0.015 * sin(t * 0.27);
+    vec2 wind = windDir * windStrength;
+
+    vec2 turbulence = vec2(
+      fbm(p * 3.5 + vec2(t * 0.4, t * 0.3)) - 0.5,
+      fbm(p * 3.5 + vec2(5.2 - t * 0.35, 7.1 + t * 0.28)) - 0.5
+    ) * 0.035;
+
+    float gravityBias = -0.012;
+    vec2 gravity = vec2(0.0, gravityBias * (1.0 - smoothstep(0.0, 0.55, r)));
+
+    vec2 flow = p + wind + turbulence + gravity;
     flow = rotate2d(0.15 * sin(t * 0.35)) * flow;
 
     float largeCloud = fbm(flow * 1.05 + vec2(t * 0.025, -t * 0.018));
