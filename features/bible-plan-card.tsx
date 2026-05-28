@@ -11,6 +11,7 @@ export function BiblePlanCard({
   passageReference,
   planTitle,
   progressLabel,
+  rhythmLabel,
 }: {
   completed: boolean;
   dayLabel: string;
@@ -18,12 +19,13 @@ export function BiblePlanCard({
   passageReference: string;
   planTitle: string;
   progressLabel: string;
+  rhythmLabel: string;
 }) {
   return (
     <Card style={{ gap: 13, padding: 16 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
         <Feather name="book-open" size={16} color={colors.olive} />
-        <Text style={{ color: colors.olive, flex: 1, fontSize: 12, fontWeight: "900" }}>Shared Scripture rhythm</Text>
+        <Text style={{ color: colors.olive, flex: 1, fontSize: 12, fontWeight: "900" }}>{rhythmLabel}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{progressLabel}</Text>
       </View>
       <View style={{ gap: 5 }}>

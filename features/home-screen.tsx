@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
 
 import { BiblePlanCard } from "@/features/bible-plan-card";
+import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
@@ -14,7 +15,7 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BiblePlan, BiblePlanReading, BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
   BodyText,
@@ -59,45 +60,6 @@ function formatRelativeTime(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function localDayKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function dateFromDayKey(value?: string) {
-  if (!value) return undefined;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return undefined;
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date;
-}
-
-function sortedPlanReadings(plan?: BiblePlan) {
-  return Object.values(plan?.readings ?? {}).sort((a, b) => a.day - b.day || a.id.localeCompare(b.id));
-}
-
-function todayPlanReading(plan: BiblePlan | undefined, todayKey: string) {
-  const readings = sortedPlanReadings(plan);
-  if (!plan || readings.length === 0) return undefined;
-
-  const exactReading = readings.find((reading) => reading.dateKey === todayKey);
-  if (exactReading) return exactReading;
-
-  const startDate = dateFromDayKey(plan.startDate);
-  const todayDate = dateFromDayKey(todayKey);
-  if (!startDate || !todayDate) return undefined;
-
-  const dayNumber = Math.floor((todayDate.getTime() - startDate.getTime()) / 86400000) + 1;
-  if (dayNumber < 1) return undefined;
-  return readings.find((reading) => reading.day === dayNumber);
-}
-
-function planDayLabel(reading: BiblePlanReading, totalReadings: number) {
-  return `Day ${reading.day} of ${totalReadings}`;
 }
 
 function moodLabel(mood: number) {
@@ -182,8 +144,8 @@ export function HomeScreen() {
   const recentActivity = feedItems.slice(0, visiblePostCount);
   const hasMorePosts = visiblePostCount < feedItems.length;
   const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
-  const groupPlanReadings = useMemo(() => sortedPlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
-  const groupPlanReading = useMemo(() => todayPlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
+  const groupPlanReadings = useMemo(() => sortedBiblePlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
+  const groupPlanReading = useMemo(() => todayBiblePlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
   const groupPlanReadUserIds = useMemo(
     () => new Set(state.groupBiblePlanProgress.filter((item) => item.read).map((item) => item.userId)),
     [state.groupBiblePlanProgress],
@@ -305,7 +267,7 @@ export function HomeScreen() {
         {state.groupBiblePlan && groupPlanReading ? (
           <BiblePlanCard
             completed={groupPlanCompletedByCurrentUser}
-            dayLabel={planDayLabel(groupPlanReading, groupPlanReadings.length)}
+            dayLabel={biblePlanDayLabel(groupPlanReading, groupPlanReadings.length)}
             onMarkRead={() =>
               dispatch({
                 type: "markGroupBiblePlanRead",
@@ -317,6 +279,7 @@ export function HomeScreen() {
             passageReference={groupPlanReading.passage.reference}
             planTitle={state.groupBiblePlan.title}
             progressLabel={`${groupPlanReadCount} read today`}
+            rhythmLabel="Shared Scripture rhythm"
           />
         ) : state.groupBiblePlan ? (
           <Card>
