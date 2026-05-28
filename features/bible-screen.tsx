@@ -2476,7 +2476,7 @@ function BibleText({
     fontVariant: ["tabular-nums"],
     fontWeight: "800",
     lineHeight: readerLineHeight,
-    marginTop: -verseFontSize * 0.4,
+    marginTop: -verseFontSize * 0.55,
   };
   const selectedTextStyle: TextStyle & { textUnderlineOffset?: number } = {
     textDecorationColor: palette.accent,
