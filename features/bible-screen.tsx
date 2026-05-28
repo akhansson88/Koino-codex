@@ -2468,13 +2468,15 @@ function BibleText({
   showVerseNumbers: boolean;
   verses: BibleChapterVerse[];
 }) {
+  const verseFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.7);
   const verseNumberStyle: TextStyle = {
-    color: palette.muted,
-    fontSize: Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.58),
+    color: palette.accent,
+    fontFamily: readerTextStyle.fontFamily,
+    fontSize: verseFontSize,
     fontVariant: ["tabular-nums"],
     fontWeight: "800",
     lineHeight: readerLineHeight,
-    verticalAlign: "top",
+    marginTop: -verseFontSize * 0.4,
   };
   const selectedTextStyle: TextStyle & { textUnderlineOffset?: number } = {
     textDecorationColor: palette.accent,
@@ -2539,16 +2541,16 @@ function BibleText({
                 >
                   {position.chapter}
                 </Text>
-                <Text style={[readerTextStyle, { flex: 1, paddingTop: 3 }]}>
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
                   {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                  <Text style={verseTextStyle}>{item.text}</Text>
-                </Text>
+                  <Text style={[readerTextStyle, { flex: 1 }]}><Text style={verseTextStyle}>{item.text}</Text></Text>
+                </View>
               </View>
             ) : (
-              <Text style={readerTextStyle}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
                 {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                <Text style={verseTextStyle}>{item.text}</Text>
-              </Text>
+                <Text style={[readerTextStyle, { flex: 1 }]}><Text style={verseTextStyle}>{item.text}</Text></Text>
+              </View>
             )}
           </Pressable>
         );
