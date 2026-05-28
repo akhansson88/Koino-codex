@@ -64,6 +64,76 @@
       }
     },
 
+    "groupBiblePlans": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        ".write": "auth != null && !newData.exists() && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
+        "active": {
+          ".write": "auth != null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
+          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('scope').val() == 'group' && newData.child('ownerId').val() == $groupId && newData.child('title').isString() && newData.child('status').val() == 'active' && newData.child('startDate').isString() && newData.child('createdBy').val() == auth.uid && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && newData.child('readings').hasChildren())",
+          "id": { ".validate": "newData.isString()" },
+          "scope": { ".validate": "newData.val() == 'group'" },
+          "ownerId": { ".validate": "newData.val() == $groupId" },
+          "title": { ".validate": "newData.isString()" },
+          "status": { ".validate": "newData.val() == 'active'" },
+          "startDate": { ".validate": "newData.isString()" },
+          "createdBy": { ".validate": "newData.val() == auth.uid" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "readings": {
+            "$readingKey": {
+              ".validate": "newData.child('id').isString() && newData.child('day').isNumber() && newData.child('passage').child('reference').isString() && (!newData.child('dateKey').exists() || newData.child('dateKey').isString()) && (!newData.child('prompt').exists() || newData.child('prompt').isString())",
+              "id": { ".validate": "newData.isString()" },
+              "day": { ".validate": "newData.isNumber()" },
+              "dateKey": { ".validate": "newData.val() == null || newData.isString()" },
+              "passage": {
+                ".validate": "newData.child('reference').isString()",
+                "id": { ".validate": "newData.val() == null || newData.isString()" },
+                "book": { ".validate": "newData.val() == null || newData.isString()" },
+                "chapter": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "startVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "endVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "reference": { ".validate": "newData.isString()" },
+                "translation": { ".validate": "newData.val() == null || newData.isString()" },
+                "$other": { ".validate": false }
+              },
+              "prompt": { ".validate": "newData.val() == null || newData.isString()" },
+              "$other": { ".validate": false }
+            }
+          },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "groupBiblePlanProgress": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        ".write": "auth != null && !newData.exists() && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
+        "$planId": {
+          "$dateKey": {
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+              ".validate": "newData.val() == null || (newData.child('id').val() == $uid && newData.child('planId').val() == $planId && newData.child('readingId').isString() && newData.child('userId').val() == $uid && newData.child('dateKey').val() == $dateKey && newData.child('read').isBoolean() && (newData.child('reflectionVisibility').val() == 'private' || newData.child('reflectionVisibility').val() == 'group') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('reflectionText').exists() || newData.child('reflectionText').isString()) && (!newData.child('journalEntryId').exists() || newData.child('journalEntryId').isString()))",
+              "id": { ".validate": "newData.val() == $uid" },
+              "planId": { ".validate": "newData.val() == $planId" },
+              "readingId": { ".validate": "newData.isString()" },
+              "userId": { ".validate": "newData.val() == $uid" },
+              "dateKey": { ".validate": "newData.val() == $dateKey" },
+              "read": { ".validate": "newData.isBoolean()" },
+              "reflectionText": { ".validate": "newData.val() == null || newData.isString()" },
+              "reflectionVisibility": { ".validate": "newData.val() == 'private' || newData.val() == 'group'" },
+              "journalEntryId": { ".validate": "newData.val() == null || newData.isString()" },
+              "createdAt": { ".validate": "newData.isString()" },
+              "updatedAt": { ".validate": "newData.isString()" },
+              "$other": { ".validate": false }
+            }
+          }
+        }
+      }
+    },
+
     "groupMembers": {
       "$groupId": {
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
@@ -202,6 +272,72 @@
       }
     },
 
+    "privateBiblePlans": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "active": {
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('scope').val() == 'private' && newData.child('ownerId').val() == $uid && newData.child('title').isString() && newData.child('status').val() == 'active' && newData.child('startDate').isString() && newData.child('createdBy').val() == $uid && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && newData.child('readings').hasChildren())",
+          "id": { ".validate": "newData.isString()" },
+          "scope": { ".validate": "newData.val() == 'private'" },
+          "ownerId": { ".validate": "newData.val() == $uid" },
+          "title": { ".validate": "newData.isString()" },
+          "status": { ".validate": "newData.val() == 'active'" },
+          "startDate": { ".validate": "newData.isString()" },
+          "createdBy": { ".validate": "newData.val() == $uid" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "readings": {
+            "$readingKey": {
+              ".validate": "newData.child('id').isString() && newData.child('day').isNumber() && newData.child('passage').child('reference').isString() && (!newData.child('dateKey').exists() || newData.child('dateKey').isString()) && (!newData.child('prompt').exists() || newData.child('prompt').isString())",
+              "id": { ".validate": "newData.isString()" },
+              "day": { ".validate": "newData.isNumber()" },
+              "dateKey": { ".validate": "newData.val() == null || newData.isString()" },
+              "passage": {
+                ".validate": "newData.child('reference').isString()",
+                "id": { ".validate": "newData.val() == null || newData.isString()" },
+                "book": { ".validate": "newData.val() == null || newData.isString()" },
+                "chapter": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "startVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "endVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+                "reference": { ".validate": "newData.isString()" },
+                "translation": { ".validate": "newData.val() == null || newData.isString()" },
+                "$other": { ".validate": false }
+              },
+              "prompt": { ".validate": "newData.val() == null || newData.isString()" },
+              "$other": { ".validate": false }
+            }
+          },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "privateBiblePlanProgress": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$planId": {
+          "$dateKey": {
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.val() == null || (newData.child('id').val() == $dateKey && newData.child('planId').val() == $planId && newData.child('readingId').isString() && newData.child('userId').val() == $uid && newData.child('dateKey').val() == $dateKey && newData.child('read').isBoolean() && newData.child('reflectionVisibility').val() == 'private' && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('reflectionText').exists() || newData.child('reflectionText').isString()) && (!newData.child('journalEntryId').exists() || newData.child('journalEntryId').isString()))",
+            "id": { ".validate": "newData.val() == $dateKey" },
+            "planId": { ".validate": "newData.val() == $planId" },
+            "readingId": { ".validate": "newData.isString()" },
+            "userId": { ".validate": "newData.val() == $uid" },
+            "dateKey": { ".validate": "newData.val() == $dateKey" },
+            "read": { ".validate": "newData.isBoolean()" },
+            "reflectionText": { ".validate": "newData.val() == null || newData.isString()" },
+            "reflectionVisibility": { ".validate": "newData.val() == 'private'" },
+            "journalEntryId": { ".validate": "newData.val() == null || newData.isString()" },
+            "createdAt": { ".validate": "newData.isString()" },
+            "updatedAt": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
     "posts": {
       "$groupId": {
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
@@ -314,17 +450,28 @@
         ".read": "auth != null && auth.uid == $uid",
         "$entryId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('title').exists() || newData.child('title').val() == null || newData.child('title').isString()) && (!newData.child('journalType').exists() || newData.child('journalType').val() == null || newData.child('journalType').val() == 'reflection' || newData.child('journalType').val() == 'prayer' || newData.child('journalType').val() == 'answered_prayer' || newData.child('journalType').val() == 'heart_checkin' || newData.child('journalType').val() == 'scripture_note') && (!newData.child('entryKind').exists() || newData.child('entryKind').val() == null || newData.child('entryKind').val() == 'reflection' || newData.child('entryKind').val() == 'prayer_request' || newData.child('entryKind').val() == 'praise' || newData.child('entryKind').val() == 'update' || newData.child('entryKind').val() == 'scripture') && (!newData.child('mood').exists() || newData.child('mood').val() == null || newData.child('mood').isNumber()) && (!newData.child('heartMood').exists() || newData.child('heartMood').val() == null || newData.child('heartMood').val() == 'peaceful' || newData.child('heartMood').val() == 'grateful' || newData.child('heartMood').val() == 'heavy' || newData.child('heartMood').val() == 'anxious' || newData.child('heartMood').val() == 'hopeful' || newData.child('heartMood').val() == 'tired') && (!newData.child('sharedPostId').exists() || newData.child('sharedPostId').val() == null || newData.child('sharedPostId').isString()) && (!newData.child('linkedPrayerRequestId').exists() || newData.child('linkedPrayerRequestId').val() == null || newData.child('linkedPrayerRequestId').isString()) && (!newData.child('isPrivate').exists() || newData.child('isPrivate').val() == null || newData.child('isPrivate').isBoolean()) && (!newData.child('verse').exists() || newData.child('verse').val() == null || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))) && (!newData.child('verses').exists() || newData.child('verses').val() == null || newData.child('verses').hasChild('0')))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $entryId && newData.child('userId').val() == $uid && newData.child('body').isString() && (newData.child('source').val() == 'manual' || newData.child('source').val() == 'private_check_in' || newData.child('source').val() == 'bible_plan') && newData.child('createdAt').isString() && newData.child('updatedAt').isString() && (!newData.child('title').exists() || newData.child('title').val() == null || newData.child('title').isString()) && (!newData.child('journalType').exists() || newData.child('journalType').val() == null || newData.child('journalType').val() == 'reflection' || newData.child('journalType').val() == 'prayer' || newData.child('journalType').val() == 'answered_prayer' || newData.child('journalType').val() == 'heart_checkin' || newData.child('journalType').val() == 'scripture_note') && (!newData.child('entryKind').exists() || newData.child('entryKind').val() == null || newData.child('entryKind').val() == 'reflection' || newData.child('entryKind').val() == 'prayer_request' || newData.child('entryKind').val() == 'praise' || newData.child('entryKind').val() == 'update' || newData.child('entryKind').val() == 'scripture') && (!newData.child('mood').exists() || newData.child('mood').val() == null || newData.child('mood').isNumber()) && (!newData.child('heartMood').exists() || newData.child('heartMood').val() == null || newData.child('heartMood').val() == 'peaceful' || newData.child('heartMood').val() == 'grateful' || newData.child('heartMood').val() == 'heavy' || newData.child('heartMood').val() == 'anxious' || newData.child('heartMood').val() == 'hopeful' || newData.child('heartMood').val() == 'tired') && (!newData.child('sharedPostId').exists() || newData.child('sharedPostId').val() == null || newData.child('sharedPostId').isString()) && (!newData.child('linkedPrayerRequestId').exists() || newData.child('linkedPrayerRequestId').val() == null || newData.child('linkedPrayerRequestId').isString()) && (!newData.child('biblePlanId').exists() || newData.child('biblePlanId').val() == null || newData.child('biblePlanId').isString()) && (!newData.child('biblePlanReadingId').exists() || newData.child('biblePlanReadingId').val() == null || newData.child('biblePlanReadingId').isString()) && (!newData.child('isPrivate').exists() || newData.child('isPrivate').val() == null || newData.child('isPrivate').isBoolean()) && (!newData.child('passage').exists() || newData.child('passage').val() == null || newData.child('passage').child('reference').isString()) && (!newData.child('verse').exists() || newData.child('verse').val() == null || (newData.child('verse').child('reference').isString() && newData.child('verse').child('text').isString() && (!newData.child('verse').child('translation').exists() || newData.child('verse').child('translation').isString()))) && (!newData.child('verses').exists() || newData.child('verses').val() == null || newData.child('verses').hasChild('0')))",
           "id": { ".validate": "newData.val() == $entryId" },
           "userId": { ".validate": "newData.val() == $uid" },
           "journalType": { ".validate": "newData.val() == null || newData.val() == 'reflection' || newData.val() == 'prayer' || newData.val() == 'answered_prayer' || newData.val() == 'heart_checkin' || newData.val() == 'scripture_note'" },
           "title": { ".validate": "newData.val() == null || newData.isString()" },
           "body": { ".validate": "newData.isString()" },
           "images": { "$imageIndex": { ".validate": "newData.isString()" } },
-          "source": { ".validate": "newData.val() == 'manual' || newData.val() == 'private_check_in'" },
+          "source": { ".validate": "newData.val() == 'manual' || newData.val() == 'private_check_in' || newData.val() == 'bible_plan'" },
           "entryKind": { ".validate": "newData.val() == null || newData.val() == 'reflection' || newData.val() == 'prayer_request' || newData.val() == 'praise' || newData.val() == 'update' || newData.val() == 'scripture'" },
           "mood": { ".validate": "newData.val() == null || newData.isNumber()" },
           "heartMood": { ".validate": "newData.val() == null || newData.val() == 'peaceful' || newData.val() == 'grateful' || newData.val() == 'heavy' || newData.val() == 'anxious' || newData.val() == 'hopeful' || newData.val() == 'tired'" },
+          "passage": {
+            ".validate": "newData.val() == null || newData.child('reference').isString()",
+            "id": { ".validate": "newData.val() == null || newData.isString()" },
+            "book": { ".validate": "newData.val() == null || newData.isString()" },
+            "chapter": { ".validate": "newData.val() == null || newData.isNumber()" },
+            "startVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+            "endVerse": { ".validate": "newData.val() == null || newData.isNumber()" },
+            "reference": { ".validate": "newData.isString()" },
+            "translation": { ".validate": "newData.val() == null || newData.isString()" },
+            "$other": { ".validate": false }
+          },
           "verse": {
             ".validate": "newData.val() == null || (newData.child('reference').isString() && newData.child('text').isString() && (!newData.child('translation').exists() || newData.child('translation').isString()))",
             "id": { ".validate": "newData.val() == null || newData.isString()" },
@@ -359,6 +506,8 @@
           },
           "sharedPostId": { ".validate": "newData.val() == null || newData.isString()" },
           "linkedPrayerRequestId": { ".validate": "newData.val() == null || newData.isString()" },
+          "biblePlanId": { ".validate": "newData.val() == null || newData.isString()" },
+          "biblePlanReadingId": { ".validate": "newData.val() == null || newData.isString()" },
           "isPrivate": { ".validate": "newData.val() == null || newData.isBoolean()" },
           "createdAt": { ".validate": "newData.isString()" },
           "updatedAt": { ".validate": "newData.isString()" },
