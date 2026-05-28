@@ -7,10 +7,7 @@ import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
-  actionLabels,
   defaultFeedTitle as productDefaultFeedTitle,
-  entryKindIcon,
-  feedItemKind,
   feedItemLabel,
   normalizeEntryKind,
   visibility,
@@ -19,11 +16,9 @@ import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
 import {
   AppScreen,
-  Avatar,
   BodyText,
   Card,
   CurrentRoomHeader,
-  ExpandableBodyText,
   HeartPromptCard,
   IconButton,
   PrimaryButton,
@@ -31,8 +26,8 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  VerseList,
 } from "@/ui/app-components";
+import { PostCard } from "@/ui/post-card";
 import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
@@ -44,8 +39,6 @@ type CheckInStep = "choose" | "details" | "thanks";
 
 const INITIAL_POST_COUNT = 10;
 const LOAD_MORE_POST_COUNT = 20;
-
-const FEED_BODY_PREVIEW_LINES = 3;
 
 const moodOptions = [
   { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
@@ -81,210 +74,8 @@ function kindLabel(item: FeedItem) {
   return feedItemLabel(item);
 }
 
-function kindIcon(item: FeedItem) {
-  if (item.type === "check_in") return "check-circle" as const;
-  return entryKindIcon(item.kind);
-}
-
 function defaultTitle(item: FeedItem) {
   return productDefaultFeedTitle(item, moodLabel);
-}
-
-function FeedPostCard({
-  authorImage,
-  authorName,
-  item,
-  onDelete,
-  onEdit,
-  onOpen,
-  onPray,
-  onReply,
-  ownsItem,
-  prayed,
-  prayerCount,
-  replyCount,
-}: {
-  authorImage?: GroupImage;
-  authorName: string;
-  item: FeedItem;
-  onDelete: () => void;
-  onEdit: () => void;
-  onOpen: () => void;
-  onPray: () => void;
-  onReply: () => void;
-  ownsItem: boolean;
-  prayed: boolean;
-  prayerCount: number;
-  replyCount: number;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const suppressOpenRef = useRef(false);
-  const itemKind = feedItemKind(item);
-  const isPrayer = item.type === "post" && itemKind === "prayer_request";
-  const actionLabel = actionLabels[itemKind];
-
-  function runMenuAction(action: () => void) {
-    suppressOpenRef.current = true;
-    setMenuOpen(false);
-    action();
-    setTimeout(() => {
-      suppressOpenRef.current = false;
-    }, 250);
-  }
-
-  return (
-      <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
-        <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
-          <Avatar image={authorImage} name={authorName} size={42} tone={isPrayer ? "orange" : "green"} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-          </View>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Feather name={kindIcon(item)} size={13} color={colors.gold} />
-            <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
-          </View>
-        </View>
-
-        {ownsItem && menuOpen ? (
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              minWidth: 118,
-              paddingVertical: 4,
-              position: "absolute",
-              bottom: 50,
-              right: 14,
-              zIndex: 40,
-              ...platformShadow({
-                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-                elevation: 12,
-                offset: { width: 0, height: 10 },
-                opacity: 0.14,
-                radius: 24,
-              }),
-            }}
-          >
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onEdit);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="edit-2" size={14} color={colors.ink} />
-              <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
-            </Pressable>
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onDelete);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="trash-2" size={14} color={colors.danger} />
-              <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <Pressable
-          onPress={() => {
-            if (menuOpen || suppressOpenRef.current) {
-              setMenuOpen(false);
-              return;
-            }
-            onOpen();
-          }}
-          style={{ gap: 8 }}
-        >
-          <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
-            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
-          </Text>
-          <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
-            {item.body || "No words today, just presence."}
-          </ExpandableBodyText>
-        </Pressable>
-        <LinkPreview text={item.body} />
-
-        <VerseList verse={item.verse} verses={item.verses} compact />
-
-        {isPrayer ? (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-            <PrimaryButton
-              icon="heart"
-              onPress={() => {
-                onPray();
-              }}
-              style={{ flex: 1, minHeight: 50 }}
-            >
-              {prayed ? "Prayed" : "Pray"}
-            </PrimaryButton>
-            <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "700" }}>{prayerCount} prayed</Text>
-            <View style={{ flex: 1 }} />
-            {ownsItem ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Post options"
-                hitSlop={8}
-                onPressIn={(event) => event.stopPropagation()}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
-                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-              >
-                <Feather name="more-horizontal" size={19} color={colors.ink} />
-              </Pressable>
-            ) : null}
-          </View>
-        ) : (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 22 }}>
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                onPray();
-              }}
-              style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-            >
-              <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
-              <Text style={{ color: colors.muted, fontWeight: "700" }}>{actionLabel} {prayerCount}</Text>
-            </Pressable>
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                onReply();
-              }}
-              style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-            >
-              <Feather name="message-circle" size={21} color={colors.ink} />
-              <Text style={{ color: colors.muted, fontWeight: "700" }}>{replyCount}</Text>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            {ownsItem ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Post options"
-                hitSlop={8}
-                onPressIn={(event) => event.stopPropagation()}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((current) => !current);
-                }}
-                style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-              >
-                <Feather name="more-horizontal" size={19} color={colors.ink} />
-              </Pressable>
-            ) : null}
-          </View>
-        )}
-      </Card>
-  );
 }
 
 export function HomeScreen() {
@@ -521,7 +312,7 @@ export function HomeScreen() {
           const prayer = itemPrayerState(item);
           const replies = itemReplies(item);
           return (
-            <FeedPostCard
+            <PostCard
               key={`${item.type}-${item.id}`}
               authorImage={authorImage}
               authorName={authorName}
