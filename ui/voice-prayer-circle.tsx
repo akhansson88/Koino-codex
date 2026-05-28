@@ -147,7 +147,7 @@ const fragmentShaderSource = `
 
     vec3 finalColor = mix(background, color, circle);
 
-    gl_FragColor = vec4(finalColor, 1.0);
+    gl_FragColor = vec4(finalColor * circle, circle);
   }
 `;
 
@@ -162,7 +162,7 @@ function VoicePrayerCircleWeb({ size }: { size: number }) {
 
     const context = canvas.getContext("webgl", {
       antialias: true,
-      alpha: false,
+      alpha: true,
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
     });
