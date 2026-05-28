@@ -4,6 +4,8 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
 
+import { BiblePlanCard } from "@/features/bible-plan-card";
+import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
@@ -52,12 +54,6 @@ function formatRelativeTime(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function localDayKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function kindLabel(item: FeedItem) {
@@ -138,6 +134,14 @@ export function HomeScreen() {
   const recentActivity = feedItems.slice(0, visiblePostCount);
   const hasMorePosts = visiblePostCount < feedItems.length;
   const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
+  const groupPlanReadings = useMemo(() => sortedBiblePlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
+  const groupPlanReading = useMemo(() => todayBiblePlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
+  const groupPlanReadUserIds = useMemo(
+    () => new Set(state.groupBiblePlanProgress.filter((item) => item.read).map((item) => item.userId)),
+    [state.groupBiblePlanProgress],
+  );
+  const groupPlanReadCount = groupPlanReadUserIds.size;
+  const groupPlanCompletedByCurrentUser = Boolean(state.currentUserId && groupPlanReadUserIds.has(state.currentUserId));
 
   function resetCheckIn() {
     setCheckInStep("choose");
@@ -250,6 +254,28 @@ export function HomeScreen() {
 
       <View style={{ gap: 10 }}>
         <SectionHeading>Group rhythm</SectionHeading>
+        {state.groupBiblePlan && groupPlanReading ? (
+          <BiblePlanCard
+            completed={groupPlanCompletedByCurrentUser}
+            dayLabel={biblePlanDayLabel(groupPlanReading, groupPlanReadings.length)}
+            onMarkRead={() =>
+              dispatch({
+                type: "markGroupBiblePlanRead",
+                planId: state.groupBiblePlan?.id ?? "",
+                readingId: groupPlanReading.id,
+                dateKey: todayKey,
+              })
+            }
+            passageReference={groupPlanReading.passage.reference}
+            planTitle={state.groupBiblePlan.title}
+            progressLabel={`${groupPlanReadCount} read today`}
+            rhythmLabel="Shared Scripture rhythm"
+          />
+        ) : state.groupBiblePlan ? (
+          <Card>
+            <BodyText muted>No Bible Plan reading scheduled for today.</BodyText>
+          </Card>
+        ) : null}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           <RhythmAction icon="heart" label="Pray for someone" onPress={() => {
             if (openPrayer) {

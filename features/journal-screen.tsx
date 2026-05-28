@@ -4,6 +4,8 @@ import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, Text, View } from "react-native";
 
+import { BiblePlanCard } from "@/features/bible-plan-card";
+import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import {
   EntryVisibility,
   heartMoodLabel,
@@ -81,6 +83,10 @@ export function JournalScreen() {
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
+  const todayKey = localDayKey(new Date());
+  const privatePlanReadings = useMemo(() => sortedBiblePlanReadings(state.privateBiblePlan), [state.privateBiblePlan]);
+  const privatePlanReading = useMemo(() => todayBiblePlanReading(state.privateBiblePlan, todayKey), [state.privateBiblePlan, todayKey]);
+  const privatePlanCompleted = Boolean(privatePlanReading && state.privateBiblePlanProgress.some((item) => item.read && item.readingId === privatePlanReading.id));
   const entries = useMemo<DisplayEntry[]>(() => {
     const privateEntries: DisplayEntry[] = state.journalEntries
       .filter((entry) => entry.userId === state.currentUserId)
@@ -194,6 +200,29 @@ export function JournalScreen() {
         subtitle="Take a quiet moment with God."
         onPress={() => setCheckInVisible(true)}
       />
+
+      {state.privateBiblePlan && privatePlanReading ? (
+        <BiblePlanCard
+          completed={privatePlanCompleted}
+          dayLabel={biblePlanDayLabel(privatePlanReading, privatePlanReadings.length)}
+          onMarkRead={() =>
+            dispatch({
+              type: "markPrivateBiblePlanRead",
+              planId: state.privateBiblePlan?.id ?? "",
+              readingId: privatePlanReading.id,
+              dateKey: todayKey,
+            })
+          }
+          passageReference={privatePlanReading.passage.reference}
+          planTitle={state.privateBiblePlan.title}
+          progressLabel={privatePlanCompleted ? "Read today" : "Not read yet"}
+          rhythmLabel="Private Scripture rhythm"
+        />
+      ) : state.privateBiblePlan ? (
+        <Card>
+          <BodyText muted>No Bible Plan reading scheduled for today.</BodyText>
+        </Card>
+      ) : null}
 
       <Card>
         <SectionHeading>Internal test</SectionHeading>
