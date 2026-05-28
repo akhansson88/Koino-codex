@@ -1,24 +1,28 @@
 import { Feather } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
-import { BodyText, Card, PrimaryButton } from "@/ui/app-components";
+import { BodyText, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { colors } from "@/ui/theme";
 
 export function BiblePlanCard({
   completed,
   dayLabel,
   onMarkRead,
+  onReflect,
   passageReference,
   planTitle,
   progressLabel,
+  reflectLabel = "Reflect",
   rhythmLabel,
 }: {
   completed: boolean;
   dayLabel: string;
   onMarkRead: () => void;
+  onReflect?: () => void;
   passageReference: string;
   planTitle: string;
   progressLabel: string;
+  reflectLabel?: string;
   rhythmLabel: string;
 }) {
   return (
@@ -39,6 +43,11 @@ export function BiblePlanCard({
       <PrimaryButton disabled={completed} icon="check-circle" onPress={onMarkRead}>
         {completed ? "Read today" : "Mark as read"}
       </PrimaryButton>
+      {onReflect ? (
+        <SecondaryButton icon="edit-3" onPress={onReflect}>
+          {reflectLabel}
+        </SecondaryButton>
+      ) : null}
     </Card>
   );
 }
