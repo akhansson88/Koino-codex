@@ -291,23 +291,6 @@
       }
     },
 
-    "commentReactions": {
-      "$groupId": {
-        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
-        ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
-        "$reactionId": {
-          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((!data.exists() && !newData.exists()) || (!data.exists() && newData.exists() && newData.child('id').val() == $reactionId && newData.child('userId').val() == auth.uid && root.child('replies').child($groupId).child(newData.child('replyId').val()).exists()) || (data.exists() && !newData.exists() && (data.child('userId').val() == auth.uid || root.child('replies').child($groupId).child(data.child('replyId').val()).child('userId').val() == auth.uid || (root.child('replies').child($groupId).child(data.child('replyId').val()).child('targetType').val() == 'post' && root.child('posts').child($groupId).child(root.child('replies').child($groupId).child(data.child('replyId').val()).child('targetId').val()).child('userId').val() == auth.uid) || (root.child('replies').child($groupId).child(data.child('replyId').val()).child('targetType').val() == 'check_in' && root.child('checkIns').child($groupId).child(root.child('replies').child($groupId).child(data.child('replyId').val()).child('targetId').val()).child('userId').val() == auth.uid))))",
-          ".validate": "newData.val() == null || (newData.child('id').val() == $reactionId && newData.child('userId').val() == auth.uid && newData.child('replyId').isString() && (newData.child('kind').val() == 'amen' || newData.child('kind').val() == 'with_you' || newData.child('kind').val() == 'encouraged') && newData.child('createdAt').isString())",
-          "id": { ".validate": "newData.val() == $reactionId" },
-          "userId": { ".validate": "newData.val() == auth.uid" },
-          "replyId": { ".validate": "newData.isString()" },
-          "kind": { ".validate": "newData.val() == 'amen' || newData.val() == 'with_you' || newData.val() == 'encouraged'" },
-          "createdAt": { ".validate": "newData.isString()" },
-          "$other": { ".validate": false }
-        }
-      }
-    },
-
     "prayerSessions": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
