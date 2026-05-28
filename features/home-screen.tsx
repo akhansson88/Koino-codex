@@ -440,7 +440,6 @@ export function HomeScreen() {
           resetCheckIn();
           setCheckInVisible(true);
         }}
-        onCreate={() => openComposer("reflection")}
       />
 
       <View style={{ gap: 10 }}>

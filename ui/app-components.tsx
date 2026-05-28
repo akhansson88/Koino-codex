@@ -205,18 +205,18 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
 export function HeartPromptCard({
   image,
   name,
-  onCreate,
   onPress,
   subtitle = "Share, reflect or ask for prayer...",
 }: {
   image?: GroupImage;
   name?: string;
-  onCreate: () => void;
   onPress: () => void;
   subtitle?: string;
 }) {
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
       style={{
         alignItems: "center",
         backgroundColor: colors.paper,
@@ -234,17 +234,12 @@ export function HeartPromptCard({
         }),
       }}
     >
-      <Pressable accessibilityRole="button" onPress={onPress} style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 12 }}>
-        <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-          <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
-        </View>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Create new entry"
-        onPress={onCreate}
+      <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
+        <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
+      </View>
+      <View
         style={{
           alignItems: "center",
           backgroundColor: colors.accentSubtle,
@@ -257,8 +252,8 @@ export function HeartPromptCard({
         }}
       >
         <Feather name="plus" size={23} color={colors.olive} />
-      </Pressable>
-    </View>
+      </View>
+    </Pressable>
   );
 }
 
