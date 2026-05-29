@@ -11,7 +11,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build": "expo export --platform web",
+    "build": "expo export --platform web && node scripts/inject-pwa.js",
+    "build:pwa": "expo export --platform web && node scripts/inject-pwa.js",
     "deploy:preview": "npm run build && netlify deploy --dir dist --functions netlify/functions",
     "deploy:netlify": "npm run build && netlify deploy --prod --dir dist --functions netlify/functions",
     "typecheck": "tsc --noEmit",
@@ -54,6 +55,7 @@
     "@remotion/cli": "^4.0.464",
     "@types/react": "~19.1.10",
     "remotion": "^4.0.464",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   }
 }

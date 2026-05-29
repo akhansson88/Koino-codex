@@ -10,6 +10,15 @@
     "splash": {
       "backgroundColor": "#F7EFE4"
     },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./koino-logo.png",
+      "name": "KOINO",
+      "shortName": "KOINO",
+      "description": "Community faith app",
+      "backgroundColor": "#F7EFE4",
+      "themeColor": "#F7EFE4"
+    },
     "ios": {
       "supportsTablet": true
     },
