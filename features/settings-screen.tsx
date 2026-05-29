@@ -9,13 +9,14 @@ import {
   defaultFeedTitle as productDefaultFeedTitle,
   feedItemLabel,
   moodLabel,
+  moodOptions,
   normalizeEntryKind,
   prayerFilters,
   roomTabs,
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id, Reply } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -25,6 +26,7 @@ import {
   Card,
   FilterChips,
   HeartPromptCard,
+  IconButton,
   PrimaryButton,
   RoomImage,
   Row,
@@ -32,7 +34,7 @@ import {
   SectionHeading,
   TextInputField,
 } from "@/ui/app-components";
-import { primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
@@ -41,7 +43,7 @@ import { SharedComposer } from "@/ui/shared-composer";
 import { PostCard } from "@/ui/post-card";
 import { colors } from "@/ui/theme";
 
-type RoomView = "rooms" | "detail";
+type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "checkinComposer";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 
@@ -106,6 +108,12 @@ export function SettingsScreen() {
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
+  const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
+  const [encouragementDraft, setEncouragementDraft] = useState("");
+  const [checkInMood, setCheckInMood] = useState(4);
+  const [checkInText, setCheckInText] = useState("");
+  const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
+  const [checkInBackView, setCheckInBackView] = useState<RoomView>("detail");
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -167,6 +175,7 @@ export function SettingsScreen() {
   const prayerRequests = feedItems.filter(
     (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request",
   );
+  const selectedPrayer = prayerRequests.find((item) => item.id === selectedPrayerId);
   const visiblePrayerRequests = prayerRequests.filter((item) => {
     if (item.type !== "post") return false;
     if (prayerFilter === "open") return !item.answeredAt;
@@ -189,6 +198,8 @@ export function SettingsScreen() {
     useCallback(() => {
       setRoomView("detail");
       setDetailTab("reflections");
+      setSelectedPrayerId(undefined);
+      setEncouragementDraft("");
     }, []),
   );
 
@@ -214,6 +225,24 @@ export function SettingsScreen() {
     setComposerVerses([]);
   }
 
+  function handleCommunityTabChange(tab: RoomDetailTab) {
+    if (tab === "prayer") {
+      setRoomView("prayer");
+      return;
+    }
+    if (tab === "checkins") {
+      setRoomView("checkins");
+      return;
+    }
+    setDetailTab(tab);
+  }
+
+  function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>) {
+    setSelectedPrayerId(item.id);
+    setEncouragementDraft("");
+    setRoomView("prayerDetail");
+  }
+
   function itemPrayerState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
@@ -231,6 +260,19 @@ export function SettingsScreen() {
     return state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
   }
 
+  function itemPrayerActivity(item: FeedItem) {
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    return state.prayerReactions
+      .filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((reaction) => ({
+        id: reaction.id,
+        createdAt: reaction.createdAt,
+        name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
+        image: userImageById.get(reaction.userId),
+      }));
+  }
+
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
     if (prayer.prayed) return;
@@ -244,6 +286,39 @@ export function SettingsScreen() {
       return;
     }
     prayForItem(item);
+  }
+
+  async function sendEncouragement(item: FeedItem) {
+    const body = encouragementDraft.trim();
+    if (!body) return;
+    await dispatch({ type: "createReply", targetType: item.type === "post" ? "post" : "check_in", targetId: item.id, body });
+    setEncouragementDraft("");
+  }
+
+  function resetCommunityCheckIn() {
+    setCheckInMood(4);
+    setCheckInText("");
+    setCheckInVerses([]);
+  }
+
+  function openCheckInComposer(backView: RoomView) {
+    resetCommunityCheckIn();
+    setCheckInBackView(backView);
+    setRoomView("checkinComposer");
+  }
+
+  async function submitCommunityCheckIn() {
+    await dispatch({
+      type: "submitCheckIn",
+      mood: checkInMood,
+      readToday: true,
+      reflectionText: checkInText,
+      visibility: "group",
+      verse: primaryBibleVerse(checkInVerses),
+      verses: checkInVerses,
+    });
+    resetCommunityCheckIn();
+    setRoomView("checkins");
   }
 
   async function handleInvite() {
@@ -398,6 +473,105 @@ export function SettingsScreen() {
     setManageSheetVisible(false);
   }
 
+  if (roomView === "prayer" && group) {
+    return (
+      <>
+        <CommunityPrayerScreen
+          filter={prayerFilter}
+          onBack={() => setRoomView("detail")}
+          onCreatePrayer={() => openComposer("prayer_request")}
+          onFilter={setPrayerFilter}
+          onOpenPrayer={openPrayerDetail}
+          onPray={prayForItem}
+          prayerRequests={visiblePrayerRequests}
+          prayerState={itemPrayerState}
+          userById={userById}
+          userImageById={userImageById}
+        />
+        <SharedComposer
+          visible={composerVisible}
+          context="room"
+          kind={composerKind}
+          entryVisibility={composerVisibility}
+          title={composerTitle}
+          body={composerBody}
+          verses={composerVerses}
+          onKind={setComposerKind}
+          onVisibility={setComposerVisibility}
+          onTitle={setComposerTitle}
+          onBody={setComposerBody}
+          onVerses={setComposerVerses}
+          onClose={() => setComposerVisible(false)}
+          onSubmit={submitComposer}
+          roomName={group.name}
+          roomImage={group.image}
+        />
+      </>
+    );
+  }
+
+  if (roomView === "prayerDetail" && group) {
+    if (!selectedPrayer) {
+      return (
+        <AppScreen>
+          <FocusedScreenHeader onBack={() => setRoomView("prayer")} title="Prayer" />
+          <Card>
+            <BodyText muted>This prayer request is no longer available.</BodyText>
+          </Card>
+        </AppScreen>
+      );
+    }
+
+    const prayer = itemPrayerState(selectedPrayer);
+    return (
+      <CommunityPrayerDetailScreen
+        activity={itemPrayerActivity(selectedPrayer)}
+        authorImage={userImageById.get(selectedPrayer.userId)}
+        authorName={userById.get(selectedPrayer.userId) ?? "Someone"}
+        encouragementDraft={encouragementDraft}
+        item={selectedPrayer}
+        onBack={() => setRoomView("prayer")}
+        onChangeEncouragement={setEncouragementDraft}
+        onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: selectedPrayer.id })}
+        onPray={() => prayForItem(selectedPrayer)}
+        onSendEncouragement={() => sendEncouragement(selectedPrayer)}
+        ownsItem={selectedPrayer.userId === state.currentUserId}
+        prayer={prayer}
+        replies={itemReplies(selectedPrayer)}
+        userById={userById}
+        userImageById={userImageById}
+      />
+    );
+  }
+
+  if (roomView === "checkins" && group) {
+    return (
+      <CommunityCheckInsScreen
+        checkIns={sharedCheckIns}
+        onBack={() => setRoomView("detail")}
+        onCheckIn={() => openCheckInComposer("checkins")}
+        onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
+        userById={userById}
+        userImageById={userImageById}
+      />
+    );
+  }
+
+  if (roomView === "checkinComposer" && group) {
+    return (
+      <CommunityCheckInComposerScreen
+        mood={checkInMood}
+        note={checkInText}
+        onBack={() => setRoomView(checkInBackView)}
+        onMood={setCheckInMood}
+        onNote={setCheckInText}
+        onSubmit={submitCommunityCheckIn}
+        onVerses={setCheckInVerses}
+        verses={checkInVerses}
+      />
+    );
+  }
+
   if (roomView === "detail" && group) {
     return (
       <>
@@ -431,12 +605,12 @@ export function SettingsScreen() {
             image={currentUser?.image}
             name={currentUser?.name ?? state.authEmail ?? "K"}
             subtitle="Take a quiet moment with God."
-            onPress={() => router.push("/(tabs)?checkIn=1" as never)}
+            onPress={() => openCheckInComposer("detail")}
           />
 
           <FilterChips
             value={detailTab}
-            onChange={setDetailTab}
+            onChange={handleCommunityTabChange}
             options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
           />
 
@@ -471,63 +645,6 @@ export function SettingsScreen() {
                     />
                   );
                 })
-              )}
-            </View>
-          ) : null}
-
-          {detailTab === "prayer" ? (
-            <View style={{ gap: 12 }}>
-              <FilterChips value={prayerFilter} onChange={setPrayerFilter} options={prayerFilters.map((filter) => ({ label: filter.label, value: filter.value }))} />
-              <BodyText muted>{visiblePrayerRequests.length} {prayerFilter === "open" ? "open" : prayerFilter === "answered" ? "answered" : "total"} {visiblePrayerRequests.length === 1 ? "request" : "requests"}</BodyText>
-              {visiblePrayerRequests.length === 0 ? (
-                <Card>
-                  <BodyText muted>{prayerFilter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
-                </Card>
-              ) : (
-                visiblePrayerRequests.map((item) => {
-                  const prayer = itemPrayerState(item);
-                  return (
-                    <PrayerRequestCard
-                      key={item.id}
-                      authorImage={userImageById.get(item.userId)}
-                      authorName={userById.get(item.userId) ?? "Someone"}
-                      item={item}
-                      prayed={prayer.prayed}
-                      prayedBy={prayer.prayedBy}
-                      prayerCount={prayer.count}
-                      onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                      onPray={() => prayForItem(item)}
-                    />
-                  );
-                })
-              )}
-            </View>
-          ) : null}
-
-          {detailTab === "checkins" ? (
-            <View style={{ gap: 12 }}>
-              <Card>
-                <SectionHeading>This week's check-in</SectionHeading>
-                <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
-                <PrimaryButton icon="check-circle" onPress={() => router.push("/(tabs)?checkIn=1" as never)}>
-                  Check in now
-                </PrimaryButton>
-              </Card>
-              <SectionHeading>Recent check-ins</SectionHeading>
-              {sharedCheckIns.length === 0 ? (
-                <Card>
-                  <BodyText muted>No shared check-ins yet. This space will stay gentle until someone is ready.</BodyText>
-                </Card>
-              ) : (
-                sharedCheckIns.map((item) => (
-                  <CheckInCard
-                    key={item.id}
-                    authorImage={userImageById.get(item.userId)}
-                    authorName={userById.get(item.userId) ?? "Someone"}
-                    item={item}
-                    onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                  />
-                ))
               )}
             </View>
           ) : null}
@@ -841,6 +958,365 @@ export function SettingsScreen() {
 export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
 
+function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: string }) {
+  return (
+    <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+      <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onBack} />
+      <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title}</Text>
+      <View style={{ width: 38 }} />
+    </View>
+  );
+}
+
+function CommunityPrayerScreen({
+  filter,
+  onBack,
+  onCreatePrayer,
+  onFilter,
+  onOpenPrayer,
+  onPray,
+  prayerRequests,
+  prayerState,
+  userById,
+  userImageById,
+}: {
+  filter: PrayerFilter;
+  onBack: () => void;
+  onCreatePrayer: () => void;
+  onFilter: (filter: PrayerFilter) => void;
+  onOpenPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
+  onPray: (item: FeedItem) => void;
+  prayerRequests: Extract<FeedItem, { type: "post" }>[];
+  prayerState: (item: FeedItem) => { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
+  userById: Map<Id, string>;
+  userImageById: Map<Id, GroupImage | undefined>;
+}) {
+  const countLabel = filter === "open" ? "open" : filter === "answered" ? "answered" : "total";
+
+  return (
+    <AppScreen>
+      <FocusedScreenHeader onBack={onBack} title="Prayer" />
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Prayer</Text>
+        <BodyText muted>Hold requests with care, pray with intention, and return with encouragement.</BodyText>
+      </View>
+      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+        <BodyText muted>{prayerRequests.length} {countLabel} {prayerRequests.length === 1 ? "request" : "requests"}</BodyText>
+        <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+          Share prayer
+        </PrimaryButton>
+      </View>
+      {prayerRequests.length === 0 ? (
+        <Card>
+          <BodyText muted>{filter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
+        </Card>
+      ) : (
+        prayerRequests.map((item) => {
+          const prayer = prayerState(item);
+          return (
+            <PrayerRequestCard
+              key={item.id}
+              authorImage={userImageById.get(item.userId)}
+              authorName={userById.get(item.userId) ?? "Someone"}
+              item={item}
+              prayed={prayer.prayed}
+              prayedBy={prayer.prayedBy}
+              prayerCount={prayer.count}
+              onOpen={() => onOpenPrayer(item)}
+              onPray={() => onPray(item)}
+            />
+          );
+        })
+      )}
+    </AppScreen>
+  );
+}
+
+function CommunityPrayerDetailScreen({
+  activity,
+  authorImage,
+  authorName,
+  encouragementDraft,
+  item,
+  onBack,
+  onChangeEncouragement,
+  onMarkAnswered,
+  onPray,
+  onSendEncouragement,
+  ownsItem,
+  prayer,
+  replies,
+  userById,
+  userImageById,
+}: {
+  activity: { id: Id; createdAt: string; name: string; image?: GroupImage }[];
+  authorImage?: GroupImage;
+  authorName: string;
+  encouragementDraft: string;
+  item: Extract<FeedItem, { type: "post" }>;
+  onBack: () => void;
+  onChangeEncouragement: (value: string) => void;
+  onMarkAnswered: () => void;
+  onPray: () => void;
+  onSendEncouragement: () => void;
+  ownsItem: boolean;
+  prayer: { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
+  replies: Reply[];
+  userById: Map<Id, string>;
+  userImageById: Map<Id, GroupImage | undefined>;
+}) {
+  const answered = Boolean(item.answeredAt);
+
+  return (
+    <AppScreen>
+      <FocusedScreenHeader onBack={onBack} title="Prayer" />
+      <View style={{ alignItems: "center", gap: 8 }}>
+        <Avatar image={authorImage} name={authorName} size={58} tone="green" />
+        <View style={{ alignItems: "center", gap: 3 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+        </View>
+      </View>
+      <View style={{ gap: 12 }}>
+        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>{item.title || defaultTitle(item)}</Text>
+        <BodyText style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>{item.body || "No words today, just presence."}</BodyText>
+        <LinkPreview text={item.body} />
+      </View>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+        <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+          <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
+        </View>
+        <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
+        <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+          <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
+        </View>
+      </Card>
+      {answered ? (
+        <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+            <Feather name="check-circle" size={20} color={colors.olive} />
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Answered prayer</Text>
+          </View>
+          <BodyText muted>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</BodyText>
+        </Card>
+      ) : null}
+      {!answered ? (
+        <PrimaryButton disabled={prayer.prayed} icon={prayer.prayed ? "check" : "heart"} onPress={onPray}>
+          {prayer.prayed ? "You prayed" : "Pray"}
+        </PrimaryButton>
+      ) : null}
+      {ownsItem && !answered ? (
+        <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
+          Mark as answered
+        </SecondaryButton>
+      ) : null}
+      <View style={{ gap: 12 }}>
+        <SectionHeading>Prayer activity</SectionHeading>
+        <Card style={{ gap: 0, padding: 0 }}>
+          {activity.length === 0 ? (
+            <BodyText muted style={{ padding: 14 }}>No prayer activity yet.</BodyText>
+          ) : (
+            activity.map((entry, index) => (
+              <View
+                key={entry.id}
+                style={{
+                  alignItems: "center",
+                  borderBottomColor: colors.line,
+                  borderBottomWidth: index === activity.length - 1 ? 0 : 1,
+                  flexDirection: "row",
+                  gap: 10,
+                  padding: 14,
+                }}
+              >
+                <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(entry.createdAt)}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
+      </View>
+      <View style={{ gap: 12 }}>
+        <SectionHeading>Encouragement</SectionHeading>
+        <Card style={{ gap: 0, padding: 0 }}>
+          {replies.length === 0 ? (
+            <BodyText muted style={{ padding: 14 }}>No encouragement yet.</BodyText>
+          ) : (
+            replies.map((reply, index) => (
+              <View
+                key={reply.id}
+                style={{
+                  borderBottomColor: colors.line,
+                  borderBottomWidth: index === replies.length - 1 ? 0 : 1,
+                  gap: 8,
+                  padding: 14,
+                }}
+              >
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                  <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
+                  <View>
+                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>
+                  </View>
+                </View>
+                <BodyText>{reply.body}</BodyText>
+                <LinkPreview text={reply.body} />
+              </View>
+            ))
+          )}
+        </Card>
+      </View>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+        <TextInputField
+          value={encouragementDraft}
+          onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
+          onSubmitEditing={onSendEncouragement}
+          placeholder="Write an encouragement..."
+          returnKeyType="send"
+          style={{ flex: 1 }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          disabled={!encouragementDraft.trim()}
+          onPress={onSendEncouragement}
+          style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
+        >
+          <Feather name="send" size={22} color={colors.gold} />
+        </Pressable>
+      </View>
+    </AppScreen>
+  );
+}
+
+function CommunityCheckInsScreen({
+  checkIns,
+  onBack,
+  onCheckIn,
+  onOpenCheckIn,
+  userById,
+  userImageById,
+}: {
+  checkIns: Extract<FeedItem, { type: "check_in" }>[];
+  onBack: () => void;
+  onCheckIn: () => void;
+  onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
+  userById: Map<Id, string>;
+  userImageById: Map<Id, GroupImage | undefined>;
+}) {
+  return (
+    <AppScreen>
+      <FocusedScreenHeader onBack={onBack} title="Check-ins" />
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Check-ins</Text>
+        <BodyText muted>Take a gentle moment to share how your heart is doing.</BodyText>
+      </View>
+      <Card>
+        <SectionHeading>This week's check-in</SectionHeading>
+        <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
+        <PrimaryButton icon="edit-3" onPress={onCheckIn}>
+          Check in now
+        </PrimaryButton>
+      </Card>
+      <SectionHeading>Recent check-ins</SectionHeading>
+      {checkIns.length === 0 ? (
+        <Card>
+          <BodyText muted>No shared check-ins yet. This space will stay gentle until someone is ready.</BodyText>
+        </Card>
+      ) : (
+        checkIns.map((item) => (
+          <CheckInCard
+            key={item.id}
+            authorImage={userImageById.get(item.userId)}
+            authorName={userById.get(item.userId) ?? "Someone"}
+            item={item}
+            onOpen={() => onOpenCheckIn(item)}
+          />
+        ))
+      )}
+    </AppScreen>
+  );
+}
+
+function CommunityCheckInComposerScreen({
+  mood,
+  note,
+  onBack,
+  onMood,
+  onNote,
+  onSubmit,
+  onVerses,
+  verses,
+}: {
+  mood: number;
+  note: string;
+  onBack: () => void;
+  onMood: (value: number) => void;
+  onNote: (value: string) => void;
+  onSubmit: () => void;
+  onVerses: (verses: BibleVerse[]) => void;
+  verses: BibleVerse[];
+}) {
+  return (
+    <AppScreen>
+      <FocusedScreenHeader onBack={onBack} title="Check-in" />
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>How is your heart today?</Text>
+        <BodyText muted>Take a quiet moment with God.</BodyText>
+      </View>
+      <View style={{ gap: 10 }}>
+        {moodOptions.map((option) => {
+          const selected = option.value === mood;
+          return (
+            <Pressable accessibilityRole="button" accessibilityState={{ selected }} key={option.value} onPress={() => onMood(option.value)}>
+              <Card
+                style={{
+                  alignItems: "center",
+                  backgroundColor: selected ? colors.accentSubtle : colors.paper,
+                  borderColor: selected ? colors.gold : colors.line,
+                  flexDirection: "row",
+                  gap: 14,
+                  padding: 14,
+                }}
+              >
+                <View style={{ alignItems: "center", backgroundColor: colors.paper, borderRadius: 999, height: 38, justifyContent: "center", width: 38 }}>
+                  <Feather name={selected ? "check" : "heart"} size={18} color={selected ? colors.gold : colors.olive} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{option.label}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{option.description}</Text>
+                </View>
+              </Card>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ gap: 8 }}>
+        <SectionHeading>Reflection</SectionHeading>
+        <TextInputField
+          multiline
+          maxLength={350}
+          value={note}
+          onChangeText={(value) => onNote(value.slice(0, 350))}
+          onSubmitEditing={onSubmit}
+          placeholder="Share a sentence about what you are carrying today."
+          returnKeyType="send"
+          submitBehavior="submit"
+        />
+        <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
+      </View>
+      <BibleVerseField verses={verses} onChange={onVerses} />
+      <PrimaryButton icon="send" onPress={onSubmit}>
+        Share check-in
+      </PrimaryButton>
+    </AppScreen>
+  );
+}
+
 function PrayerRequestCard({
   authorImage,
   authorName,
@@ -968,13 +1444,6 @@ function MembersPanel({
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
         </View>
       </Card>
-      <Card>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
-        <RoomCodeCopy code={group.inviteCode} />
-        <PrimaryButton icon="share-2" onPress={onInvite}>
-          Invite members
-        </PrimaryButton>
-      </Card>
       <Card style={{ gap: 0, padding: 0 }}>
         {members.map((member, index) => {
           const checkIn = latestCheckInByUser.get(member.id);
@@ -1011,6 +1480,13 @@ function MembersPanel({
             </View>
           );
         })}
+      </Card>
+      <PrimaryButton icon="share-2" onPress={onInvite}>
+        Invite members
+      </PrimaryButton>
+      <Card>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
+        <RoomCodeCopy code={group.inviteCode} />
       </Card>
       <SecondaryButton icon="settings" onPress={onManage}>
         Community settings
