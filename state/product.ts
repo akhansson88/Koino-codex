@@ -40,11 +40,11 @@ export const journalEntryTypes: { value: JournalEntryType; label: string; icon: 
 
 export const heartMoods: { value: HeartMood; label: string; description: string; icon: "sun" | "heart" | "cloud" | "wind" | "trending-up" | "moon" }[] = [
   { value: "peaceful", label: "Peaceful", description: "Calm and at rest", icon: "sun" },
-  { value: "grateful", label: "Grateful", description: "Thankful for God's goodness", icon: "heart" },
+  { value: "grateful", label: "Grateful", description: "Grateful and full of joy", icon: "heart" },
   { value: "heavy", label: "Heavy", description: "Carrying some burden", icon: "cloud" },
-  { value: "anxious", label: "Anxious", description: "Needing God's peace", icon: "wind" },
-  { value: "hopeful", label: "Hopeful", description: "Looking forward with trust", icon: "trending-up" },
-  { value: "tired", label: "Tired", description: "Physically or emotionally worn", icon: "moon" },
+  { value: "anxious", label: "Anxious", description: "Worried or overwhelmed", icon: "wind" },
+  { value: "hopeful", label: "Hopeful", description: "Expectant and encouraged", icon: "trending-up" },
+  { value: "tired", label: "Tired", description: "Drained and needing rest", icon: "moon" },
 ];
 
 export function journalEntryTypeFor(entry: Pick<JournalEntry, "journalType" | "entryKind" | "source">): JournalEntryType {

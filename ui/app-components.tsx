@@ -2,6 +2,7 @@ import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
+import type { ModalProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 
@@ -46,6 +47,42 @@ export function AppScreen({
         {children}
       </ScrollView>
     </View>
+  );
+}
+
+const webFixedPosition = "fixed" as unknown as ViewStyle["position"];
+
+export function FullScreenModal({
+  animationType = "slide",
+  children,
+  onRequestClose,
+  presentationStyle,
+  visible,
+}: PropsWithChildren<Pick<ModalProps, "animationType" | "onRequestClose" | "presentationStyle" | "visible">>) {
+  if (Platform.OS === "web") {
+    if (!visible) return null;
+
+    return (
+      <View
+        style={{
+          backgroundColor: colors.cream,
+          bottom: 0,
+          left: 0,
+          position: webFixedPosition,
+          right: 0,
+          top: 0,
+          zIndex: 9999,
+        }}
+      >
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <Modal animationType={animationType} presentationStyle={presentationStyle} visible={visible} onRequestClose={onRequestClose}>
+      {children}
+    </Modal>
   );
 }
 

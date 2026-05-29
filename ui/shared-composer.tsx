@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
-import { AppScreen, Card, FilterChips, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
+import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
 import { colors } from "@/ui/theme";
 
@@ -72,7 +72,7 @@ export function SharedComposer({
   const typeOptions = context === "journal" ? postTypes : composerPostTypes;
 
   return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
+    <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Close composer" icon="arrow-left" onPress={onClose} />
@@ -151,6 +151,6 @@ export function SharedComposer({
           {actionLabel}
         </PrimaryButton>
       </AppScreen>
-    </Modal>
+    </FullScreenModal>
   );
 }

@@ -10,9 +10,11 @@ import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, 
 import { colors } from "@/ui/theme";
 
 export function BibleVerseField({
+  label = "Add verses (optional)",
   onChange,
   verses,
 }: {
+  label?: string;
   onChange: (verses: BibleVerse[]) => void;
   verses: BibleVerse[];
 }) {
@@ -34,7 +36,7 @@ export function BibleVerseField({
   return (
     <View style={{ gap: 8 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <SectionHeading>Add verses (optional)</SectionHeading>
+        <SectionHeading>{label}</SectionHeading>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
       </View>
       {selectedVerses.length > 0 ? (

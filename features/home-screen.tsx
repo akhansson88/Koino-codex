@@ -1,31 +1,22 @@
 import type { ComponentProps } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Modal, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
-import { BiblePlanCard } from "@/features/bible-plan-card";
 import { BiblePlanReflectionEditor } from "@/features/bible-plan-reflection-editor";
 import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
-import {
-  EntryVisibility,
-  defaultFeedTitle as productDefaultFeedTitle,
-  feedItemLabel,
-  moodLabel as productMoodLabel,
-  moodOptions,
-  normalizeEntryKind,
-  visibility,
-} from "@/state/product";
+import { defaultFeedTitle as productDefaultFeedTitle, feedItemLabel, heartMoods, moodLabel, normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, GroupImage } from "@/state/types";
+import type { BibleVerse, FeedItem, GroupImage, HeartMood } from "@/state/types";
 import {
   AppScreen,
   Avatar,
+  AvatarStack,
   BodyText,
   Card,
-  CurrentRoomHeader,
-  HeartPromptCard,
+  FullScreenModal,
   IconButton,
   PrimaryButton,
   RoomImage,
@@ -33,18 +24,24 @@ import {
   SectionHeading,
   TextInputField,
 } from "@/ui/app-components";
-import { PostCard } from "@/ui/post-card";
-import { BibleVerseField, normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
-import { confirmAction } from "@/ui/confirm";
-import { LinkPreview } from "@/ui/link-preview";
+import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { SharedComposer } from "@/ui/shared-composer";
+import { QuietActionCard, ScriptureRhythmCard } from "@/ui/rhythm-cards";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 type CheckInStep = "choose" | "details" | "thanks";
+type FeatherName = ComponentProps<typeof Feather>["name"];
 
-const INITIAL_POST_COUNT = 10;
-const LOAD_MORE_POST_COUNT = 20;
+const fallbackPassage = "Philippians 2:1-11";
+
+const moodTone: Record<HeartMood, { background: string; color: string; icon: FeatherName }> = {
+  peaceful: { background: "#E5F0D8", color: "#58712D", icon: "feather" },
+  grateful: { background: "#FFF0DE", color: "#B86B17", icon: "sun" },
+  heavy: { background: "#EEF1F4", color: "#667085", icon: "cloud" },
+  anxious: { background: "#FCE8DF", color: "#C45125", icon: "cloud-rain" },
+  hopeful: { background: "#FFF2C7", color: "#B86B17", icon: "star" },
+  tired: { background: "#ECE5FF", color: "#7253B8", icon: "moon" },
+};
 
 function formatRelativeTime(value: string) {
   const created = Date.parse(value);
@@ -54,8 +51,19 @@ function formatRelativeTime(value: string) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
+  if (hours < 24) return `${hours}h ago`;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function firstName(name?: string) {
+  return name?.trim().split(/\s+/)[0];
+}
+
+function moodNumber(mood?: HeartMood) {
+  if (mood === "grateful") return 5;
+  if (mood === "peaceful" || mood === "hopeful") return 4;
+  if (mood === "heavy" || mood === "anxious" || mood === "tired") return 2;
+  return 3;
 }
 
 function kindLabel(item: FeedItem) {
@@ -63,41 +71,43 @@ function kindLabel(item: FeedItem) {
 }
 
 function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, productMoodLabel);
+  return productDefaultFeedTitle(item, moodLabel);
 }
 
 export function HomeScreen() {
   const { state, dispatch } = useKoino();
-  const params = useLocalSearchParams<{ checkIn?: string; compose?: string }>();
+  const params = useLocalSearchParams<{ checkIn?: string }>();
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
-  const [mood, setMood] = useState(4);
+  const [heartMood, setHeartMood] = useState<HeartMood>();
   const [checkInText, setCheckInText] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
   const [shareCheckIn, setShareCheckIn] = useState(true);
-  const [composerVisible, setComposerVisible] = useState(false);
-  const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
-  const [composerVisibility, setComposerVisibility] = useState<EntryVisibility>(visibility.private);
-  const [composerTitle, setComposerTitle] = useState("");
-  const [composerBody, setComposerBody] = useState("");
-  const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
-  const [editingItem, setEditingItem] = useState<FeedItem | undefined>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
-  const [visiblePostCount, setVisiblePostCount] = useState(INITIAL_POST_COUNT);
   const [groupPlanReflectionVisible, setGroupPlanReflectionVisible] = useState(false);
   const [groupPlanReflectionText, setGroupPlanReflectionText] = useState("");
-  const lastComposeParamRef = useRef<string | undefined>(undefined);
+  const lastCheckInParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
-  const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
     (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
   );
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
+  const communityMembers = useMemo(
+    () =>
+      state.memberships.map((membership) => {
+        const member = state.users.find((candidate) => candidate.id === membership.userId);
+        return {
+          image: member?.image,
+          name: member?.name ?? membership.userName,
+        };
+      }),
+    [state.memberships, state.users],
+  );
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
       .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
@@ -130,23 +140,12 @@ export function HomeScreen() {
         answeredMarkedAt: item.answeredMarkedAt,
         createdAt: item.createdAt,
       }));
-    return [...checkIns, ...posts]
-      .filter((item) => {
-        return true;
-      })
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const recentActivity = feedItems.slice(0, visiblePostCount);
-  const hasMorePosts = visiblePostCount < feedItems.length;
-  const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request");
+  const latestCommunityItem = feedItems[0];
+  const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request" && !item.answeredAt);
   const groupPlanReadings = useMemo(() => sortedBiblePlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
   const groupPlanReading = useMemo(() => todayBiblePlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
-  const groupPlanReadUserIds = useMemo(
-    () => new Set(state.groupBiblePlanProgress.filter((item) => item.read).map((item) => item.userId)),
-    [state.groupBiblePlanProgress],
-  );
-  const groupPlanReadCount = groupPlanReadUserIds.size;
-  const groupPlanCompletedByCurrentUser = Boolean(state.currentUserId && groupPlanReadUserIds.has(state.currentUserId));
   const currentGroupPlanProgress = useMemo(
     () =>
       groupPlanReading && state.currentUserId
@@ -155,101 +154,47 @@ export function HomeScreen() {
     [groupPlanReading, state.currentUserId, state.groupBiblePlanProgress],
   );
   const savedGroupPlanReflection = currentGroupPlanProgress?.reflectionText ?? "";
-  const groupPlanReflections = useMemo(
-    () =>
-      groupPlanReading
-        ? state.groupBiblePlanProgress
-            .filter(
-              (item) =>
-                item.readingId === groupPlanReading.id &&
-                item.reflectionVisibility === "group" &&
-                Boolean(item.reflectionText?.trim()),
-            )
-            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-        : [],
-    [groupPlanReading, state.groupBiblePlanProgress],
-  );
-  const visibleGroupPlanReflections = groupPlanReflections.slice(0, 3);
+  const groupPlanCompletedByCurrentUser = Boolean(currentGroupPlanProgress?.read);
+  const greeting = firstName(user?.name);
 
   function resetCheckIn() {
     setCheckInStep("choose");
-    setMood(4);
+    setHeartMood(undefined);
     setCheckInText("");
     setCheckInVerses([]);
     setShareCheckIn(true);
   }
 
-  function openComposer(kind: EntryKind, item?: FeedItem, defaultVisibility: EntryVisibility = visibility.private) {
-    setComposerKind(kind);
-    setComposerVisibility(defaultVisibility);
-    setEditingItem(item);
-    setComposerTitle(item?.type === "post" ? item.title ?? "" : "");
-    setComposerBody(item?.body ?? "");
-    setComposerVerses(normalizeBibleVerses(item?.verse, item?.verses));
-    setComposerVisible(true);
-  }
-
-  useEffect(() => {
-    if (!params.checkIn) return;
+  function openCheckIn() {
     resetCheckIn();
     setCheckInVisible(true);
-  }, [params.checkIn]);
+  }
 
   useEffect(() => {
-    if (!params.compose || params.compose === lastComposeParamRef.current) return;
-    lastComposeParamRef.current = params.compose;
-    openComposer("reflection", undefined, visibility.room);
-  }, [params.compose]);
-
-  async function submitComposer() {
-    if (!composerBody.trim()) return;
-    if (editingItem?.type === "post") {
-      await dispatch({ type: "editPost", id: editingItem.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
-    } else if (composerVisibility === visibility.private) {
-      await dispatch({ type: "createJournalEntry", entryKind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
-    } else {
-      await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
-    }
-    setComposerVisible(false);
-    setEditingItem(undefined);
-    setComposerTitle("");
-    setComposerBody("");
-    setComposerVerses([]);
-    setComposerKind("reflection");
-  }
-
-  function itemPrayerState(item: FeedItem) {
-    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
-    const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
-    return {
-      prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
-      count: prayedByUserIds.length,
-      targetType,
-      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
-    };
-  }
-
-  function itemReplies(item: FeedItem) {
-    const targetType = item.type === "post" ? "post" : "check_in";
-    return state.replies
-      .filter((reply) => reply.targetType === targetType && reply.targetId === item.id)
-      .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  }
-
-  function deleteItem(item: FeedItem) {
-    confirmAction({
-      title: `Delete ${kindLabel(item).toLowerCase()}?`,
-      message: "This will remove it from your community.",
-      confirmText: "Delete",
-      destructive: true,
-      onConfirm: () => dispatch({ type: item.type === "post" ? "deletePost" : "deleteCheckIn", id: item.id }),
-    });
-  }
+    if (!params.checkIn || params.checkIn === lastCheckInParamRef.current) return;
+    lastCheckInParamRef.current = params.checkIn;
+    openCheckIn();
+  }, [params.checkIn]);
 
   function openGroupPlanReflection() {
+    if (!state.groupBiblePlan || !groupPlanReading) {
+      router.push({ pathname: "/(tabs)/me", params: { newEntry: Date.now().toString() } } as never);
+      return;
+    }
     setGroupPlanReflectionText(savedGroupPlanReflection);
     setGroupPlanReflectionVisible(true);
+  }
+
+  async function readGroupPlan() {
+    if (state.groupBiblePlan && groupPlanReading) {
+      await dispatch({
+        type: "markGroupBiblePlanRead",
+        planId: state.groupBiblePlan.id,
+        readingId: groupPlanReading.id,
+        dateKey: todayKey,
+      });
+    }
+    router.push("/(tabs)/bible" as never);
   }
 
   async function submitGroupPlanReflection() {
@@ -265,16 +210,22 @@ export function HomeScreen() {
     setGroupPlanReflectionVisible(false);
   }
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-      if (distanceFromBottom < 100 && hasMorePosts) {
-        setVisiblePostCount((prev) => Math.min(prev + LOAD_MORE_POST_COUNT, feedItems.length));
-      }
-    },
-    [hasMorePosts, feedItems.length],
-  );
+  function openPrayerSurface() {
+    if (openPrayer) {
+      router.push(`/feed/post/${openPrayer.id}` as never);
+      return;
+    }
+    setMemberSelectVisible(true);
+  }
+
+  function itemPrayerState(item: FeedItem) {
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
+    return {
+      count: [...new Set(reactions.map((reaction) => reaction.userId))].length,
+      targetType,
+    };
+  }
 
   return (
     <AppScreen scroll={false} topInset={false}>
@@ -282,177 +233,75 @@ export function HomeScreen() {
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
         contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: 112, paddingTop: 18 }}
       >
-      <CurrentRoomHeader />
+        <View style={{ gap: 5 }}>
+          <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
+            {greeting ? `Good morning, ${greeting}` : "Good morning"}
+          </Text>
+          <BodyText muted>Take a quiet moment with God.</BodyText>
+        </View>
 
-      <HeartPromptCard
-        image={user?.image}
-        name={user?.name ?? state.authEmail ?? "K"}
-        subtitle={todaysCheckIn ? "Share, reflect or ask for prayer..." : "Take a moment to check in..."}
-        onPress={() => {
-          resetCheckIn();
-          setCheckInVisible(true);
-        }}
-      />
+        <HeartCheckInCard checkedIn={todaysCheckIn} onPress={openCheckIn} />
 
-      <View style={{ gap: 10 }}>
-        <SectionHeading>Community rhythm</SectionHeading>
-        {state.groupBiblePlan && groupPlanReading ? (
-          <BiblePlanCard
-            completed={groupPlanCompletedByCurrentUser}
-            dayLabel={biblePlanDayLabel(groupPlanReading, groupPlanReadings.length)}
-            onMarkRead={() =>
-              dispatch({
-                type: "markGroupBiblePlanRead",
-                planId: state.groupBiblePlan?.id ?? "",
-                readingId: groupPlanReading.id,
-                dateKey: todayKey,
-              })
-            }
-            onReflect={openGroupPlanReflection}
-            passageReference={groupPlanReading.passage.reference}
-            planTitle={state.groupBiblePlan.title}
-            progressLabel={`${groupPlanReadCount} read today`}
-            reflectLabel={savedGroupPlanReflection ? "Edit reflection" : "Share reflection"}
-            rhythmLabel="Shared Scripture rhythm"
-          />
-        ) : state.groupBiblePlan ? (
-          <Card>
-            <BodyText muted>No Bible Plan reading scheduled for today.</BodyText>
-          </Card>
-        ) : null}
+        <ScriptureRhythmCard
+          completed={groupPlanCompletedByCurrentUser}
+          onRead={readGroupPlan}
+          onReflect={openGroupPlanReflection}
+          passageReference={groupPlanReading?.passage.reference ?? fallbackPassage}
+          progressLabel={groupPlanReading ? biblePlanDayLabel(groupPlanReading, groupPlanReadings.length) : "Day 1 of 3"}
+          reflectLabel={savedGroupPlanReflection ? "Reflect" : "Reflect"}
+          rhythmLabel="Today's Scripture rhythm"
+        />
+
         {groupPlanReflectionVisible && state.groupBiblePlan && groupPlanReading ? (
           <BiblePlanReflectionEditor
             onCancel={() => setGroupPlanReflectionVisible(false)}
             onChangeText={setGroupPlanReflectionText}
             onSave={submitGroupPlanReflection}
             passageReference={groupPlanReading.passage.reference}
-            placeholder="Share a brief reflection with your community..."
+            placeholder="Write a brief reflection with your community..."
             saveIcon="send"
-            title="Community reflection"
+            title="Reflect"
             value={groupPlanReflectionText}
           />
         ) : null}
-        {visibleGroupPlanReflections.length > 0 ? (
+
+        <PrayerPreviewCard
+          members={communityMembers}
+          onPress={openPrayerSurface}
+          openPrayer={openPrayer}
+          userById={userById}
+          userImageById={userImageById}
+        />
+
+        <CommunityPreviewCard
+          item={latestCommunityItem}
+          onOpen={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
+          prayerCount={latestCommunityItem ? itemPrayerState(latestCommunityItem).count : 0}
+          userById={userById}
+          userImageById={userImageById}
+        />
+
+        {state.authError ? (
           <Card>
-            <SectionHeading>Shared reflections</SectionHeading>
-            <View style={{ gap: 12 }}>
-              {visibleGroupPlanReflections.map((reflection) => (
-                <View key={reflection.id} style={{ gap: 4 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                    {userById.get(reflection.userId) ?? "Someone"}
-                  </Text>
-                  <BodyText muted>{reflection.reflectionText}</BodyText>
-                </View>
-              ))}
-            </View>
-            {groupPlanReflections.length > visibleGroupPlanReflections.length ? (
-              <BodyText muted>More reflections will be available here soon.</BodyText>
-            ) : null}
+            <BodyText muted>{state.authError}</BodyText>
           </Card>
         ) : null}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          <RhythmAction icon="edit-3" label="Write entry" onPress={() => openComposer("reflection", undefined, visibility.room)} />
-          <RhythmAction icon="heart" label="Pray for someone" onPress={() => setMemberSelectVisible(true)} />
-        </View>
-      </View>
-
-      {ownsGroup ? (
-        <Card>
-          <SectionHeading>Internal test</SectionHeading>
-          <BodyText muted>{state.groupBiblePlan ? `Active community plan: ${state.groupBiblePlan.title}` : "No active community Bible plan."}</BodyText>
-          <SecondaryButton icon="book-open" onPress={() => dispatch({ type: "createSampleGroupBiblePlan" })}>
-            Create sample community plan
-          </SecondaryButton>
-        </Card>
-      ) : null}
-
-      <View style={{ gap: 10 }}>
-        <SectionHeading>{openPrayer ? "Someone to pray for" : "Open prayer"}</SectionHeading>
-        <Card>
-          {openPrayer ? (
-            <>
-              <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>
-                {openPrayer.type === "post" ? openPrayer.title || defaultTitle(openPrayer) : defaultTitle(openPrayer)}
-              </Text>
-              <BodyText muted numberOfLines={2}>{openPrayer.body}</BodyText>
-              <LinkPreview text={openPrayer.body} />
-              <PrimaryButton icon="heart" onPress={() => {
-                const prayer = itemPrayerState(openPrayer);
-                setPrayerTarget({ targetType: prayer.targetType, targetId: openPrayer.id, body: openPrayer.body });
-              }}>
-                Pray
-              </PrimaryButton>
-            </>
-          ) : (
-            <BodyText muted>No open prayer requests right now.</BodyText>
-          )}
-        </Card>
-      </View>
-
-      {state.authError ? (
-        <Card>
-          <BodyText muted>{state.authError}</BodyText>
-        </Card>
-      ) : null}
-
-      <View style={{ gap: 10 }}>
-        <SectionHeading>Community</SectionHeading>
-      {recentActivity.length === 0 ? (
-          <Card>
-            <BodyText muted>This community is quiet right now. Start with a check-in or a small reflection.</BodyText>
-          </Card>
-      ) : (
-        recentActivity.map((item) => {
-          const authorName = userById.get(item.userId) ?? "Someone";
-          const authorImage = userImageById.get(item.userId);
-          const prayer = itemPrayerState(item);
-          const replies = itemReplies(item);
-          return (
-            <PostCard
-              key={`${item.type}-${item.id}`}
-              authorImage={authorImage}
-              authorName={authorName}
-              item={item}
-              ownsItem={item.userId === state.currentUserId}
-              prayed={prayer.prayed}
-              prayedBy={prayer.prayedBy}
-              prayerCount={prayer.count}
-              replyCount={replies.length}
-              onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-              onEdit={() => {
-                if (item.type === "post") openComposer(normalizeEntryKind(item.kind), item, visibility.room);
-              }}
-              onDelete={() => deleteItem(item)}
-              onReply={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-              onPray={() => {
-                if (prayer.prayed) {
-                  dispatch({ type: "unpray", targetType: prayer.targetType, targetId: item.id });
-                } else {
-                  setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body });
-                }
-              }}
-            />
-          );
-        })
-      )}
-      </View>
+      </ScrollView>
 
       <CheckInModal
         visible={checkInVisible}
         step={checkInStep}
-        mood={mood}
+        mood={heartMood}
         note={checkInText}
         verses={checkInVerses}
-        roomName={group?.name ?? "Test Community"}
+        roomName={group?.name ?? "Koinonia"}
         roomImage={group?.image}
         share={shareCheckIn}
         onClose={() => setCheckInVisible(false)}
         onMood={(value) => {
-          setMood(value);
+          setHeartMood(value);
           setCheckInStep("details");
         }}
         onNote={setCheckInText}
@@ -460,11 +309,13 @@ export function HomeScreen() {
         onShare={setShareCheckIn}
         onBack={() => setCheckInStep("choose")}
         onSubmit={async () => {
+          const selected = heartMoods.find((option) => option.value === heartMood);
           await dispatch({
             type: "submitCheckIn",
-            mood,
+            mood: moodNumber(heartMood),
+            heartMood,
             readToday: true,
-            reflectionText: checkInText,
+            reflectionText: checkInText.trim() || selected?.description || "",
             visibility: shareCheckIn ? "group" : "private",
             verse: primaryBibleVerse(checkInVerses),
             verses: checkInVerses,
@@ -477,41 +328,25 @@ export function HomeScreen() {
         }}
       />
 
-      <SharedComposer
-        visible={composerVisible}
-        context="today"
-        kind={composerKind}
-        entryVisibility={composerVisibility}
-        title={composerTitle}
-        body={composerBody}
-        verses={composerVerses}
-        editing={Boolean(editingItem)}
-        onKind={setComposerKind}
-        onVisibility={setComposerVisibility}
-        onTitle={setComposerTitle}
-        onBody={setComposerBody}
-        onVerses={setComposerVerses}
-        roomName={group?.name}
-        roomImage={group?.image}
-        onClose={() => {
-          setComposerVisible(false);
-          setEditingItem(undefined);
-        }}
-        onSubmit={submitComposer}
-      />
-
       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
         onFinish={(status, startedAt, completedAt) => {
           if (prayerTarget) {
-            dispatch({ type: "finishPrayer", targetType: prayerTarget.targetType, targetId: prayerTarget.targetId, status, startedAt, recipientUserId: prayerTarget.recipientUserId });
+            dispatch({
+              type: "finishPrayer",
+              targetType: prayerTarget.targetType,
+              targetId: prayerTarget.targetId,
+              status,
+              startedAt,
+              recipientUserId: prayerTarget.recipientUserId,
+            });
           }
           setPrayerTarget(undefined);
         }}
       />
 
-      <Modal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
+      <FullScreenModal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
         <AppScreen>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
@@ -523,44 +358,147 @@ export function HomeScreen() {
             <BodyText muted>Select a member from your community.</BodyText>
           </View>
           <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
-            {state.users.filter((u) => u.id !== state.currentUserId).map((member) => (
-              <Pressable
-                accessibilityRole="button"
-                key={member.id}
-                onPress={() => {
-                  setMemberSelectVisible(false);
-                  setPrayerTarget({ targetType: "user", targetId: member.id, body: "", recipientUserId: member.id });
-                }}
-              >
-                <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
-                  <Avatar image={member.image} name={member.name} size={46} tone="green" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
-                  </View>
-                  <Feather name="heart" size={18} color={colors.gold} />
-                </Card>
-              </Pressable>
-            ))}
-            {state.users.filter((u) => u.id !== state.currentUserId).length === 0 ? (
+            {state.users
+              .filter((member) => member.id !== state.currentUserId)
+              .map((member) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={member.id}
+                  onPress={() => {
+                    setMemberSelectVisible(false);
+                    setPrayerTarget({ targetType: "user", targetId: member.id, body: "", recipientUserId: member.id });
+                  }}
+                >
+                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
+                    <Avatar image={member.image} name={member.name} size={46} tone="green" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
+                    </View>
+                    <Feather name="heart" size={18} color={colors.gold} />
+                  </Card>
+                </Pressable>
+              ))}
+            {state.users.filter((member) => member.id !== state.currentUserId).length === 0 ? (
               <Card>
                 <BodyText muted>No other members in this community yet.</BodyText>
               </Card>
             ) : null}
           </ScrollView>
         </AppScreen>
-      </Modal>
-      </ScrollView>
+      </FullScreenModal>
     </AppScreen>
   );
 }
 
-function RhythmAction({ icon, label, onPress }: { icon: ComponentProps<typeof Feather>["name"]; label: string; onPress: () => void }) {
+function HeartCheckInCard({ checkedIn, onPress }: { checkedIn: boolean; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={{ flexBasis: "47%", flexGrow: 1 }}>
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: 58, padding: 12 }}>
-        <Feather name={icon} size={18} color={colors.olive} />
-        <Text style={{ color: colors.ink, flex: 1, fontSize: 14, fontWeight: "900" }}>{label}</Text>
+    <Pressable accessibilityRole="button" onPress={onPress}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: 90, padding: 14 }}>
+        <View style={{ flex: 1, gap: 5 }}>
+          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>How is your heart today?</Text>
+          <BodyText muted>{checkedIn ? "You checked in today. You can still pause with God." : "Check in and invite God into your day."}</BodyText>
+        </View>
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: colors.accentSubtle,
+            borderRadius: 16,
+            height: 56,
+            justifyContent: "center",
+            width: 56,
+          }}
+        >
+          <Feather name="plus" size={25} color={colors.olive} />
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+function PrayerPreviewCard({
+  members,
+  onPress,
+  openPrayer,
+  userById,
+  userImageById,
+}: {
+  members: { image?: GroupImage; name: string }[];
+  onPress: () => void;
+  openPrayer?: FeedItem;
+  userById: Map<string, string>;
+  userImageById: Map<string, GroupImage | undefined>;
+}) {
+  const previewUsers =
+    openPrayer && openPrayer.type === "post"
+      ? [{ image: userImageById.get(openPrayer.userId), name: userById.get(openPrayer.userId) ?? "Someone" }, ...members]
+      : members;
+
+  return (
+    <QuietActionCard icon="heart" onPress={onPress} subtitle="See and pray for someone" title="Someone needs prayer">
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+        {previewUsers.length ? <AvatarStack users={previewUsers} size={32} /> : <BodyText muted>No open prayer requests right now.</BodyText>}
+        {previewUsers.length > 4 ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>+{previewUsers.length - 4}</Text> : null}
+      </View>
+    </QuietActionCard>
+  );
+}
+
+function CommunityPreviewCard({
+  item,
+  onOpen,
+  prayerCount,
+  userById,
+  userImageById,
+}: {
+  item?: FeedItem;
+  onOpen: (item: FeedItem) => void;
+  prayerCount: number;
+  userById: Map<string, string>;
+  userImageById: Map<string, GroupImage | undefined>;
+}) {
+  if (!item) {
+    return (
+      <QuietActionCard icon="users" subtitle="Take a moment to pray or reflect." title="Latest from your community">
+        <BodyText muted>Nothing new right now.</BodyText>
+      </QuietActionCard>
+    );
+  }
+
+  const authorName = userById.get(item.userId) ?? "Someone";
+  return (
+    <Pressable accessibilityRole="button" onPress={() => onOpen(item)}>
+      <Card style={{ gap: 12, padding: 14 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <Text style={{ color: colors.ink, flex: 1, fontSize: 16, fontWeight: "900" }}>Latest from your community</Text>
+          <Feather name="chevron-right" size={19} color={colors.muted} />
+        </View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <Avatar image={userImageById.get(item.userId)} name={authorName} size={36} tone="green" />
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+              <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: 14, fontWeight: "900" }}>
+                {authorName}
+              </Text>
+              <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
+            </View>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          </View>
+        </View>
+        <View style={{ gap: 5 }}>
+          <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+          </Text>
+          <BodyText muted numberOfLines={2}>
+            {item.body || "No words today, just presence."}
+          </BodyText>
+        </View>
+        {prayerCount > 0 ? (
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+            <Feather name="heart" size={14} color={colors.muted} />
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCount} prayed</Text>
+          </View>
+        ) : null}
       </Card>
     </Pressable>
   );
@@ -586,7 +524,7 @@ function CheckInModal({
 }: {
   visible: boolean;
   step: CheckInStep;
-  mood: number;
+  mood?: HeartMood;
   note: string;
   verses: BibleVerse[];
   roomName: string;
@@ -595,142 +533,184 @@ function CheckInModal({
   onBack: () => void;
   onClose: () => void;
   onDone: () => void;
-  onMood: (value: number) => void;
+  onMood: (value: HeartMood) => void;
   onNote: (value: string) => void;
   onShare: (value: boolean) => void;
   onSubmit: () => void;
   onVerses: (verses: BibleVerse[]) => void;
 }) {
-  const selectedMood = moodOptions.find((option) => option.value === mood) ?? moodOptions[1];
-  return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <AppScreen>
-        {step !== "thanks" ? (
-          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-            <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
-            {step === "details" ? <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Save</Text> : <View style={{ width: 38 }} />}
-          </View>
-        ) : null}
+  const selectedMood = heartMoods.find((option) => option.value === mood);
 
-        {step === "choose" ? (
-          <>
-            <View style={{ gap: 7 }}>
-              <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>How's your heart today?</Text>
-              <BodyText muted>Take a moment to check in with God and with yourself.</BodyText>
+  return (
+    <FullScreenModal animationType="slide" presentationStyle="pageSheet" visible={visible} onRequestClose={step === "details" ? onBack : onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
+        <AppScreen topInset>
+          {step !== "thanks" ? (
+            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+              <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
+              {step === "details" ? (
+                <Pressable accessibilityRole="button" onPress={onSubmit} style={{ padding: 8 }}>
+                  <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Save</Text>
+                </Pressable>
+              ) : (
+                <View style={{ width: 38 }} />
+              )}
             </View>
-            <View style={{ gap: 10 }}>
-              {moodOptions.map((option) => (
-                <Pressable accessibilityRole="button" key={option.value} onPress={() => onMood(option.value)}>
-                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
-                    <View
-                      style={{
-                        alignItems: "center",
-                        backgroundColor: colors.accentSubtle,
-                        borderRadius: 999,
-                        height: 40,
-                        justifyContent: "center",
-                        width: 40,
-                      }}
-                    >
-                      <Ionicons name={option.icon} size={22} color={colors.olive} />
+          ) : null}
+
+          {step === "choose" ? (
+            <>
+              <View style={{ gap: 7 }}>
+                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>How is your heart today?</Text>
+                <BodyText muted>Choose how your heart feels right now.</BodyText>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {heartMoods.map((option) => (
+                  <MoodOptionCard key={option.value} option={option} selected={option.value === mood} onPress={() => onMood(option.value)} />
+                ))}
+              </View>
+              <SecondaryButton onPress={onClose}>Skip</SecondaryButton>
+            </>
+          ) : null}
+
+          {step === "details" ? (
+            <>
+              <View style={{ gap: 7 }}>
+                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>What's on your heart?</Text>
+                <BodyText muted>Be honest. God already knows.</BodyText>
+              </View>
+              <View style={{ gap: 6 }}>
+                <TextInputField
+                  multiline
+                  maxLength={350}
+                  value={note}
+                  onChangeText={(value) => onNote(value.slice(0, 350))}
+                  onSubmitEditing={onSubmit}
+                  placeholder="Write your thoughts..."
+                  returnKeyType="send"
+                  style={{ minHeight: 210 }}
+                  submitBehavior="submit"
+                />
+                <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
+              </View>
+              {selectedMood ? (
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                  <MoodIcon mood={selectedMood.value} size={34} />
+                  <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{selectedMood.label}</Text>
+                </View>
+              ) : null}
+              <BibleVerseField label="Add Scripture (optional)" verses={verses} onChange={onVerses} />
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <SectionHeading>Share with</SectionHeading>
+                <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
+                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={36} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                        {share ? "Shared with your room" : "Only you can see this"}
+                      </Text>
                     </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{option.label}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{option.description}</Text>
-                    </View>
+                    <Feather name="chevron-down" size={18} color={colors.muted} />
                   </Card>
                 </Pressable>
-              ))}
-            </View>
-            <SecondaryButton onPress={onClose}>Skip</SecondaryButton>
-          </>
-        ) : null}
+              </View>
+              <PrimaryButton icon="send" onPress={onSubmit} style={{ minHeight: 58 }}>
+                {share ? "Share check-in" : "Save privately"}
+              </PrimaryButton>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
+                <Feather name="lock" size={13} color={colors.muted} />
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  {share ? "This will be shared with your room" : "This will stay in your private journal"}
+                </Text>
+              </View>
+            </>
+          ) : null}
 
-        {step === "details" ? (
-          <>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+          {step === "thanks" ? (
+            <View style={{ alignItems: "center", flex: 1, gap: 20, justifyContent: "center", minHeight: 560 }}>
               <View
                 style={{
                   alignItems: "center",
                   backgroundColor: colors.accentSubtle,
                   borderRadius: 999,
-                  height: 52,
+                  height: 96,
                   justifyContent: "center",
-                  width: 52,
+                  width: 96,
                 }}
               >
-                <Ionicons name={selectedMood.icon} size={26} color={colors.olive} />
+                <Feather name="heart" size={42} color={colors.gold} />
               </View>
-              <View>
-                <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>{selectedMood.label}</Text>
-                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{selectedMood.description}</Text>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Check-in shared</Text>
+                <BodyText muted style={{ textAlign: "center" }}>
+                  Thank you for taking a quiet moment with God.
+                </BodyText>
               </View>
+              <PrimaryButton onPress={onDone} style={{ alignSelf: "stretch" }}>
+                Done
+              </PrimaryButton>
             </View>
-            <View style={{ gap: 8 }}>
-              <SectionHeading>Add a thought (optional)</SectionHeading>
-              <TextInputField
-                multiline
-                maxLength={350}
-                value={note}
-                onChangeText={onNote}
-                onSubmitEditing={onSubmit}
-                placeholder="Thankful for a quiet morning and time with God."
-                returnKeyType="send"
-                submitBehavior="submit"
-              />
-              <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
-            </View>
-            <BibleVerseField verses={verses} onChange={onVerses} />
-            <View style={{ gap: 8 }}>
-              <SectionHeading>Share with</SectionHeading>
-              <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
-                <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                  <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={34} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{share ? "Shared with your community" : "Only you can see this"}</Text>
-                  </View>
-                  <Feather name="chevron-down" size={18} color={colors.muted} />
-                </Card>
-              </Pressable>
-            </View>
-            <PrimaryButton icon="send" onPress={onSubmit}>
-              Post check-in
-            </PrimaryButton>
-          </>
-        ) : null}
-
-        {step === "thanks" ? (
-          <View style={{ alignItems: "center", flex: 1, gap: 20, justifyContent: "center", minHeight: 560 }}>
-            <View
-              style={{
-                alignItems: "center",
-                backgroundColor: colors.accentSubtle,
-                borderRadius: 999,
-                height: 96,
-                justifyContent: "center",
-                width: 96,
-              }}
-            >
-              <Feather name="feather" size={46} color={colors.gold} />
-            </View>
-            <View style={{ alignItems: "center", gap: 8 }}>
-              <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Thank you!</Text>
-              <BodyText muted style={{ textAlign: "center" }}>
-                Your check-in has been shared with {roomName}.
-              </BodyText>
-            </View>
-            <PrimaryButton onPress={onDone} style={{ alignSelf: "stretch" }}>
-              View in journal
-            </PrimaryButton>
-            <SecondaryButton onPress={onDone} style={{ alignSelf: "stretch" }}>
-              Done
-            </SecondaryButton>
-          </View>
-        ) : null}
-      </AppScreen>
-    </Modal>
+          ) : null}
+        </AppScreen>
+      </KeyboardAvoidingView>
+    </FullScreenModal>
   );
 }
 
+function MoodOptionCard({
+  onPress,
+  option,
+  selected,
+}: {
+  onPress: () => void;
+  option: (typeof heartMoods)[number];
+  selected: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={{ flexBasis: "47%", flexGrow: 1 }}>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: selected ? colors.accentSubtle : colors.paper,
+          borderColor: selected ? colors.gold : colors.line,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          gap: 10,
+          minHeight: 136,
+          padding: 12,
+          ...platformShadow({
+            boxShadow: "0 8px 18px rgba(11, 18, 32, 0.04)",
+            offset: { width: 0, height: 8 },
+            opacity: 0.04,
+            radius: 18,
+          }),
+        }}
+      >
+        <MoodIcon mood={option.value} />
+        <View style={{ alignItems: "center", gap: 4 }}>
+          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900", textAlign: "center" }}>{option.label}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{option.description}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
 
+function MoodIcon({ mood, size = 48 }: { mood: HeartMood; size?: number }) {
+  const tone = moodTone[mood];
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: tone.background,
+        borderRadius: 999,
+        height: size,
+        justifyContent: "center",
+        width: size,
+      }}
+    >
+      <Feather name={tone.icon} size={Math.round(size * 0.45)} color={tone.color} />
+    </View>
+  );
+}
