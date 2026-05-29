@@ -15,14 +15,16 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id, Membership } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id } from "@/state/types";
 import {
   AppScreen,
   Avatar,
+  AvatarStack,
   BodyText,
   BottomSheet,
   Card,
   FilterChips,
+  HeartPromptCard,
   PrimaryButton,
   RoomImage,
   Row,
@@ -53,7 +55,7 @@ function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) 
 }
 
 async function shareRoomInvite(room: Group) {
-  const invitation = `Join ${room.name} on KOINO with room code ${room.inviteCode}.`;
+  const invitation = `Join ${room.name} on KOINO with community code ${room.inviteCode}.`;
   const clipboard =
     Platform.OS === "web"
       ? (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText?: (text: string) => Promise<void> } } }).navigator?.clipboard
@@ -87,7 +89,7 @@ function defaultTitle(item: FeedItem) {
 export function SettingsScreen() {
   const { state, dispatch } = useKoino();
   const [roomView, setRoomView] = useState<RoomView>("detail");
-  const [detailTab, setDetailTab] = useState<RoomDetailTab>("feed");
+  const [detailTab, setDetailTab] = useState<RoomDetailTab>("reflections");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [manageSheetVisible, setManageSheetVisible] = useState(false);
@@ -109,8 +111,22 @@ export function SettingsScreen() {
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
   const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 4);
+  const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
+  const communityMembers = useMemo(
+    () =>
+      state.memberships.map((membership) => {
+        const user = state.users.find((candidate) => candidate.id === membership.userId);
+        return {
+          id: membership.userId,
+          image: user?.image,
+          name: user?.name ?? membership.userName,
+          role: membership.role,
+        };
+      }),
+    [state.memberships, state.users],
+  );
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
       .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
@@ -145,6 +161,9 @@ export function SettingsScreen() {
       }));
     return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
+  const reflectionItems = feedItems.filter(
+    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) !== "prayer_request",
+  );
   const prayerRequests = feedItems.filter(
     (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request",
   );
@@ -155,6 +174,13 @@ export function SettingsScreen() {
     return true;
   });
   const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
+  const latestCheckInByUser = useMemo(() => {
+    const latest = new Map<Id, Extract<FeedItem, { type: "check_in" }>>();
+    for (const checkIn of sharedCheckIns) {
+      if (!latest.has(checkIn.userId)) latest.set(checkIn.userId, checkIn);
+    }
+    return latest;
+  }, [sharedCheckIns]);
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
   const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
@@ -162,7 +188,7 @@ export function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       setRoomView("detail");
-      setDetailTab("feed");
+      setDetailTab("reflections");
     }, []),
   );
 
@@ -225,7 +251,7 @@ export function SettingsScreen() {
     try {
       setInviteMessage(await shareRoomInvite(group));
     } catch {
-      setInviteMessage("Room code is selectable if sharing is unavailable.");
+      setInviteMessage("Community code is selectable if sharing is unavailable.");
     }
   }
 
@@ -288,7 +314,7 @@ export function SettingsScreen() {
 
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setRoomImageMessage("Photo library permission is needed to choose a room image.");
+        setRoomImageMessage("Photo library permission is needed to choose a community image.");
         return;
       }
 
@@ -316,21 +342,21 @@ export function SettingsScreen() {
     if (!group) return;
     await dispatch({ type: "uploadGroupImage", id: group.id, localUri });
     setCropSource(undefined);
-    setRoomImageMessage("Room image updated.");
+    setRoomImageMessage("Community image updated.");
   }
 
   function handleDeleteRoomImage() {
     if (!group?.image || !ownsGroup) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Delete room image?",
-      message: "The room will return to its initials avatar.",
+      title: "Delete community image?",
+      message: "The community will return to its initials avatar.",
       confirmText: "Delete",
       destructive: true,
       onConfirm: () => {
         void dispatch({ type: "deleteGroupImage", id: group.id })
-          .then(() => setRoomImageMessage("Room image deleted."))
-          .catch(() => setRoomImageMessage("Could not delete the room image."));
+          .then(() => setRoomImageMessage("Community image deleted."))
+          .catch(() => setRoomImageMessage("Could not delete the community image."));
       },
     });
   }
@@ -339,7 +365,7 @@ export function SettingsScreen() {
     if (!group) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Leave room?",
+      title: "Leave community?",
       message: `You will leave ${group.name}, but your account will stay signed in.`,
       confirmText: "Leave",
       destructive: true,
@@ -351,8 +377,8 @@ export function SettingsScreen() {
     if (!group) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Delete room?",
-      message: "This removes the room, shared check-ins, reflections, replies, and prayers.",
+      title: "Delete community?",
+      message: "This removes the community, shared check-ins, reflections, replies, and prayers.",
       confirmText: "Delete",
       destructive: true,
       onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
@@ -376,27 +402,37 @@ export function SettingsScreen() {
     return (
       <>
         <AppScreen>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingTop: 18 }}>
-            <RoomImage image={group.image} name={group.name} size={52} />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
+          <View style={{ gap: 12, paddingTop: 18 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+              <RoomImage image={group.image} name={group.name} size={54} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 21, fontWeight: "900" }}>{group.name}</Text>
+                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>A quiet place to pray, reflect, and walk together.</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open community management"
+                onPress={() => {
+                  setCurrentGroupName(group.name);
+                  setManageSheetVisible(true);
+                }}
+                style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}
+              >
+                <Feather name="more-horizontal" size={20} color={colors.ink} />
+              </Pressable>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open room options"
-              onPress={openRoomOverview}
-              style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}
-            >
-              <Feather name="more-horizontal" size={20} color={colors.ink} />
-            </Pressable>
+            {communityMembers.length > 0 ? <AvatarStack users={communityMembers} size={28} /> : null}
           </View>
 
-          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "flex-end" }}>
-            <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 14 }}>
-              New
-            </PrimaryButton>
-          </View>
+          <HeartPromptCard
+            actionIcon="edit-3"
+            actionLabel="Check in"
+            image={currentUser?.image}
+            name={currentUser?.name ?? state.authEmail ?? "K"}
+            subtitle="Take a quiet moment with God."
+            onPress={() => router.push("/(tabs)?checkIn=1" as never)}
+          />
 
           <FilterChips
             value={detailTab}
@@ -404,46 +440,24 @@ export function SettingsScreen() {
             options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
           />
 
-          {detailTab === "feed" ? (
-            feedItems.length === 0 ? (
-              <Card>
-                <BodyText muted>This room is quiet right now.</BodyText>
-              </Card>
-            ) : (
-              feedItems.map((item) => {
-                const prayer = itemPrayerState(item);
-                return (
-                  <PostCard
-                    key={`${item.type}-${item.id}`}
-                    authorImage={userImageById.get(item.userId)}
-                    authorName={userById.get(item.userId) ?? "Someone"}
-                    item={item}
-                    ownsItem={item.userId === state.currentUserId}
-                    prayed={prayer.prayed}
-                    prayedBy={prayer.prayedBy}
-                    prayerCount={prayer.count}
-                    replyCount={itemReplies(item).length}
-                    onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                    onPray={() => togglePostAction(item)}
-                  />
-                );
-              })
-            )
-          ) : null}
-
-          {detailTab === "prayer" ? (
+          {detailTab === "reflections" ? (
             <View style={{ gap: 12 }}>
-              <FilterChips value={prayerFilter} onChange={setPrayerFilter} options={prayerFilters.map((filter) => ({ label: filter.label, value: filter.value }))} />
-              {visiblePrayerRequests.length === 0 ? (
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+                <SectionHeading>Reflections</SectionHeading>
+                <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                  Share
+                </PrimaryButton>
+              </View>
+              {reflectionItems.length === 0 ? (
                 <Card>
-                  <BodyText muted>{prayerFilter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
+                  <BodyText muted>No reflections yet. When you are ready, share one honest line with your community.</BodyText>
                 </Card>
               ) : (
-                visiblePrayerRequests.map((item) => {
+                reflectionItems.map((item) => {
                   const prayer = itemPrayerState(item);
                   return (
                     <PostCard
-                      key={item.id}
+                      key={`${item.type}-${item.id}`}
                       authorImage={userImageById.get(item.userId)}
                       authorName={userById.get(item.userId) ?? "Someone"}
                       item={item}
@@ -452,6 +466,35 @@ export function SettingsScreen() {
                       prayedBy={prayer.prayedBy}
                       prayerCount={prayer.count}
                       replyCount={itemReplies(item).length}
+                      onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                      onPray={() => togglePostAction(item)}
+                    />
+                  );
+                })
+              )}
+            </View>
+          ) : null}
+
+          {detailTab === "prayer" ? (
+            <View style={{ gap: 12 }}>
+              <FilterChips value={prayerFilter} onChange={setPrayerFilter} options={prayerFilters.map((filter) => ({ label: filter.label, value: filter.value }))} />
+              <BodyText muted>{visiblePrayerRequests.length} {prayerFilter === "open" ? "open" : prayerFilter === "answered" ? "answered" : "total"} {visiblePrayerRequests.length === 1 ? "request" : "requests"}</BodyText>
+              {visiblePrayerRequests.length === 0 ? (
+                <Card>
+                  <BodyText muted>{prayerFilter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
+                </Card>
+              ) : (
+                visiblePrayerRequests.map((item) => {
+                  const prayer = itemPrayerState(item);
+                  return (
+                    <PrayerRequestCard
+                      key={item.id}
+                      authorImage={userImageById.get(item.userId)}
+                      authorName={userById.get(item.userId) ?? "Someone"}
+                      item={item}
+                      prayed={prayer.prayed}
+                      prayedBy={prayer.prayedBy}
+                      prayerCount={prayer.count}
                       onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
                       onPray={() => prayForItem(item)}
                     />
@@ -465,7 +508,7 @@ export function SettingsScreen() {
             <View style={{ gap: 12 }}>
               <Card>
                 <SectionHeading>This week's check-in</SectionHeading>
-                <BodyText muted>Take a moment to check in with God and with your group.</BodyText>
+                <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
                 <PrimaryButton icon="check-circle" onPress={() => router.push("/(tabs)?checkIn=1" as never)}>
                   Check in now
                 </PrimaryButton>
@@ -473,7 +516,7 @@ export function SettingsScreen() {
               <SectionHeading>Recent check-ins</SectionHeading>
               {sharedCheckIns.length === 0 ? (
                 <Card>
-                  <BodyText muted>No shared check-ins yet.</BodyText>
+                  <BodyText muted>No shared check-ins yet. This space will stay gentle until someone is ready.</BodyText>
                 </Card>
               ) : (
                 sharedCheckIns.map((item) => (
@@ -489,11 +532,12 @@ export function SettingsScreen() {
             </View>
           ) : null}
 
-          {detailTab === "about" ? (
-            <AboutRoomPanel
+          {detailTab === "members" ? (
+            <MembersPanel
               group={group}
+              latestCheckInByUser={latestCheckInByUser}
               memberCount={memberCount}
-              memberships={state.memberships}
+              members={communityMembers}
               onInvite={handleInvite}
               onManage={() => {
                 setCurrentGroupName(group.name);
@@ -521,13 +565,13 @@ export function SettingsScreen() {
           roomName={group.name}
           roomImage={group.image}
         />
-        <BottomSheet title="Manage room" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
+        <BottomSheet title="Community settings" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
               <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename room</Text>
-                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Room name" returnKeyType="done" style={{ marginTop: 8 }} />
-                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your room</Text> : null}
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename community</Text>
+                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Community name" returnKeyType="done" style={{ marginTop: 8 }} />
+                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your community</Text> : null}
               </Row>
             </View>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -536,8 +580,8 @@ export function SettingsScreen() {
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                   <RoomImage image={group.image} name={group.name} size={42} />
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group.image ? "Change room image" : "Add room image"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new room image" : "Only the owner can change this"}</Text>
+                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group.image ? "Change community image" : "Add community image"}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new community image" : "Only the owner can change this"}</Text>
                   </View>
                 </View>
               </Row>
@@ -547,7 +591,7 @@ export function SettingsScreen() {
                 <View style={{ backgroundColor: colors.line, height: 1 }} />
                 <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
                   <Row icon="trash-2" tone="danger">
-                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room image</Text>
+                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community image</Text>
                     <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
                   </Row>
                 </Pressable>
@@ -563,15 +607,15 @@ export function SettingsScreen() {
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
               <Row icon="log-out">
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave room</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this room</Text>
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave community</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this community</Text>
               </Row>
             </Pressable>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
               <Row icon="trash-2" tone="danger">
-                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room</Text>
-                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this room</Text>
+                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community</Text>
+                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this community</Text>
               </Row>
             </Pressable>
           </Card>
@@ -586,12 +630,12 @@ export function SettingsScreen() {
     <>
     <AppScreen>
       <View style={{ gap: 8, paddingTop: 64 }}>
-        <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>My room</Text>
-        <BodyText muted>Your small group. Real connection. Shared faith.</BodyText>
+        <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Community</Text>
+        <BodyText muted>A quiet place to pray, reflect, and walk together.</BodyText>
       </View>
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Your room</SectionHeading>
+        <SectionHeading>Current community</SectionHeading>
         <Card style={{ gap: 18, padding: 20 }}>
           {group ? (
             <>
@@ -610,14 +654,14 @@ export function SettingsScreen() {
                       paddingVertical: 6,
                     }}
                   >
-                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>Current room</Text>
+                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>Current community</Text>
                   </View>
                 </View>
               </View>
               <View style={{ backgroundColor: colors.line, height: 1 }} />
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Room code</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Community code</Text>
                   <RoomCodeCopy code={group.inviteCode} />
                 </View>
                 <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
@@ -625,17 +669,17 @@ export function SettingsScreen() {
                 </PrimaryButton>
               </View>
               <SecondaryButton icon="message-circle" onPress={() => setRoomView("detail")}>
-                Open room feed
+                Open Community
               </SecondaryButton>
               {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
               {roomImageMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{roomImageMessage}</Text> : null}
             </>
           ) : (
             <>
-              <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>No room selected</Text>
-              <BodyText muted>Join or create a room for the people you pray with.</BodyText>
+              <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>No community selected</Text>
+              <BodyText muted>Join or create a community for the people you pray with.</BodyText>
               <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)}>
-                Join another room
+                Join or create community
               </PrimaryButton>
             </>
           )}
@@ -643,10 +687,10 @@ export function SettingsScreen() {
       </View>
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Other rooms</SectionHeading>
+        <SectionHeading>Other communities</SectionHeading>
         <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
           {otherRooms.length === 0 ? (
-            <BodyText muted style={{ padding: 16 }}>No other rooms yet.</BodyText>
+            <BodyText muted style={{ padding: 16 }}>No other communities yet.</BodyText>
           ) : (
             otherRooms.map((room, index) => (
               <Pressable
@@ -654,7 +698,7 @@ export function SettingsScreen() {
                 key={room.id}
                 onPress={() => {
                   dispatch({ type: "switchGroup", id: room.id });
-                  setDetailTab("feed");
+                  setDetailTab("reflections");
                   setRoomView("detail");
                 }}
                 style={{
@@ -679,14 +723,14 @@ export function SettingsScreen() {
         <Card style={{ gap: 0, padding: 0 }}>
           <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
             <Row icon="user-plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Join another room</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Join another community</Text>
             </Row>
           </Pressable>
         </Card>
         <Card style={{ gap: 0, padding: 0 }}>
           <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
             <Row icon="plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Create a new room</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Create a new community</Text>
             </Row>
           </Pressable>
         </Card>
@@ -700,7 +744,7 @@ export function SettingsScreen() {
             setManageSheetVisible(true);
           }}
         >
-          Manage room
+          Community settings
         </SecondaryButton>
       ) : null}
 
@@ -708,10 +752,10 @@ export function SettingsScreen() {
         Log out
       </SecondaryButton>
 
-      <BottomSheet title="Join another room" visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
+      <BottomSheet title="Join or create community" visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a room code</Text>
-          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Room code" returnKeyType="join" />
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a community code</Text>
+          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Community code" returnKeyType="join" />
           <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
             Join by code
           </PrimaryButton>
@@ -722,23 +766,23 @@ export function SettingsScreen() {
           <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new room</Text>
-          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New room name" returnKeyType="done" />
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new community</Text>
+          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New community name" returnKeyType="done" />
           <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
-            Create new room
+            Create new community
           </PrimaryButton>
         </View>
         {state.authError ? <Text style={{ color: colors.danger, fontWeight: "800" }}>{state.authError}</Text> : null}
         <SecondaryButton onPress={() => setJoinSheetVisible(false)}>Cancel</SecondaryButton>
       </BottomSheet>
 
-      <BottomSheet title="Manage room" visible={manageSheetVisible && Boolean(group)} onClose={() => setManageSheetVisible(false)}>
+      <BottomSheet title="Community settings" visible={manageSheetVisible && Boolean(group)} onClose={() => setManageSheetVisible(false)}>
         <Card style={{ gap: 0, padding: 0 }}>
           <View style={{ paddingHorizontal: 14 }}>
             <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename room</Text>
-              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Room name" returnKeyType="done" style={{ marginTop: 8 }} />
-              {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your room</Text> : null}
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename community</Text>
+              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Community name" returnKeyType="done" style={{ marginTop: 8 }} />
+              {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your community</Text> : null}
             </Row>
           </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -747,8 +791,8 @@ export function SettingsScreen() {
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                 <RoomImage image={group?.image} name={group?.name} size={42} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group?.image ? "Change room image" : "Add room image"}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new room image" : "Only the owner can change this"}</Text>
+                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group?.image ? "Change community image" : "Add community image"}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new community image" : "Only the owner can change this"}</Text>
                 </View>
               </View>
             </Row>
@@ -758,7 +802,7 @@ export function SettingsScreen() {
               <View style={{ backgroundColor: colors.line, height: 1 }} />
               <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
                 <Row icon="trash-2" tone="danger">
-                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room image</Text>
+                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community image</Text>
                   <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
                 </Row>
               </Pressable>
@@ -774,15 +818,15 @@ export function SettingsScreen() {
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
             <Row icon="log-out">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave room</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this room</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave community</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this community</Text>
             </Row>
           </Pressable>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
             <Row icon="trash-2" tone="danger">
-              <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete room</Text>
-              <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this room</Text>
+              <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community</Text>
+              <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this community</Text>
             </Row>
           </Pressable>
         </Card>
@@ -794,7 +838,80 @@ export function SettingsScreen() {
   );
 }
 
+export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
+
+function PrayerRequestCard({
+  authorImage,
+  authorName,
+  item,
+  onOpen,
+  onPray,
+  prayed,
+  prayedBy,
+  prayerCount,
+}: {
+  authorImage?: GroupImage;
+  authorName: string;
+  item: Extract<FeedItem, { type: "post" }>;
+  onOpen: () => void;
+  onPray: () => void;
+  prayed: boolean;
+  prayedBy?: { name: string; image?: GroupImage }[];
+  prayerCount: number;
+}) {
+  const answered = Boolean(item.answeredAt);
+  return (
+    <Pressable accessibilityRole="button" onPress={onOpen}>
+      <Card style={{ gap: 12, padding: 16 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <Avatar image={authorImage} name={authorName} size={40} tone="green" />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{authorName}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          </View>
+          <View style={{ backgroundColor: answered ? colors.mossSurface : colors.accentSubtle, borderColor: colors.line, borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 }}>
+            <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 11, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+          </View>
+        </View>
+        <View style={{ gap: 7 }}>
+          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>{item.title || defaultTitle(item)}</Text>
+          <BodyText muted numberOfLines={3}>{item.body || "No words today, just presence."}</BodyText>
+          <LinkPreview text={item.body} />
+        </View>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          {prayedBy?.length ? <AvatarStack users={prayedBy} size={24} /> : null}
+          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerCount} prayed</Text>
+          {!answered ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                onPray();
+              }}
+              style={{
+                alignItems: "center",
+                backgroundColor: prayed ? colors.accentSubtle : colors.paper,
+                borderColor: prayed ? colors.gold : colors.line,
+                borderRadius: 999,
+                borderWidth: 1,
+                flexDirection: "row",
+                gap: 6,
+                minHeight: 36,
+                paddingHorizontal: 12,
+              }}
+            >
+              <Feather name={prayed ? "check" : "heart"} size={15} color={prayed ? colors.gold : colors.olive} />
+              <Text style={{ color: prayed ? colors.gold : colors.olive, fontSize: 12, fontWeight: "900" }}>{prayed ? "You prayed" : "Pray with this"}</Text>
+            </Pressable>
+          ) : (
+            <Feather name="bookmark" size={18} color={colors.gold} />
+          )}
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
 
 function CheckInCard({
   authorImage,
@@ -825,17 +942,19 @@ function CheckInCard({
   );
 }
 
-function AboutRoomPanel({
+function MembersPanel({
   group,
+  latestCheckInByUser,
   memberCount,
-  memberships,
+  members,
   onInvite,
   onManage,
   onSwitchRoom,
 }: {
   group: Group;
+  latestCheckInByUser: Map<Id, Extract<FeedItem, { type: "check_in" }>>;
   memberCount: number;
-  memberships: Membership[];
+  members: { id: Id; image?: GroupImage; name: string; role: "owner" | "member" }[];
   onInvite: () => void;
   onManage: () => void;
   onSwitchRoom: () => void;
@@ -850,38 +969,54 @@ function AboutRoomPanel({
         </View>
       </Card>
       <Card>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Room code</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
         <RoomCodeCopy code={group.inviteCode} />
         <PrimaryButton icon="share-2" onPress={onInvite}>
-          Invite
+          Invite members
         </PrimaryButton>
       </Card>
       <Card style={{ gap: 0, padding: 0 }}>
-        {memberships.map((membership, index) => (
-          <View
-            key={membership.id}
-            style={{
-              alignItems: "center",
-              borderBottomColor: colors.line,
-              borderBottomWidth: index === memberships.length - 1 ? 0 : 1,
-              flexDirection: "row",
-              gap: 10,
-              padding: 14,
-            }}
-          >
-            <Avatar name={membership.userName} size={36} tone={membership.role === "owner" ? "orange" : "green"} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Room owner" : "Member"}</Text>
+        {members.map((member, index) => {
+          const checkIn = latestCheckInByUser.get(member.id);
+          return (
+            <View
+              key={member.id}
+              style={{
+                alignItems: "center",
+                borderBottomColor: colors.line,
+                borderBottomWidth: index === members.length - 1 ? 0 : 1,
+                flexDirection: "row",
+                gap: 10,
+                padding: 14,
+              }}
+            >
+              <Avatar image={member.image} name={member.name} size={38} tone={member.role === "owner" ? "orange" : "green"} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{member.name}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{member.role === "owner" ? "Community host" : "Member"}</Text>
+                {checkIn ? (
+                  <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>
+                    Last check-in: {moodLabel(checkIn.mood)}
+                  </Text>
+                ) : null}
+              </View>
+              <View
+                style={{
+                  backgroundColor: checkIn ? colors.mossSurface : colors.input,
+                  borderRadius: 999,
+                  height: 9,
+                  width: 9,
+                }}
+              />
             </View>
-          </View>
-        ))}
+          );
+        })}
       </Card>
       <SecondaryButton icon="settings" onPress={onManage}>
-        Manage room
+        Community settings
       </SecondaryButton>
       <SecondaryButton icon="repeat" onPress={onSwitchRoom}>
-        Switch or join room
+        Join or create community
       </SecondaryButton>
     </View>
   );

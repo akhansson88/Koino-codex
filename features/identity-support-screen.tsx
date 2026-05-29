@@ -40,7 +40,7 @@ function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) 
 }
 
 async function shareRoomInvite(room: Group) {
-  const invitation = `Join ${room.name} on KOINO with room code ${room.inviteCode}.`;
+  const invitation = `Join ${room.name} on KOINO with community code ${room.inviteCode}.`;
   const clipboard =
     Platform.OS === "web"
       ? (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText?: (text: string) => Promise<void> } } }).navigator?.clipboard
@@ -160,7 +160,7 @@ export function IdentitySupportScreen() {
 
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Identity & Support</Text>
-          <BodyText muted>Manage your profile, room, privacy, and help.</BodyText>
+          <BodyText muted>Manage your profile, community, privacy, and help.</BodyText>
         </View>
 
         <SettingsSection label="Identity">
@@ -188,8 +188,8 @@ export function IdentitySupportScreen() {
           <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
             <SettingsRow
               icon="repeat"
-              title="Switch or join room"
-              subtitle="Join another room or create a new one"
+              title="Switch or join community"
+              subtitle="Join another community or create a new one"
               onPress={() => setSwitcherVisible(true)}
             />
           </Card>
@@ -240,7 +240,7 @@ export function IdentitySupportScreen() {
 
       <BottomSheet title="Account options" visible={activeSheet === "account"} onClose={() => setActiveSheet(undefined)}>
         <InfoLine label="Email" value={state.authEmail ?? "No email connected"} />
-        <InfoLine label="Notifications" value="Room and prayer updates" />
+        <InfoLine label="Notifications" value="Community and prayer updates" />
         <SecondaryButton
           icon="log-out"
           onPress={() => {
@@ -256,7 +256,7 @@ export function IdentitySupportScreen() {
         title="Help & contact"
         visible={activeSheet === "help"}
         onClose={() => setActiveSheet(undefined)}
-        body="Help is here for account questions, room invitations, prayer rhythms, and anything that makes KOINO harder to use."
+        body="Help is here for account questions, community invitations, prayer rhythms, and anything that makes KOINO harder to use."
       />
 
       <BottomSheet title="Password & security" visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
@@ -271,7 +271,7 @@ export function IdentitySupportScreen() {
         title="Privacy"
         visible={activeSheet === "privacy"}
         onClose={() => setActiveSheet(undefined)}
-        body="Your journal is private by default. Shared reflections and prayers stay connected to the room you choose."
+        body="Your journal is private by default. Shared reflections and prayers stay connected to the community you choose."
       />
 
       <InfoSheet
@@ -309,7 +309,7 @@ export function RoomDetailsScreen() {
     try {
       setInviteMessage(await shareRoomInvite(group));
     } catch {
-      setInviteMessage("Room code is selectable if sharing is unavailable.");
+      setInviteMessage("Community code is selectable if sharing is unavailable.");
     }
   }
 
@@ -317,18 +317,18 @@ export function RoomDetailsScreen() {
     if (!group || !ownsGroup || !roomName.trim() || roomName.trim() === group.name) return;
     await dispatch({ type: "updateGroup", id: group.id, name: roomName });
     setActiveSheet(undefined);
-    setRoomMessage("Room name updated.");
+    setRoomMessage("Community name updated.");
   }
 
   function handleLeaveRoom() {
     if (!group) return;
     if (ownsGroup) {
-      setRoomMessage("Room owners need to transfer ownership or delete the room before leaving.");
+      setRoomMessage("Community hosts need to transfer ownership or delete the community before leaving.");
       return;
     }
 
     confirmAction({
-      title: "Leave room?",
+      title: "Leave community?",
       message: `You will leave ${group.name}, but your account will stay signed in.`,
       confirmText: "Leave",
       destructive: true,
@@ -344,8 +344,8 @@ export function RoomDetailsScreen() {
         <AppHeader showBack onBack={() => router.back()} />
 
         <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Room details</Text>
-          <BodyText muted>Manage your room and members.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Community details</Text>
+          <BodyText muted>Manage your community and members.</BodyText>
         </View>
 
         {group ? (
@@ -354,11 +354,11 @@ export function RoomDetailsScreen() {
 
             {roomMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{roomMessage}</Text> : null}
 
-            <SettingsSection label="Room settings">
+            <SettingsSection label="Community settings">
               <SettingsRow icon="users" title="Manage members" onPress={() => setActiveSheet("members")} />
               <SettingsRow
                 icon="edit-2"
-                title="Room name"
+                title="Community name"
                 value={group.name}
                 onPress={() => {
                   setRoomName(group.name);
@@ -367,7 +367,7 @@ export function RoomDetailsScreen() {
                 showDivider
               />
               <SettingsRow icon="bell" title="Notifications" value="All activity" onPress={() => setActiveSheet("notifications")} showDivider />
-              <SettingsRow icon="log-out" title="Leave room" tone="danger" onPress={handleLeaveRoom} showDivider />
+              <SettingsRow icon="log-out" title="Leave community" tone="danger" onPress={handleLeaveRoom} showDivider />
             </SettingsSection>
 
             <JoinSwitchCard onBrowse={() => setSwitcherVisible(true)} />
@@ -375,10 +375,10 @@ export function RoomDetailsScreen() {
         ) : (
           <>
             <Card>
-              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>No room selected</Text>
-              <BodyText muted>Join or create a room for the people you pray with.</BodyText>
+              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>No community selected</Text>
+              <BodyText muted>Join or create a community for the people you pray with.</BodyText>
               <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)}>
-                Browse rooms
+                Browse communities
               </PrimaryButton>
             </Card>
           </>
@@ -389,18 +389,18 @@ export function RoomDetailsScreen() {
         <MemberList memberships={state.memberships} />
       </BottomSheet>
 
-      <BottomSheet title="Room name" visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>{ownsGroup ? "Choose a name that helps your group feel easy to recognize." : "Only the room owner can rename this room."}</BodyText>
+      <BottomSheet title="Community name" visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{ownsGroup ? "Choose a name that helps your community feel easy to recognize." : "Only the community host can rename this community."}</BodyText>
         <TextInputField
           editable={ownsGroup}
           value={roomName}
           onChangeText={setRoomName}
           onSubmitEditing={handleRenameRoom}
-          placeholder="Room name"
+          placeholder="Community name"
           returnKeyType="done"
         />
         <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom}>
-          Save room name
+          Save community name
         </PrimaryButton>
       </BottomSheet>
 
@@ -408,7 +408,7 @@ export function RoomDetailsScreen() {
         title="Notifications"
         visible={activeSheet === "notifications"}
         onClose={() => setActiveSheet(undefined)}
-        body="Room notifications are currently set to all activity. More granular controls can be connected when notification preferences exist."
+        body="Community notifications are currently set to all activity. More granular controls can be connected when notification preferences exist."
       />
 
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
@@ -507,17 +507,17 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
           </Pressable>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Room code</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
             <RoomCodeCopy code={group.inviteCode} fontSize={14} iconSize={15} />
           </View>
           <SecondaryButton icon="info" onPress={onDetails}>
-            View room details
+            View community details
           </SecondaryButton>
         </>
       ) : (
         <>
-          <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>No room selected</Text>
-          <BodyText muted>Join or create a room for the people you pray with.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>No community selected</Text>
+          <BodyText muted>Join or create a community for the people you pray with.</BodyText>
         </>
       )}
     </Card>
@@ -588,11 +588,11 @@ function RoomHeaderCard({
       </View>
       <View style={{ backgroundColor: colors.line, height: 1 }} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Room code</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </View>
       <PrimaryButton icon="share-2" onPress={onInvite}>
-        Invite to room
+        Invite members
       </PrimaryButton>
       {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{inviteMessage}</Text> : null}
     </Card>
@@ -603,11 +603,11 @@ function JoinSwitchCard({ onBrowse }: { onBrowse: () => void }) {
   return (
     <Card style={{ gap: 14 }}>
       <View style={{ gap: 4 }}>
-        <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>Join or switch room</Text>
-        <BodyText muted>Join another room or create a new one.</BodyText>
+        <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>Join or switch community</Text>
+        <BodyText muted>Join another community or create a new one.</BodyText>
       </View>
       <SecondaryButton icon="users" onPress={onBrowse}>
-        Browse rooms
+        Browse communities
       </SecondaryButton>
     </Card>
   );
@@ -626,7 +626,7 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
     if (!canJoin) return;
     await dispatch({ type: "joinGroup", inviteCode: joinInviteCode });
     setJoinInviteCode("");
-    setMessage("Room joined.");
+    setMessage("Community joined.");
     onClose();
   }
 
@@ -634,23 +634,23 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
     if (!canCreate) return;
     await dispatch({ type: "createGroup", name: newGroupName });
     setNewGroupName("");
-    setMessage("Room created.");
+    setMessage("Community created.");
     onClose();
   }
 
   async function handleSwitchRoom(roomId: Id) {
     await dispatch({ type: "switchGroup", id: roomId });
-    setMessage("Room switched.");
+    setMessage("Community switched.");
     onClose();
   }
 
   return (
-    <BottomSheet title="Join or switch room" visible={visible} onClose={onClose}>
+    <BottomSheet title="Join or switch community" visible={visible} onClose={onClose}>
       <View style={{ gap: 10 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Your rooms</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Your communities</Text>
         <View style={{ gap: 8 }}>
           {otherRooms.length === 0 ? (
-            <BodyText muted>No other rooms yet.</BodyText>
+            <BodyText muted>No other communities yet.</BodyText>
           ) : (
             otherRooms.map((room) => (
               <Pressable accessibilityRole="button" key={room.id} onPress={() => handleSwitchRoom(room.id)}>
@@ -662,26 +662,26 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Join by room code</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Join by community code</Text>
         <TextInputField
           autoCapitalize="characters"
           autoCorrect={false}
           value={joinInviteCode}
           onChangeText={(value) => setJoinInviteCode(value.toUpperCase())}
           onSubmitEditing={handleJoinRoom}
-          placeholder="Room code"
+          placeholder="Community code"
           returnKeyType="join"
         />
         <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom}>
-          Join room
+          Join community
         </PrimaryButton>
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Create a new room</Text>
-        <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="Room name" returnKeyType="done" />
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Create a new community</Text>
+        <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="Community name" returnKeyType="done" />
         <SecondaryButton disabled={!canCreate} icon="plus" onPress={handleCreateRoom}>
-          Create room
+          Create community
         </SecondaryButton>
       </View>
       {message || state.authError ? <Text style={{ color: state.authError ? colors.danger : colors.muted, fontSize: 13, fontWeight: "800" }}>{state.authError ?? message}</Text> : null}
@@ -718,7 +718,7 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
 
 function MemberList({ memberships }: { memberships: Membership[] }) {
   if (memberships.length === 0) {
-    return <BodyText muted>No members are listed for this room yet.</BodyText>;
+    return <BodyText muted>No members are listed for this community yet.</BodyText>;
   }
 
   return (
@@ -749,7 +749,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
       <Avatar name={membership.userName} size={38} tone={membership.role === "owner" ? "orange" : "green"} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Room owner" : "Member"}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Community host" : "Member"}</Text>
       </View>
     </View>
   );

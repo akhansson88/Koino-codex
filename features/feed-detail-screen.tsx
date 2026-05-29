@@ -161,7 +161,7 @@ export function FeedDetailScreen() {
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
-  const actionLabel = prayer?.prayed && itemKind === "prayer_request" ? "Prayed" : actionLabels[itemKind];
+  const actionLabel = isPrayerRequest ? (prayer?.prayed ? "You prayed" : "Pray with this request") : actionLabels[itemKind];
   const actionPastLabel = actionPastLabels[itemKind];
 
   async function sendReply() {
@@ -206,6 +206,19 @@ export function FeedDetailScreen() {
           <LinkPreview text={item.body} />
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
+        {isPrayerRequest ? (
+          <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+            <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+              <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
+            </View>
+            <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
+            <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+              <Text style={{ color: prayerAnswered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{prayerAnswered ? "Answered" : "Open"}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
+            </View>
+          </Card>
+        ) : null}
         {prayerAnswered ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
             <Feather name="check-circle" size={20} color={colors.olive} />

@@ -64,7 +64,7 @@ export function RoomCodeCopy({
 
   return (
     <Pressable
-      accessibilityLabel={`Copy room code ${code}`}
+      accessibilityLabel={`Copy community code ${code}`}
       accessibilityRole="button"
       onPress={handleCopy}
       style={({ pressed }) =>

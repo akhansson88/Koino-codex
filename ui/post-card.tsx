@@ -3,6 +3,8 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
 import {
+  actionLabels,
+  actionPastLabels,
   defaultFeedTitle as productDefaultFeedTitle,
   entryKindIcon,
   feedItemKind,
@@ -87,6 +89,9 @@ export function PostCard({
       suppressOpenRef.current = false;
     }, 250);
   }
+
+  const itemKind = feedItemKind(item);
+  const prayerCopy = itemKind === "prayer_request" ? "prayed" : actionPastLabels[itemKind].toLowerCase();
 
   return (
     <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
@@ -211,7 +216,7 @@ export function PostCard({
         >
           <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
           <Text style={{ color: colors.muted, fontWeight: "700" }}>
-            {prayed ? "Prayed" : "Pray"}
+            {prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
           </Text>
         </Pressable>
         {onReply ? (
@@ -247,7 +252,7 @@ export function PostCard({
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
           <AvatarStack users={prayedBy} size={24} />
           <Text style={{ color: colors.muted, fontWeight: "700" }}>
-            {prayerCount} {prayerCount === 1 ? "person" : "people"} prayed
+            {prayerCount} {prayerCopy}
           </Text>
         </View>
       ) : null}

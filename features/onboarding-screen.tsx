@@ -131,21 +131,21 @@ export function OnboardingScreen() {
           ) : (
             <>
               <Card>
-                <Body>What should your group call you?</Body>
+                <Body>What should your community call you?</Body>
                 <Field value={name} onChangeText={setName} onSubmitEditing={handleSessionSubmit} placeholder="Your name" autoCapitalize="words" returnKeyType="next" />
                 <Body muted>Signed in as {state.authEmail ?? "your account"}.</Body>
               </Card>
 
               <Card tone="moss">
-                <Body>Join a prayer room with a code, or create one for your small group.</Body>
+                <Body>Join a community with a code, or create one for the people you pray with.</Body>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                   <Choice label="Join by code" selected={groupMode === "join"} onPress={() => setGroupMode("join")} />
-                  <Choice label="Create room" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
+                  <Choice label="Create community" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
                 </View>
                 {groupMode === "join" ? (
-                  <Field value={inviteCode} onChangeText={setInviteCode} onSubmitEditing={handleSessionSubmit} placeholder="Group code" autoCapitalize="characters" returnKeyType="join" />
+                  <Field value={inviteCode} onChangeText={setInviteCode} onSubmitEditing={handleSessionSubmit} placeholder="Community code" autoCapitalize="characters" returnKeyType="join" />
                 ) : (
-                  <Field value={groupName} onChangeText={setGroupName} onSubmitEditing={handleSessionSubmit} placeholder="Group name" returnKeyType="done" />
+                  <Field value={groupName} onChangeText={setGroupName} onSubmitEditing={handleSessionSubmit} placeholder="Community name" returnKeyType="done" />
                 )}
                 {state.authError ? <Body muted>{state.authError}</Body> : null}
               </Card>

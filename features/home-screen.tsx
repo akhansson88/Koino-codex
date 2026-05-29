@@ -240,7 +240,7 @@ export function HomeScreen() {
   function deleteItem(item: FeedItem) {
     confirmAction({
       title: `Delete ${kindLabel(item).toLowerCase()}?`,
-      message: "This will remove it from the shared room.",
+      message: "This will remove it from your community.",
       confirmText: "Delete",
       destructive: true,
       onConfirm: () => dispatch({ type: item.type === "post" ? "deletePost" : "deleteCheckIn", id: item.id }),
@@ -299,7 +299,7 @@ export function HomeScreen() {
       />
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Group rhythm</SectionHeading>
+        <SectionHeading>Community rhythm</SectionHeading>
         {state.groupBiblePlan && groupPlanReading ? (
           <BiblePlanCard
             completed={groupPlanCompletedByCurrentUser}
@@ -330,9 +330,9 @@ export function HomeScreen() {
             onChangeText={setGroupPlanReflectionText}
             onSave={submitGroupPlanReflection}
             passageReference={groupPlanReading.passage.reference}
-            placeholder="Share a brief reflection with your group..."
+            placeholder="Share a brief reflection with your community..."
             saveIcon="send"
-            title="Group reflection"
+            title="Community reflection"
             value={groupPlanReflectionText}
           />
         ) : null}
@@ -363,9 +363,9 @@ export function HomeScreen() {
       {ownsGroup ? (
         <Card>
           <SectionHeading>Internal test</SectionHeading>
-          <BodyText muted>{state.groupBiblePlan ? `Active group plan: ${state.groupBiblePlan.title}` : "No active group Bible plan."}</BodyText>
+          <BodyText muted>{state.groupBiblePlan ? `Active community plan: ${state.groupBiblePlan.title}` : "No active community Bible plan."}</BodyText>
           <SecondaryButton icon="book-open" onPress={() => dispatch({ type: "createSampleGroupBiblePlan" })}>
-            Create sample group plan
+            Create sample community plan
           </SecondaryButton>
         </Card>
       ) : null}
@@ -400,10 +400,10 @@ export function HomeScreen() {
       ) : null}
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Group Activity</SectionHeading>
+        <SectionHeading>Community</SectionHeading>
       {recentActivity.length === 0 ? (
           <Card>
-            <BodyText muted>This room is quiet right now. Start with a check-in or a small reflection.</BodyText>
+            <BodyText muted>This community is quiet right now. Start with a check-in or a small reflection.</BodyText>
           </Card>
       ) : (
         recentActivity.map((item) => {
@@ -447,7 +447,7 @@ export function HomeScreen() {
         mood={mood}
         note={checkInText}
         verses={checkInVerses}
-        roomName={group?.name ?? "Test Room"}
+        roomName={group?.name ?? "Test Community"}
         roomImage={group?.image}
         share={shareCheckIn}
         onClose={() => setCheckInVisible(false)}
@@ -520,7 +520,7 @@ export function HomeScreen() {
           </View>
           <View style={{ gap: 6 }}>
             <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>Who would you like to pray for?</Text>
-            <BodyText muted>Select a member from your group.</BodyText>
+            <BodyText muted>Select a member from your community.</BodyText>
           </View>
           <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
             {state.users.filter((u) => u.id !== state.currentUserId).map((member) => (
@@ -544,7 +544,7 @@ export function HomeScreen() {
             ))}
             {state.users.filter((u) => u.id !== state.currentUserId).length === 0 ? (
               <Card>
-                <BodyText muted>No other members in this group yet.</BodyText>
+                <BodyText muted>No other members in this community yet.</BodyText>
               </Card>
             ) : null}
           </ScrollView>
@@ -688,7 +688,7 @@ function CheckInModal({
                   <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={34} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{share ? "Shared with your room" : "Only you can see this"}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{share ? "Shared with your community" : "Only you can see this"}</Text>
                   </View>
                   <Feather name="chevron-down" size={18} color={colors.muted} />
                 </Card>

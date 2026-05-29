@@ -26,7 +26,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow KOINO to choose a room image from your photo library."
+          "photosPermission": "Allow KOINO to choose a community image from your photo library."
         }
       ],
       "expo-web-browser",

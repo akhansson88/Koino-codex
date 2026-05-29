@@ -1,5 +1,5 @@
-import { RoomScreen } from "@/features/settings-screen";
+import { CommunityScreen } from "@/features/settings-screen";
 
-export default function RoomRoute() {
-  return <RoomScreen />;
+export default function CommunityRoute() {
+  return <CommunityScreen />;
 }

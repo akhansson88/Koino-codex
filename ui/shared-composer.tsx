@@ -11,7 +11,11 @@ const MAX_BODY_LENGTH = 500;
 
 function primaryActionLabel(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
   if (editing) return "Update entry";
-  if (context === "room" || entryVisibility === visibility.room) return "Post entry";
+  if (context === "room" || entryVisibility === visibility.room) {
+    if (kind === "prayer_request") return "Share prayer";
+    if (kind === "reflection") return "Share reflection";
+    return "Share";
+  }
   if (context === "journal" && kind === "prayer_request") return "Save prayer";
   if (context === "journal" && kind === "praise") return "Save answered prayer";
   if (context === "journal" && kind === "scripture") return "Save Scripture note";
@@ -21,7 +25,7 @@ function primaryActionLabel(context: "journal" | "today" | "room", entryVisibili
 
 function titleFor(context: "journal" | "today" | "room", editing: boolean) {
   if (editing) return "Edit your entry";
-  if (context === "room") return "Share with your room";
+  if (context === "room") return "Share with your community";
   return "Write your entry";
 }
 
@@ -64,7 +68,7 @@ export function SharedComposer({
 }) {
   const showVisibility = context !== "room";
   const actionLabel = primaryActionLabel(context, entryVisibility, editing, kind);
-  const activeRoomName = roomName ?? "Room";
+  const activeRoomName = roomName ?? "Community";
   const typeOptions = context === "journal" ? postTypes : composerPostTypes;
 
   return (
@@ -119,7 +123,7 @@ export function SharedComposer({
               onChange={onVisibility}
               options={[
                 { label: "Private", value: visibility.private },
-                { label: "Share with room", value: visibility.room },
+                { label: "Share with community", value: visibility.room },
               ]}
             />
           ) : null}
@@ -135,7 +139,7 @@ export function SharedComposer({
                   {entryVisibility === visibility.room ? activeRoomName : "Private journal"}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {entryVisibility === visibility.room ? "Shared with your room" : "Only you can see this"}
+                  {entryVisibility === visibility.room ? "Shared with your community" : "Only you can see this"}
                 </Text>
               </View>
               {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}

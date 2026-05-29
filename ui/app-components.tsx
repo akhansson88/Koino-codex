@@ -137,7 +137,7 @@ export function CurrentRoomHeader() {
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
-            {group?.name ?? "No group"}
+            {group?.name ?? "No community"}
           </Text>
           <Feather name="chevron-down" size={16} color={colors.ink} />
         </View>
@@ -212,11 +212,15 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
 }
 
 export function HeartPromptCard({
+  actionIcon = "plus",
+  actionLabel,
   image,
   name,
   onPress,
   subtitle = "Share, reflect or ask for prayer...",
 }: {
+  actionIcon?: FeatherName;
+  actionLabel?: string;
   image?: GroupImage;
   name?: string;
   onPress: () => void;
@@ -253,14 +257,18 @@ export function HeartPromptCard({
           alignItems: "center",
           backgroundColor: colors.accentSubtle,
           borderColor: colors.line,
-          borderRadius: radius.md,
+          borderRadius: 999,
           borderWidth: 1,
+          flexDirection: "row",
+          gap: 7,
           height: 46,
           justifyContent: "center",
-          width: 46,
+          minWidth: actionLabel ? 92 : 46,
+          paddingHorizontal: actionLabel ? 13 : 0,
         }}
       >
-        <Feather name="plus" size={23} color={colors.olive} />
+        <Feather name={actionIcon} size={actionLabel ? 16 : 23} color={colors.olive} />
+        {actionLabel ? <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{actionLabel}</Text> : null}
       </View>
     </Pressable>
   );
@@ -522,7 +530,7 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
     );
   }
 
-  return <Avatar name={name ?? "Room"} size={size} tone="blue" />;
+  return <Avatar name={name ?? "Community"} size={size} tone="blue" />;
 }
 
 export function AvatarStack({ users, size = 42 }: { users: { name: string; image?: GroupImage }[]; size?: number }) {
@@ -748,7 +756,7 @@ export function VerseDetailSheet({
         Add to Journal
       </SecondaryButton>
       <SecondaryButton icon="users" onPress={shareToRoom}>
-        Share to Room
+        Share to Community
       </SecondaryButton>
       <SecondaryButton icon="corner-up-right" onPress={openInBible}>
         Open in Bible

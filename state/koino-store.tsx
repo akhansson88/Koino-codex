@@ -369,13 +369,13 @@ async function createGroupForUser(user: FirebaseUser, name: string, userName?: s
 
 async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: string) {
   const normalizedCode = code.trim().toUpperCase();
-  if (!normalizedCode) throw new Error("Enter a group invite code.");
+  if (!normalizedCode) throw new Error("Enter a community invite code.");
 
   await ensureProfile(user, userName);
 
   const inviteSnapshot = await get(ref(database, `inviteCodes/${normalizedCode}`));
   const invite = inviteSnapshot.val() as { groupId?: string } | null;
-  if (!invite?.groupId) throw new Error("No group exists for that invite code.");
+  if (!invite?.groupId) throw new Error("No community exists for that invite code.");
 
   const timestamp = now();
   const membership: Membership = {
@@ -407,7 +407,7 @@ async function deleteRoomStoragePath(path?: string) {
   try {
     await deleteRoomImage(path);
   } catch {
-    // Storage cleanup should never undo the room metadata update.
+    // Storage cleanup should never undo the community image metadata update.
   }
 }
 
@@ -947,7 +947,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupSnapshot = await get(ref(database, `groups/${action.id}`));
               const groupToUpdate = groupSnapshot.val() as Group | null;
               if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
-                throw new Error("Only the room owner can change the room image.");
+                throw new Error("Only the community host can change the community image.");
               }
 
               const timestamp = now();
@@ -982,7 +982,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupSnapshot = await get(ref(database, `groups/${action.id}`));
               const groupToUpdate = groupSnapshot.val() as Group | null;
               if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
-                throw new Error("Only the room owner can delete the room image.");
+                throw new Error("Only the community host can delete the community image.");
               }
 
               await update(ref(database, `groups/${action.id}`), { image: null, updatedAt: now() });
@@ -1407,7 +1407,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const group = groups.find((item) => item.id === profile.currentGroupId);
               if (!group || group.ownerId !== firebaseUser.uid) return;
               const timestamp = now();
-              const samplePlan = sampleBiblePlanDraft("Sample group Bible plan");
+              const samplePlan = sampleBiblePlanDraft("Sample community Bible plan");
               const plan: BiblePlan = {
                 id: samplePlan.id ?? id("bibleplan"),
                 scope: "group",

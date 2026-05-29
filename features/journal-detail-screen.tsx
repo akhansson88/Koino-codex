@@ -135,10 +135,10 @@ export function JournalDetailScreen() {
           <RoomImage image={currentEntry.displaySource === "Shared check-in" ? group?.image : undefined} name={currentEntry.displaySource === "Shared check-in" ? group?.name : "Private journal"} size={34} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-              {currentEntry.displaySource === "Shared check-in" ? group?.name ?? "Room" : "Private journal"}
+              {currentEntry.displaySource === "Shared check-in" ? group?.name ?? "Community" : "Private journal"}
             </Text>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-              {currentEntry.displaySource === "Shared check-in" ? "Shared with your room" : "Only you can see this"}
+              {currentEntry.displaySource === "Shared check-in" ? "Shared with your community" : "Only you can see this"}
             </Text>
           </View>
         </Card>

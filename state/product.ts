@@ -1,12 +1,12 @@
 import type { EntryKind, FeedItem, HeartMood, JournalEntry, JournalEntryType } from "@/state/types";
 
-export const tabs = ["Bible", "Group", "Me", "Room"] as const;
+export const tabs = ["Bible", "Today", "Me", "Community"] as const;
 
 export const roomTabs = [
-  { value: "feed", label: "Feed" },
+  { value: "reflections", label: "Reflections" },
   { value: "prayer", label: "Prayer" },
   { value: "checkins", label: "Check-ins" },
-  { value: "about", label: "About" },
+  { value: "members", label: "Members" },
 ] as const;
 
 export const prayerStatuses = {
