@@ -1,4 +1,4 @@
-import { Tabs, router, usePathname } from "expo-router";
+import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
 import { tabs } from "@/state/product";
-import { Avatar } from "@/ui/app-components";
+import { AvatarButton } from "@/ui/app-components";
 import { brandPalette, colors, platformShadow, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
@@ -112,7 +112,6 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-
 function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
   if (Platform.OS === "web") return null;
 
@@ -141,7 +140,6 @@ function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
     </BlurView>
   );
 }
-
 function KoinoTabHeader() {
   const insets = useSafeAreaInsets();
 
@@ -172,7 +170,7 @@ function HeaderRightControls() {
   return (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
       <ThemeSelector />
-      <IdentityButton />
+      <AvatarButton />
     </View>
   );
 }
@@ -253,25 +251,6 @@ function ThemeSelector() {
           <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPeach : "#B86B17"} size={16} />
         </Animated.View>
       </Animated.View>
-    </Pressable>
-  );
-}
-
-function IdentityButton() {
-  const { state } = useKoino();
-  const pathname = usePathname();
-  const user = state.users.find((item) => item.id === state.currentUserId);
-
-  if (!state.currentUserId) return null;
-
-  const openIdentitySupport = () => {
-    if (pathname === "/identity") return;
-    router.push("/identity" as never);
-  };
-
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={openIdentitySupport}>
-      <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
     </Pressable>
   );
 }

@@ -64,14 +64,6 @@ export function AppHeader({
   showBack?: boolean;
   onBack?: () => void;
 }) {
-  const { state } = useKoino();
-  const pathname = usePathname();
-  const user = state.users.find((item) => item.id === state.currentUserId);
-  const openIdentitySupport = () => {
-    if (pathname === "/identity") return;
-    router.push("/identity" as never);
-  };
-
   return (
     <View style={{ gap: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
@@ -83,9 +75,7 @@ export function AppHeader({
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <ThemeDots />
-          <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" onPress={openIdentitySupport}>
-            <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={38} tone="pink" />
-          </Pressable>
+          <AvatarButton />
         </View>
       </View>
 
@@ -110,6 +100,25 @@ export function AppHeader({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+export function AvatarButton({ size = 38 }: { size?: number }) {
+  const { state } = useKoino();
+  const pathname = usePathname();
+  const user = state.users.find((item) => item.id === state.currentUserId);
+
+  if (!state.currentUserId) return null;
+
+  const openIdentitySupport = () => {
+    if (pathname === "/identity") return;
+    router.push("/identity" as never);
+  };
+
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" hitSlop={8} onPress={openIdentitySupport}>
+      <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={size} tone="pink" />
+    </Pressable>
   );
 }
 
