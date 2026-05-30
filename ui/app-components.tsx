@@ -402,7 +402,7 @@ export function TextInputField(props: TextInputProps) {
           borderRadius: radius.lg,
           borderWidth: 1,
           color: colors.ink,
-          fontSize: 15,
+          fontSize: 16,
           minHeight: props.multiline ? 116 : 50,
           paddingHorizontal: 14,
           paddingVertical: props.multiline ? 14 : 0,

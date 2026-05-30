@@ -11,6 +11,30 @@ if (!fs.existsSync(distIndex)) {
 let html = fs.readFileSync(distIndex, 'utf8');
 let changed = false;
 
+// Disable zoom via viewport meta tag
+const viewportRegex = /(<meta\s+name="viewport"\s+content="[^"]*?)(?:\s*\/?>)/i;
+if (viewportRegex.test(html)) {
+  const desired = 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, shrink-to-fit=no';
+  html = html.replace(viewportRegex, (_, _match, _offset) => `<meta name="viewport" content="${desired}" />`);
+  changed = true;
+}
+
+// Add touch-action CSS to prevent double-tap zoom
+if (!html.includes('touch-action: manipulation')) {
+  html = html.replace(
+    '</style>',
+    `
+      /* Disable pinch-to-zoom and double-tap zoom */
+      html {
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+      }
+    </style>`
+  );
+  changed = true;
+}
+
 // Only inject tags that Expo doesn't already add from app.json web config
 const missing = [];
 if (!html.includes('rel="manifest"')) missing.push('<link rel="manifest" href="/manifest.json">');

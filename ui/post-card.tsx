@@ -214,7 +214,7 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <Feather name="heart" size={22} color={prayed ? colors.gold : colors.ink} />
+          <Ionicons name={prayed ? "heart" : "heart-outline"} size={22} color={prayed ? colors.gold : colors.ink} />
           <Text style={{ color: colors.muted, fontWeight: "700" }}>
             {prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
           </Text>
