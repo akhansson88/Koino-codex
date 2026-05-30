@@ -460,7 +460,9 @@ function isChapterSwipeGesture(dx: number, dy: number) {
   return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
 }
 
-const chapterSwipeActivationDistance = 9;
+const chapterSwipeActivationDistance = 12;
+const chapterSwipeActivationRatio = 1.6;
+const chapterScrollIntentDistance = 6;
 const chapterSwipeDistanceRatio = 0.24;
 const chapterSwipeVelocity = 0.7;
 
@@ -563,6 +565,7 @@ export function BibleScreen() {
   const topicRequestRef = useRef(0);
   const chapterSwipeX = useRef(new Animated.Value(0)).current;
   const chapterSwipeAnimatingRef = useRef(false);
+  const chapterSwipeBlockedByScrollRef = useRef(false);
   const verseLongPressActiveRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
@@ -609,7 +612,6 @@ export function BibleScreen() {
   const [readerToast, setReaderToast] = useState<ReaderToast | undefined>();
   const [selectionSaving, setSelectionSaving] = useState(false);
   const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
-  const [chapterSwipeActive, setChapterSwipeActive] = useState(false);
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
 
@@ -1489,15 +1491,30 @@ export function BibleScreen() {
   const shouldCaptureChapterSwipe = useCallback(
     (dx: number, dy: number) => {
       if (chapterSwipeAnimatingRef.current) return false;
+      const horizontalDistance = Math.abs(dx);
+      const verticalDistance = Math.abs(dy);
+      if (verticalDistance >= chapterScrollIntentDistance && verticalDistance >= horizontalDistance) {
+        chapterSwipeBlockedByScrollRef.current = true;
+        return false;
+      }
+      if (chapterSwipeBlockedByScrollRef.current) return false;
+
       const hasTarget = dx < 0 ? Boolean(nextChapter) : Boolean(previousChapter);
-      return hasTarget && Math.abs(dx) > chapterSwipeActivationDistance && Math.abs(dx) > Math.abs(dy) * 1.25;
+      return hasTarget && horizontalDistance > chapterSwipeActivationDistance && horizontalDistance > verticalDistance * chapterSwipeActivationRatio;
     },
     [nextChapter, previousChapter],
   );
 
+  const resetReaderTouchIntent = useCallback(() => {
+    chapterSwipeBlockedByScrollRef.current = false;
+  }, []);
+
+  const handleReaderScrollBeginDrag = useCallback(() => {
+    chapterSwipeBlockedByScrollRef.current = true;
+  }, []);
+
   const resetChapterSwipe = useCallback(() => {
     chapterSwipeAnimatingRef.current = false;
-    setChapterSwipeActive(false);
     setChapterSwipeDirection("idle");
   }, []);
 
@@ -1507,10 +1524,10 @@ export function BibleScreen() {
         onMoveShouldSetPanResponder: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
         onPanResponderGrant: () => {
           chapterSwipeX.stopAnimation();
-          setChapterSwipeActive(true);
         },
         onPanResponderMove: (_event, gesture) => {
           if (Math.abs(gesture.dy) > Math.abs(gesture.dx) * 2 && Math.abs(gesture.dy) > 30) {
+            chapterSwipeBlockedByScrollRef.current = true;
             Animated.spring(chapterSwipeX, {
               damping: 20,
               stiffness: 210,
@@ -1681,70 +1698,79 @@ export function BibleScreen() {
         topInset={insets.top}
       />
 
-      <ScrollView
-        ref={scrollRef}
-        contentInsetAdjustmentBehavior="never"
-        keyboardShouldPersistTaps="handled"
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        scrollEnabled={!chapterSwipeActive}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          alignSelf: "stretch",
-          paddingBottom: readerBottomPadding,
-          paddingHorizontal: 22,
-          paddingTop: compactMode ? 12 : 18,
-        }}
+      <View
+        {...chapterSwipePanResponder.panHandlers}
+        onTouchCancel={resetReaderTouchIntent}
+        onTouchEnd={resetReaderTouchIntent}
+        onTouchStart={resetReaderTouchIntent}
+        style={{ flex: 1 }}
       >
-        <Animated.View
-          {...chapterSwipePanResponder.panHandlers}
-          style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
+        <ScrollView
+          ref={scrollRef}
+          contentInsetAdjustmentBehavior="never"
+          directionalLockEnabled
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleReaderScrollBeginDrag}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            alignSelf: "stretch",
+            paddingBottom: readerBottomPadding,
+            paddingHorizontal: 22,
+            paddingTop: compactMode ? 12 : 18,
+          }}
         >
-          <BibleText
-            audioHighlightActive={audioHighlightActive}
-            audioPosition={audioPosition}
-            chapterHighlightByVerse={chapterHighlightByVerse}
-            compactMode={compactMode}
-            crossReferenceAvailability={chapterCrossReferenceAvailability}
-            highlightedPosition={highlightedPosition}
-            onVersePress={handleVersePress}
-            onVersePressIn={handleVersePressIn}
-            onVerseLayout={handleVerseLayout}
-            onVerseLongPress={handleVerseLongPress}
-            palette={readerPalette}
-            position={position}
-            readerLineHeight={readerLineHeight}
-            readerTextStyle={readerTextStyle}
-            selectedVerseNumbers={selectedVerseNumbers}
-            selectedVersePosition={selectedVersePosition}
-            showCrossReferences={showCrossReferences}
-            showVerseNumbers={showVerseNumbers}
-            verses={chapterVerses}
-          />
+          <Animated.View
+            style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
+          >
+            <BibleText
+              audioHighlightActive={audioHighlightActive}
+              audioPosition={audioPosition}
+              chapterHighlightByVerse={chapterHighlightByVerse}
+              compactMode={compactMode}
+              crossReferenceAvailability={chapterCrossReferenceAvailability}
+              highlightedPosition={highlightedPosition}
+              onVersePress={handleVersePress}
+              onVersePressIn={handleVersePressIn}
+              onVerseLayout={handleVerseLayout}
+              onVerseLongPress={handleVerseLongPress}
+              palette={readerPalette}
+              position={position}
+              readerLineHeight={readerLineHeight}
+              readerTextStyle={readerTextStyle}
+              selectedVerseNumbers={selectedVerseNumbers}
+              selectedVersePosition={selectedVersePosition}
+              showCrossReferences={showCrossReferences}
+              showVerseNumbers={showVerseNumbers}
+              verses={chapterVerses}
+            />
 
-          <ChapterReflectionCard
-            onAction={handleReflectionAction}
-            onChangeText={setReflectionText}
-            palette={readerPalette}
-            value={reflectionText}
-          />
+            <ChapterReflectionCard
+              onAction={handleReflectionAction}
+              onChangeText={setReflectionText}
+              palette={readerPalette}
+              value={reflectionText}
+            />
 
-          <SavedVersesSection
-            onAddToJournal={(verse) => openScriptureComposer("journal", "scripture", verse)}
-            onOpenInBible={openVerseInReader}
-            onRemove={(id) => dispatch({ type: "removeSavedVerse", id })}
-            onShareToRoom={(verse) => openScriptureComposer("room", "scripture", verse, "A Scripture for today.")}
-            palette={readerPalette}
-            verses={state.savedVerses}
-          />
+            <SavedVersesSection
+              onAddToJournal={(verse) => openScriptureComposer("journal", "scripture", verse)}
+              onOpenInBible={openVerseInReader}
+              onRemove={(id) => dispatch({ type: "removeSavedVerse", id })}
+              onShareToRoom={(verse) => openScriptureComposer("room", "scripture", verse, "A Scripture for today.")}
+              palette={readerPalette}
+              verses={state.savedVerses}
+            />
 
-          <NextChapterCard
-            nextChapter={nextChapter}
-            onPress={() => nextChapter && jumpToPosition(nextChapter)}
-            palette={readerPalette}
-          />
-        </Animated.View>
-      </ScrollView>
+            <NextChapterCard
+              nextChapter={nextChapter}
+              onPress={() => nextChapter && jumpToPosition(nextChapter)}
+              palette={readerPalette}
+            />
+          </Animated.View>
+        </ScrollView>
+      </View>
 
       <ChapterSwipeIndicator
         direction={chapterSwipeDirection}
