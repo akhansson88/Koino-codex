@@ -645,7 +645,6 @@ export function SettingsScreen() {
                   <Feather name="more-horizontal" size={20} color={colors.ink} />
                 </Pressable>
               </View>
-              {communityMembers.length > 0 ? <AvatarStack users={communityMembers} size={28} /> : null}
             </View>
 
             <HeartPromptCard
