@@ -450,6 +450,22 @@ function SettingsRow({
   tone?: "default" | "danger";
   value?: string;
 }) {
+  const rowSurface =
+    tone === "danger"
+      ? colors.dangerSurface
+      : icon === "users" || icon === "user-plus" || icon === "home"
+        ? colors.semantic.communitySoft
+        : icon === "heart" || icon === "coffee" || icon === "help-circle"
+          ? colors.semantic.warmthSoft
+          : colors.semantic.reflectionSoft;
+  const rowAccent =
+    tone === "danger"
+      ? colors.danger
+      : icon === "users" || icon === "user-plus" || icon === "home"
+        ? colors.text.primary
+        : icon === "heart" || icon === "coffee" || icon === "help-circle"
+          ? colors.text.primary
+          : colors.text.primary;
   const content = (
     <>
       {showDivider ? <View style={{ backgroundColor: colors.line, height: 1, marginLeft: 60 }} /> : null}
@@ -457,7 +473,7 @@ function SettingsRow({
         <View
           style={{
             alignItems: "center",
-            backgroundColor: tone === "danger" ? colors.dangerSurface : colors.accentSubtle,
+            backgroundColor: rowSurface,
             borderColor: tone === "danger" ? colors.dangerBorder : colors.line,
             borderRadius: 999,
             borderWidth: 1,
@@ -466,7 +482,7 @@ function SettingsRow({
             width: 34,
           }}
         >
-          <Feather name={icon} size={17} color={tone === "danger" ? colors.danger : colors.olive} />
+          <Feather name={icon} size={17} color={rowAccent} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: tone === "danger" ? colors.danger : colors.ink, fontSize: 15, fontWeight: "900" }}>{title}</Text>
@@ -492,7 +508,7 @@ function SettingsRow({
 
 function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; memberCount: number; onDetails: () => void }) {
   return (
-    <Card style={{ gap: 14, padding: 16 }}>
+    <Card style={{ backgroundColor: group ? colors.semantic.communitySoft : colors.background.surface, gap: 14, padding: 16 }}>
       {group ? (
         <>
           <Pressable accessibilityRole="button" onPress={onDetails} style={{ alignItems: "center", flexDirection: "row", gap: 13 }}>
@@ -526,12 +542,12 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
 
 function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (value: string) => void; onGive: () => void }) {
   return (
-    <Card style={{ backgroundColor: colors.mossSurface, borderColor: colors.gold, gap: 14 }}>
+    <Card style={{ backgroundColor: colors.semantic.warmthSoft, borderColor: colors.border.soft, gap: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <View
           style={{
             alignItems: "center",
-            backgroundColor: colors.paper,
+            backgroundColor: colors.background.surface,
             borderColor: colors.line,
             borderRadius: 999,
             borderWidth: 1,
@@ -540,7 +556,7 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
             width: 42,
           }}
         >
-          <Feather name="heart" size={19} color={colors.olive} />
+          <Feather name="heart" size={19} color={colors.brand.peach} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Give to KOINO</Text>
@@ -576,7 +592,7 @@ function RoomHeaderCard({
   onInvite: () => void;
 }) {
   return (
-    <Card style={{ gap: 16, padding: 18 }}>
+    <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 16, padding: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
         <RoomImage image={group.image} name={group.name} size={70} />
         <View style={{ flex: 1, gap: 4 }}>
@@ -601,7 +617,7 @@ function RoomHeaderCard({
 
 function JoinSwitchCard({ onBrowse }: { onBrowse: () => void }) {
   return (
-    <Card style={{ gap: 14 }}>
+    <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 14 }}>
       <View style={{ gap: 4 }}>
         <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>Join or switch community</Text>
         <BodyText muted>Join another community or create a new one.</BodyText>
@@ -694,7 +710,7 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.input,
+        backgroundColor: colors.semantic.communitySoft,
         borderColor: colors.line,
         borderRadius: radius.lg,
         borderWidth: 1,
@@ -737,7 +753,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.input,
+        backgroundColor: colors.semantic.communitySoft,
         borderColor: colors.line,
         borderRadius: radius.lg,
         borderWidth: 1,
@@ -757,7 +773,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ backgroundColor: colors.input, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: 14 }}>
+    <View style={{ backgroundColor: colors.background.surface, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: 14 }}>
       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{label}</Text>
       <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{value}</Text>
     </View>

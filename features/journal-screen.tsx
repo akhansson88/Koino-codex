@@ -49,6 +49,13 @@ function journalTypeForKind(kind: EntryKind): JournalEntryType {
   return "reflection";
 }
 
+function journalTypeAccent(type: JournalEntryType) {
+  if (type === "prayer") return colors.semantic.prayer;
+  if (type === "answered_prayer") return colors.semantic.success;
+  if (type === "heart_checkin") return colors.semantic.community;
+  return colors.semantic.reflection;
+}
+
 type DisplayEntry = JournalEntry & { displaySource: string };
 
 export function JournalScreen() {
@@ -301,7 +308,7 @@ export function JournalScreen() {
 function ReflectTodayCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card style={{ gap: 12, padding: 14 }}>
+      <Card style={{ backgroundColor: colors.semantic.reflectionSoft, gap: 12, padding: 14 }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Reflect on today</Text>
@@ -333,7 +340,7 @@ function ReflectionVisual() {
   return (
     <View
       style={{
-        backgroundColor: "#F7E8D6",
+        backgroundColor: colors.semantic.reflectionSoft,
         borderRadius: radius.md,
         height: 112,
         overflow: "hidden",
@@ -341,7 +348,7 @@ function ReflectionVisual() {
     >
       <View
         style={{
-          backgroundColor: "#FFEFD8",
+          backgroundColor: colors.semantic.warmthSoft,
           borderRadius: 999,
           height: 30,
           position: "absolute",
@@ -352,7 +359,7 @@ function ReflectionVisual() {
       />
       <View
         style={{
-          backgroundColor: "#E8D0B4",
+          backgroundColor: colors.brand.lavender,
           borderRadius: 999,
           bottom: -50,
           height: 120,
@@ -363,7 +370,7 @@ function ReflectionVisual() {
       />
       <View
         style={{
-          backgroundColor: "#D7E3C9",
+          backgroundColor: colors.semantic.communitySoft,
           borderRadius: 999,
           bottom: -58,
           height: 118,
@@ -374,7 +381,7 @@ function ReflectionVisual() {
       />
       <View
         style={{
-          backgroundColor: "rgba(255, 255, 255, 0.45)",
+          backgroundColor: colors.background.surface,
           bottom: 18,
           height: 22,
           left: 18,
@@ -415,7 +422,7 @@ function JournalHistoryModal({
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Private journal</Text>
+          <Text style={{ color: colors.semantic.reflection, fontSize: 13, fontWeight: "900" }}>Private journal</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ gap: 6 }}>
@@ -468,6 +475,7 @@ function JournalEntryCard({
   const type = journalEntryTypeFor(entry);
   const typeLabel = journalEntryTypeLabel(entry);
   const mood = heartMoodLabel(entry.heartMood);
+  const accent = journalTypeAccent(type);
 
   return (
     <Card>
@@ -491,9 +499,9 @@ function JournalEntryCard({
                       : "edit-3"
             }
             size={13}
-            color={colors.gold}
+            color={accent}
           />
-          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{typeLabel}</Text>
+          <Text style={{ color: colors.text.primary, fontSize: 12, fontWeight: "900" }}>{typeLabel}</Text>
         </View>
       </View>
       <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>

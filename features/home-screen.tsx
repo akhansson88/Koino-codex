@@ -34,14 +34,14 @@ type FeatherName = ComponentProps<typeof Feather>["name"];
 
 const fallbackPassage = "Philippians 2:1-11";
 
-const moodTone: Record<HeartMood, { background: string; color: string; icon: FeatherName }> = {
-  peaceful: { background: "#E5F0D8", color: "#58712D", icon: "feather" },
-  grateful: { background: "#FFF0DE", color: "#B86B17", icon: "sun" },
-  heavy: { background: "#EEF1F4", color: "#667085", icon: "cloud" },
-  anxious: { background: "#FCE8DF", color: "#C45125", icon: "cloud-rain" },
-  hopeful: { background: "#FFF2C7", color: "#B86B17", icon: "star" },
-  tired: { background: "#ECE5FF", color: "#7253B8", icon: "moon" },
-};
+function moodToneFor(mood: HeartMood): { background: string; color: string; icon: FeatherName } {
+  if (mood === "peaceful" || mood === "grateful" || mood === "hopeful") {
+    return { background: colors.semantic.communitySoft, color: colors.semantic.community, icon: mood === "hopeful" ? "star" : mood === "grateful" ? "sun" : "feather" };
+  }
+  if (mood === "tired") return { background: colors.semantic.reflectionSoft, color: colors.semantic.reflection, icon: "moon" };
+  if (mood === "anxious") return { background: colors.semantic.prayerSoft, color: colors.semantic.prayer, icon: "cloud-rain" };
+  return { background: colors.background.surface, color: colors.text.secondary, icon: "cloud" };
+}
 
 function formatRelativeTime(value: string) {
   const created = Date.parse(value);
@@ -350,7 +350,7 @@ export function HomeScreen() {
         <AppScreen>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
-            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
+            <Text style={{ color: colors.semantic.prayer, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
             <View style={{ width: 38 }} />
           </View>
           <View style={{ gap: 6 }}>
@@ -375,7 +375,7 @@ export function HomeScreen() {
                       <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
                       <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
                     </View>
-                    <Feather name="heart" size={18} color={colors.gold} />
+                    <Feather name="heart" size={18} color={colors.semantic.prayer} />
                   </Card>
                 </Pressable>
               ))}
@@ -394,7 +394,7 @@ export function HomeScreen() {
 function HeartCheckInCard({ checkedIn, onPress }: { checkedIn: boolean; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: 90, padding: 14 }}>
+      <Card style={{ alignItems: "center", backgroundColor: colors.semantic.warmthSoft, flexDirection: "row", gap: 14, minHeight: 90, padding: 14 }}>
         <View style={{ flex: 1, gap: 5 }}>
           <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>How is your heart today?</Text>
           <BodyText muted>{checkedIn ? "You checked in today. You can still pause with God." : "Check in and invite God into your day."}</BodyText>
@@ -402,14 +402,14 @@ function HeartCheckInCard({ checkedIn, onPress }: { checkedIn: boolean; onPress:
         <View
           style={{
             alignItems: "center",
-            backgroundColor: colors.accentSubtle,
+            backgroundColor: colors.background.surface,
             borderRadius: 16,
             height: 56,
             justifyContent: "center",
             width: 56,
           }}
         >
-          <Feather name="plus" size={25} color={colors.olive} />
+          <Feather name="plus" size={25} color={colors.brand.peach} />
         </View>
       </Card>
     </Pressable>
@@ -603,7 +603,7 @@ function CheckInModal({
               <View style={{ gap: 8, marginTop: 8 }}>
                 <SectionHeading>Share with</SectionHeading>
                 <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
-                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+              <Card style={{ alignItems: "center", backgroundColor: share ? colors.semantic.communitySoft : colors.semantic.reflectionSoft, flexDirection: "row", gap: 12, padding: 12 }}>
                     <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
@@ -632,14 +632,14 @@ function CheckInModal({
               <View
                 style={{
                   alignItems: "center",
-                  backgroundColor: colors.accentSubtle,
+                  backgroundColor: colors.semantic.communitySoft,
                   borderRadius: 999,
                   height: 96,
                   justifyContent: "center",
                   width: 96,
                 }}
               >
-                <Feather name="heart" size={42} color={colors.gold} />
+                <Feather name="heart" size={42} color={colors.semantic.success} />
               </View>
               <View style={{ alignItems: "center", gap: 8 }}>
                 <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Check-in shared</Text>
@@ -672,15 +672,16 @@ function MoodOptionCard({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: selected ? colors.accentSubtle : colors.paper,
-          borderColor: selected ? colors.gold : colors.line,
+          backgroundColor: selected ? colors.semantic.warmthSoft : colors.background.surface,
+          borderColor: selected ? colors.border.soft : colors.border.subtle,
           borderRadius: radius.lg,
           borderWidth: 1,
           gap: 10,
           minHeight: 136,
           padding: 12,
           ...platformShadow({
-            boxShadow: "0 8px 18px rgba(11, 18, 32, 0.04)",
+            boxShadow: `0 8px 18px ${colors.shadow.soft}`,
+            color: colors.text.primary,
             offset: { width: 0, height: 8 },
             opacity: 0.04,
             radius: 18,
@@ -698,7 +699,7 @@ function MoodOptionCard({
 }
 
 function MoodIcon({ mood, size = 48 }: { mood: HeartMood; size?: number }) {
-  const tone = moodTone[mood];
+  const tone = moodToneFor(mood);
   return (
     <View
       style={{

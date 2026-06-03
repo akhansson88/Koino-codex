@@ -24,16 +24,19 @@ export function ScriptureRhythmCard({
   reflectLabel?: string;
   rhythmLabel: string;
 }) {
+  const passageSurface = completed ? colors.semantic.communitySoft : colors.semantic.reflectionSoft;
+  const passageAccent = completed ? colors.semantic.success : colors.semantic.scripture;
+
   return (
     <Card style={{ gap: 10, padding: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <Text style={{ color: colors.olive, flex: 1, fontSize: 13, fontWeight: "900" }}>{rhythmLabel}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{progressLabel}</Text>
+        <Text style={{ color: colors.text.primary, flex: 1, fontSize: 13, fontWeight: "900" }}>{rhythmLabel}</Text>
+        <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "800" }}>{progressLabel}</Text>
       </View>
       <View
         style={{
           alignItems: "center",
-          backgroundColor: colors.accentSubtle,
+          backgroundColor: passageSurface,
           borderRadius: radius.sm,
           flexDirection: "row",
           gap: 10,
@@ -41,31 +44,36 @@ export function ScriptureRhythmCard({
           paddingHorizontal: 12,
         }}
       >
-        <Feather name="bookmark" size={17} color={colors.gold} />
-        <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>
+        <Feather name="bookmark" size={17} color={passageAccent} />
+        <Text numberOfLines={1} style={{ color: colors.text.primary, flex: 1, fontSize: 15, fontWeight: "900" }}>
           {passageReference}
         </Text>
       </View>
-      <RhythmRow icon={completed ? "check-circle" : "circle"} label="Read today" onPress={onRead} />
-      <RhythmRow icon="edit-3" label={reflectLabel} onPress={onReflect} />
+      <RhythmRow accent={completed ? "community" : "neutral"} icon={completed ? "check-circle" : "circle"} label="Read today" onPress={onRead} />
+      <RhythmRow accent="reflection" icon="edit-3" label={reflectLabel} onPress={onReflect} />
     </Card>
   );
 }
 
 function RhythmRow({
+  accent = "neutral",
   icon,
   label,
   onPress,
 }: {
+  accent?: "community" | "neutral" | "reflection";
   icon: FeatherName;
   label: string;
   onPress?: () => void;
 }) {
+  const surface =
+    accent === "community" ? colors.semantic.communitySoft : accent === "reflection" ? colors.semantic.reflectionSoft : colors.background.surface;
+  const iconColor = accent === "community" ? colors.semantic.success : accent === "reflection" ? colors.semantic.scripture : colors.text.primary;
   const content = (
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.input,
+        backgroundColor: surface,
         borderRadius: radius.sm,
         flexDirection: "row",
         gap: 10,
@@ -75,8 +83,8 @@ function RhythmRow({
         paddingHorizontal: 12,
       }}
     >
-      <Feather name={icon} size={17} color={colors.olive} />
-      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{label}</Text>
+      <Feather name={icon} size={17} color={iconColor} />
+      <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "900" }}>{label}</Text>
     </View>
   );
 
@@ -103,10 +111,18 @@ export function QuietActionCard({
   title: string;
   tone?: "default" | "accent";
 }>) {
+  const accent =
+    icon === "heart"
+      ? { color: colors.semantic.prayer, surface: colors.semantic.prayerSoft }
+      : icon === "users"
+        ? { color: colors.semantic.community, surface: colors.semantic.communitySoft }
+        : icon === "book-open" || icon === "edit-3"
+          ? { color: colors.semantic.reflection, surface: colors.semantic.reflectionSoft }
+          : { color: colors.brand.peach, surface: colors.semantic.warmthSoft };
   const content = (
     <Card
       style={{
-        backgroundColor: tone === "accent" ? colors.elevated : colors.paper,
+        backgroundColor: tone === "accent" ? colors.semantic.warmthSoft : colors.background.surface,
         gap: 12,
         padding: 14,
       }}
@@ -116,23 +132,23 @@ export function QuietActionCard({
           <View
             style={{
               alignItems: "center",
-              backgroundColor: colors.accentSubtle,
+              backgroundColor: accent.surface,
               borderRadius: 999,
               height: 38,
               justifyContent: "center",
               width: 38,
             }}
           >
-            <Feather name={icon} size={18} color={colors.olive} />
+            <Feather name={icon} size={18} color={accent.color} />
           </View>
         ) : null}
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{title}</Text>
+          <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: "900" }}>{title}</Text>
           <BodyText muted numberOfLines={2}>
             {subtitle}
           </BodyText>
         </View>
-        {onPress ? <Feather name="chevron-right" size={19} color={colors.muted} /> : null}
+        {onPress ? <Feather name="chevron-right" size={19} color={colors.text.secondary} /> : null}
       </View>
       {children}
     </Card>

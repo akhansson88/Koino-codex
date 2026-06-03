@@ -163,6 +163,14 @@ export function FeedDetailScreen() {
   const ownsItem = item.userId === state.currentUserId;
   const actionLabel = isPrayerRequest ? (prayer?.prayed ? "You prayed" : "Pray with this request") : actionLabels[itemKind];
   const actionPastLabel = actionPastLabels[itemKind];
+  const detailAccent =
+    itemKind === "prayer_request"
+      ? colors.semantic.prayer
+      : itemKind === "praise"
+        ? colors.semantic.success
+        : itemKind === "scripture"
+          ? colors.semantic.scripture
+          : colors.semantic.community;
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -181,15 +189,15 @@ export function FeedDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.background.app, flex: 1 }}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
           <Feather name="more-horizontal" size={22} color={colors.ink} />
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-          <Feather name={kindIcon(item)} size={18} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
+          <Feather name={kindIcon(item)} size={18} color={detailAccent} />
+          <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
           <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
@@ -207,21 +215,21 @@ export function FeedDetailScreen() {
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
         {isPrayerRequest ? (
-          <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+          <Card style={{ alignItems: "center", backgroundColor: colors.semantic.prayerSoft, flexDirection: "row", gap: 12, padding: 14 }}>
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
+              <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
             </View>
             <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-              <Text style={{ color: prayerAnswered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{prayerAnswered ? "Answered" : "Open"}</Text>
+              <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "900" }}>{prayerAnswered ? "Answered" : "Open"}</Text>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
             </View>
           </Card>
         ) : null}
         {prayerAnswered ? (
-          <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
-            <Feather name="check-circle" size={20} color={colors.olive} />
+          <Card style={{ alignItems: "center", backgroundColor: colors.semantic.communitySoft, flexDirection: "row", gap: 10, padding: 14 }}>
+            <Feather name="check-circle" size={20} color={colors.semantic.success} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Answered prayer</Text>
               <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</Text>
@@ -257,7 +265,7 @@ export function FeedDetailScreen() {
                       padding: 14,
                     }}
                   >
-                    <Feather name="users" size={18} color={colors.gold} />
+                    <Feather name="users" size={18} color={colors.semantic.prayer} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{activity.name} prayed</Text>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(activity.createdAt)}</Text>
@@ -328,7 +336,7 @@ export function FeedDetailScreen() {
               width: 48,
             }}
           >
-            <Feather name="send" size={22} color={colors.gold} />
+            <Feather name="send" size={22} color={colors.semantic.community} />
           </Pressable>
         </View>
       </AppScreen>
@@ -343,8 +351,8 @@ function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
+        backgroundColor: colors.background.surface,
+        borderColor: colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -354,8 +362,8 @@ function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
         paddingHorizontal: 16,
       }}
     >
-      <Feather name="check-circle" size={18} color={colors.olive} />
-      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>Mark answered</Text>
+      <Feather name="check-circle" size={18} color={colors.text.primary} />
+      <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: "900" }}>Mark answered</Text>
     </Pressable>
   );
 }
