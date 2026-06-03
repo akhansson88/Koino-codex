@@ -359,7 +359,7 @@ function ReflectionVisual() {
       />
       <View
         style={{
-          backgroundColor: colors.brand.lavender,
+          backgroundColor: colors.brand.mistBlue,
           borderRadius: 999,
           bottom: -50,
           height: 120,

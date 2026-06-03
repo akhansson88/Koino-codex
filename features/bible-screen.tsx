@@ -549,7 +549,7 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
   if (theme === "dark") {
     const dark = themes.dark;
     return {
-      accent: dark.brand.lavender,
+      accent: dark.brand.mistBlue,
       background: dark.background.app,
       buttonText: dark.onAccent,
       danger: dark.danger,

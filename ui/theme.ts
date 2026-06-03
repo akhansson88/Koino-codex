@@ -14,7 +14,7 @@ type TextColors = {
 };
 
 type BrandColors = {
-  lavender: string;
+  mistBlue: string;
   sage: string;
   peach: string;
   coral: string;
@@ -89,7 +89,7 @@ const white = "#FFFFFF";
 const charcoal = "#1C1C1C";
 const stone = "#6B6B6B";
 const mutedStone = "#8A8A8A";
-const lavender = "#D8CCF3";
+const mistBlue = "#C9D8E6";
 const sage = "#A6C7B1";
 const peach = "#FFCCB5";
 const coral = "#FF6B5C";
@@ -99,14 +99,15 @@ export const brandPalette = {
   warmWhite,
   charcoal,
   stone,
-  lavender,
+  mistBlue,
   sage,
   peach,
   coral,
   deepNavy: charcoal,
   warmPeach: peach,
-  blushRosa: lavender,
-  lavenderHaze: lavender,
+  lavender: mistBlue,
+  blushRosa: mistBlue,
+  lavenderHaze: mistBlue,
   softCyan: sage,
   offWhite: warmOffWhite,
 } as const;
@@ -124,7 +125,7 @@ const lightTokens: ThemeTokens = {
     inverse: warmWhite,
   },
   brand: {
-    lavender,
+    mistBlue,
     sage,
     peach,
     coral,
@@ -132,14 +133,14 @@ const lightTokens: ThemeTokens = {
   semantic: {
     prayer: coral,
     prayerSoft: "#FFE4DC",
-    reflection: lavender,
-    reflectionSoft: "#F0EAFB",
+    reflection: mistBlue,
+    reflectionSoft: "#EEF4FA",
     community: sage,
     communitySoft: "#E6F0EA",
     warmth: peach,
     warmthSoft: "#FFF0E8",
     success: sage,
-    scripture: lavender,
+    scripture: mistBlue,
   },
   border: {
     subtle: "rgba(28, 28, 28, 0.08)",
@@ -166,7 +167,7 @@ const darkTokens: ThemeTokens = {
     inverse: charcoal,
   },
   brand: {
-    lavender: "#CBBCEB",
+    mistBlue: "#B7C8D9",
     sage: "#9ABAA4",
     peach: "#F4BFA7",
     coral,
@@ -174,14 +175,14 @@ const darkTokens: ThemeTokens = {
   semantic: {
     prayer: coral,
     prayerSoft: "#3A211D",
-    reflection: "#CBBCEB",
-    reflectionSoft: "#2E283A",
+    reflection: "#B7C8D9",
+    reflectionSoft: "#1F2A34",
     community: "#9ABAA4",
     communitySoft: "#203126",
     warmth: "#F4BFA7",
     warmthSoft: "#35251F",
     success: "#9ABAA4",
-    scripture: "#CBBCEB",
+    scripture: "#B7C8D9",
   },
   border: {
     subtle: "rgba(252, 251, 248, 0.12)",
@@ -209,7 +210,7 @@ function withLegacyAliases(tokens: ThemeTokens): ThemeColors {
     clay: tokens.text.secondary,
     gold: tokens.text.primary,
     line: tokens.border.subtle,
-    rose: tokens.brand.lavender,
+    rose: tokens.brand.mistBlue,
     roseSurface: tokens.semantic.reflectionSoft,
     mossSurface: tokens.semantic.communitySoft,
     accentSubtle: tokens.semantic.warmthSoft,
