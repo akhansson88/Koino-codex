@@ -1,6 +1,62 @@
 import { Platform, type ViewStyle } from "react-native";
 
-type ThemeColors = {
+type BackgroundColors = {
+  app: string;
+  surface: string;
+  elevated: string;
+};
+
+type TextColors = {
+  primary: string;
+  secondary: string;
+  muted: string;
+  inverse: string;
+};
+
+type BrandColors = {
+  lavender: string;
+  sage: string;
+  peach: string;
+  coral: string;
+};
+
+type SemanticColors = {
+  prayer: string;
+  prayerSoft: string;
+  reflection: string;
+  reflectionSoft: string;
+  community: string;
+  communitySoft: string;
+  warmth: string;
+  warmthSoft: string;
+  success: string;
+  scripture: string;
+};
+
+type BorderColors = {
+  subtle: string;
+  soft: string;
+};
+
+type ShadowColors = {
+  soft: string;
+};
+
+type OverlayColors = {
+  scrim: string;
+};
+
+type ThemeTokens = {
+  background: BackgroundColors;
+  text: TextColors;
+  brand: BrandColors;
+  semantic: SemanticColors;
+  border: BorderColors;
+  shadow: ShadowColors;
+  overlay: OverlayColors;
+};
+
+type LegacyColorAliases = {
   cream: string;
   paper: string;
   elevated: string;
@@ -25,68 +81,154 @@ type ThemeColors = {
   white: string;
 };
 
+type ThemeColors = ThemeTokens & LegacyColorAliases;
+
+const warmOffWhite = "#F8F6F2";
+const warmWhite = "#FCFBF8";
+const white = "#FFFFFF";
+const charcoal = "#1C1C1C";
+const stone = "#6B6B6B";
+const mutedStone = "#8A8A8A";
+const lavender = "#D8CCF3";
+const sage = "#A6C7B1";
+const peach = "#FFCCB5";
+const coral = "#FF6B5C";
+
 export const brandPalette = {
-  deepNavy: "#0B1220",
-  warmPeach: "#FFC79A",
-  blushRosa: "#F2A7C4",
-  lavenderHaze: "#C5B4E6",
-  softCyan: "#86D8DE",
-  offWhite: "#F3F2EC",
+  warmOffWhite,
+  warmWhite,
+  charcoal,
+  stone,
+  lavender,
+  sage,
+  peach,
+  coral,
+  deepNavy: charcoal,
+  warmPeach: peach,
+  blushRosa: lavender,
+  lavenderHaze: lavender,
+  softCyan: sage,
+  offWhite: warmOffWhite,
 } as const;
 
-const lightTheme: ThemeColors = {
-  cream: "#FAF5EE",
-  paper: "#FFFFFF",
-  elevated: "#FFF9F2",
-  input: "#FFFDF9",
-  ink: brandPalette.deepNavy,
-  muted: "#6F7686",
-  olive: "#A45118",
-  moss: "#E9965F",
-  clay: "#8B4A2F",
-  gold: "#F59A63",
-  line: "#E9D9C8",
-  rose: "#D77C68",
-  roseSurface: "#FCEDE8",
-  mossSurface: "#FFF3EA",
-  accentSubtle: "#FFF4EA",
-  danger: "#B42318",
-  dangerBorder: "#FDA29B",
-  dangerSurface: "#FEF3F2",
-  disabled: "#EDE5DA",
-  disabledText: "#9A9085",
-  onAccent: brandPalette.deepNavy,
-  white: "#FFFFFF",
+const lightTokens: ThemeTokens = {
+  background: {
+    app: warmOffWhite,
+    surface: warmWhite,
+    elevated: white,
+  },
+  text: {
+    primary: charcoal,
+    secondary: stone,
+    muted: mutedStone,
+    inverse: warmWhite,
+  },
+  brand: {
+    lavender,
+    sage,
+    peach,
+    coral,
+  },
+  semantic: {
+    prayer: coral,
+    prayerSoft: "#FFE4DC",
+    reflection: lavender,
+    reflectionSoft: "#F0EAFB",
+    community: sage,
+    communitySoft: "#E6F0EA",
+    warmth: peach,
+    warmthSoft: "#FFF0E8",
+    success: sage,
+    scripture: lavender,
+  },
+  border: {
+    subtle: "rgba(28, 28, 28, 0.08)",
+    soft: "rgba(28, 28, 28, 0.12)",
+  },
+  shadow: {
+    soft: "rgba(28, 28, 28, 0.06)",
+  },
+  overlay: {
+    scrim: "rgba(28, 28, 28, 0.45)",
+  },
 };
+
+const darkTokens: ThemeTokens = {
+  background: {
+    app: "#171615",
+    surface: "#23211E",
+    elevated: "#2D2A26",
+  },
+  text: {
+    primary: warmWhite,
+    secondary: "#C8C3BA",
+    muted: "#9F9A91",
+    inverse: charcoal,
+  },
+  brand: {
+    lavender: "#CBBCEB",
+    sage: "#9ABAA4",
+    peach: "#F4BFA7",
+    coral,
+  },
+  semantic: {
+    prayer: coral,
+    prayerSoft: "#3A211D",
+    reflection: "#CBBCEB",
+    reflectionSoft: "#2E283A",
+    community: "#9ABAA4",
+    communitySoft: "#203126",
+    warmth: "#F4BFA7",
+    warmthSoft: "#35251F",
+    success: "#9ABAA4",
+    scripture: "#CBBCEB",
+  },
+  border: {
+    subtle: "rgba(252, 251, 248, 0.12)",
+    soft: "rgba(252, 251, 248, 0.18)",
+  },
+  shadow: {
+    soft: "rgba(0, 0, 0, 0.28)",
+  },
+  overlay: {
+    scrim: "rgba(0, 0, 0, 0.58)",
+  },
+};
+
+function withLegacyAliases(tokens: ThemeTokens): ThemeColors {
+  return {
+    ...tokens,
+    cream: tokens.background.app,
+    paper: tokens.background.surface,
+    elevated: tokens.background.elevated,
+    input: tokens.background.surface,
+    ink: tokens.text.primary,
+    muted: tokens.text.secondary,
+    olive: tokens.text.primary,
+    moss: tokens.brand.sage,
+    clay: tokens.text.secondary,
+    gold: tokens.text.primary,
+    line: tokens.border.subtle,
+    rose: tokens.brand.lavender,
+    roseSurface: tokens.semantic.reflectionSoft,
+    mossSurface: tokens.semantic.communitySoft,
+    accentSubtle: tokens.semantic.warmthSoft,
+    danger: tokens.background.app === warmOffWhite ? "#B42318" : "#FDA29B",
+    dangerBorder: tokens.background.app === warmOffWhite ? "#FDA29B" : "#7A271A",
+    dangerSurface: tokens.background.app === warmOffWhite ? "#FEF3F2" : "#2A1716",
+    disabled: tokens.background.app === warmOffWhite ? "#E2DED6" : "#393631",
+    disabledText: tokens.text.muted,
+    onAccent: charcoal,
+    white,
+  };
+}
+
+const lightTheme: ThemeColors = withLegacyAliases(lightTokens);
+const darkTheme: ThemeColors = withLegacyAliases(darkTokens);
 
 export type ThemeName = "light" | "dark";
 export type LegacyThemeName = "classic" | "brand";
 export type StoredThemeName = ThemeName | LegacyThemeName;
-
-const darkTheme: ThemeColors = {
-  cream: brandPalette.deepNavy,
-  paper: "#111A2C",
-  elevated: "#172237",
-  input: "#0F192B",
-  ink: brandPalette.offWhite,
-  muted: "#A7B0C0",
-  olive: brandPalette.warmPeach,
-  moss: "#FFB985",
-  clay: "#E99B89",
-  gold: "#F8BE88",
-  line: "#2A3549",
-  rose: "#F0A090",
-  roseSurface: "#33201E",
-  mossSurface: "#342417",
-  accentSubtle: "#3A281C",
-  danger: "#FDA29B",
-  dangerBorder: "#7A271A",
-  dangerSurface: "#2A1716",
-  disabled: "#263145",
-  disabledText: "#7D8797",
-  onAccent: brandPalette.deepNavy,
-  white: brandPalette.offWhite,
-};
 
 export const themes: Record<ThemeName, ThemeColors> = {
   light: lightTheme,
@@ -106,10 +248,7 @@ export function normalizeTheme(theme: string | null | undefined): ThemeName {
 }
 
 export function applyTheme(theme: ThemeName) {
-  const next = themes[theme];
-  for (const key of Object.keys(next) as Array<keyof ThemeColors>) {
-    colors[key] = next[key];
-  }
+  Object.assign(colors, themes[theme]);
 }
 
 export function statusBarStyle(theme: ThemeName): "dark" | "light" {
@@ -131,7 +270,7 @@ export const copy = {
 
 export function platformShadow({
   boxShadow,
-  color = brandPalette.deepNavy,
+  color = brandPalette.charcoal,
   elevation,
   opacity,
   radius,

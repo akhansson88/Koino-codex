@@ -1,11 +1,11 @@
 import { PropsWithChildren } from "react";
 import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
-import { brandPalette, colors, platformShadow, radius } from "@/ui/theme";
+import { colors, platformShadow, radius } from "@/ui/theme";
 
 export function Screen({ children }: PropsWithChildren) {
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
+    <View style={{ flex: 1, backgroundColor: colors.background.app }}>
       {children}
     </View>
   );
@@ -16,13 +16,13 @@ export function Card({
   tone = "paper",
   style,
 }: PropsWithChildren<{ tone?: "paper" | "moss" | "rose"; style?: StyleProp<ViewStyle> }>) {
-  const accentColor = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.line;
+  const accentColor = tone === "moss" ? colors.semantic.community : tone === "rose" ? colors.semantic.reflection : colors.border.subtle;
   return (
     <View
       style={[
         {
-          backgroundColor: colors.paper,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderCurve: "continuous",
           borderRadius: radius.lg,
           borderWidth: 1,
@@ -31,7 +31,8 @@ export function Card({
           gap: 14,
           padding: 18,
           ...platformShadow({
-            boxShadow: "0 4px 12px rgba(11, 18, 32, 0.06)",
+            boxShadow: `0 4px 12px ${colors.shadow.soft}`,
+            color: colors.text.primary,
             elevation: 1,
             offset: { width: 0, height: 4 },
             opacity: 0.06,
@@ -48,7 +49,7 @@ export function Card({
 
 export function Title({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 32, fontWeight: "700", letterSpacing: 0, lineHeight: 39 }}>
+    <Text selectable style={{ color: colors.text.primary, fontSize: 32, fontWeight: "700", letterSpacing: 0, lineHeight: 39 }}>
       {children}
     </Text>
   );
@@ -56,7 +57,7 @@ export function Title({ children }: PropsWithChildren) {
 
 export function SectionTitle({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 19, fontWeight: "700", lineHeight: 25 }}>
+    <Text selectable style={{ color: colors.text.primary, fontSize: 19, fontWeight: "700", lineHeight: 25 }}>
       {children}
     </Text>
   );
@@ -64,7 +65,7 @@ export function SectionTitle({ children }: PropsWithChildren) {
 
 export function Body({ children, muted = false }: PropsWithChildren<{ muted?: boolean }>) {
   return (
-    <Text selectable style={{ color: muted ? colors.muted : colors.ink, fontSize: 16, lineHeight: 23 }}>
+    <Text selectable style={{ color: muted ? colors.text.secondary : colors.text.primary, fontSize: 16, lineHeight: 23 }}>
       {children}
     </Text>
   );
@@ -76,8 +77,8 @@ export function PillButton({
   variant = "primary",
   disabled = false,
 }: PropsWithChildren<{ onPress: () => void; variant?: "primary" | "secondary" | "ghost"; disabled?: boolean }>) {
-  const backgroundColor = variant === "primary" ? colors.gold : variant === "secondary" ? colors.elevated : colors.paper;
-  const color = variant === "primary" ? brandPalette.deepNavy : variant === "secondary" ? colors.ink : colors.olive;
+  const backgroundColor = variant === "primary" ? colors.semantic.prayer : variant === "secondary" ? colors.semantic.warmthSoft : "transparent";
+  const color = variant === "primary" ? colors.onAccent : colors.text.primary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -87,14 +88,15 @@ export function PillButton({
       style={{
         alignItems: "center",
         backgroundColor: disabled ? colors.disabled : backgroundColor,
-        borderColor: variant === "primary" ? colors.gold : colors.line,
+        borderColor: variant === "primary" ? colors.semantic.prayer : colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         minHeight: 48,
         paddingHorizontal: 18,
         paddingVertical: 12,
         ...platformShadow({
-          boxShadow: variant === "primary" && !disabled ? "0 3px 8px rgba(11, 18, 32, 0.08)" : "none",
+          boxShadow: variant === "primary" && !disabled ? `0 3px 8px ${colors.shadow.soft}` : "none",
+          color: colors.text.primary,
           elevation: variant === "primary" && !disabled ? 1 : 0,
           offset: { width: 0, height: 3 },
           opacity: variant === "primary" && !disabled ? 0.08 : 0,
@@ -110,16 +112,16 @@ export function PillButton({
 export function Field(props: TextInputProps) {
   return (
     <TextInput
-      placeholderTextColor={colors.muted}
+      placeholderTextColor={colors.text.secondary}
       {...props}
       style={[
         {
-          backgroundColor: colors.input,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderCurve: "continuous",
           borderRadius: radius.md,
           borderWidth: 1,
-          color: colors.ink,
+          color: colors.text.primary,
           fontSize: 16,
           minHeight: props.multiline ? 112 : 52,
           padding: 14,
@@ -146,15 +148,15 @@ export function Choice({
       accessibilityState={{ selected }}
       onPress={onPress}
       style={{
-        backgroundColor: selected ? colors.accentSubtle : colors.paper,
-        borderColor: selected ? colors.gold : colors.line,
+        backgroundColor: selected ? colors.semantic.warmthSoft : colors.background.surface,
+        borderColor: selected ? colors.border.soft : colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 16,
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? colors.olive : colors.ink, fontWeight: "700" }}>{label}</Text>
+      <Text style={{ color: colors.text.primary, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }

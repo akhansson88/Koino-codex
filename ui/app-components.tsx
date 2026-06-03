@@ -33,11 +33,11 @@ export function AppScreen({
 }: PropsWithChildren<{ scroll?: boolean; topInset?: boolean }>) {
   const insets = useSafeAreaInsets();
   if (!scroll) {
-    return <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>{children}</View>;
+    return <View style={{ backgroundColor: colors.background.app, flex: 1, paddingTop: topInset ? insets.top : 0 }}>{children}</View>;
   }
 
   return (
-    <View style={{ backgroundColor: colors.cream, flex: 1 }}>
+    <View style={{ backgroundColor: colors.background.app, flex: 1 }}>
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
@@ -65,7 +65,7 @@ export function FullScreenModal({
     return (
       <View
         style={{
-          backgroundColor: colors.cream,
+          backgroundColor: colors.background.app,
           bottom: 0,
           left: 0,
           position: webFixedPosition,
@@ -108,7 +108,7 @@ export function AppHeader({
           {showBack ? (
             <IconButton accessibilityLabel="Go back" icon="arrow-left" onPress={onBack ?? (() => router.back())} />
           ) : null}
-          <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
+          <Text style={{ color: colors.text.primary, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <ThemeDots />
@@ -125,11 +125,11 @@ export function AppHeader({
           <RoomImage image={currentRoomImage} name={currentRoomName} size={44} />
           <View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{currentRoomName}</Text>
-              <Feather name="chevron-down" size={16} color={colors.ink} />
+              <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: "900" }}>{currentRoomName}</Text>
+              <Feather name="chevron-down" size={16} color={colors.text.primary} />
             </View>
             {typeof memberCount === "number" ? (
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+              <Text style={{ color: colors.text.secondary, fontSize: 13, fontWeight: "600" }}>
                 {memberCount} {memberCount === 1 ? "member" : "members"}
               </Text>
             ) : null}
@@ -173,13 +173,13 @@ export function CurrentRoomHeader() {
       <RoomImage image={group?.image} name={group?.name} size={44} />
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
+          <Text numberOfLines={1} style={{ color: colors.text.primary, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
             {group?.name ?? "No community"}
           </Text>
-          <Feather name="chevron-down" size={16} color={colors.ink} />
+          <Feather name="chevron-down" size={16} color={colors.text.primary} />
         </View>
         {group ? (
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+          <Text style={{ color: colors.text.secondary, fontSize: 13, fontWeight: "600" }}>
             {memberCount} {memberCount === 1 ? "member" : "members"}
           </Text>
         ) : null}
@@ -199,8 +199,8 @@ function ThemeDots() {
       onPress={() => dispatch({ type: "setTheme", theme: isNight ? "light" : "dark" })}
       style={{
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
+        backgroundColor: colors.background.surface,
+        borderColor: colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -208,15 +208,16 @@ function ThemeDots() {
         height: 34,
         paddingHorizontal: 8,
         ...platformShadow({
-          boxShadow: "0 3px 8px rgba(11, 18, 32, 0.08)",
+          boxShadow: `0 3px 8px ${colors.shadow.soft}`,
+          color: colors.text.primary,
           offset: { width: 0, height: 3 },
           opacity: 0.08,
           radius: 8,
         }),
       }}
     >
-      <Ionicons name="sunny" color={!isNight ? colors.olive : "#B8C0CE"} size={15} />
-      <Ionicons name="moon" color={isNight ? colors.olive : "#B8C0CE"} size={14} />
+      <Ionicons name="sunny" color={!isNight ? colors.text.primary : colors.text.muted} size={15} />
+      <Ionicons name="moon" color={isNight ? colors.text.primary : colors.text.muted} size={14} />
     </Pressable>
   );
 }
@@ -226,15 +227,16 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
     <View
       style={[
         {
-          backgroundColor: colors.paper,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderCurve: "continuous",
           borderRadius: radius.xl,
           borderWidth: 1,
           gap: 14,
           padding: 16,
           ...platformShadow({
-            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+            boxShadow: `0 10px 24px ${colors.shadow.soft}`,
+            color: colors.text.primary,
             offset: { width: 0, height: 10 },
             opacity: 0.055,
             radius: 24,
@@ -269,15 +271,16 @@ export function HeartPromptCard({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
+        backgroundColor: colors.background.surface,
+        borderColor: colors.border.subtle,
         borderRadius: radius.xl,
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
         padding: 14,
         ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+          boxShadow: `0 10px 24px ${colors.shadow.soft}`,
+          color: colors.text.primary,
           offset: { width: 0, height: 10 },
           opacity: 0.055,
           radius: 24,
@@ -286,14 +289,14 @@ export function HeartPromptCard({
     >
       <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-        <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
+        <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
+        <Text style={{ color: colors.text.secondary, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
       </View>
       <View
         style={{
           alignItems: "center",
-          backgroundColor: colors.accentSubtle,
-          borderColor: colors.line,
+          backgroundColor: colors.semantic.warmthSoft,
+          borderColor: colors.border.subtle,
           borderRadius: 999,
           borderWidth: 1,
           flexDirection: "row",
@@ -304,8 +307,8 @@ export function HeartPromptCard({
           paddingHorizontal: actionLabel ? 13 : 0,
         }}
       >
-        <Feather name={actionIcon} size={actionLabel ? 16 : 23} color={colors.olive} />
-        {actionLabel ? <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{actionLabel}</Text> : null}
+        <Feather name={actionIcon} size={actionLabel ? 16 : 23} color={colors.text.primary} />
+        {actionLabel ? <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: "900" }}>{actionLabel}</Text> : null}
       </View>
     </Pressable>
   );
@@ -327,8 +330,8 @@ export function PrimaryButton({
       style={[
         {
           alignItems: "center",
-          backgroundColor: disabled ? colors.disabled : colors.gold,
-          borderColor: disabled ? colors.disabled : colors.gold,
+          backgroundColor: disabled ? colors.disabled : colors.semantic.prayer,
+          borderColor: disabled ? colors.disabled : colors.semantic.prayer,
           borderRadius: 999,
           borderWidth: 1,
           flexDirection: "row",
@@ -360,7 +363,7 @@ export function SecondaryButton({
   style?: StyleProp<ViewStyle>;
   tone?: "default" | "danger";
 }>) {
-  const color = tone === "danger" ? colors.danger : colors.olive;
+  const color = tone === "danger" ? colors.danger : colors.text.primary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -370,8 +373,8 @@ export function SecondaryButton({
       style={[
         {
           alignItems: "center",
-          backgroundColor: colors.paper,
-          borderColor: tone === "danger" ? colors.dangerBorder : colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: tone === "danger" ? colors.dangerBorder : colors.border.subtle,
           borderRadius: 999,
           borderWidth: 1,
           flexDirection: "row",
@@ -392,16 +395,16 @@ export function SecondaryButton({
 export function TextInputField(props: TextInputProps) {
   return (
     <TextInput
-      placeholderTextColor={colors.muted}
+      placeholderTextColor={colors.text.secondary}
       {...props}
       style={[
         {
-          backgroundColor: colors.input,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderCurve: "continuous",
           borderRadius: radius.lg,
           borderWidth: 1,
-          color: colors.ink,
+          color: colors.text.primary,
           fontSize: 16,
           minHeight: props.multiline ? 116 : 50,
           paddingHorizontal: 14,
@@ -433,8 +436,8 @@ export function IconButton({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
+        backgroundColor: colors.background.surface,
+        borderColor: colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         height: 38,
@@ -442,7 +445,7 @@ export function IconButton({
         width: 38,
       }}
     >
-      <Feather name={icon} size={18} color={tone === "danger" ? colors.danger : colors.ink} />
+      <Feather name={icon} size={18} color={tone === "danger" ? colors.danger : colors.text.primary} />
     </Pressable>
   );
 }
@@ -467,8 +470,8 @@ export function FilterChips<T extends string>({
             key={option.value}
             onPress={() => onChange(option.value)}
             style={{
-              backgroundColor: selected ? colors.accentSubtle : colors.paper,
-              borderColor: selected ? colors.gold : colors.line,
+              backgroundColor: selected ? colors.semantic.warmthSoft : colors.background.surface,
+              borderColor: selected ? colors.border.soft : colors.border.subtle,
               borderRadius: 999,
               borderWidth: 1,
               minHeight: 36,
@@ -476,7 +479,7 @@ export function FilterChips<T extends string>({
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: selected ? colors.olive : colors.muted, fontSize: 14, fontWeight: "800" }}>{option.label}</Text>
+            <Text style={{ color: selected ? colors.text.primary : colors.text.secondary, fontSize: 14, fontWeight: "800" }}>{option.label}</Text>
           </Pressable>
         );
       })}
@@ -512,7 +515,7 @@ export function Avatar({
       style={{
         alignItems: "center",
         backgroundColor: palette[0],
-        borderColor: colors.line,
+        borderColor: colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         height: size,
@@ -547,8 +550,8 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
     return (
       <View
         style={{
-          backgroundColor: colors.input,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderRadius: 999,
           borderWidth: 1,
           height: size,
@@ -612,7 +615,7 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
-  const verseTextStyle: TextStyle = { color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
+  const verseTextStyle: TextStyle = { color: colors.text.primary, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
   return (
     <>
       <Pressable
@@ -624,8 +627,8 @@ export function VersePreviewCard({
         }}
         style={{
           alignItems: compact ? "flex-start" : "center",
-          backgroundColor: colors.input,
-          borderColor: colors.line,
+          backgroundColor: colors.background.surface,
+          borderColor: colors.border.subtle,
           borderRadius: radius.lg,
           borderWidth: 1,
           flexDirection: "row",
@@ -633,13 +636,13 @@ export function VersePreviewCard({
           padding: compact ? 12 : 14,
         }}
       >
-        <Ionicons name="sunny-outline" size={20} color={colors.olive} />
+        <Ionicons name="sunny-outline" size={20} color={colors.text.primary} />
         <View style={{ flex: 1, gap: 4 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
+            <Text numberOfLines={1} style={{ color: colors.text.primary, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
               {displayVerse.reference}
             </Text>
-            {displayVerse.translation ? <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
+            {displayVerse.translation ? <Text style={{ color: colors.text.secondary, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
           </View>
           {showFullText ? (
             <ExpandableBodyText collapsedLines={compact ? 3 : 5} style={verseTextStyle}>
@@ -650,7 +653,7 @@ export function VersePreviewCard({
               {displayVerse.text}
             </Text>
           )}
-          {showOpenIndicator ? <Text style={{ color: colors.gold, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}
+          {showOpenIndicator ? <Text style={{ color: colors.text.primary, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}
         </View>
       </Pressable>
       <VerseDetailSheet
@@ -775,13 +778,13 @@ export function VerseDetailSheet({
   return (
     <BottomSheet title={verse.reference} visible={visible} onClose={onClose}>
       <View style={{ gap: 6 }}>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900" }}>{verse.translation ?? "Bible"}</Text>
-        <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "800", lineHeight: 26 }}>
+        <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "900" }}>{verse.translation ?? "Bible"}</Text>
+        <Text selectable style={{ color: colors.text.primary, fontSize: 17, fontWeight: "800", lineHeight: 26 }}>
           {verse.text}
         </Text>
       </View>
       {verse.contextBefore || verse.contextAfter ? (
-        <Card style={{ backgroundColor: colors.cream }}>
+        <Card style={{ backgroundColor: colors.background.app }}>
           {verse.contextBefore ? <BodyText muted>{verse.contextBefore}</BodyText> : null}
           {verse.contextAfter ? <BodyText muted>{verse.contextAfter}</BodyText> : null}
         </Card>
@@ -804,7 +807,7 @@ export function VerseDetailSheet({
 
 export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: boolean }>) {
   return (
-    <Text style={{ color: muted ? colors.muted : colors.ink, fontSize: muted ? 12 : 18, fontWeight: "900", textTransform: muted ? "uppercase" : "none" }}>
+    <Text style={{ color: muted ? colors.text.secondary : colors.text.primary, fontSize: muted ? 12 : 18, fontWeight: "900", textTransform: muted ? "uppercase" : "none" }}>
       {children}
     </Text>
   );
@@ -822,7 +825,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
                 event.stopPropagation();
                 void openLinkInApp(part.url ?? "");
               }}
-              style={{ color: muted ? colors.olive : colors.gold, fontWeight: "900", textDecorationLine: "underline" }}
+              style={{ color: colors.text.primary, fontWeight: "900", textDecorationLine: "underline" }}
             >
               {part.text}
             </Text>
@@ -833,7 +836,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
       : children;
 
   return (
-    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
+    <Text {...props} style={[{ color: muted ? colors.text.secondary : colors.text.primary, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
       {content}
     </Text>
   );
@@ -900,8 +903,8 @@ export function ExpandableBodyText({
           }}
           style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: 28 }}
         >
-          <Text style={{ color: muted ? colors.muted : colors.olive, fontSize: 13, fontWeight: "900" }}>{expanded ? "Show less" : "Show more"}</Text>
-          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
+          <Text style={{ color: muted ? colors.text.secondary : colors.text.primary, fontSize: 13, fontWeight: "900" }}>{expanded ? "Show less" : "Show more"}</Text>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.text.secondary : colors.text.primary} />
         </Pressable>
       ) : null}
     </View>
@@ -916,9 +919,9 @@ export function Row({
 }: PropsWithChildren<{ icon?: FeatherName; onPress?: () => void; tone?: "default" | "danger" }>) {
   const content: ReactNode = (
     <>
-      {icon ? <Feather name={icon} size={19} color={tone === "danger" ? colors.danger : colors.ink} /> : null}
+      {icon ? <Feather name={icon} size={19} color={tone === "danger" ? colors.danger : colors.text.primary} /> : null}
       <View style={{ flex: 1 }}>{children}</View>
-      {onPress ? <Feather name="chevron-right" size={18} color={colors.muted} /> : null}
+      {onPress ? <Feather name="chevron-right" size={18} color={colors.text.secondary} /> : null}
     </>
   );
   if (!onPress) {
@@ -941,11 +944,11 @@ export function BottomSheet({
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <View style={{ backgroundColor: "rgba(11, 18, 32, 0.45)", flex: 1, justifyContent: "flex-end" }}>
+        <View style={{ backgroundColor: colors.overlay.scrim, flex: 1, justifyContent: "flex-end" }}>
           <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
           <View
             style={{
-              backgroundColor: colors.paper,
+              backgroundColor: colors.background.surface,
               borderTopLeftRadius: radius.xxl,
               borderTopRightRadius: radius.xxl,
               gap: 16,
@@ -953,7 +956,8 @@ export function BottomSheet({
               padding: 18,
               paddingBottom: Math.max(24, insets.bottom + 14),
               ...platformShadow({
-                boxShadow: "0 -12px 30px rgba(11, 18, 32, 0.18)",
+                boxShadow: `0 -12px 30px ${colors.shadow.soft}`,
+                color: colors.text.primary,
                 offset: { width: 0, height: -12 },
                 opacity: 0.18,
                 radius: 30,
@@ -961,9 +965,9 @@ export function BottomSheet({
             }}
           >
             <View style={{ alignItems: "center" }}>
-              <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
+              <View style={{ backgroundColor: colors.border.subtle, borderRadius: 999, height: 4, width: 44 }} />
             </View>
-            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{title}</Text>
+            <Text style={{ color: colors.text.primary, fontSize: 20, fontWeight: "900" }}>{title}</Text>
             {children}
           </View>
         </View>

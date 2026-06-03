@@ -20,14 +20,14 @@ function RootNavigator() {
 
   return (
     <>
-      <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.cream} />
+      <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.background.app} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.cream },
-          headerTintColor: colors.ink,
+          headerStyle: { backgroundColor: colors.background.app },
+          headerTintColor: colors.text.primary,
           headerShadowVisible: false,
-          headerTitleStyle: { color: colors.ink, fontWeight: "700" },
-          contentStyle: { backgroundColor: colors.cream },
+          headerTitleStyle: { color: colors.text.primary, fontWeight: "700" },
+          contentStyle: { backgroundColor: colors.background.app },
           gestureEnabled: enableNativeBackGesture,
         }}
       >
