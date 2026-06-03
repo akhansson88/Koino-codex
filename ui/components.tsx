@@ -3,6 +3,27 @@ import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle 
 
 import { colors, platformShadow, radius } from "@/ui/theme";
 
+type ChoiceTone = "reflection" | "scripture" | "prayer" | "community" | "checkin" | "warmth" | "neutral";
+
+function choiceToneColors(tone?: ChoiceTone) {
+  if (tone === "reflection" || tone === "scripture") {
+    return { background: colors.semantic.reflectionSoft, border: colors.border.soft, text: colors.text.primary };
+  }
+  if (tone === "prayer") {
+    return { background: colors.semantic.prayerSoft, border: colors.border.soft, text: colors.text.primary };
+  }
+  if (tone === "community" || tone === "checkin") {
+    return { background: colors.semantic.communitySoft, border: colors.border.soft, text: colors.text.primary };
+  }
+  if (tone === "warmth") {
+    return { background: colors.semantic.warmthSoft, border: colors.border.soft, text: colors.text.primary };
+  }
+  if (tone === "neutral") {
+    return { background: colors.background.surface, border: colors.border.subtle, text: colors.text.primary };
+  }
+  return { background: colors.semantic.warmthSoft, border: colors.border.soft, text: colors.text.primary };
+}
+
 export function Screen({ children }: PropsWithChildren) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.app }}>
@@ -137,26 +158,29 @@ export function Choice({
   label,
   selected,
   onPress,
+  tone,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  tone?: ChoiceTone;
 }) {
+  const toneColors = choiceToneColors(tone);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
       style={{
-        backgroundColor: selected ? colors.semantic.warmthSoft : colors.background.surface,
-        borderColor: selected ? colors.border.soft : colors.border.subtle,
+        backgroundColor: selected ? toneColors.background : colors.background.surface,
+        borderColor: selected ? toneColors.border : colors.border.subtle,
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 16,
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: colors.text.primary, fontWeight: "700" }}>{label}</Text>
+      <Text style={{ color: selected ? toneColors.text : colors.text.primary, fontWeight: "700" }}>{label}</Text>
     </Pressable>
   );
 }

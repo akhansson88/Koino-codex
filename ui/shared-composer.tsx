@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
-import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
+import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField, type SemanticTone } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
 import { colors } from "@/ui/theme";
 
@@ -35,6 +35,20 @@ function composerAccent(kind: EntryKind, entryVisibility: EntryVisibility) {
   if (kind === "praise") return { accent: colors.semantic.success, surface: colors.semantic.communitySoft };
   if (entryVisibility === visibility.room) return { accent: colors.semantic.community, surface: colors.semantic.communitySoft };
   return { accent: colors.semantic.reflection, surface: colors.semantic.reflectionSoft };
+}
+
+function toneForEntryKind(kind: EntryKind): SemanticTone {
+  if (kind === "prayer_request") return "prayer";
+  if (kind === "scripture") return "scripture";
+  if (kind === "praise") return "community";
+  if (kind === "update") return "neutral";
+  return "reflection";
+}
+
+function submitTone(kind: EntryKind, entryVisibility: EntryVisibility) {
+  if (kind === "prayer_request") return "prayer";
+  if (kind === "praise" || entryVisibility === visibility.room) return "community";
+  return "neutral";
 }
 
 export function SharedComposer({
@@ -93,7 +107,7 @@ export function SharedComposer({
           <FilterChips
             value={kind}
             onChange={onKind}
-            options={typeOptions.map((type) => ({ label: type.composerLabel, value: type.value }))}
+            options={typeOptions.map((type) => ({ label: type.composerLabel, tone: toneForEntryKind(type.value), value: type.value }))}
           />
         </View>
 
@@ -131,8 +145,8 @@ export function SharedComposer({
               value={entryVisibility}
               onChange={onVisibility}
               options={[
-                { label: "Private", value: visibility.private },
-                { label: "Share with community", value: visibility.room },
+                { label: "Private", tone: "neutral", value: visibility.private },
+                { label: "Share with community", tone: "community", value: visibility.room },
               ]}
             />
           ) : null}
@@ -156,7 +170,7 @@ export function SharedComposer({
           </Pressable>
         </View>
 
-        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit}>
+        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit} tone={submitTone(kind, entryVisibility)}>
           {actionLabel}
         </PrimaryButton>
       </AppScreen>

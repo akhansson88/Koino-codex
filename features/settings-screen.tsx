@@ -34,6 +34,7 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
+  type SemanticTone,
 } from "@/ui/app-components";
 import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
@@ -48,6 +49,20 @@ type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "c
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
+
+function roomTabTone(value: RoomDetailTab): SemanticTone {
+  if (value === "reflections") return "reflection";
+  if (value === "prayer") return "prayer";
+  if (value === "checkins") return "checkin";
+  if (value === "members") return "community";
+  return "neutral";
+}
+
+function prayerFilterTone(value: PrayerFilter): SemanticTone {
+  if (value === "open") return "prayer";
+  if (value === "answered") return "community";
+  return "neutral";
+}
 
 function memberLabel(count: number) {
   return `${count} ${count === 1 ? "member" : "members"}`;
@@ -659,14 +674,14 @@ export function SettingsScreen() {
             <FilterChips
               value={detailTab}
               onChange={handleCommunityTabChange}
-              options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
+              options={roomTabs.map((tab) => ({ label: tab.label, tone: roomTabTone(tab.value), value: tab.value }))}
             />
 
             {detailTab === "reflections" ? (
               <View style={{ gap: 12 }}>
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
                   <SectionHeading>Reflections</SectionHeading>
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }} tone="community">
                     Share
                   </PrimaryButton>
                 </View>
@@ -831,7 +846,7 @@ export function SettingsScreen() {
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Community code</Text>
                   <RoomCodeCopy code={group.inviteCode} />
                 </View>
-                <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
+                <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }} tone="community">
                   Invite
                 </PrimaryButton>
               </View>
@@ -845,7 +860,7 @@ export function SettingsScreen() {
             <>
               <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>No community selected</Text>
               <BodyText muted>Join or create a community for the people you pray with.</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)}>
+              <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)} tone="community">
                 Join or create community
               </PrimaryButton>
             </>
@@ -923,7 +938,7 @@ export function SettingsScreen() {
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a community code</Text>
           <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Community code" returnKeyType="join" />
-          <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
+          <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom} tone="community">
             Join by code
           </PrimaryButton>
         </View>
@@ -935,7 +950,7 @@ export function SettingsScreen() {
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new community</Text>
           <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New community name" returnKeyType="done" />
-          <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
+          <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom} tone="community">
             Create new community
           </PrimaryButton>
         </View>
@@ -1125,7 +1140,7 @@ function CommunityPrayerScreen({
         <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Prayer</Text>
         <BodyText muted>Hold requests with care, pray with intention, and return with encouragement.</BodyText>
       </View>
-      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
+      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, tone: prayerFilterTone(item.value), value: item.value }))} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
         <BodyText muted>{prayerRequests.length} {countLabel} {prayerRequests.length === 1 ? "request" : "requests"}</BodyText>
         <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
@@ -1343,7 +1358,7 @@ function CommunityCheckInsScreen({
       <Card style={{ backgroundColor: colors.semantic.communitySoft }}>
         <SectionHeading>This week's check-in</SectionHeading>
         <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
-        <PrimaryButton icon="edit-3" onPress={onCheckIn}>
+        <PrimaryButton icon="edit-3" onPress={onCheckIn} tone="community">
           Check in now
         </PrimaryButton>
       </Card>
@@ -1435,7 +1450,7 @@ function CommunityCheckInComposerScreen({
         <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
       </View>
       <BibleVerseField verses={verses} onChange={onVerses} />
-      <PrimaryButton icon="send" onPress={onSubmit}>
+      <PrimaryButton icon="send" onPress={onSubmit} tone="community">
         Share check-in
       </PrimaryButton>
     </AppScreen>
@@ -1606,7 +1621,7 @@ function MembersPanel({
           );
         })}
       </Card>
-      <PrimaryButton icon="share-2" onPress={onInvite}>
+      <PrimaryButton icon="share-2" onPress={onInvite} tone="community">
         Invite members
       </PrimaryButton>
       <Card>

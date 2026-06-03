@@ -615,7 +615,7 @@ function CheckInModal({
                   </Card>
                 </Pressable>
               </View>
-              <PrimaryButton icon="send" onPress={onSubmit} style={{ minHeight: 58 }}>
+              <PrimaryButton icon="send" onPress={onSubmit} style={{ minHeight: 58 }} tone={share ? "community" : "neutral"}>
                 {share ? "Share check-in" : "Save privately"}
               </PrimaryButton>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
@@ -647,7 +647,7 @@ function CheckInModal({
                   Thank you for taking a quiet moment with God.
                 </BodyText>
               </View>
-              <PrimaryButton onPress={onDone} style={{ alignSelf: "stretch" }}>
+              <PrimaryButton onPress={onDone} style={{ alignSelf: "stretch" }} tone="community">
                 Done
               </PrimaryButton>
             </View>

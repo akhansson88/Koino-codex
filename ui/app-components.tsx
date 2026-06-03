@@ -314,13 +314,79 @@ export function HeartPromptCard({
   );
 }
 
+export type SemanticTone = "reflection" | "scripture" | "prayer" | "community" | "checkin" | "warmth" | "neutral";
+
+function semanticToneColors(tone?: SemanticTone) {
+  if (tone === "reflection" || tone === "scripture") {
+    return {
+      accent: colors.semantic.reflection,
+      background: colors.semantic.reflectionSoft,
+      border: colors.border.soft,
+      text: colors.text.primary,
+    };
+  }
+  if (tone === "prayer") {
+    return {
+      accent: colors.semantic.prayer,
+      background: colors.semantic.prayerSoft,
+      border: colors.border.soft,
+      text: colors.text.primary,
+    };
+  }
+  if (tone === "community" || tone === "checkin") {
+    return {
+      accent: colors.semantic.community,
+      background: colors.semantic.communitySoft,
+      border: colors.border.soft,
+      text: colors.text.primary,
+    };
+  }
+  if (tone === "warmth") {
+    return {
+      accent: colors.semantic.warmth,
+      background: colors.semantic.warmthSoft,
+      border: colors.border.soft,
+      text: colors.text.primary,
+    };
+  }
+  if (tone === "neutral") {
+    return {
+      accent: colors.text.primary,
+      background: colors.background.surface,
+      border: colors.border.subtle,
+      text: colors.text.primary,
+    };
+  }
+  return {
+    accent: colors.text.primary,
+    background: colors.semantic.warmthSoft,
+    border: colors.border.soft,
+    text: colors.text.primary,
+  };
+}
+
+function primaryButtonToneColors(tone: "prayer" | "community" | "warmth" | "neutral") {
+  if (tone === "community") return { background: colors.semantic.community, border: colors.semantic.community, text: colors.text.primary };
+  if (tone === "warmth") return { background: colors.semantic.warmth, border: colors.semantic.warmth, text: colors.text.primary };
+  if (tone === "neutral") return { background: colors.background.surface, border: colors.border.subtle, text: colors.text.primary };
+  return { background: colors.semantic.prayer, border: colors.semantic.prayer, text: colors.onAccent };
+}
+
 export function PrimaryButton({
   children,
   disabled = false,
   icon,
   onPress,
   style,
-}: PropsWithChildren<{ disabled?: boolean; icon?: FeatherName; onPress: () => void; style?: StyleProp<ViewStyle> }>) {
+  tone = "prayer",
+}: PropsWithChildren<{
+  disabled?: boolean;
+  icon?: FeatherName;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+  tone?: "prayer" | "community" | "warmth" | "neutral";
+}>) {
+  const toneColors = primaryButtonToneColors(tone);
   return (
     <Pressable
       accessibilityRole="button"
@@ -330,8 +396,8 @@ export function PrimaryButton({
       style={[
         {
           alignItems: "center",
-          backgroundColor: disabled ? colors.disabled : colors.semantic.prayer,
-          borderColor: disabled ? colors.disabled : colors.semantic.prayer,
+          backgroundColor: disabled ? colors.disabled : toneColors.background,
+          borderColor: disabled ? colors.disabled : toneColors.border,
           borderRadius: 999,
           borderWidth: 1,
           flexDirection: "row",
@@ -343,8 +409,8 @@ export function PrimaryButton({
         style,
       ]}
     >
-      {icon ? <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} /> : null}
-      <Text style={{ color: disabled ? colors.disabledText : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{children}</Text>
+      {icon ? <Feather name={icon} size={19} color={disabled ? colors.disabledText : toneColors.text} /> : null}
+      <Text style={{ color: disabled ? colors.disabledText : toneColors.text, fontSize: 16, fontWeight: "900" }}>{children}</Text>
     </Pressable>
   );
 }
@@ -455,7 +521,7 @@ export function FilterChips<T extends string>({
   value,
   onChange,
 }: {
-  options: { label: string; value: T }[];
+  options: { label: string; tone?: SemanticTone; value: T }[];
   value: T;
   onChange: (value: T) => void;
 }) {
@@ -463,6 +529,7 @@ export function FilterChips<T extends string>({
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
       {options.map((option) => {
         const selected = option.value === value;
+        const toneColors = semanticToneColors(option.tone);
         return (
           <Pressable
             accessibilityRole="button"
@@ -470,8 +537,8 @@ export function FilterChips<T extends string>({
             key={option.value}
             onPress={() => onChange(option.value)}
             style={{
-              backgroundColor: selected ? colors.semantic.warmthSoft : colors.background.surface,
-              borderColor: selected ? colors.border.soft : colors.border.subtle,
+              backgroundColor: selected ? toneColors.background : colors.background.surface,
+              borderColor: selected ? toneColors.border : colors.border.subtle,
               borderRadius: 999,
               borderWidth: 1,
               minHeight: 36,
@@ -479,7 +546,7 @@ export function FilterChips<T extends string>({
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: selected ? colors.text.primary : colors.text.secondary, fontSize: 14, fontWeight: "800" }}>{option.label}</Text>
+            <Text style={{ color: selected ? toneColors.text : colors.text.secondary, fontSize: 14, fontWeight: "800" }}>{option.label}</Text>
           </Pressable>
         );
       })}

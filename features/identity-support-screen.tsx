@@ -261,7 +261,7 @@ export function IdentitySupportScreen() {
 
       <BottomSheet title="Password & security" visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
         <BodyText muted>Password reset links are sent to your account email.</BodyText>
-        <PrimaryButton icon="mail" onPress={handleSendPasswordReset}>
+        <PrimaryButton icon="mail" onPress={handleSendPasswordReset} tone="neutral">
           Send reset link
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}
@@ -377,7 +377,7 @@ export function RoomDetailsScreen() {
             <Card>
               <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>No community selected</Text>
               <BodyText muted>Join or create a community for the people you pray with.</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)}>
+              <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)} tone="community">
                 Browse communities
               </PrimaryButton>
             </Card>
@@ -399,7 +399,7 @@ export function RoomDetailsScreen() {
           placeholder="Community name"
           returnKeyType="done"
         />
-        <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom}>
+        <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom} tone="community">
           Save community name
         </PrimaryButton>
       </BottomSheet>
@@ -542,7 +542,7 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
 
 function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (value: string) => void; onGive: () => void }) {
   return (
-    <Card style={{ backgroundColor: colors.semantic.warmthSoft, borderColor: colors.border.soft, gap: 14 }}>
+    <Card style={{ backgroundColor: colors.background.surface, borderColor: colors.border.subtle, gap: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <View
           style={{
@@ -556,7 +556,7 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
             width: 42,
           }}
         >
-          <Feather name="heart" size={19} color={colors.brand.peach} />
+          <Feather name="heart" size={19} color={colors.text.primary} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Give to KOINO</Text>
@@ -567,13 +567,13 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
         value={amount}
         onChange={onAmount}
         options={[
-          { label: "10 kr", value: "10" },
-          { label: "25 kr", value: "25" },
-          { label: "50 kr", value: "50" },
-          { label: "Custom", value: "custom" },
+          { label: "10 kr", tone: "neutral", value: "10" },
+          { label: "25 kr", tone: "neutral", value: "25" },
+          { label: "50 kr", tone: "neutral", value: "50" },
+          { label: "Custom", tone: "neutral", value: "custom" },
         ]}
       />
-      <PrimaryButton icon="heart" onPress={onGive}>
+      <PrimaryButton icon="heart" onPress={onGive} tone="warmth">
         Give
       </PrimaryButton>
     </Card>
@@ -607,7 +607,7 @@ function RoomHeaderCard({
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </View>
-      <PrimaryButton icon="share-2" onPress={onInvite}>
+      <PrimaryButton icon="share-2" onPress={onInvite} tone="community">
         Invite members
       </PrimaryButton>
       {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{inviteMessage}</Text> : null}
@@ -688,7 +688,7 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
           placeholder="Community code"
           returnKeyType="join"
         />
-        <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom}>
+        <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom} tone="community">
           Join community
         </PrimaryButton>
       </View>
