@@ -441,10 +441,12 @@ export function SettingsScreen() {
     try {
       if (!group || !ownsGroup) return;
 
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setRoomImageMessage("Photo library permission is needed to choose a community image.");
-        return;
+      if (Platform.OS !== "web") {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setRoomImageMessage("Photo library permission is needed to choose a community image.");
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({

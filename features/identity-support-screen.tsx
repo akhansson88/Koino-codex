@@ -82,14 +82,26 @@ export function IdentitySupportScreen() {
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
   const themeLabel = state.theme === "dark" ? "Night" : "Light";
 
+  function openAvatarCropper(source: RoomImageCropSource) {
+    if (Platform.OS === "web") {
+      setAvatarCropSource(source);
+      return;
+    }
+
+    setActiveSheet(undefined);
+    setTimeout(() => setAvatarCropSource(source), Platform.OS === "ios" ? 500 : 250);
+  }
+
   async function handleChooseAvatar() {
     setAvatarMessage("");
 
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setAvatarMessage("Photo library permission is needed to choose a profile image.");
-        return;
+      if (Platform.OS !== "web") {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setAvatarMessage("Photo library permission is needed to choose a profile image.");
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -106,7 +118,7 @@ export function IdentitySupportScreen() {
       }
 
       const size = await selectedImageSize(asset);
-      setAvatarCropSource({ ...size, uri: asset.uri });
+      openAvatarCropper({ ...size, uri: asset.uri });
     } catch {
       setAvatarMessage("Could not open that image.");
     }
