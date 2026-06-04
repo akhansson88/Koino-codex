@@ -192,6 +192,9 @@ export type PrayerReaction = {
   userId: Id;
   targetType: PrayerReactionTargetType;
   targetId: Id;
+  startedAt?: string;
+  completedAt?: string;
+  durationSeconds?: number;
   createdAt: string;
 };
 

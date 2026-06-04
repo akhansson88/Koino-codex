@@ -1237,12 +1237,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
 
               if (action.status === "completed" && action.targetType !== "journal_entry" && action.targetType !== "user" && profile?.currentGroupId) {
-                const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
+                const reactionId = session.id;
                 const reaction: PrayerReaction = {
                   id: reactionId,
                   userId: firebaseUser.uid,
                   targetType: action.targetType,
                   targetId: action.targetId,
+                  startedAt: action.startedAt,
+                  completedAt,
+                  durationSeconds,
                   createdAt: completedAt,
                 };
                 await set(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`), reaction);

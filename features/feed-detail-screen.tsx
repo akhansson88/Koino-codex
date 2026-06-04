@@ -28,6 +28,8 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
+import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
+import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
 const MAX_REPLY_LENGTH = 500;
@@ -36,16 +38,12 @@ function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function formatRelativeTime(value: string) {
-  const created = Date.parse(value);
-  if (Number.isNaN(created)) return "";
-  const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
-  if (seconds < 60) return "just now";
+function formatPrayerDuration(seconds?: number) {
+  if (seconds === undefined) return "Duration unavailable";
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+  const remainder = seconds % 60;
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function kindLabel(item: FeedItem) {
@@ -73,6 +71,7 @@ export function FeedDetailScreen() {
   const navigation = useNavigation();
   const [replyDraft, setReplyDraft] = useState("");
   const [allowRemove, setAllowRemove] = useState(false);
+  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const item = useMemo<FeedItem | undefined>(() => {
@@ -117,7 +116,7 @@ export function FeedDetailScreen() {
     const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
-      count: prayedByUserIds.length,
+      count: reactions.length,
       prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
       activity: reactions
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
@@ -125,6 +124,9 @@ export function FeedDetailScreen() {
           id: reaction.id,
           name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
           createdAt: reaction.createdAt,
+          durationSeconds:
+            reaction.durationSeconds ??
+            (reaction.startedAt && reaction.completedAt ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000)) : undefined),
         })),
     };
   }, [item, state.currentUserId, state.prayerReactions, targetType, userById, userImageById]);
@@ -161,7 +163,7 @@ export function FeedDetailScreen() {
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
-  const actionLabel = isPrayerRequest ? (prayer?.prayed ? "You prayed" : "Pray with this request") : actionLabels[itemKind];
+  const actionLabel = isPrayerRequest ? "Pray" : actionLabels[itemKind];
   const actionPastLabel = actionPastLabels[itemKind];
   const detailAccent =
     itemKind === "prayer_request"
@@ -181,8 +183,8 @@ export function FeedDetailScreen() {
 
   function togglePrayer() {
     if (!item || !targetType) return;
-    if (prayer?.prayed) {
-      dispatch({ type: "unpray", targetType, targetId: item.id });
+    if (isPrayerRequest) {
+      setPrayerTarget({ targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
       return;
     }
     dispatch({ type: "finishPrayer", targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
@@ -236,7 +238,7 @@ export function FeedDetailScreen() {
             </View>
           </Card>
         ) : (
-          <PrimaryButton disabled={isPrayerRequest && prayer?.prayed} icon={isPrayerRequest ? "users" : "heart"} onPress={togglePrayer} style={{ minHeight: 58 }}>
+          <PrimaryButton icon={isPrayerRequest ? "users" : "heart"} onPress={togglePrayer} style={{ minHeight: 58 }}>
             {actionLabel}
           </PrimaryButton>
         )}
@@ -245,7 +247,9 @@ export function FeedDetailScreen() {
         ) : null}
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-            {actionPastLabel} by {prayer?.count ?? 0} {(prayer?.count ?? 0) === 1 ? "member" : "members"}
+            {isPrayerRequest
+              ? `${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`
+              : `${actionPastLabel} by ${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "member" : "members"}`}
           </Text>
           {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
         </View>
@@ -268,7 +272,9 @@ export function FeedDetailScreen() {
                     <Feather name="users" size={18} color={colors.semantic.prayer} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{activity.name} prayed</Text>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(activity.createdAt)}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                        {formatRelativeTime(activity.createdAt)} - {formatPrayerDuration(activity.durationSeconds)}
+                      </Text>
                     </View>
                   </View>
                 ))
@@ -340,6 +346,23 @@ export function FeedDetailScreen() {
           </Pressable>
         </View>
       </AppScreen>
+      <PrayerMoment
+        target={prayerTarget}
+        onClose={() => setPrayerTarget(undefined)}
+        onFinish={(status, startedAt) => {
+          if (prayerTarget) {
+            dispatch({
+              type: "finishPrayer",
+              targetType: prayerTarget.targetType,
+              targetId: prayerTarget.targetId,
+              status,
+              startedAt,
+              recipientUserId: prayerTarget.recipientUserId,
+            });
+          }
+          setPrayerTarget(undefined);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

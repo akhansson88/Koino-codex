@@ -19,22 +19,11 @@ import {
   ExpandableBodyText,
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
+import { formatRelativeTime } from "@/ui/relative-time";
 import { VerseList } from "@/ui/app-components";
 import { colors, platformShadow } from "@/ui/theme";
 
 const FEED_BODY_PREVIEW_LINES = 3;
-
-function formatRelativeTime(value: string) {
-  const created = Date.parse(value);
-  if (Number.isNaN(created)) return "";
-  const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
-}
 
 function defaultTitle(item: FeedItem) {
   return productDefaultFeedTitle(item, (mood) => moodOptionForValue(mood).label);
@@ -225,9 +214,9 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <Ionicons name={prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" ? colors.semantic.prayer : itemColors.accent} />
+          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" ? colors.semantic.prayer : itemColors.accent} />
           <Text style={{ color: colors.text.secondary, fontWeight: "700" }}>
-            {prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+            {itemKind === "prayer_request" ? actionLabels[itemKind] : prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
           </Text>
         </Pressable>
         {onReply ? (

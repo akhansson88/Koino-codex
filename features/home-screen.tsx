@@ -26,6 +26,7 @@ import {
 } from "@/ui/app-components";
 import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
+import { formatRelativeTime } from "@/ui/relative-time";
 import { QuietActionCard, ScriptureRhythmCard } from "@/ui/rhythm-cards";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
@@ -41,18 +42,6 @@ function moodToneFor(mood: HeartMood): { background: string; color: string; icon
   if (mood === "tired") return { background: colors.semantic.reflectionSoft, color: colors.semantic.reflection, icon: "moon" };
   if (mood === "anxious") return { background: colors.semantic.prayerSoft, color: colors.semantic.prayer, icon: "cloud-rain" };
   return { background: colors.background.surface, color: colors.text.secondary, icon: "cloud" };
-}
-
-function formatRelativeTime(value: string) {
-  const created = Date.parse(value);
-  if (Number.isNaN(created)) return "";
-  const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
 function firstName(name?: string) {
@@ -222,7 +211,7 @@ export function HomeScreen() {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
     return {
-      count: [...new Set(reactions.map((reaction) => reaction.userId))].length,
+      count: reactions.length,
       targetType,
     };
   }

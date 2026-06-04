@@ -39,10 +39,12 @@ import {
 import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
+import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
 import { PostCard } from "@/ui/post-card";
+import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
 type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "checkinComposer";
@@ -89,16 +91,12 @@ async function shareRoomInvite(room: Group) {
   return "Invite ready to share.";
 }
 
-function formatRelativeTime(value: string) {
-  const created = Date.parse(value);
-  if (Number.isNaN(created)) return "";
-  const seconds = Math.max(0, Math.floor((Date.now() - created) / 1000));
-  if (seconds < 60) return "just now";
+function formatPrayerDuration(seconds?: number) {
+  if (seconds === undefined) return "Duration unavailable";
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Today at ${new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))}`;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+  const remainder = seconds % 60;
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function defaultTitle(item: FeedItem) {
@@ -128,6 +126,7 @@ export function SettingsScreen() {
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
+  const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [encouragementDraft, setEncouragementDraft] = useState("");
   const [checkInMood, setCheckInMood] = useState(4);
   const [checkInText, setCheckInText] = useState("");
@@ -302,7 +301,7 @@ export function SettingsScreen() {
     const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
-      count: prayedByUserIds.length,
+      count: reactions.length,
       targetType,
       prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
     };
@@ -321,6 +320,9 @@ export function SettingsScreen() {
       .map((reaction) => ({
         id: reaction.id,
         createdAt: reaction.createdAt,
+        durationSeconds:
+          reaction.durationSeconds ??
+          (reaction.startedAt && reaction.completedAt ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000)) : undefined),
         name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
         image: userImageById.get(reaction.userId),
       }));
@@ -328,17 +330,16 @@ export function SettingsScreen() {
 
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
-    if (prayer.prayed) return;
-    dispatch({ type: "finishPrayer", targetType: prayer.targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
+    setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
   }
 
   function togglePostAction(item: FeedItem) {
     const prayer = itemPrayerState(item);
     if (prayer.prayed) {
-      dispatch({ type: "unpray", targetType: prayer.targetType, targetId: item.id });
-      return;
+      setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
+    } else {
+      prayForItem(item);
     }
-    prayForItem(item);
   }
 
   async function sendEncouragement(item: FeedItem) {
@@ -561,6 +562,23 @@ export function SettingsScreen() {
           roomName={group.name}
           roomImage={group.image}
         />
+        <PrayerMoment
+          target={prayerTarget}
+          onClose={() => setPrayerTarget(undefined)}
+          onFinish={(status, startedAt) => {
+            if (prayerTarget) {
+              dispatch({
+                type: "finishPrayer",
+                targetType: prayerTarget.targetType,
+                targetId: prayerTarget.targetId,
+                status,
+                startedAt,
+                recipientUserId: prayerTarget.recipientUserId,
+              });
+            }
+            setPrayerTarget(undefined);
+          }}
+        />
       </>
     );
   }
@@ -581,25 +599,44 @@ export function SettingsScreen() {
 
     const prayer = itemPrayerState(selectedPrayer);
     return (
-      <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
-        <CommunityPrayerDetailScreen
-          activity={itemPrayerActivity(selectedPrayer)}
-          authorImage={userImageById.get(selectedPrayer.userId)}
-          authorName={userById.get(selectedPrayer.userId) ?? "Someone"}
-          encouragementDraft={encouragementDraft}
-          item={selectedPrayer}
-          onBack={goBackFromRoomView}
-          onChangeEncouragement={setEncouragementDraft}
-          onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: selectedPrayer.id })}
-          onPray={() => prayForItem(selectedPrayer)}
-          onSendEncouragement={() => sendEncouragement(selectedPrayer)}
-          ownsItem={selectedPrayer.userId === state.currentUserId}
-          prayer={prayer}
-          replies={itemReplies(selectedPrayer)}
-          userById={userById}
-          userImageById={userImageById}
+      <>
+        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+          <CommunityPrayerDetailScreen
+            activity={itemPrayerActivity(selectedPrayer)}
+            authorImage={userImageById.get(selectedPrayer.userId)}
+            authorName={userById.get(selectedPrayer.userId) ?? "Someone"}
+            encouragementDraft={encouragementDraft}
+            item={selectedPrayer}
+            onBack={goBackFromRoomView}
+            onChangeEncouragement={setEncouragementDraft}
+            onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: selectedPrayer.id })}
+            onPray={() => prayForItem(selectedPrayer)}
+            onSendEncouragement={() => sendEncouragement(selectedPrayer)}
+            ownsItem={selectedPrayer.userId === state.currentUserId}
+            prayer={prayer}
+            replies={itemReplies(selectedPrayer)}
+            userById={userById}
+            userImageById={userImageById}
+          />
+        </CommunityTransitionFrame>
+        <PrayerMoment
+          target={prayerTarget}
+          onClose={() => setPrayerTarget(undefined)}
+          onFinish={(status, startedAt) => {
+            if (prayerTarget) {
+              dispatch({
+                type: "finishPrayer",
+                targetType: prayerTarget.targetType,
+                targetId: prayerTarget.targetId,
+                status,
+                startedAt,
+                recipientUserId: prayerTarget.recipientUserId,
+              });
+            }
+            setPrayerTarget(undefined);
+          }}
         />
-      </CommunityTransitionFrame>
+      </>
     );
   }
 
@@ -1190,7 +1227,7 @@ function CommunityPrayerDetailScreen({
   userById,
   userImageById,
 }: {
-  activity: { id: Id; createdAt: string; name: string; image?: GroupImage }[];
+  activity: { id: Id; createdAt: string; durationSeconds?: number; name: string; image?: GroupImage }[];
   authorImage?: GroupImage;
   authorName: string;
   encouragementDraft: string;
@@ -1244,8 +1281,8 @@ function CommunityPrayerDetailScreen({
         </Card>
       ) : null}
       {!answered ? (
-        <PrimaryButton disabled={prayer.prayed} icon={prayer.prayed ? "check" : "heart"} onPress={onPray}>
-          {prayer.prayed ? "You prayed" : "Pray"}
+        <PrimaryButton icon="heart" onPress={onPray}>
+          Pray
         </PrimaryButton>
       ) : null}
       {ownsItem && !answered ? (
@@ -1274,7 +1311,9 @@ function CommunityPrayerDetailScreen({
                 <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(entry.createdAt)}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                    {formatRelativeTime(entry.createdAt)} - {formatPrayerDuration(entry.durationSeconds)}
+                  </Text>
                 </View>
               </View>
             ))
@@ -1507,8 +1546,8 @@ function PrayerRequestCard({
               }}
               style={{
                 alignItems: "center",
-                backgroundColor: prayed ? colors.semantic.communitySoft : colors.semantic.prayer,
-                borderColor: prayed ? colors.border.soft : colors.semantic.prayer,
+                backgroundColor: colors.semantic.prayer,
+                borderColor: colors.semantic.prayer,
                 borderRadius: 999,
                 borderWidth: 1,
                 flexDirection: "row",
@@ -1517,8 +1556,8 @@ function PrayerRequestCard({
                 paddingHorizontal: 12,
               }}
             >
-              <Feather name={prayed ? "check" : "heart"} size={15} color={prayed ? colors.text.primary : colors.onAccent} />
-              <Text style={{ color: prayed ? colors.text.primary : colors.onAccent, fontSize: 12, fontWeight: "900" }}>{prayed ? "You prayed" : "Pray with this"}</Text>
+              <Feather name="heart" size={15} color={colors.onAccent} />
+              <Text style={{ color: colors.onAccent, fontSize: 12, fontWeight: "900" }}>Pray</Text>
             </Pressable>
           ) : (
             <Feather name="bookmark" size={18} color={colors.semantic.success} />
