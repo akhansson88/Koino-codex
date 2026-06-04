@@ -36,6 +36,7 @@ export type Membership = {
   groupId: Id;
   role: "owner" | "member";
   userName: string;
+  image?: ProfileImage;
   createdAt: string;
 };
 

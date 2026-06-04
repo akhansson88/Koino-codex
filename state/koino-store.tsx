@@ -331,12 +331,21 @@ async function ensureProfile(user: FirebaseUser, name?: string) {
   if (name?.trim() && user.displayName !== resolvedName) {
     await FirebaseAuth.updateProfile(user, { displayName: resolvedName });
   }
+
+  return {
+    ...existing,
+    id: user.uid,
+    name: resolvedName,
+    email: user.email ?? null,
+    createdAt: existing?.createdAt ?? timestamp,
+    theme: normalizeTheme(existing?.theme),
+  } satisfies Profile;
 }
 
 async function createGroupForUser(user: FirebaseUser, name: string, userName?: string) {
   if (!name.trim()) return;
 
-  await ensureProfile(user, userName);
+  const userProfile = await ensureProfile(user, userName);
 
   const timestamp = now();
   const groupId = id("group");
@@ -355,6 +364,7 @@ async function createGroupForUser(user: FirebaseUser, name: string, userName?: s
     groupId,
     role: "owner",
     userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
+    ...(userProfile.image ? { image: userProfile.image } : {}),
     createdAt: timestamp,
   };
 
@@ -371,7 +381,7 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
   const normalizedCode = code.trim().toUpperCase();
   if (!normalizedCode) throw new Error("Enter a community invite code.");
 
-  await ensureProfile(user, userName);
+  const userProfile = await ensureProfile(user, userName);
 
   const inviteSnapshot = await get(ref(database, `inviteCodes/${normalizedCode}`));
   const invite = inviteSnapshot.val() as { groupId?: string } | null;
@@ -384,6 +394,7 @@ async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: st
     groupId: invite.groupId,
     role: "member",
     userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
+    ...(userProfile.image ? { image: userProfile.image } : {}),
     createdAt: timestamp,
   };
 
@@ -418,6 +429,15 @@ async function deleteUserAvatarStoragePath(path?: string) {
   } catch {
     // Storage cleanup should never undo the profile metadata update.
   }
+}
+
+async function userMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
+  const userGroupsSnapshot = await get(ref(database, `userGroups/${userId}`));
+  return asArray<Membership>(userGroupsSnapshot.val()).reduce<Record<string, Profile["image"] | null>>((updates, membership) => {
+    updates[`groupMembers/${membership.groupId}/${userId}/image`] = image;
+    updates[`userGroups/${userId}/${membership.groupId}/image`] = image;
+    return updates;
+  }, {});
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
@@ -679,6 +699,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, [firebaseUser, profile?.currentGroupId, profileReady, userGroupsReady, userMemberships]);
 
   useEffect(() => {
+    if (!firebaseUser || !profileReady || !userGroupsReady) return;
+
+    void userMembershipImageUpdates(firebaseUser.uid, profile?.image ?? null).then((updates) => {
+      if (Object.keys(updates).length > 0) {
+        void update(ref(database), updates);
+      }
+    });
+  }, [firebaseUser, profile?.image, profileReady, userGroupsReady]);
+
+  useEffect(() => {
     if (!firebaseUser) return;
 
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
@@ -796,7 +826,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const memberUsers = memberships.map<User>((membership) => ({
       id: membership.userId,
       name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
-      image: membership.userId === profile?.id ? profile.image : undefined,
+      image: membership.image ?? (membership.userId === profile?.id ? profile.image : undefined),
       createdAt: membership.createdAt,
     }));
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
@@ -1001,15 +1031,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
               try {
                 const url = userAvatarPublicUrl(path);
-                await update(ref(database, `profiles/${firebaseUser.uid}`), {
-                  image: {
-                    url,
-                    path,
-                    width: 512,
-                    height: 512,
-                    contentType: "image/webp",
-                    updatedAt: timestamp,
-                  },
+                const image: Profile["image"] = {
+                  url,
+                  path,
+                  width: 512,
+                  height: 512,
+                  contentType: "image/webp",
+                  updatedAt: timestamp,
+                };
+                await update(ref(database), {
+                  [`profiles/${firebaseUser.uid}/image`]: image,
+                  ...(await userMembershipImageUpdates(firebaseUser.uid, image)),
                 });
               } catch (error) {
                 await deleteUserAvatarStoragePath(path);
@@ -1024,7 +1056,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
               const profileToUpdate = profileSnapshot.val() as Profile | null;
 
-              await update(ref(database, `profiles/${firebaseUser.uid}`), { image: null });
+              await update(ref(database), {
+                [`profiles/${firebaseUser.uid}/image`]: null,
+                ...(await userMembershipImageUpdates(firebaseUser.uid, null)),
+              });
               await deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
               return;
             }

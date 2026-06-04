@@ -140,12 +140,22 @@
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$uid": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || (auth.uid == $uid && (newData.val() == null || (newData.child('userId').val() == auth.uid && root.child('groups').child($groupId).child('id').val() == $groupId && root.child('inviteCodes').child(root.child('groups').child($groupId).child('inviteCode').val()).child('groupId').val() == $groupId))) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
-          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member') && newData.child('userName').isString() && newData.child('createdAt').isString())",
+          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member') && newData.child('userName').isString() && newData.child('createdAt').isString() && (!newData.child('image').exists() || newData.child('image').val() == null || (newData.child('image').child('url').isString() && newData.child('image').child('path').isString() && newData.child('image').child('width').val() == 512 && newData.child('image').child('height').val() == 512 && newData.child('image').child('contentType').val() == 'image/webp' && newData.child('image').child('updatedAt').isString())))",
           "id": { ".validate": "newData.isString()" },
           "userId": { ".validate": "newData.val() == $uid" },
           "groupId": { ".validate": "newData.val() == $groupId" },
           "role": { ".validate": "newData.val() == 'owner' || newData.val() == 'member'" },
           "userName": { ".validate": "newData.isString()" },
+          "image": {
+            ".validate": "newData.val() == null || (newData.child('url').isString() && newData.child('path').isString() && newData.child('width').val() == 512 && newData.child('height').val() == 512 && newData.child('contentType').val() == 'image/webp' && newData.child('updatedAt').isString())",
+            "url": { ".validate": "newData.isString()" },
+            "path": { ".validate": "newData.isString()" },
+            "width": { ".validate": "newData.val() == 512" },
+            "height": { ".validate": "newData.val() == 512" },
+            "contentType": { ".validate": "newData.val() == 'image/webp'" },
+            "updatedAt": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          },
           "createdAt": { ".validate": "newData.isString()" },
           "$other": { ".validate": false }
         }
@@ -157,12 +167,22 @@
         ".read": "auth != null && auth.uid == $uid",
         "$groupId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || (auth.uid == $uid && (newData.val() == null || (newData.child('userId').val() == auth.uid && root.child('groups').child($groupId).child('id').val() == $groupId && root.child('inviteCodes').child(root.child('groups').child($groupId).child('inviteCode').val()).child('groupId').val() == $groupId))) || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
-          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member') && newData.child('userName').isString() && newData.child('createdAt').isString())",
+          ".validate": "newData.val() == null || (newData.child('id').isString() && newData.child('userId').val() == $uid && newData.child('groupId').val() == $groupId && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member') && newData.child('userName').isString() && newData.child('createdAt').isString() && (!newData.child('image').exists() || newData.child('image').val() == null || (newData.child('image').child('url').isString() && newData.child('image').child('path').isString() && newData.child('image').child('width').val() == 512 && newData.child('image').child('height').val() == 512 && newData.child('image').child('contentType').val() == 'image/webp' && newData.child('image').child('updatedAt').isString())))",
           "id": { ".validate": "newData.isString()" },
           "userId": { ".validate": "newData.val() == $uid" },
           "groupId": { ".validate": "newData.val() == $groupId" },
           "role": { ".validate": "newData.val() == 'owner' || newData.val() == 'member'" },
           "userName": { ".validate": "newData.isString()" },
+          "image": {
+            ".validate": "newData.val() == null || (newData.child('url').isString() && newData.child('path').isString() && newData.child('width').val() == 512 && newData.child('height').val() == 512 && newData.child('contentType').val() == 'image/webp' && newData.child('updatedAt').isString())",
+            "url": { ".validate": "newData.isString()" },
+            "path": { ".validate": "newData.isString()" },
+            "width": { ".validate": "newData.val() == 512" },
+            "height": { ".validate": "newData.val() == 512" },
+            "contentType": { ".validate": "newData.val() == 'image/webp'" },
+            "updatedAt": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          },
           "createdAt": { ".validate": "newData.isString()" },
           "$other": { ".validate": false }
         }

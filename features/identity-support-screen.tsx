@@ -762,7 +762,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
         padding: 10,
       }}
     >
-      <Avatar name={membership.userName} size={38} tone={membership.role === "owner" ? "orange" : "green"} />
+      <Avatar image={membership.image} name={membership.userName} size={38} tone={membership.role === "owner" ? "orange" : "green"} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Community host" : "Member"}</Text>
