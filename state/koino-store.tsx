@@ -434,10 +434,26 @@ async function deleteUserAvatarStoragePath(path?: string) {
 async function userMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
   const userGroupsSnapshot = await get(ref(database, `userGroups/${userId}`));
   return asArray<Membership>(userGroupsSnapshot.val()).reduce<Record<string, Profile["image"] | null>>((updates, membership) => {
+    if (membership.image?.url === image?.url) return updates;
+
     updates[`groupMembers/${membership.groupId}/${userId}/image`] = image;
     updates[`userGroups/${userId}/${membership.groupId}/image`] = image;
     return updates;
   }, {});
+}
+
+async function syncUserMembershipImage(userId: Id, image: Profile["image"] | null) {
+  const updates = await userMembershipImageUpdates(userId, image);
+  if (Object.keys(updates).length > 0) {
+    await update(ref(database), updates);
+  }
+}
+
+async function profileAndMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
+  return {
+    [`profiles/${userId}/image`]: image,
+    ...(await userMembershipImageUpdates(userId, image)),
+  };
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
@@ -701,10 +717,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!firebaseUser || !profileReady || !userGroupsReady) return;
 
-    void userMembershipImageUpdates(firebaseUser.uid, profile?.image ?? null).then((updates) => {
-      if (Object.keys(updates).length > 0) {
-        void update(ref(database), updates);
-      }
+    void syncUserMembershipImage(firebaseUser.uid, profile?.image ?? null).catch(() => {
+      // Avatar fanout is best-effort; profile uploads should not be blocked by it.
     });
   }, [firebaseUser, profile?.image, profileReady, userGroupsReady]);
 
@@ -1039,16 +1053,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   contentType: "image/webp",
                   updatedAt: timestamp,
                 };
-                await update(ref(database), {
-                  [`profiles/${firebaseUser.uid}/image`]: image,
-                  ...(await userMembershipImageUpdates(firebaseUser.uid, image)),
-                });
+                await update(ref(database), await profileAndMembershipImageUpdates(firebaseUser.uid, image));
               } catch (error) {
                 await deleteUserAvatarStoragePath(path);
                 throw error;
               }
 
-              await deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
+              void deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
               return;
             }
             case "deleteUserAvatar": {
@@ -1056,11 +1067,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
               const profileToUpdate = profileSnapshot.val() as Profile | null;
 
-              await update(ref(database), {
-                [`profiles/${firebaseUser.uid}/image`]: null,
-                ...(await userMembershipImageUpdates(firebaseUser.uid, null)),
-              });
-              await deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
+              await update(ref(database), await profileAndMembershipImageUpdates(firebaseUser.uid, null));
+              void deleteUserAvatarStoragePath(profileToUpdate?.image?.path);
               return;
             }
             case "deleteGroup": {
