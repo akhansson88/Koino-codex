@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
 
 import type { PrayerSessionTargetType } from "@/state/types";
-import { colors } from "@/ui/theme";
+import { brandPalette, colors } from "@/ui/theme";
 import { VoicePrayerCircle } from "@/ui/voice-prayer-circle";
 
 const PRAYER_COMPLETE_DELAY_MS = 15_000;
@@ -58,13 +58,13 @@ export function PrayerMoment({
 
   return (
     <Modal visible={Boolean(target)} animationType="fade" presentationStyle="fullScreen">
-      <View style={{ flex: 1, backgroundColor: colors.background.app }}>
+      <View style={{ flex: 1, backgroundColor: colors.cream }}>
         <View style={{ flex: 1, justifyContent: "center", gap: 26, padding: 26 }}>
           <VoicePrayerCircle size={240} />
           <View
             style={{
-              backgroundColor: colors.background.surface,
-              borderColor: colors.border.subtle,
+              backgroundColor: colors.paper,
+              borderColor: colors.line,
               borderCurve: "continuous",
               borderRadius: 8,
               borderWidth: 1,
@@ -72,10 +72,10 @@ export function PrayerMoment({
               padding: 18,
             }}
           >
-            <Text selectable style={{ color: colors.text.primary, fontSize: 32, fontWeight: "700", textAlign: "center" }}>
+            <Text selectable style={{ color: colors.ink, fontSize: 32, fontWeight: "700", textAlign: "center" }}>
               Prayer moment
             </Text>
-            <Text selectable style={{ color: colors.text.secondary, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
+            <Text selectable style={{ color: colors.muted, fontSize: 18, lineHeight: 27, textAlign: "center" }}>
               Take a quiet breath. Hold this person before God, without hurry.
             </Text>
           </View>
@@ -86,7 +86,7 @@ export function PrayerMoment({
               onPress={() => onFinish("completed", startedAt, new Date().toISOString())}
               style={{
                 alignItems: "center",
-                backgroundColor: canCompletePrayer ? colors.semantic.prayer : colors.disabled,
+                backgroundColor: canCompletePrayer ? colors.gold : colors.disabled,
                 borderRadius: 999,
                 overflow: "hidden",
                 padding: 16,
@@ -95,7 +95,7 @@ export function PrayerMoment({
             >
               <Animated.View
                 style={{
-                  backgroundColor: colors.semantic.prayer,
+                  backgroundColor: colors.gold,
                   bottom: 0,
                   left: 0,
                   opacity: canCompletePrayer ? 1 : 0.72,
@@ -105,15 +105,15 @@ export function PrayerMoment({
                   width: completeProgressWidth,
                 }}
               />
-              <Text style={{ color: canCompletePrayer ? colors.onAccent : colors.text.primary, fontSize: 16, fontWeight: "700", zIndex: 1 }}>
+              <Text style={{ color: canCompletePrayer ? brandPalette.deepNavy : colors.ink, fontSize: 16, fontWeight: "700", zIndex: 1 }}>
                 I have prayed
               </Text>
             </Pressable>
             <Pressable onPress={() => onFinish("skipped", startedAt, new Date().toISOString())} style={{ alignItems: "center", padding: 16 }}>
-              <Text style={{ color: colors.text.primary, fontSize: 16, fontWeight: "700" }}>Skip for now</Text>
+              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "700" }}>Skip for now</Text>
             </Pressable>
             <Pressable onPress={onClose} style={{ alignItems: "center", padding: 8 }}>
-              <Text style={{ color: colors.text.secondary, fontSize: 14 }}>Close</Text>
+              <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
             </Pressable>
           </View>
         </View>

@@ -37,7 +37,7 @@ export function BibleVerseField({
     <View style={{ gap: 8 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
         <SectionHeading>{label}</SectionHeading>
-        <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
       </View>
       {selectedVerses.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -47,7 +47,7 @@ export function BibleVerseField({
                 <VersePreviewCard verse={verse} compact />
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${verse.reference}`} onPress={() => removeVerse(verse.reference)} style={{ padding: 8 }}>
-                <Feather name="x" size={18} color={colors.text.primary} />
+                <Feather name="x" size={18} color={colors.olive} />
               </Pressable>
             </View>
           ))}
@@ -63,7 +63,7 @@ export function BibleVerseField({
         </SecondaryButton>
       )}
       {!canAddVerse ? (
-        <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "700" }}>Maximum 5 Bible references</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Maximum 5 Bible references</Text>
       ) : null}
       {canAddVerse ? (
         <BibleVersePicker
@@ -139,7 +139,7 @@ export function BibleVersePicker({
     <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.text.primary, fontSize: 20, fontWeight: "900" }}>Choose a {bibleVersion.label} verse</Text>
+          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Choose a {bibleVersion.label} verse</Text>
           <IconButton accessibilityLabel="Close verse picker" icon="x" onPress={onBack} />
         </View>
         <TextInputField value={bookQuery} onChangeText={setBookQuery} placeholder="Search books" />
@@ -193,8 +193,8 @@ function PickerPills<T extends string>({
             onPress={() => onSelect(value)}
             style={{
               alignItems: "center",
-              backgroundColor: isSelected ? colors.semantic.reflectionSoft : colors.background.surface,
-              borderColor: isSelected ? colors.border.soft : colors.border.subtle,
+              backgroundColor: isSelected ? colors.accentSubtle : colors.paper,
+              borderColor: isSelected ? colors.gold : colors.line,
               borderRadius: 999,
               borderWidth: 1,
               justifyContent: "center",
@@ -202,7 +202,7 @@ function PickerPills<T extends string>({
               paddingHorizontal: 14,
             }}
           >
-            <Text style={{ color: isSelected ? colors.text.primary : colors.text.secondary, fontSize: 14, fontWeight: "800" }}>{value}</Text>
+            <Text style={{ color: isSelected ? colors.olive : colors.muted, fontSize: 14, fontWeight: "800" }}>{value}</Text>
           </Pressable>
         );
       })}

@@ -38,15 +38,6 @@ function kindIcon(item: FeedItem) {
   return entryKindIcon(item.kind);
 }
 
-function kindColors(item: FeedItem) {
-  const kind = feedItemKind(item);
-  if (kind === "prayer_request") return { accent: colors.semantic.prayer, surface: colors.semantic.prayerSoft };
-  if (kind === "praise") return { accent: colors.text.primary, surface: colors.semantic.communitySoft };
-  if (kind === "scripture") return { accent: colors.text.primary, surface: colors.semantic.reflectionSoft };
-  if (item.type === "check_in") return { accent: colors.text.primary, surface: colors.semantic.communitySoft };
-  return { accent: colors.text.primary, surface: colors.semantic.reflectionSoft };
-}
-
 export function PostCard({
   authorImage,
   authorName,
@@ -90,19 +81,18 @@ export function PostCard({
 
   const itemKind = feedItemKind(item);
   const prayerCopy = itemKind === "prayer_request" ? "prayed" : actionPastLabels[itemKind].toLowerCase();
-  const itemColors = kindColors(item);
 
   return (
     <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
         <Avatar image={authorImage} name={authorName} size={42} tone="green" />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather name={kindIcon(item)} size={13} color={itemColors.accent} />
-          <Text style={{ color: colors.text.primary, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
+          <Feather name={kindIcon(item)} size={13} color={colors.gold} />
+          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
         </View>
       </View>
 
@@ -110,7 +100,7 @@ export function PostCard({
         <View
           style={{
             alignItems: "center",
-            backgroundColor: colors.semantic.communitySoft,
+            backgroundColor: colors.accentSubtle,
             borderRadius: 12,
             flexDirection: "row",
             gap: 12,
@@ -121,18 +111,18 @@ export function PostCard({
           <View
             style={{
               alignItems: "center",
-              backgroundColor: colors.background.surface,
+              backgroundColor: colors.paper,
               borderRadius: 999,
               height: 36,
               justifyContent: "center",
               width: 36,
             }}
           >
-            <Ionicons name={moodOptionForValue(item.mood).icon} size={20} color={colors.semantic.community} />
+            <Ionicons name={moodOptionForValue(item.mood).icon} size={20} color={colors.olive} />
           </View>
           <View style={{ flex: 1, gap: 1 }}>
-            <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: "900" }}>{moodOptionForValue(item.mood).label}</Text>
-            <Text style={{ color: colors.text.secondary, fontSize: 13, fontWeight: "600" }}>{moodOptionForValue(item.mood).description}</Text>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{moodOptionForValue(item.mood).label}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{moodOptionForValue(item.mood).description}</Text>
           </View>
         </View>
       ) : null}
@@ -140,8 +130,8 @@ export function PostCard({
       {ownsItem && menuOpen ? (
         <View
           style={{
-            backgroundColor: colors.background.surface,
-            borderColor: colors.border.subtle,
+            backgroundColor: colors.paper,
+            borderColor: colors.line,
             borderRadius: 12,
             borderWidth: 1,
             minWidth: 118,
@@ -151,8 +141,7 @@ export function PostCard({
             right: 14,
             zIndex: 40,
             ...platformShadow({
-              boxShadow: `0 10px 24px ${colors.shadow.soft}`,
-              color: colors.text.primary,
+              boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
               elevation: 12,
               offset: { width: 0, height: 10 },
               opacity: 0.14,
@@ -168,8 +157,8 @@ export function PostCard({
             }}
             style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
           >
-            <Feather name="edit-2" size={14} color={colors.text.primary} />
-            <Text style={{ color: colors.text.primary, fontWeight: "800" }}>Edit</Text>
+            <Feather name="edit-2" size={14} color={colors.ink} />
+            <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
           </Pressable>
           <Pressable
             onPressIn={(event) => event.stopPropagation()}
@@ -195,7 +184,7 @@ export function PostCard({
         }}
         style={{ gap: 8 }}
       >
-        <Text numberOfLines={2} style={{ color: colors.text.primary, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
+        <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
           {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
         </Text>
         <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
@@ -214,8 +203,8 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" ? colors.semantic.prayer : itemColors.accent} />
-          <Text style={{ color: colors.text.secondary, fontWeight: "700" }}>
+          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" || prayed ? colors.gold : colors.ink} />
+          <Text style={{ color: colors.muted, fontWeight: "700" }}>
             {itemKind === "prayer_request" ? actionLabels[itemKind] : prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
           </Text>
         </Pressable>
@@ -227,8 +216,8 @@ export function PostCard({
             }}
             style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
           >
-            <Feather name="message-circle" size={21} color={colors.text.primary} />
-            <Text style={{ color: colors.text.secondary, fontWeight: "700" }}>{replyCount}</Text>
+            <Feather name="message-circle" size={21} color={colors.ink} />
+            <Text style={{ color: colors.muted, fontWeight: "700" }}>{replyCount}</Text>
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }} />
@@ -244,14 +233,14 @@ export function PostCard({
             }}
             style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
           >
-            <Feather name="more-horizontal" size={19} color={colors.text.primary} />
+            <Feather name="more-horizontal" size={19} color={colors.ink} />
           </Pressable>
         ) : null}
       </View>
       {prayedBy && prayedBy.length > 0 ? (
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
           <AvatarStack users={prayedBy} size={24} />
-          <Text style={{ color: colors.text.secondary, fontWeight: "700" }}>
+          <Text style={{ color: colors.muted, fontWeight: "700" }}>
             {prayerCount} {prayerCopy}
           </Text>
         </View>

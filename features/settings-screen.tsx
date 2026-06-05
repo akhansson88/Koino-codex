@@ -34,7 +34,6 @@ import {
   SecondaryButton,
   SectionHeading,
   TextInputField,
-  type SemanticTone,
 } from "@/ui/app-components";
 import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
@@ -51,20 +50,6 @@ type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "c
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
-
-function roomTabTone(value: RoomDetailTab): SemanticTone {
-  if (value === "reflections") return "reflection";
-  if (value === "prayer") return "prayer";
-  if (value === "checkins") return "checkin";
-  if (value === "members") return "community";
-  return "neutral";
-}
-
-function prayerFilterTone(value: PrayerFilter): SemanticTone {
-  if (value === "open") return "prayer";
-  if (value === "answered") return "community";
-  return "neutral";
-}
 
 function memberLabel(count: number) {
   return `${count} ${count === 1 ? "member" : "members"}`;
@@ -713,14 +698,14 @@ export function SettingsScreen() {
             <FilterChips
               value={detailTab}
               onChange={handleCommunityTabChange}
-              options={roomTabs.map((tab) => ({ label: tab.label, tone: roomTabTone(tab.value), value: tab.value }))}
+              options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
             />
 
             {detailTab === "reflections" ? (
               <View style={{ gap: 12 }}>
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
                   <SectionHeading>Reflections</SectionHeading>
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }} tone="community">
+                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
                     Share
                   </PrimaryButton>
                 </View>
@@ -857,7 +842,7 @@ export function SettingsScreen() {
 
       <View style={{ gap: 10 }}>
         <SectionHeading>Current community</SectionHeading>
-        <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 18, padding: 20 }}>
+        <Card style={{ gap: 18, padding: 20 }}>
           {group ? (
             <>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 18 }}>
@@ -868,14 +853,14 @@ export function SettingsScreen() {
                   <View
                     style={{
                       alignSelf: "flex-start",
-                      backgroundColor: colors.background.surface,
+                      backgroundColor: colors.accentSubtle,
                       borderRadius: 999,
                       marginTop: 10,
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                     }}
                   >
-                    <Text style={{ color: colors.semantic.community, fontSize: 12, fontWeight: "900" }}>Current community</Text>
+                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>Current community</Text>
                   </View>
                 </View>
               </View>
@@ -885,7 +870,7 @@ export function SettingsScreen() {
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Community code</Text>
                   <RoomCodeCopy code={group.inviteCode} />
                 </View>
-                <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }} tone="community">
+                <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
                   Invite
                 </PrimaryButton>
               </View>
@@ -899,7 +884,7 @@ export function SettingsScreen() {
             <>
               <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>No community selected</Text>
               <BodyText muted>Join or create a community for the people you pray with.</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)} tone="community">
+              <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)}>
                 Join or create community
               </PrimaryButton>
             </>
@@ -977,7 +962,7 @@ export function SettingsScreen() {
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a community code</Text>
           <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Community code" returnKeyType="join" />
-          <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom} tone="community">
+          <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
             Join by code
           </PrimaryButton>
         </View>
@@ -989,7 +974,7 @@ export function SettingsScreen() {
         <View style={{ gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new community</Text>
           <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New community name" returnKeyType="done" />
-          <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom} tone="community">
+          <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
             Create new community
           </PrimaryButton>
         </View>
@@ -1179,7 +1164,7 @@ function CommunityPrayerScreen({
         <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Prayer</Text>
         <BodyText muted>Hold requests with care, pray with intention, and return with encouragement.</BodyText>
       </View>
-      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, tone: prayerFilterTone(item.value), value: item.value }))} />
+      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
         <BodyText muted>{prayerRequests.length} {countLabel} {prayerRequests.length === 1 ? "request" : "requests"}</BodyText>
         <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
@@ -1262,21 +1247,21 @@ function CommunityPrayerDetailScreen({
         <BodyText style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>{item.body || "No words today, just presence."}</BodyText>
         <LinkPreview text={item.body} />
       </View>
-      <Card style={{ alignItems: "center", backgroundColor: colors.semantic.prayerSoft, flexDirection: "row", gap: 12, padding: 14 }}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.text.primary, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
+          <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
         </View>
         <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+          <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
         </View>
       </Card>
       {answered ? (
-        <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 8 }}>
+        <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Feather name="check-circle" size={20} color={colors.semantic.success} />
+            <Feather name="check-circle" size={20} color={colors.olive} />
             <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Answered prayer</Text>
           </View>
           <BodyText muted>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</BodyText>
@@ -1367,7 +1352,7 @@ function CommunityPrayerDetailScreen({
           onPress={onSendEncouragement}
           style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
         >
-          <Feather name="send" size={22} color={colors.semantic.community} />
+          <Feather name="send" size={22} color={colors.gold} />
         </Pressable>
       </View>
     </AppScreen>
@@ -1396,10 +1381,10 @@ function CommunityCheckInsScreen({
         <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Check-ins</Text>
         <BodyText muted>Take a gentle moment to share how your heart is doing.</BodyText>
       </View>
-      <Card style={{ backgroundColor: colors.semantic.communitySoft }}>
+      <Card>
         <SectionHeading>This week's check-in</SectionHeading>
         <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
-        <PrimaryButton icon="edit-3" onPress={onCheckIn} tone="community">
+        <PrimaryButton icon="edit-3" onPress={onCheckIn}>
           Check in now
         </PrimaryButton>
       </Card>
@@ -1457,15 +1442,15 @@ function CommunityCheckInComposerScreen({
               <Card
                 style={{
                   alignItems: "center",
-                  backgroundColor: selected ? colors.semantic.communitySoft : colors.paper,
-                  borderColor: selected ? colors.border.soft : colors.line,
+                  backgroundColor: selected ? colors.accentSubtle : colors.paper,
+                  borderColor: selected ? colors.gold : colors.line,
                   flexDirection: "row",
                   gap: 14,
                   padding: 14,
                 }}
               >
                 <View style={{ alignItems: "center", backgroundColor: colors.paper, borderRadius: 999, height: 38, justifyContent: "center", width: 38 }}>
-                  <Feather name={selected ? "check" : "heart"} size={18} color={selected ? colors.semantic.success : colors.semantic.community} />
+                  <Feather name={selected ? "check" : "heart"} size={18} color={selected ? colors.gold : colors.olive} />
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{option.label}</Text>
@@ -1491,7 +1476,7 @@ function CommunityCheckInComposerScreen({
         <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
       </View>
       <BibleVerseField verses={verses} onChange={onVerses} />
-      <PrimaryButton icon="send" onPress={onSubmit} tone="community">
+      <PrimaryButton icon="send" onPress={onSubmit}>
         Share check-in
       </PrimaryButton>
     </AppScreen>
@@ -1527,8 +1512,8 @@ function PrayerRequestCard({
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{authorName}</Text>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
           </View>
-          <View style={{ backgroundColor: answered ? colors.semantic.communitySoft : colors.semantic.prayerSoft, borderColor: colors.line, borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 }}>
-            <Text style={{ color: colors.text.primary, fontSize: 11, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+          <View style={{ backgroundColor: answered ? colors.mossSurface : colors.accentSubtle, borderColor: colors.line, borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 }}>
+            <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 11, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
           </View>
         </View>
         <View style={{ gap: 7 }}>
@@ -1548,8 +1533,8 @@ function PrayerRequestCard({
               }}
               style={{
                 alignItems: "center",
-                backgroundColor: colors.semantic.prayer,
-                borderColor: colors.semantic.prayer,
+                backgroundColor: colors.gold,
+                borderColor: colors.gold,
                 borderRadius: 999,
                 borderWidth: 1,
                 flexDirection: "row",
@@ -1562,7 +1547,7 @@ function PrayerRequestCard({
               <Text style={{ color: colors.onAccent, fontSize: 12, fontWeight: "900" }}>Pray</Text>
             </Pressable>
           ) : (
-            <Feather name="bookmark" size={18} color={colors.semantic.success} />
+            <Feather name="bookmark" size={18} color={colors.gold} />
           )}
         </View>
       </Card>
@@ -1583,7 +1568,7 @@ function CheckInCard({
 }) {
   return (
     <Pressable accessibilityRole="button" onPress={onOpen}>
-      <Card style={{ alignItems: "center", backgroundColor: colors.semantic.communitySoft, flexDirection: "row", gap: 12, padding: 14 }}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
         <Avatar image={authorImage} name={authorName} size={38} tone="green" />
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
@@ -1591,7 +1576,7 @@ function CheckInCard({
           {item.body ? <BodyText muted numberOfLines={2}>{item.body}</BodyText> : null}
         </View>
         <View style={{ alignItems: "center", gap: 4 }}>
-          <Feather name="smile" size={20} color={colors.semantic.community} />
+          <Feather name="smile" size={20} color={colors.olive} />
           <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{moodLabel(item.mood)}</Text>
         </View>
       </Card>
@@ -1618,7 +1603,7 @@ function MembersPanel({
 }) {
   return (
     <View style={{ gap: 12 }}>
-      <Card style={{ alignItems: "center", backgroundColor: colors.semantic.communitySoft, flexDirection: "row", gap: 14 }}>
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
         <RoomImage image={group.image} name={group.name} size={58} />
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
@@ -1652,7 +1637,7 @@ function MembersPanel({
               </View>
               <View
                 style={{
-                  backgroundColor: checkIn ? colors.semantic.community : colors.input,
+                  backgroundColor: checkIn ? colors.mossSurface : colors.input,
                   borderRadius: 999,
                   height: 9,
                   width: 9,
@@ -1662,7 +1647,7 @@ function MembersPanel({
           );
         })}
       </Card>
-      <PrimaryButton icon="share-2" onPress={onInvite} tone="community">
+      <PrimaryButton icon="share-2" onPress={onInvite}>
         Invite members
       </PrimaryButton>
       <Card>

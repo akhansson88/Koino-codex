@@ -273,7 +273,7 @@ export function IdentitySupportScreen() {
 
       <BottomSheet title="Password & security" visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
         <BodyText muted>Password reset links are sent to your account email.</BodyText>
-        <PrimaryButton icon="mail" onPress={handleSendPasswordReset} tone="neutral">
+        <PrimaryButton icon="mail" onPress={handleSendPasswordReset}>
           Send reset link
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}
@@ -389,7 +389,7 @@ export function RoomDetailsScreen() {
             <Card>
               <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>No community selected</Text>
               <BodyText muted>Join or create a community for the people you pray with.</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)} tone="community">
+              <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)}>
                 Browse communities
               </PrimaryButton>
             </Card>
@@ -411,7 +411,7 @@ export function RoomDetailsScreen() {
           placeholder="Community name"
           returnKeyType="done"
         />
-        <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom} tone="community">
+        <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom}>
           Save community name
         </PrimaryButton>
       </BottomSheet>
@@ -462,22 +462,6 @@ function SettingsRow({
   tone?: "default" | "danger";
   value?: string;
 }) {
-  const rowSurface =
-    tone === "danger"
-      ? colors.dangerSurface
-      : icon === "users" || icon === "user-plus" || icon === "home"
-        ? colors.semantic.communitySoft
-        : icon === "heart" || icon === "coffee" || icon === "help-circle"
-          ? colors.semantic.warmthSoft
-          : colors.semantic.reflectionSoft;
-  const rowAccent =
-    tone === "danger"
-      ? colors.danger
-      : icon === "users" || icon === "user-plus" || icon === "home"
-        ? colors.text.primary
-        : icon === "heart" || icon === "coffee" || icon === "help-circle"
-          ? colors.text.primary
-          : colors.text.primary;
   const content = (
     <>
       {showDivider ? <View style={{ backgroundColor: colors.line, height: 1, marginLeft: 60 }} /> : null}
@@ -485,7 +469,7 @@ function SettingsRow({
         <View
           style={{
             alignItems: "center",
-            backgroundColor: rowSurface,
+            backgroundColor: tone === "danger" ? colors.dangerSurface : colors.accentSubtle,
             borderColor: tone === "danger" ? colors.dangerBorder : colors.line,
             borderRadius: 999,
             borderWidth: 1,
@@ -494,7 +478,7 @@ function SettingsRow({
             width: 34,
           }}
         >
-          <Feather name={icon} size={17} color={rowAccent} />
+          <Feather name={icon} size={17} color={tone === "danger" ? colors.danger : colors.olive} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: tone === "danger" ? colors.danger : colors.ink, fontSize: 15, fontWeight: "900" }}>{title}</Text>
@@ -520,7 +504,7 @@ function SettingsRow({
 
 function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; memberCount: number; onDetails: () => void }) {
   return (
-    <Card style={{ backgroundColor: group ? colors.semantic.communitySoft : colors.background.surface, gap: 14, padding: 16 }}>
+    <Card style={{ gap: 14, padding: 16 }}>
       {group ? (
         <>
           <Pressable accessibilityRole="button" onPress={onDetails} style={{ alignItems: "center", flexDirection: "row", gap: 13 }}>
@@ -554,12 +538,12 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
 
 function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (value: string) => void; onGive: () => void }) {
   return (
-    <Card style={{ backgroundColor: colors.background.surface, borderColor: colors.border.subtle, gap: 14 }}>
+    <Card style={{ backgroundColor: colors.mossSurface, borderColor: colors.gold, gap: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <View
           style={{
             alignItems: "center",
-            backgroundColor: colors.background.surface,
+            backgroundColor: colors.paper,
             borderColor: colors.line,
             borderRadius: 999,
             borderWidth: 1,
@@ -568,7 +552,7 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
             width: 42,
           }}
         >
-          <Feather name="heart" size={19} color={colors.text.primary} />
+          <Feather name="heart" size={19} color={colors.olive} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Give to KOINO</Text>
@@ -579,13 +563,13 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
         value={amount}
         onChange={onAmount}
         options={[
-          { label: "10 kr", tone: "neutral", value: "10" },
-          { label: "25 kr", tone: "neutral", value: "25" },
-          { label: "50 kr", tone: "neutral", value: "50" },
-          { label: "Custom", tone: "neutral", value: "custom" },
+          { label: "10 kr", value: "10" },
+          { label: "25 kr", value: "25" },
+          { label: "50 kr", value: "50" },
+          { label: "Custom", value: "custom" },
         ]}
       />
-      <PrimaryButton icon="heart" onPress={onGive} tone="warmth">
+      <PrimaryButton icon="heart" onPress={onGive}>
         Give
       </PrimaryButton>
     </Card>
@@ -604,7 +588,7 @@ function RoomHeaderCard({
   onInvite: () => void;
 }) {
   return (
-    <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 16, padding: 18 }}>
+    <Card style={{ gap: 16, padding: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
         <RoomImage image={group.image} name={group.name} size={70} />
         <View style={{ flex: 1, gap: 4 }}>
@@ -619,7 +603,7 @@ function RoomHeaderCard({
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </View>
-      <PrimaryButton icon="share-2" onPress={onInvite} tone="community">
+      <PrimaryButton icon="share-2" onPress={onInvite}>
         Invite members
       </PrimaryButton>
       {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{inviteMessage}</Text> : null}
@@ -629,7 +613,7 @@ function RoomHeaderCard({
 
 function JoinSwitchCard({ onBrowse }: { onBrowse: () => void }) {
   return (
-    <Card style={{ backgroundColor: colors.semantic.communitySoft, gap: 14 }}>
+    <Card style={{ gap: 14 }}>
       <View style={{ gap: 4 }}>
         <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>Join or switch community</Text>
         <BodyText muted>Join another community or create a new one.</BodyText>
@@ -700,7 +684,7 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
           placeholder="Community code"
           returnKeyType="join"
         />
-        <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom} tone="community">
+        <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom}>
           Join community
         </PrimaryButton>
       </View>
@@ -722,7 +706,7 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.semantic.communitySoft,
+        backgroundColor: colors.input,
         borderColor: colors.line,
         borderRadius: radius.lg,
         borderWidth: 1,
@@ -765,7 +749,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.semantic.communitySoft,
+        backgroundColor: colors.input,
         borderColor: colors.line,
         borderRadius: radius.lg,
         borderWidth: 1,
@@ -785,7 +769,7 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ backgroundColor: colors.background.surface, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: 14 }}>
+    <View style={{ backgroundColor: colors.input, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: 14 }}>
       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{label}</Text>
       <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{value}</Text>
     </View>

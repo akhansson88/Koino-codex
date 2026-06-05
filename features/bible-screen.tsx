@@ -55,7 +55,7 @@ import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHead
 import { confirmAction } from "@/ui/confirm";
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors, platformShadow, radius, themes } from "@/ui/theme";
+import { colors, platformShadow, radius } from "@/ui/theme";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -547,58 +547,55 @@ type ReaderPalette = {
 
 function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
   if (theme === "dark") {
-    const dark = themes.dark;
     return {
-      accent: dark.brand.mistBlue,
-      background: dark.background.app,
-      buttonText: dark.onAccent,
-      danger: dark.danger,
-      dim: dark.overlay.scrim,
-      input: dark.background.surface,
-      line: dark.border.subtle,
-      muted: dark.text.secondary,
-      peach: dark.semantic.reflectionSoft,
-      shadow: dark.shadow.soft,
-      sheet: dark.background.surface,
-      surface: dark.background.elevated,
-      text: dark.text.primary,
+      accent: "#FFC79A",
+      background: "#0B1220",
+      buttonText: "#0B1220",
+      danger: "#FDA29B",
+      dim: "rgba(2, 6, 16, 0.58)",
+      input: "#101A2C",
+      line: "#2A3549",
+      muted: "#A7B0C0",
+      peach: "rgba(255, 199, 154, 0.14)",
+      shadow: "#000000",
+      sheet: "#111A2C",
+      surface: "#172237",
+      text: "#F3F2EC",
     };
   }
 
   if (theme === "sepia") {
-    const light = themes.light;
     return {
-      accent: light.text.primary,
-      background: light.background.app,
-      buttonText: light.onAccent,
-      danger: light.danger,
-      dim: light.overlay.scrim,
-      input: light.background.surface,
-      line: light.border.subtle,
-      muted: light.text.secondary,
-      peach: light.semantic.warmthSoft,
-      shadow: light.shadow.soft,
-      sheet: light.background.surface,
-      surface: light.background.elevated,
-      text: light.text.primary,
+      accent: "#A45118",
+      background: "#F7EDE0",
+      buttonText: "#0B1220",
+      danger: colors.danger,
+      dim: "rgba(63, 38, 21, 0.34)",
+      input: "#FFF8EF",
+      line: "#E7CFB9",
+      muted: "#776A5E",
+      peach: "#FFE8D8",
+      shadow: "#3F2615",
+      sheet: "#FFF6ED",
+      surface: "#FFF9F2",
+      text: "#1B2434",
     };
   }
 
-  const light = themes.light;
   return {
-    accent: light.text.primary,
-    background: light.background.app,
-    buttonText: light.onAccent,
-    danger: light.danger,
-    dim: light.overlay.scrim,
-    input: light.background.surface,
-    line: light.border.subtle,
-    muted: light.text.secondary,
-    peach: light.semantic.reflectionSoft,
-    shadow: light.shadow.soft,
-    sheet: light.background.surface,
-    surface: light.background.surface,
-    text: light.text.primary,
+    accent: colors.olive,
+    background: colors.cream,
+    buttonText: colors.onAccent,
+    danger: colors.danger,
+    dim: "rgba(11, 18, 32, 0.34)",
+    input: colors.input,
+    line: colors.line,
+    muted: colors.muted,
+    peach: colors.accentSubtle,
+    shadow: colors.ink,
+    sheet: colors.paper,
+    surface: colors.paper,
+    text: colors.ink,
   };
 }
 

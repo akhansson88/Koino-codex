@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
-import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField, type SemanticTone } from "@/ui/app-components";
+import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
 import { colors } from "@/ui/theme";
 
@@ -27,28 +27,6 @@ function titleFor(context: "journal" | "today" | "room", editing: boolean) {
   if (editing) return "Edit your entry";
   if (context === "room") return "Share with your community";
   return "Write your entry";
-}
-
-function composerAccent(kind: EntryKind, entryVisibility: EntryVisibility) {
-  if (kind === "prayer_request") return { accent: colors.semantic.prayer, surface: colors.semantic.prayerSoft };
-  if (kind === "scripture") return { accent: colors.semantic.scripture, surface: colors.semantic.reflectionSoft };
-  if (kind === "praise") return { accent: colors.semantic.success, surface: colors.semantic.communitySoft };
-  if (entryVisibility === visibility.room) return { accent: colors.semantic.community, surface: colors.semantic.communitySoft };
-  return { accent: colors.semantic.reflection, surface: colors.semantic.reflectionSoft };
-}
-
-function toneForEntryKind(kind: EntryKind): SemanticTone {
-  if (kind === "prayer_request") return "prayer";
-  if (kind === "scripture") return "scripture";
-  if (kind === "praise") return "community";
-  if (kind === "update") return "neutral";
-  return "reflection";
-}
-
-function submitTone(kind: EntryKind, entryVisibility: EntryVisibility) {
-  if (kind === "prayer_request") return "prayer";
-  if (kind === "praise" || entryVisibility === visibility.room) return "community";
-  return "neutral";
 }
 
 export function SharedComposer({
@@ -92,22 +70,21 @@ export function SharedComposer({
   const actionLabel = primaryActionLabel(context, entryVisibility, editing, kind);
   const activeRoomName = roomName ?? "Community";
   const typeOptions = context === "journal" ? postTypes : composerPostTypes;
-  const accent = composerAccent(kind, entryVisibility);
 
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Close composer" icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: "900" }}>{actionLabel.replace(" entry", "")}</Text>
+          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{actionLabel.replace(" entry", "")}</Text>
         </View>
 
         <View style={{ gap: 10 }}>
-          <Text style={{ color: colors.text.primary, fontSize: 24, fontWeight: "900" }}>{titleFor(context, editing)}</Text>
+          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{titleFor(context, editing)}</Text>
           <FilterChips
             value={kind}
             onChange={onKind}
-            options={typeOptions.map((type) => ({ label: type.composerLabel, tone: toneForEntryKind(type.value), value: type.value }))}
+            options={typeOptions.map((type) => ({ label: type.composerLabel, value: type.value }))}
           />
         </View>
 
@@ -131,7 +108,7 @@ export function SharedComposer({
             style={{ minHeight: 170 }}
             submitBehavior="submit"
           />
-          <Text style={{ alignSelf: "flex-end", color: colors.text.secondary, fontSize: 11, fontWeight: "700" }}>
+          <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>
             {body.length}/{MAX_BODY_LENGTH}
           </Text>
         </View>
@@ -145,8 +122,8 @@ export function SharedComposer({
               value={entryVisibility}
               onChange={onVisibility}
               options={[
-                { label: "Private", tone: "neutral", value: visibility.private },
-                { label: "Share with community", tone: "community", value: visibility.room },
+                { label: "Private", value: visibility.private },
+                { label: "Share with community", value: visibility.room },
               ]}
             />
           ) : null}
@@ -155,22 +132,22 @@ export function SharedComposer({
             disabled={!showVisibility}
             onPress={() => onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private)}
           >
-            <Card style={{ alignItems: "center", backgroundColor: entryVisibility === visibility.room ? colors.semantic.communitySoft : accent.surface, flexDirection: "row", gap: 12, padding: 12 }}>
+            <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
               <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : "Private journal"} size={34} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text.primary, fontSize: 14, fontWeight: "900" }}>
+                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
                   {entryVisibility === visibility.room ? activeRoomName : "Private journal"}
                 </Text>
-                <Text style={{ color: colors.text.secondary, fontSize: 12, fontWeight: "700" }}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
                   {entryVisibility === visibility.room ? "Shared with your community" : "Only you can see this"}
                 </Text>
               </View>
-              {showVisibility ? <Feather name="chevron-down" size={18} color={colors.text.secondary} /> : null}
+              {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}
             </Card>
           </Pressable>
         </View>
 
-        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit} tone={submitTone(kind, entryVisibility)}>
+        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit}>
           {actionLabel}
         </PrimaryButton>
       </AppScreen>
