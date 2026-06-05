@@ -484,6 +484,24 @@ export function FilterChips<T extends string>({
   );
 }
 
+export function StatusPill({ status }: { status: "answered" | "open" }) {
+  const answered = status === "answered";
+  return (
+    <View
+      style={{
+        backgroundColor: answered ? colors.rhythmSoft : colors.warmSoft,
+        borderColor: answered ? colors.accentRhythm : colors.border,
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{answered ? "Answered" : "Open"}</Text>
+    </View>
+  );
+}
+
 export function Avatar({
   image,
   name,

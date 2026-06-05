@@ -24,7 +24,7 @@ import { confirmAction } from "@/ui/confirm";
 import { openLinkInApp } from "@/ui/open-link";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
-import { colors, radius } from "@/ui/theme";
+import { colors, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "account" | "help" | "security" | "privacy" | "terms";
@@ -538,12 +538,12 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
 
 function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (value: string) => void; onGive: () => void }) {
   return (
-    <Card style={{ backgroundColor: colors.mossSurface, borderColor: colors.gold, gap: 14 }}>
+    <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, gap: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <View
           style={{
             alignItems: "center",
-            backgroundColor: colors.paper,
+            backgroundColor: colors.warmSoft,
             borderColor: colors.line,
             borderRadius: 999,
             borderWidth: 1,
@@ -552,10 +552,10 @@ function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (v
             width: 42,
           }}
         >
-          <Feather name="heart" size={19} color={colors.olive} />
+          <Feather name="heart" size={19} color={colors.textMuted} />
         </View>
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Give to KOINO</Text>
+          <Text style={[typography.title, { color: colors.ink }]}>Give to KOINO</Text>
           <BodyText muted>Support the mission and help KOINO grow.</BodyText>
         </View>
       </View>

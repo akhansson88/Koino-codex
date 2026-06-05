@@ -7,7 +7,7 @@ import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
 import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 export function BibleVerseField({
   label = "Add verses (optional)",
@@ -138,8 +138,13 @@ export function BibleVersePicker({
   return (
     <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
       <AppScreen>
-        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Choose a {bibleVersion.label} verse</Text>
+        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[typography.heading, { color: colors.ink, fontSize: 20, lineHeight: 26 }]}>Choose verse</Text>
+            <Text numberOfLines={1} style={[typography.caption, { color: colors.muted }]}>
+              {bibleVersion.label}
+            </Text>
+          </View>
           <IconButton accessibilityLabel="Close verse picker" icon="x" onPress={onBack} />
         </View>
         <TextInputField value={bookQuery} onChangeText={setBookQuery} placeholder="Search books" />

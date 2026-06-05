@@ -33,6 +33,7 @@ import {
   Row,
   SecondaryButton,
   SectionHeading,
+  StatusPill,
   TextInputField,
 } from "@/ui/app-components";
 import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
@@ -1254,7 +1255,7 @@ function CommunityPrayerDetailScreen({
         </View>
         <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
+          <StatusPill status={answered ? "answered" : "open"} />
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
         </View>
       </Card>
@@ -1512,9 +1513,7 @@ function PrayerRequestCard({
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{authorName}</Text>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
           </View>
-          <View style={{ backgroundColor: answered ? colors.mossSurface : colors.accentSubtle, borderColor: colors.line, borderRadius: 999, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 }}>
-            <Text style={{ color: answered ? colors.olive : colors.gold, fontSize: 11, fontWeight: "900" }}>{answered ? "Answered" : "Open"}</Text>
-          </View>
+          <StatusPill status={answered ? "answered" : "open"} />
         </View>
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>{item.title || defaultTitle(item)}</Text>

@@ -24,6 +24,7 @@ import {
   IconButton,
   PrimaryButton,
   SectionHeading,
+  StatusPill,
   TextInputField,
   VerseList,
 } from "@/ui/app-components";
@@ -216,7 +217,7 @@ export function FeedDetailScreen() {
             </View>
             <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-              <Text style={{ color: prayerAnswered ? colors.olive : colors.gold, fontSize: 14, fontWeight: "900" }}>{prayerAnswered ? "Answered" : "Open"}</Text>
+              <StatusPill status={prayerAnswered ? "answered" : "open"} />
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
             </View>
           </Card>

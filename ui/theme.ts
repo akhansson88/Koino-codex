@@ -195,13 +195,13 @@ export const typography = {
     lineHeight: 34,
   },
   heading: {
-    fontFamily: fontFamilies.headingSemiBold,
+    fontFamily: fontFamilies.headingMedium,
     fontSize: 22,
     letterSpacing: 0,
     lineHeight: 28,
   },
   title: {
-    fontFamily: fontFamilies.headingSemiBold,
+    fontFamily: fontFamilies.headingMedium,
     fontSize: 18,
     letterSpacing: 0,
     lineHeight: 24,
