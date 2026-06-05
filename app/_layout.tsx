@@ -1,6 +1,13 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Platform } from "react-native";
+import { useFonts } from "expo-font";
+import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
+import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
+import { Montserrat_300Light } from "@expo-google-fonts/montserrat/300Light";
+import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular";
+import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
+import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
+import { ActivityIndicator, Platform, View } from "react-native";
 
 import { KoinoProvider, useKoino } from "@/state/koino-store";
 import { colors, statusBarStyle } from "@/ui/theme";
@@ -8,6 +15,23 @@ import { colors, statusBarStyle } from "@/ui/theme";
 const enableNativeBackGesture = Platform.OS === "ios";
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Montserrat_300Light,
+    Montserrat_400Regular,
+    Montserrat_500Medium,
+    Montserrat_600SemiBold,
+  });
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ alignItems: "center", backgroundColor: colors.background, flex: 1, justifyContent: "center" }}>
+        <ActivityIndicator color={colors.textMuted} />
+      </View>
+    );
+  }
+
   return (
     <KoinoProvider>
       <RootNavigator />

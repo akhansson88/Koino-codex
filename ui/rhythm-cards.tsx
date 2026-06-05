@@ -3,7 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
 import { BodyText, Card } from "@/ui/app-components";
-import { colors, radius } from "@/ui/theme";
+import { colors, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -27,22 +27,24 @@ export function ScriptureRhythmCard({
   return (
     <Card style={{ gap: 10, padding: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <Text style={{ color: colors.olive, flex: 1, fontSize: 13, fontWeight: "900" }}>{rhythmLabel}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{progressLabel}</Text>
+        <Text style={[typography.label, { color: colors.textMuted, flex: 1 }]}>{rhythmLabel}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{progressLabel}</Text>
       </View>
       <View
         style={{
           alignItems: "center",
-          backgroundColor: colors.accentSubtle,
+          backgroundColor: colors.warmSoft,
+          borderColor: colors.border,
           borderRadius: radius.sm,
+          borderWidth: 1,
           flexDirection: "row",
           gap: 10,
           minHeight: 48,
           paddingHorizontal: 12,
         }}
       >
-        <Feather name="bookmark" size={17} color={colors.gold} />
-        <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>
+        <Feather name="bookmark" size={17} color={colors.textMuted} />
+        <Text numberOfLines={1} style={[typography.bodyMedium, { color: colors.ink, flex: 1 }]}>
           {passageReference}
         </Text>
       </View>
@@ -76,7 +78,7 @@ function RhythmRow({
       }}
     >
       <Feather name={icon} size={17} color={colors.olive} />
-      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{label}</Text>
+      <Text style={[typography.label, { color: colors.ink }]}>{label}</Text>
     </View>
   );
 
@@ -127,7 +129,7 @@ export function QuietActionCard({
           </View>
         ) : null}
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{title}</Text>
+          <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
           <BodyText muted numberOfLines={2}>
             {subtitle}
           </BodyText>

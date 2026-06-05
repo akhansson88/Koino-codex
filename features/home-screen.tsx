@@ -35,14 +35,14 @@ type FeatherName = ComponentProps<typeof Feather>["name"];
 
 const fallbackPassage = "Philippians 2:1-11";
 
-const moodTone: Record<HeartMood, { background: string; color: string; icon: FeatherName }> = {
-  peaceful: { background: "#E5F0D8", color: "#58712D", icon: "feather" },
-  grateful: { background: "#FFF0DE", color: "#B86B17", icon: "sun" },
-  heavy: { background: "#EEF1F4", color: "#667085", icon: "cloud" },
-  anxious: { background: "#FCE8DF", color: "#C45125", icon: "cloud-rain" },
-  hopeful: { background: "#FFF2C7", color: "#B86B17", icon: "star" },
-  tired: { background: "#ECE5FF", color: "#7253B8", icon: "moon" },
-};
+function moodToneFor(mood: HeartMood): { background: string; color: string; icon: FeatherName } {
+  if (mood === "peaceful") return { background: colors.rhythmSoft, color: colors.textMuted, icon: "feather" };
+  if (mood === "grateful") return { background: colors.warmSoft, color: colors.textMuted, icon: "sun" };
+  if (mood === "heavy") return { background: colors.reflectionSoft, color: colors.textSecondary, icon: "cloud" };
+  if (mood === "anxious") return { background: colors.prayerSoft, color: colors.textMuted, icon: "cloud-rain" };
+  if (mood === "hopeful") return { background: colors.warmSoft, color: colors.textMuted, icon: "star" };
+  return { background: colors.lavenderSoft, color: colors.textMuted, icon: "moon" };
+}
 
 function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
@@ -687,7 +687,7 @@ function MoodOptionCard({
 }
 
 function MoodIcon({ mood, size = 48 }: { mood: HeartMood; size?: number }) {
-  const tone = moodTone[mood];
+  const tone = moodToneFor(mood);
   return (
     <View
       style={{

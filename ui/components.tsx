@@ -1,7 +1,7 @@
 import { PropsWithChildren } from "react";
 import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
-import { brandPalette, colors, platformShadow, radius } from "@/ui/theme";
+import { brandPalette, colors, platformShadow, radius, typography } from "@/ui/theme";
 
 export function Screen({ children }: PropsWithChildren) {
   return (
@@ -48,7 +48,7 @@ export function Card({
 
 export function Title({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 32, fontWeight: "700", letterSpacing: 0, lineHeight: 39 }}>
+    <Text selectable style={[typography.screenTitle, { color: colors.ink }]}>
       {children}
     </Text>
   );
@@ -56,7 +56,7 @@ export function Title({ children }: PropsWithChildren) {
 
 export function SectionTitle({ children }: PropsWithChildren) {
   return (
-    <Text selectable style={{ color: colors.ink, fontSize: 19, fontWeight: "700", lineHeight: 25 }}>
+    <Text selectable style={[typography.title, { color: colors.ink }]}>
       {children}
     </Text>
   );
@@ -64,7 +64,7 @@ export function SectionTitle({ children }: PropsWithChildren) {
 
 export function Body({ children, muted = false }: PropsWithChildren<{ muted?: boolean }>) {
   return (
-    <Text selectable style={{ color: muted ? colors.muted : colors.ink, fontSize: 16, lineHeight: 23 }}>
+    <Text selectable style={[typography.body, { color: muted ? colors.muted : colors.ink }]}>
       {children}
     </Text>
   );
@@ -102,7 +102,7 @@ export function PillButton({
         }),
       }}
     >
-      <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "700" }}>{children}</Text>
+      <Text style={[typography.button, { color: disabled ? colors.disabledText : color }]}>{children}</Text>
     </Pressable>
   );
 }
@@ -120,11 +120,11 @@ export function Field(props: TextInputProps) {
           borderRadius: radius.md,
           borderWidth: 1,
           color: colors.ink,
-          fontSize: 16,
           minHeight: props.multiline ? 112 : 52,
           padding: 14,
           textAlignVertical: props.multiline ? "top" : "center",
         },
+        typography.body,
         props.style,
       ]}
     />
@@ -154,7 +154,7 @@ export function Choice({
         paddingVertical: 10,
       }}
     >
-      <Text style={{ color: selected ? colors.olive : colors.ink, fontWeight: "700" }}>{label}</Text>
+      <Text style={[typography.button, { color: selected ? colors.olive : colors.ink }]}>{label}</Text>
     </Pressable>
   );
 }

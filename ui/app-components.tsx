@@ -12,7 +12,7 @@ import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
 import { splitLinkText } from "@/ui/link-utils";
 import { openLinkInApp } from "@/ui/open-link";
-import { colors, platformShadow, radius } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -108,7 +108,7 @@ export function AppHeader({
           {showBack ? (
             <IconButton accessibilityLabel="Go back" icon="arrow-left" onPress={onBack ?? (() => router.back())} />
           ) : null}
-          <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
+          <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <ThemeDots />
@@ -125,11 +125,11 @@ export function AppHeader({
           <RoomImage image={currentRoomImage} name={currentRoomName} size={44} />
           <View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{currentRoomName}</Text>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{currentRoomName}</Text>
               <Feather name="chevron-down" size={16} color={colors.ink} />
             </View>
             {typeof memberCount === "number" ? (
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+              <Text style={[typography.label, { color: colors.muted }]}>
                 {memberCount} {memberCount === 1 ? "member" : "members"}
               </Text>
             ) : null}
@@ -173,13 +173,13 @@ export function CurrentRoomHeader() {
       <RoomImage image={group?.image} name={group?.name} size={44} />
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900", maxWidth: 220 }}>
+          <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, maxWidth: 220 }]}>
             {group?.name ?? "No community"}
           </Text>
           <Feather name="chevron-down" size={16} color={colors.ink} />
         </View>
         {group ? (
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+          <Text style={[typography.label, { color: colors.muted }]}>
             {memberCount} {memberCount === 1 ? "member" : "members"}
           </Text>
         ) : null}
@@ -215,8 +215,8 @@ function ThemeDots() {
         }),
       }}
     >
-      <Ionicons name="sunny" color={!isNight ? colors.olive : "#B8C0CE"} size={15} />
-      <Ionicons name="moon" color={isNight ? colors.olive : "#B8C0CE"} size={14} />
+      <Ionicons name="sunny" color={!isNight ? colors.olive : colors.textSecondary} size={15} />
+      <Ionicons name="moon" color={isNight ? colors.olive : colors.textSecondary} size={14} />
     </Pressable>
   );
 }
@@ -286,8 +286,8 @@ export function HeartPromptCard({
     >
       <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "700" }}>How is your heart today?</Text>
-        <Text style={{ color: colors.muted, fontSize: 14, fontWeight: "600" }}>{subtitle}</Text>
+        <Text style={[typography.cardTitle, { color: colors.ink }]}>How is your heart today?</Text>
+        <Text style={[typography.subtitle, { color: colors.muted }]}>{subtitle}</Text>
       </View>
       <View
         style={{
@@ -305,7 +305,7 @@ export function HeartPromptCard({
         }}
       >
         <Feather name={actionIcon} size={actionLabel ? 16 : 23} color={colors.olive} />
-        {actionLabel ? <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{actionLabel}</Text> : null}
+        {actionLabel ? <Text style={[typography.label, { color: colors.olive }]}>{actionLabel}</Text> : null}
       </View>
     </Pressable>
   );
@@ -341,7 +341,7 @@ export function PrimaryButton({
       ]}
     >
       {icon ? <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} /> : null}
-      <Text style={{ color: disabled ? colors.disabledText : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{children}</Text>
+      <Text style={[typography.button, { color: disabled ? colors.disabledText : colors.onAccent }]}>{children}</Text>
     </Pressable>
   );
 }
@@ -384,7 +384,7 @@ export function SecondaryButton({
       ]}
     >
       {icon ? <Feather name={icon} size={18} color={disabled ? colors.disabledText : color} /> : null}
-      <Text style={{ color: disabled ? colors.disabledText : color, fontSize: 15, fontWeight: "900" }}>{children}</Text>
+      <Text style={[typography.button, { color: disabled ? colors.disabledText : color }]}>{children}</Text>
     </Pressable>
   );
 }
@@ -402,12 +402,12 @@ export function TextInputField(props: TextInputProps) {
           borderRadius: radius.lg,
           borderWidth: 1,
           color: colors.ink,
-          fontSize: 16,
           minHeight: props.multiline ? 116 : 50,
           paddingHorizontal: 14,
           paddingVertical: props.multiline ? 14 : 0,
           textAlignVertical: props.multiline ? "top" : "center",
         },
+        typography.body,
         props.style,
       ]}
     />
@@ -476,7 +476,7 @@ export function FilterChips<T extends string>({
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: selected ? colors.olive : colors.muted, fontSize: 14, fontWeight: "800" }}>{option.label}</Text>
+            <Text style={[typography.label, { color: selected ? colors.olive : colors.muted }]}>{option.label}</Text>
           </Pressable>
         );
       })}
@@ -497,10 +497,10 @@ export function Avatar({
 }) {
   const [failed, setFailed] = useState(false);
   const palette = {
-    orange: ["#FFE1C9", "#A9561A"],
-    green: ["#E7F1DD", "#58712D"],
-    pink: ["#F8D3DD", "#8E3B54"],
-    blue: ["#DDE8F3", "#365778"],
+    orange: [colors.warmSoft, colors.textMuted],
+    green: [colors.rhythmSoft, colors.textMuted],
+    pink: [colors.prayerSoft, colors.textMuted],
+    blue: [colors.reflectionSoft, colors.textMuted],
   }[tone];
 
   useEffect(() => {
@@ -530,7 +530,7 @@ export function Avatar({
           style={{ height: "100%", width: "100%" }}
         />
       ) : (
-        <Text style={{ color: palette[1], fontSize: Math.max(12, size * 0.36), fontWeight: "900" }}>{initials(name)}</Text>
+        <Text style={[typography.label, { color: palette[1], fontSize: Math.max(12, size * 0.36), lineHeight: Math.max(14, size * 0.42) }]}>{initials(name)}</Text>
       )}
     </View>
   );
@@ -612,7 +612,7 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
-  const verseTextStyle: TextStyle = { color: colors.ink, fontSize: compact ? 13 : 14, fontWeight: "700", lineHeight: compact ? 18 : 20 };
+  const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
   return (
     <>
       <Pressable
@@ -636,10 +636,10 @@ export function VersePreviewCard({
         <Ionicons name="sunny-outline" size={20} color={colors.olive} />
         <View style={{ flex: 1, gap: 4 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: compact ? 12 : 13, fontWeight: "900" }}>
+            <Text numberOfLines={1} style={[typography.label, { color: colors.ink, flex: 1, fontSize: compact ? 12 : 13 }]}>
               {displayVerse.reference}
             </Text>
-            {displayVerse.translation ? <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>{displayVerse.translation}</Text> : null}
+            {displayVerse.translation ? <Text style={[typography.caption, { color: colors.muted, fontSize: 11 }]}>{displayVerse.translation}</Text> : null}
           </View>
           {showFullText ? (
             <ExpandableBodyText collapsedLines={compact ? 3 : 5} style={verseTextStyle}>
@@ -650,7 +650,7 @@ export function VersePreviewCard({
               {displayVerse.text}
             </Text>
           )}
-          {showOpenIndicator ? <Text style={{ color: colors.gold, fontSize: 11, fontWeight: "900" }}>Open</Text> : null}
+          {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text> : null}
         </View>
       </Pressable>
       <VerseDetailSheet
@@ -775,8 +775,8 @@ export function VerseDetailSheet({
   return (
     <BottomSheet title={verse.reference} visible={visible} onClose={onClose}>
       <View style={{ gap: 6 }}>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900" }}>{verse.translation ?? "Bible"}</Text>
-        <Text selectable style={{ color: colors.ink, fontSize: 17, fontWeight: "800", lineHeight: 26 }}>
+        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{verse.translation ?? "Bible"}</Text>
+        <Text selectable style={[typography.bodyMedium, { color: colors.ink, fontSize: 17, lineHeight: 26 }]}>
           {verse.text}
         </Text>
       </View>
@@ -804,7 +804,7 @@ export function VerseDetailSheet({
 
 export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: boolean }>) {
   return (
-    <Text style={{ color: muted ? colors.muted : colors.ink, fontSize: muted ? 12 : 18, fontWeight: "900", textTransform: muted ? "uppercase" : "none" }}>
+    <Text style={[muted ? typography.sectionLabel : typography.title, { color: muted ? colors.muted : colors.ink }]}>
       {children}
     </Text>
   );
@@ -822,7 +822,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
                 event.stopPropagation();
                 void openLinkInApp(part.url ?? "");
               }}
-              style={{ color: muted ? colors.olive : colors.gold, fontWeight: "900", textDecorationLine: "underline" }}
+              style={[typography.bodyMedium, { color: muted ? colors.olive : colors.textMuted, textDecorationLine: "underline" }]}
             >
               {part.text}
             </Text>
@@ -833,7 +833,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
       : children;
 
   return (
-    <Text {...props} style={[{ color: muted ? colors.muted : colors.ink, fontSize: 15, fontWeight: "500", lineHeight: 22 }, style]}>
+    <Text {...props} style={[typography.body, { color: muted ? colors.muted : colors.ink }, style]}>
       {content}
     </Text>
   );
@@ -900,7 +900,7 @@ export function ExpandableBodyText({
           }}
           style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: 28 }}
         >
-          <Text style={{ color: muted ? colors.muted : colors.olive, fontSize: 13, fontWeight: "900" }}>{expanded ? "Show less" : "Show more"}</Text>
+          <Text style={[typography.label, { color: muted ? colors.muted : colors.olive }]}>{expanded ? "Show less" : "Show more"}</Text>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
         </Pressable>
       ) : null}
@@ -963,7 +963,7 @@ export function BottomSheet({
             <View style={{ alignItems: "center" }}>
               <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
             </View>
-            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{title}</Text>
+            <Text style={[typography.heading, { color: colors.ink, fontSize: 20, lineHeight: 26 }]}>{title}</Text>
             {children}
           </View>
         </View>

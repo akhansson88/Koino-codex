@@ -9,7 +9,7 @@ import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
 import { tabs } from "@/state/product";
 import { AvatarButton } from "@/ui/app-components";
-import { brandPalette, colors, platformShadow, type ThemeName } from "@/ui/theme";
+import { brandPalette, colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -65,7 +65,7 @@ export default function TabLayout() {
               }
             : {}),
         },
-        tabBarLabelStyle: { fontWeight: "700" },
+        tabBarLabelStyle: typography.navLabel,
       }}
     >
       <Tabs.Screen
@@ -159,7 +159,7 @@ function KoinoTabHeader() {
       }}
     >
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
+        <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
         <HeaderRightControls />
       </View>
     </View>
@@ -192,7 +192,7 @@ function ThemeSelector() {
   const nextTheme = state.theme === "light" ? "dark" : "light";
   const trackBackground = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: ["#FFF4D8", "#172237"],
+    outputRange: [colors.warmSoft, "#172237"],
   });
   const thumbTranslate = progress.interpolate({
     inputRange: [0, 1],
@@ -227,7 +227,7 @@ function ThemeSelector() {
           width: 74,
         }}
       >
-        <Ionicons name="sunny" color="#B86B17" size={15} />
+        <Ionicons name="sunny" color={colors.textMuted} size={15} />
         <Ionicons name="moon" color="#D6D9EA" size={14} />
         <Animated.View
           style={{
@@ -248,7 +248,7 @@ function ThemeSelector() {
             width: 32,
           }}
         >
-          <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPeach : "#B86B17"} size={16} />
+          <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPersika : colors.textMuted} size={16} />
         </Animated.View>
       </Animated.View>
     </Pressable>

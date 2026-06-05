@@ -21,12 +21,13 @@ import {
   SectionHeading,
   VerseList,
 } from "@/ui/app-components";
+import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { QuietActionCard, ScriptureRhythmCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors, radius } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 const JOURNAL_BODY_PREVIEW_LINES = 3;
 const fallbackPassage = "Philippians 2:1-11";
@@ -209,7 +210,7 @@ export function JournalScreen() {
   return (
     <AppScreen topInset={false}>
       <View style={{ gap: 6 }}>
-        <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>Journal</Text>
+        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Journal</Text>
         <BodyText muted>A space for reflection, growth and spiritual memory.</BodyText>
       </View>
 
@@ -301,15 +302,20 @@ export function JournalScreen() {
 function ReflectTodayCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card style={{ gap: 12, padding: 14 }}>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+      <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, minHeight: 150, overflow: "hidden", padding: 16 }}>
+        <BrandWaveMotif
+          height={136}
+          opacity={0.95}
+          style={{ bottom: -12, position: "absolute", right: -54, transform: [{ rotate: "-2deg" }] }}
+          width={306}
+        />
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 12, zIndex: 1 }}>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Reflect on today</Text>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>Reflect on today</Text>
             <BodyText muted>Go deeper in your journal</BodyText>
           </View>
           <Feather name="chevron-right" size={19} color={colors.muted} />
         </View>
-        <ReflectionVisual />
       </Card>
     </Pressable>
   );
@@ -323,67 +329,9 @@ function JourneySummaryCard({ count, onPress }: { count: number; onPress: () => 
       <View style={{ backgroundColor: colors.line, height: 1 }} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
         <Feather name="book-open" size={15} color={colors.muted} />
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
       </View>
     </QuietActionCard>
-  );
-}
-
-function ReflectionVisual() {
-  return (
-    <View
-      style={{
-        backgroundColor: "#F7E8D6",
-        borderRadius: radius.md,
-        height: 112,
-        overflow: "hidden",
-      }}
-    >
-      <View
-        style={{
-          backgroundColor: "#FFEFD8",
-          borderRadius: 999,
-          height: 30,
-          position: "absolute",
-          right: 28,
-          top: 24,
-          width: 30,
-        }}
-      />
-      <View
-        style={{
-          backgroundColor: "#E8D0B4",
-          borderRadius: 999,
-          bottom: -50,
-          height: 120,
-          left: -28,
-          position: "absolute",
-          width: 190,
-        }}
-      />
-      <View
-        style={{
-          backgroundColor: "#D7E3C9",
-          borderRadius: 999,
-          bottom: -58,
-          height: 118,
-          position: "absolute",
-          right: -24,
-          width: 210,
-        }}
-      />
-      <View
-        style={{
-          backgroundColor: "rgba(255, 255, 255, 0.45)",
-          bottom: 18,
-          height: 22,
-          left: 18,
-          position: "absolute",
-          right: 18,
-          transform: [{ rotate: "-2deg" }],
-        }}
-      />
-    </View>
   );
 }
 
@@ -415,11 +363,11 @@ function JournalHistoryModal({
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Private journal</Text>
+          <Text style={[typography.label, { color: colors.olive }]}>Private journal</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>Your journey</Text>
+          <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Your journey</Text>
           <BodyText muted>Spiritual memory</BodyText>
         </View>
         {entries.length === 0 ? (
@@ -474,8 +422,8 @@ function JournalEntryCard({
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
         <Avatar image={userImage} name={userName} size={38} tone={type === "answered_prayer" ? "orange" : "green"} />
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatDate(entry.createdAt)}</Text>
+          <Text style={[typography.label, { color: colors.ink, fontSize: 14 }]}>{userName}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatDate(entry.createdAt)}</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 5 }}>
           <Feather
@@ -491,13 +439,13 @@ function JournalEntryCard({
                       : "edit-3"
             }
             size={13}
-            color={colors.gold}
+            color={colors.accentReflection}
           />
-          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{typeLabel}</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{typeLabel}</Text>
         </View>
       </View>
       <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
-        <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
+        <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
           {entry.title || (type === "heart_checkin" && mood ? mood : typeLabel)}
         </Text>
         <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>{entry.body}</ExpandableBodyText>

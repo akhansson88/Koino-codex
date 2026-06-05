@@ -566,19 +566,19 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 
   if (theme === "sepia") {
     return {
-      accent: "#A45118",
-      background: "#F7EDE0",
-      buttonText: "#0B1220",
+      accent: colors.textMuted,
+      background: colors.cardPaper,
+      buttonText: colors.onAccent,
       danger: colors.danger,
-      dim: "rgba(63, 38, 21, 0.34)",
-      input: "#FFF8EF",
-      line: "#E7CFB9",
-      muted: "#776A5E",
-      peach: "#FFE8D8",
-      shadow: "#3F2615",
-      sheet: "#FFF6ED",
-      surface: "#FFF9F2",
-      text: "#1B2434",
+      dim: "rgba(11, 18, 32, 0.28)",
+      input: colors.surface,
+      line: colors.border,
+      muted: colors.textSecondary,
+      peach: colors.warmSoft,
+      shadow: colors.textPrimary,
+      sheet: colors.surface,
+      surface: colors.surface,
+      text: colors.textPrimary,
     };
   }
 
@@ -2359,10 +2359,10 @@ function SuggestedTopicRow({
   topic: SuggestedTopic;
 }) {
   const tone = {
-    blue: { background: "#E7EEF7", color: "#365778" },
-    green: { background: "#E7F1DD", color: "#58712D" },
-    peach: { background: "#FFF0E5", color: "#A45118" },
-    rose: { background: "#FCEDE8", color: "#B35A48" },
+    blue: { background: colors.reflectionSoft, color: colors.textMuted },
+    green: { background: colors.rhythmSoft, color: colors.textMuted },
+    peach: { background: colors.warmSoft, color: colors.textMuted },
+    rose: { background: colors.prayerSoft, color: colors.textMuted },
   }[topic.tone];
 
   return (

@@ -21,7 +21,7 @@ import {
 import { LinkPreview } from "@/ui/link-preview";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { VerseList } from "@/ui/app-components";
-import { colors, platformShadow } from "@/ui/theme";
+import { colors, platformShadow, typography } from "@/ui/theme";
 
 const FEED_BODY_PREVIEW_LINES = 3;
 
@@ -87,12 +87,12 @@ export function PostCard({
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
         <Avatar image={authorImage} name={authorName} size={42} tone="green" />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>{authorName}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt)}</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather name={kindIcon(item)} size={13} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
+          <Feather name={kindIcon(item)} size={13} color={colors.accentPrayer} />
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{kindLabel(item)}</Text>
         </View>
       </View>
 
@@ -121,8 +121,8 @@ export function PostCard({
             <Ionicons name={moodOptionForValue(item.mood).icon} size={20} color={colors.olive} />
           </View>
           <View style={{ flex: 1, gap: 1 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{moodOptionForValue(item.mood).label}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{moodOptionForValue(item.mood).description}</Text>
+            <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>{moodOptionForValue(item.mood).label}</Text>
+            <Text style={[typography.caption, { color: colors.muted, fontSize: 13, lineHeight: 18 }]}>{moodOptionForValue(item.mood).description}</Text>
           </View>
         </View>
       ) : null}
@@ -184,7 +184,7 @@ export function PostCard({
         }}
         style={{ gap: 8 }}
       >
-        <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>
+        <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
           {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
         </Text>
         <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
@@ -203,8 +203,8 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" || prayed ? colors.gold : colors.ink} />
-          <Text style={{ color: colors.muted, fontWeight: "700" }}>
+          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" || prayed ? colors.accentPrayer : colors.ink} />
+          <Text style={[typography.label, { color: colors.muted }]}>
             {itemKind === "prayer_request" ? actionLabels[itemKind] : prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
           </Text>
         </Pressable>
@@ -217,7 +217,7 @@ export function PostCard({
             style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
           >
             <Feather name="message-circle" size={21} color={colors.ink} />
-            <Text style={{ color: colors.muted, fontWeight: "700" }}>{replyCount}</Text>
+            <Text style={[typography.label, { color: colors.muted }]}>{replyCount}</Text>
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }} />
@@ -240,7 +240,7 @@ export function PostCard({
       {prayedBy && prayedBy.length > 0 ? (
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
           <AvatarStack users={prayedBy} size={24} />
-          <Text style={{ color: colors.muted, fontWeight: "700" }}>
+          <Text style={[typography.label, { color: colors.muted }]}>
             {prayerCount} {prayerCopy}
           </Text>
         </View>
