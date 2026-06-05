@@ -9,7 +9,7 @@ import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
 import { tabs } from "@/state/product";
 import { AvatarButton } from "@/ui/app-components";
-import { colors, platformShadow, type ThemeName } from "@/ui/theme";
+import { brandPalette, colors, platformShadow, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -22,10 +22,10 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         header: () => <KoinoTabHeader />,
-        headerTintColor: colors.text.primary,
+        headerTintColor: colors.ink,
         headerShadowVisible: false,
-        tabBarActiveTintColor: colors.text.primary,
-        tabBarInactiveTintColor: colors.text.secondary,
+        tabBarActiveTintColor: colors.olive,
+        tabBarInactiveTintColor: colors.muted,
         tabBarBackground: () => <TabBarGlassBackground theme={state.theme} />,
         tabBarStyle: {
           backgroundColor:
@@ -146,13 +146,12 @@ function KoinoTabHeader() {
   return (
     <View
       style={{
-        backgroundColor: colors.background.app,
+        backgroundColor: colors.cream,
         paddingBottom: 14,
         paddingHorizontal: 18,
         paddingTop: insets.top + 12,
         ...platformShadow({
-          boxShadow: `0 4px 12px ${colors.shadow.soft}`,
-          color: colors.text.primary,
+          boxShadow: "0 4px 12px rgba(11, 18, 32, 0.04)",
           offset: { width: 0, height: 4 },
           opacity: 0.04,
           radius: 12,
@@ -160,7 +159,7 @@ function KoinoTabHeader() {
       }}
     >
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.text.primary, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
+        <Text style={{ color: colors.olive, fontSize: 24, fontWeight: "900", letterSpacing: 3 }}>KOINO</Text>
         <HeaderRightControls />
       </View>
     </View>
@@ -193,7 +192,7 @@ function ThemeSelector() {
   const nextTheme = state.theme === "light" ? "dark" : "light";
   const trackBackground = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [colors.semantic.warmthSoft, colors.background.elevated],
+    outputRange: ["#FFF4D8", "#172237"],
   });
   const thumbTranslate = progress.interpolate({
     inputRange: [0, 1],
@@ -218,7 +217,7 @@ function ThemeSelector() {
         style={{
           alignItems: "center",
           backgroundColor: trackBackground,
-          borderColor: colors.border.subtle,
+          borderColor: colors.line,
           borderRadius: 999,
           borderWidth: 1,
           flexDirection: "row",
@@ -228,20 +227,19 @@ function ThemeSelector() {
           width: 74,
         }}
       >
-        <Ionicons name="sunny" color={colors.text.primary} size={15} />
-        <Ionicons name="moon" color={colors.text.muted} size={14} />
+        <Ionicons name="sunny" color="#B86B17" size={15} />
+        <Ionicons name="moon" color="#D6D9EA" size={14} />
         <Animated.View
           style={{
             alignItems: "center",
-            backgroundColor: isNight ? colors.background.app : colors.background.surface,
+            backgroundColor: isNight ? colors.cream : colors.paper,
             borderRadius: 999,
             height: 28,
             justifyContent: "center",
             left: 2,
             position: "absolute",
             ...platformShadow({
-              boxShadow: `0 2px 5px ${colors.shadow.soft}`,
-              color: colors.text.primary,
+              boxShadow: "0 2px 5px rgba(11, 18, 32, 0.16)",
               offset: { width: 0, height: 2 },
               opacity: 0.16,
               radius: 5,
@@ -250,7 +248,7 @@ function ThemeSelector() {
             width: 32,
           }}
         >
-          <Ionicons name={isNight ? "moon" : "sunny"} color={colors.text.primary} size={16} />
+          <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPeach : "#B86B17"} size={16} />
         </Animated.View>
       </Animated.View>
     </Pressable>
