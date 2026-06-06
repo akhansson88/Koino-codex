@@ -90,6 +90,8 @@ export function PostCard({
   const itemKind = feedItemKind(item);
   const isPrayerRequest = itemKind === "prayer_request";
   const reactionCopy = actionPastLabels[itemKind].toLowerCase();
+  const hasPrayerActivity = Boolean(prayedBy?.length);
+  const hasReactionActivity = !isPrayerRequest && Boolean(reactedBy?.length);
 
   return (
     <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
@@ -260,20 +262,24 @@ export function PostCard({
           </Pressable>
         ) : null}
       </View>
-      {prayedBy && prayedBy.length > 0 ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
-          <AvatarStack users={prayedBy} size={24} />
-          <Text style={[typography.label, { color: colors.muted }]}>
-            {prayerCount} {prayerCount === 1 ? "prayer" : "prayers"}
-          </Text>
-        </View>
-      ) : null}
-      {!isPrayerRequest && reactedBy && reactedBy.length > 0 ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
-          <AvatarStack users={reactedBy} size={24} />
-          <Text style={[typography.label, { color: colors.muted }]}>
-            {reactionCount ?? 0} {reactionCopy}
-          </Text>
+      {hasPrayerActivity || hasReactionActivity ? (
+        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 6 }}>
+          {hasPrayerActivity ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+              <AvatarStack users={prayedBy!} size={24} />
+              <Text style={[typography.label, { color: colors.muted }]}>
+                {prayerCount} {prayerCount === 1 ? "prayer" : "prayers"}
+              </Text>
+            </View>
+          ) : null}
+          {hasReactionActivity ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+              <AvatarStack users={reactedBy!} size={24} />
+              <Text style={[typography.label, { color: colors.muted }]}>
+                {reactionCount ?? 0} {reactionCopy}
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Card>
