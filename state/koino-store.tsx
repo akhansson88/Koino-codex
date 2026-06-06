@@ -26,6 +26,8 @@ import {
   KoinoState,
   Membership,
   Post,
+  PostReaction,
+  PostReactionKind,
   PrayerNotification,
   PrayerReaction,
   PrayerSession,
@@ -112,6 +114,7 @@ type Action =
   | { type: "unmarkPrayerAnswered"; id: Id }
   | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string; recipientUserId?: Id }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
+  | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
   | { type: "deleteReply"; id: Id }
 
@@ -457,9 +460,10 @@ async function profileAndMembershipImageUpdates(userId: Id, image: Profile["imag
 }
 
 async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
-  const [replySnapshot, reactionSnapshot] = await Promise.all([
+  const [replySnapshot, reactionSnapshot, postReactionSnapshot] = await Promise.all([
     get(ref(database, `replies/${groupId}`)),
     get(ref(database, `prayerReactions/${groupId}`)),
+    get(ref(database, `postReactions/${groupId}`)),
   ]);
   const childDeletes: Record<string, null> = {};
   const ownedChildDeletes: Record<string, null> = {};
@@ -493,6 +497,15 @@ async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "che
       }
     });
 
+  asArray<PostReaction>(postReactionSnapshot.val())
+    .filter((reaction) => reaction.targetType === targetType && reaction.targetId === targetId)
+    .forEach((reaction) => {
+      childDeletes[`postReactions/${groupId}/${reaction.id}`] = null;
+      if (reaction.userId === ownerId) {
+        ownedChildDeletes[`postReactions/${groupId}/${reaction.id}`] = null;
+      }
+    });
+
   if (Object.keys(childDeletes).length > 0) {
     try {
       await update(ref(database), childDeletes);
@@ -523,6 +536,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerNotifications, setPrayerNotifications] = useState<PrayerNotification[]>([]);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
+  const [postReactions, setPostReactions] = useState<PostReaction[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
@@ -556,6 +570,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setPrayerSessions([]);
     setPrayerNotifications([]);
     setPrayerReactions([]);
+    setPostReactions([]);
     setReplies([]);
     setJournalEntries([]);
     setSavedVerses([]);
@@ -797,6 +812,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setPosts([]);
       setReplies([]);
       setPrayerReactions([]);
+      setPostReactions([]);
       setGroupBiblePlan(undefined);
       setGroupBiblePlanProgress([]);
       return;
@@ -808,6 +824,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const postsRef = ref(database, `posts/${groupId}`);
     const repliesRef = ref(database, `replies/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
+    const postReactionsRef = ref(database, `postReactions/${groupId}`);
     const groupBiblePlanRef = ref(database, `groupBiblePlans/${groupId}/active`);
 
     const unsubs = [
@@ -816,6 +833,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
+      onValue(postReactionsRef, (snapshot) => setPostReactions(asArray<PostReaction>(snapshot.val()))),
       onValue(groupBiblePlanRef, (snapshot) => setGroupBiblePlan(snapshot.exists() ? (snapshot.val() as BiblePlan) : undefined)),
     ];
 
@@ -862,6 +880,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerSessions,
       prayerNotifications,
       prayerReactions,
+      postReactions,
       replies,
       journalEntries,
       savedVerses,
@@ -885,6 +904,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     journalEntries,
     memberships,
     posts,
+    postReactions,
     prayerNotifications,
     privateCheckIns,
     prayerReactions,
@@ -1299,6 +1319,33 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
               await remove(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`));
+              return;
+            }
+            case "togglePostReaction": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              if (action.targetType === "post") {
+                const post = posts.find((item) => item.id === action.targetId && item.groupId === profile.currentGroupId);
+                if (!post) return;
+              } else if (!checkIns.some((item) => item.id === action.targetId && item.groupId === profile.currentGroupId)) {
+                return;
+              }
+
+              const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}_${action.kind}`;
+              const reactionRef = ref(database, `postReactions/${profile.currentGroupId}/${reactionId}`);
+              if (postReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid)) {
+                await remove(reactionRef);
+                return;
+              }
+
+              const reaction: PostReaction = {
+                id: reactionId,
+                userId: firebaseUser.uid,
+                targetType: action.targetType,
+                targetId: action.targetId,
+                kind: action.kind,
+                createdAt: now(),
+              };
+              await set(reactionRef, reaction);
               return;
             }
             case "createReply": {
@@ -1781,6 +1828,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       groups,
       journalEntries,
       posts,
+      postReactions,
       prayerReactions,
       privateCheckIns,
       privateBiblePlan,

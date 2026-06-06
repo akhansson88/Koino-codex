@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
@@ -14,7 +14,7 @@ import {
   feedItemLabel,
   moodLabel,
 } from "@/state/product";
-import type { FeedItem, GroupImage } from "@/state/types";
+import type { FeedItem, GroupImage, PostReactionKind } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -132,6 +132,20 @@ export function FeedDetailScreen() {
         })),
     };
   }, [item, state.currentUserId, state.prayerReactions, targetType, userById, userImageById]);
+  const reaction = useMemo(() => {
+    if (!item || !targetType) return undefined;
+    const itemReactionKind = feedItemKind(item);
+    if (itemReactionKind === "prayer_request") return undefined;
+    const kind = itemReactionKind as PostReactionKind;
+    const reactions = state.postReactions.filter((candidate) => candidate.targetType === targetType && candidate.targetId === item.id && candidate.kind === kind);
+    const reactedByUserIds = [...new Set(reactions.map((candidate) => candidate.userId))];
+    return {
+      reacted: reactions.some((candidate) => candidate.userId === state.currentUserId),
+      count: reactions.length,
+      kind,
+      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+    };
+  }, [item, state.currentUserId, state.postReactions, targetType, userById, userImageById]);
 
   usePreventRemove(Boolean(replyDraft.trim()) && !allowRemove, ({ data }) => {
     Alert.alert("Discard reply?", "Your draft encouragement has not been sent.", [
@@ -165,7 +179,6 @@ export function FeedDetailScreen() {
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
-  const actionLabel = isPrayerRequest ? "Pray" : actionLabels[itemKind];
   const actionPastLabel = actionPastLabels[itemKind];
 
   async function sendReply() {
@@ -175,13 +188,14 @@ export function FeedDetailScreen() {
     setReplyDraft("");
   }
 
-  function togglePrayer() {
+  function startPrayer() {
     if (!item || !targetType) return;
-    if (isPrayerRequest) {
-      setPrayerTarget({ targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
-      return;
-    }
-    dispatch({ type: "finishPrayer", targetType, targetId: item.id, status: "completed", startedAt: new Date().toISOString() });
+    setPrayerTarget({ targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
+  }
+
+  function toggleReaction() {
+    if (!item || !targetType || isPrayerRequest || !reaction) return;
+    dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: reaction.kind });
   }
 
   return (
@@ -232,21 +246,30 @@ export function FeedDetailScreen() {
             </View>
           </Card>
         ) : (
-          <PrimaryButton icon={isPrayerRequest ? "users" : "heart"} onPress={togglePrayer} style={{ minHeight: 58 }}>
-            {actionLabel}
-          </PrimaryButton>
+          <View style={{ gap: 10 }}>
+            <DetailPrayerButton onPress={startPrayer} />
+            {!isPrayerRequest ? (
+              <DetailReactionButton active={Boolean(reaction?.reacted)} label={reaction?.reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]} onPress={toggleReaction} />
+            ) : null}
+          </View>
         )}
         {ownsItem && isPrayerRequest && !prayerAnswered ? (
           <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-            {isPrayerRequest
-              ? `${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`
-              : `${actionPastLabel} by ${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "member" : "members"}`}
+            {`${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`}
           </Text>
           {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
         </View>
+        {!isPrayerRequest ? (
+          <View style={{ gap: 12 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+              {`${actionPastLabel} by ${reaction?.count ?? 0} ${(reaction?.count ?? 0) === 1 ? "member" : "members"}`}
+            </Text>
+            {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
+          </View>
+        ) : null}
         {isPrayerRequest ? (
           <View style={{ gap: 12 }}>
             <SectionHeading>Prayer activity</SectionHeading>
@@ -358,6 +381,54 @@ export function FeedDetailScreen() {
         }}
       />
     </KeyboardAvoidingView>
+  );
+}
+
+function DetailPrayerButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.gold,
+        borderColor: colors.gold,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 10,
+        justifyContent: "center",
+        minHeight: 58,
+        paddingHorizontal: 18,
+      }}
+    >
+      <MaterialCommunityIcons name="hands-pray" size={21} color={colors.onAccent} />
+      <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Pray</Text>
+    </Pressable>
+  );
+}
+
+function DetailReactionButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 9,
+        justifyContent: "center",
+        minHeight: 52,
+        paddingHorizontal: 18,
+      }}
+    >
+      <Ionicons name={active ? "heart" : "heart-outline"} size={20} color={active ? colors.accentPrayer : colors.olive} />
+      <Text style={{ color: colors.olive, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+    </Pressable>
   );
 }
 

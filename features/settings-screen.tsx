@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
@@ -9,6 +9,7 @@ import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-
 import {
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
+  feedItemKind,
   feedItemLabel,
   heartMoods,
   moodLabel,
@@ -18,7 +19,7 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Reply } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, Reply } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -293,6 +294,21 @@ export function SettingsScreen() {
     };
   }
 
+  function itemReactionState(item: FeedItem) {
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    const itemReactionKind = feedItemKind(item);
+    const kind = (itemReactionKind === "prayer_request" ? "reflection" : itemReactionKind) as PostReactionKind;
+    const reactions = state.postReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id && reaction.kind === kind);
+    const reactedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
+    return {
+      reacted: reactions.some((reaction) => reaction.userId === state.currentUserId),
+      count: reactions.length,
+      kind,
+      targetType,
+      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+    };
+  }
+
   function itemReplies(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     return state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
@@ -320,12 +336,8 @@ export function SettingsScreen() {
   }
 
   function togglePostAction(item: FeedItem) {
-    const prayer = itemPrayerState(item);
-    if (prayer.prayed) {
-      setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
-    } else {
-      prayForItem(item);
-    }
+    const reaction = itemReactionState(item);
+    dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
   }
 
   async function sendEncouragement(item: FeedItem) {
@@ -732,6 +744,7 @@ export function SettingsScreen() {
                 ) : (
                   reflectionItems.map((item) => {
                     const prayer = itemPrayerState(item);
+                    const reaction = itemReactionState(item);
                     return (
                       <PostCard
                         key={`${item.type}-${item.id}`}
@@ -742,9 +755,13 @@ export function SettingsScreen() {
                         prayed={prayer.prayed}
                         prayedBy={prayer.prayedBy}
                         prayerCount={prayer.count}
+                        reacted={reaction.reacted}
+                        reactedBy={reaction.reactedBy}
+                        reactionCount={reaction.count}
                         replyCount={itemReplies(item).length}
                         onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                        onPray={() => togglePostAction(item)}
+                        onPray={() => prayForItem(item)}
+                        onReact={() => togglePostAction(item)}
                       />
                     );
                   })
@@ -844,6 +861,23 @@ export function SettingsScreen() {
           <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
         </BottomSheet>
         <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
+        <PrayerMoment
+          target={prayerTarget}
+          onClose={() => setPrayerTarget(undefined)}
+          onFinish={(status, startedAt) => {
+            if (prayerTarget) {
+              dispatch({
+                type: "finishPrayer",
+                targetType: prayerTarget.targetType,
+                targetId: prayerTarget.targetId,
+                status,
+                startedAt,
+                recipientUserId: prayerTarget.recipientUserId,
+              });
+            }
+            setPrayerTarget(undefined);
+          }}
+        />
       </>
     );
   }
@@ -1285,9 +1319,7 @@ function CommunityPrayerDetailScreen({
         </Card>
       ) : null}
       {!answered ? (
-        <PrimaryButton icon="heart" onPress={onPray}>
-          Pray
-        </PrimaryButton>
+        <PrayerActionButton onPress={onPray} />
       ) : null}
       {ownsItem && !answered ? (
         <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
@@ -1373,6 +1405,30 @@ function CommunityPrayerDetailScreen({
         </Pressable>
       </View>
     </AppScreen>
+  );
+}
+
+function PrayerActionButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.gold,
+        borderColor: colors.gold,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 10,
+        justifyContent: "center",
+        minHeight: 54,
+        paddingHorizontal: 18,
+      }}
+    >
+      <MaterialCommunityIcons name="hands-pray" size={21} color={colors.onAccent} />
+      <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Pray</Text>
+    </Pressable>
   );
 }
 
@@ -1483,7 +1539,7 @@ function PrayerRequestCard({
                 paddingHorizontal: 12,
               }}
             >
-              <Feather name="heart" size={15} color={colors.onAccent} />
+              <MaterialCommunityIcons name="hands-pray" size={16} color={colors.onAccent} />
               <Text style={{ color: colors.onAccent, fontSize: 12, fontWeight: "900" }}>Pray</Text>
             </Pressable>
           ) : (

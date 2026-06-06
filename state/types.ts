@@ -166,6 +166,8 @@ export type Post = {
 
 export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply" | "user";
 export type PrayerReactionTargetType = "post" | "check_in" | "reply";
+export type PostReactionTargetType = "post" | "check_in";
+export type PostReactionKind = Exclude<EntryKind, "prayer_request">;
 export type ReplyTargetType = "post" | "check_in";
 export type PrayerSession = {
   id: Id;
@@ -196,6 +198,15 @@ export type PrayerReaction = {
   startedAt?: string;
   completedAt?: string;
   durationSeconds?: number;
+  createdAt: string;
+};
+
+export type PostReaction = {
+  id: Id;
+  userId: Id;
+  targetType: PostReactionTargetType;
+  targetId: Id;
+  kind: PostReactionKind;
   createdAt: string;
 };
 
@@ -259,6 +270,7 @@ export type KoinoState = {
   prayerSessions: PrayerSession[];
   prayerNotifications: PrayerNotification[];
   prayerReactions: PrayerReaction[];
+  postReactions: PostReaction[];
   replies: Reply[];
   journalEntries: JournalEntry[];
   savedVerses: SavedVerse[];

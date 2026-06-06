@@ -450,6 +450,24 @@
       }
     },
 
+    "postReactions": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
+        "$reactionId": {
+          ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && ((!data.exists() && !newData.exists()) || (!data.exists() && newData.exists() && newData.child('id').val() == $reactionId && newData.child('id').val() == auth.uid + '_' + newData.child('targetType').val() + '_' + newData.child('targetId').val() + '_' + newData.child('kind').val() && newData.child('userId').val() == auth.uid && ((newData.child('targetType').val() == 'post' && root.child('posts').child($groupId).child(newData.child('targetId').val()).exists()) || (newData.child('targetType').val() == 'check_in' && root.child('checkIns').child($groupId).child(newData.child('targetId').val()).exists()))) || (data.exists() && !newData.exists() && (data.child('userId').val() == auth.uid || (data.child('targetType').val() == 'post' && root.child('posts').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid) || (data.child('targetType').val() == 'check_in' && root.child('checkIns').child($groupId).child(data.child('targetId').val()).child('userId').val() == auth.uid))))",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $reactionId && newData.child('id').val() == auth.uid + '_' + newData.child('targetType').val() + '_' + newData.child('targetId').val() + '_' + newData.child('kind').val() && newData.child('userId').val() == auth.uid && (newData.child('targetType').val() == 'post' || newData.child('targetType').val() == 'check_in') && newData.child('targetId').isString() && (newData.child('kind').val() == 'reflection' || newData.child('kind').val() == 'praise' || newData.child('kind').val() == 'update' || newData.child('kind').val() == 'scripture') && newData.child('createdAt').isString())",
+          "id": { ".validate": "newData.val() == $reactionId" },
+          "userId": { ".validate": "newData.val() == auth.uid" },
+          "targetType": { ".validate": "newData.val() == 'post' || newData.val() == 'check_in'" },
+          "targetId": { ".validate": "newData.isString()" },
+          "kind": { ".validate": "newData.val() == 'reflection' || newData.val() == 'praise' || newData.val() == 'update' || newData.val() == 'scripture'" },
+          "createdAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
     "prayerSessions": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",

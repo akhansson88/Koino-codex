@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 
 import {
@@ -46,11 +46,15 @@ export function PostCard({
   onEdit,
   onOpen,
   onPray,
+  onReact,
   onReply,
   ownsItem,
   prayed,
   prayedBy,
   prayerCount,
+  reacted,
+  reactedBy,
+  reactionCount,
   replyCount,
 }: {
   authorImage?: GroupImage;
@@ -60,11 +64,15 @@ export function PostCard({
   onEdit?: () => void;
   onOpen: () => void;
   onPray: () => void;
+  onReact?: () => void;
   onReply?: () => void;
   ownsItem: boolean;
   prayed: boolean;
   prayedBy?: { name: string; image?: GroupImage }[];
   prayerCount: number;
+  reacted?: boolean;
+  reactedBy?: { name: string; image?: GroupImage }[];
+  reactionCount?: number;
   replyCount: number;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -80,7 +88,8 @@ export function PostCard({
   }
 
   const itemKind = feedItemKind(item);
-  const prayerCopy = itemKind === "prayer_request" ? "prayed" : actionPastLabels[itemKind].toLowerCase();
+  const isPrayerRequest = itemKind === "prayer_request";
+  const reactionCopy = actionPastLabels[itemKind].toLowerCase();
 
   return (
     <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
@@ -203,11 +212,25 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <Ionicons name={itemKind === "prayer_request" || prayed ? "heart" : "heart-outline"} size={22} color={itemKind === "prayer_request" || prayed ? colors.accentPrayer : colors.ink} />
+          <MaterialCommunityIcons name="hands-pray" size={22} color={colors.ink} />
           <Text style={[typography.label, { color: colors.muted }]}>
-            {itemKind === "prayer_request" ? actionLabels[itemKind] : prayed ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+            Pray
           </Text>
         </Pressable>
+        {!isPrayerRequest && onReact ? (
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              onReact();
+            }}
+            style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
+          >
+            <Ionicons name={reacted ? "heart" : "heart-outline"} size={21} color={reacted ? colors.accentPrayer : colors.ink} />
+            <Text style={[typography.label, { color: colors.muted }]}>
+              {reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+            </Text>
+          </Pressable>
+        ) : null}
         {onReply ? (
           <Pressable
             onPress={(event) => {
@@ -241,7 +264,15 @@ export function PostCard({
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
           <AvatarStack users={prayedBy} size={24} />
           <Text style={[typography.label, { color: colors.muted }]}>
-            {prayerCount} {prayerCopy}
+            {prayerCount} {prayerCount === 1 ? "prayer" : "prayers"}
+          </Text>
+        </View>
+      ) : null}
+      {!isPrayerRequest && reactedBy && reactedBy.length > 0 ? (
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 8, marginTop: 6 }}>
+          <AvatarStack users={reactedBy} size={24} />
+          <Text style={[typography.label, { color: colors.muted }]}>
+            {reactionCount ?? 0} {reactionCopy}
           </Text>
         </View>
       ) : null}
