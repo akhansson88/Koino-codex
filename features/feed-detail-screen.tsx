@@ -30,6 +30,7 @@ import {
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
 import { prayerCountNoun } from "@/ui/prayer-copy";
+import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
@@ -38,14 +39,6 @@ const MAX_REPLY_LENGTH = 500;
 
 function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function formatPrayerDuration(seconds?: number) {
-  if (seconds === undefined) return "Duration unavailable";
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function kindLabel(item: FeedItem) {
@@ -125,6 +118,7 @@ export function FeedDetailScreen() {
         .map((reaction) => ({
           id: reaction.id,
           name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
+          image: userImageById.get(reaction.userId),
           createdAt: reaction.createdAt,
           durationSeconds:
             reaction.durationSeconds ??
@@ -270,37 +264,7 @@ export function FeedDetailScreen() {
             {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
           </View>
         ) : null}
-        {isPrayerRequest ? (
-          <View style={{ gap: 12 }}>
-            <SectionHeading>Prayer activity</SectionHeading>
-            <Card style={{ gap: 0, padding: 0 }}>
-              {prayer?.activity.length ? (
-                prayer.activity.map((activity, index) => (
-                  <View
-                    key={activity.id}
-                    style={{
-                      borderBottomColor: colors.line,
-                      borderBottomWidth: index === prayer.activity.length - 1 ? 0 : 1,
-                      flexDirection: "row",
-                      gap: 10,
-                      padding: 14,
-                    }}
-                  >
-                    <Feather name="users" size={18} color={colors.gold} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{activity.name} prayed</Text>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                        {formatRelativeTime(activity.createdAt)} - {formatPrayerDuration(activity.durationSeconds)}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <BodyText muted style={{ padding: 14 }}>No prayer activity yet.</BodyText>
-              )}
-            </Card>
-          </View>
-        ) : null}
+        <PrayerActivity activity={prayer?.activity ?? []} />
         <View style={{ gap: 12 }}>
           <SectionHeading>Encouragement</SectionHeading>
           <Card style={{ gap: 0, padding: 0 }}>

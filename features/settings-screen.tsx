@@ -42,6 +42,7 @@ import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { prayerCountLabel, prayerCountNoun } from "@/ui/prayer-copy";
+import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
@@ -78,14 +79,6 @@ async function shareRoomInvite(room: Group) {
 
   await Share.share({ message: invitation, title: `Join ${room.name}` });
   return "Invite ready to share.";
-}
-
-function formatPrayerDuration(seconds?: number) {
-  if (seconds === undefined) return "Duration unavailable";
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
 }
 
 function defaultTitle(item: FeedItem) {
@@ -1265,7 +1258,7 @@ function CommunityPrayerDetailScreen({
   userById,
   userImageById,
 }: {
-  activity: { id: Id; createdAt: string; durationSeconds?: number; name: string; image?: GroupImage }[];
+  activity: PrayerActivityEntry[];
   authorImage?: GroupImage;
   authorName: string;
   encouragementDraft: string;
@@ -1326,36 +1319,7 @@ function CommunityPrayerDetailScreen({
           Mark as answered
         </SecondaryButton>
       ) : null}
-      <View style={{ gap: 12 }}>
-        <SectionHeading>Prayer activity</SectionHeading>
-        <Card style={{ gap: 0, padding: 0 }}>
-          {activity.length === 0 ? (
-            <BodyText muted style={{ padding: 14 }}>No prayer activity yet.</BodyText>
-          ) : (
-            activity.map((entry, index) => (
-              <View
-                key={entry.id}
-                style={{
-                  alignItems: "center",
-                  borderBottomColor: colors.line,
-                  borderBottomWidth: index === activity.length - 1 ? 0 : 1,
-                  flexDirection: "row",
-                  gap: 10,
-                  padding: 14,
-                }}
-              >
-                <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                    {formatRelativeTime(entry.createdAt)} - {formatPrayerDuration(entry.durationSeconds)}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </Card>
-      </View>
+      <PrayerActivity activity={activity} />
       <View style={{ gap: 12 }}>
         <SectionHeading>Encouragement</SectionHeading>
         <Card style={{ gap: 0, padding: 0 }}>
