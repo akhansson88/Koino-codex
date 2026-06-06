@@ -100,7 +100,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="room"
+        name="community"
         options={{
           title: tabs[3],
           tabBarLabel: tabs[3],

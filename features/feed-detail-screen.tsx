@@ -29,6 +29,7 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
+import { prayerCountNoun } from "@/ui/prayer-copy";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
@@ -213,7 +214,7 @@ export function FeedDetailScreen() {
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
               <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer?.count ?? 0)}</Text>
             </View>
             <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>

@@ -5,19 +5,20 @@ import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
 
+import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import {
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
   feedItemLabel,
+  heartMoods,
   moodLabel,
-  moodOptions,
   normalizeEntryKind,
   prayerFilters,
   roomTabs,
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, Id, Reply } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Reply } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -36,9 +37,10 @@ import {
   StatusPill,
   TextInputField,
 } from "@/ui/app-components";
-import { BibleVerseField, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
+import { prayerCountLabel, prayerCountNoun } from "@/ui/prayer-copy";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
@@ -47,7 +49,7 @@ import { PostCard } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
-type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "checkinComposer";
+type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
@@ -114,10 +116,12 @@ export function SettingsScreen() {
   const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [encouragementDraft, setEncouragementDraft] = useState("");
-  const [checkInMood, setCheckInMood] = useState(4);
+  const [checkInVisible, setCheckInVisible] = useState(false);
+  const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
+  const [heartMood, setHeartMood] = useState<HeartMood>();
   const [checkInText, setCheckInText] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
-  const [checkInBackView, setCheckInBackView] = useState<RoomView>("detail");
+  const [shareCheckIn, setShareCheckIn] = useState(true);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -228,12 +232,8 @@ export function SettingsScreen() {
       navigateToRoomView("detail", "back");
       return true;
     }
-    if (roomView === "checkinComposer") {
-      navigateToRoomView(checkInBackView, "back");
-      return true;
-    }
     return false;
-  }, [checkInBackView, navigateToRoomView, roomView]);
+  }, [navigateToRoomView, roomView]);
 
   useEffect(() => {
     if (Platform.OS === "web") return undefined;
@@ -336,29 +336,31 @@ export function SettingsScreen() {
   }
 
   function resetCommunityCheckIn() {
-    setCheckInMood(4);
+    setCheckInStep("choose");
+    setHeartMood(undefined);
     setCheckInText("");
     setCheckInVerses([]);
+    setShareCheckIn(true);
   }
 
-  function openCheckInComposer(backView: RoomView) {
+  function openCheckInComposer() {
     resetCommunityCheckIn();
-    setCheckInBackView(backView);
-    navigateToRoomView("checkinComposer");
+    setCheckInVisible(true);
   }
 
   async function submitCommunityCheckIn() {
+    const selected = heartMoods.find((option) => option.value === heartMood);
     await dispatch({
       type: "submitCheckIn",
-      mood: checkInMood,
+      mood: moodNumber(heartMood),
+      heartMood,
       readToday: true,
-      reflectionText: checkInText,
-      visibility: "group",
+      reflectionText: checkInText.trim() || selected?.description || "",
+      visibility: shareCheckIn ? "group" : "private",
       verse: primaryBibleVerse(checkInVerses),
       verses: checkInVerses,
     });
-    resetCommunityCheckIn();
-    navigateToRoomView("checkins", "back");
+    setCheckInStep("thanks");
   }
 
   async function handleInvite() {
@@ -515,6 +517,33 @@ export function SettingsScreen() {
     setManageSheetVisible(false);
   }
 
+  const communityCheckInModal = group ? (
+    <CheckInModal
+      visible={checkInVisible}
+      step={checkInStep}
+      mood={heartMood}
+      note={checkInText}
+      verses={checkInVerses}
+      roomName={group.name}
+      roomImage={group.image}
+      share={shareCheckIn}
+      onClose={() => setCheckInVisible(false)}
+      onMood={(value) => {
+        setHeartMood(value);
+        setCheckInStep("details");
+      }}
+      onNote={setCheckInText}
+      onVerses={setCheckInVerses}
+      onShare={setShareCheckIn}
+      onBack={() => setCheckInStep("choose")}
+      onSubmit={submitCommunityCheckIn}
+      onDone={() => {
+        setCheckInVisible(false);
+        resetCommunityCheckIn();
+      }}
+    />
+  ) : null;
+
   if (roomView === "prayer" && group) {
     return (
       <>
@@ -630,33 +659,19 @@ export function SettingsScreen() {
 
   if (roomView === "checkins" && group) {
     return (
-      <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
-        <CommunityCheckInsScreen
-          checkIns={sharedCheckIns}
-          onBack={goBackFromRoomView}
-          onCheckIn={() => openCheckInComposer("checkins")}
-          onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
-          userById={userById}
-          userImageById={userImageById}
-        />
-      </CommunityTransitionFrame>
-    );
-  }
-
-  if (roomView === "checkinComposer" && group) {
-    return (
-      <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
-        <CommunityCheckInComposerScreen
-          mood={checkInMood}
-          note={checkInText}
-          onBack={goBackFromRoomView}
-          onMood={setCheckInMood}
-          onNote={setCheckInText}
-          onSubmit={submitCommunityCheckIn}
-          onVerses={setCheckInVerses}
-          verses={checkInVerses}
-        />
-      </CommunityTransitionFrame>
+      <>
+        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+          <CommunityCheckInsScreen
+            checkIns={sharedCheckIns}
+            onBack={goBackFromRoomView}
+            onCheckIn={openCheckInComposer}
+            onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
+            userById={userById}
+            userImageById={userImageById}
+          />
+        </CommunityTransitionFrame>
+        {communityCheckInModal}
+      </>
     );
   }
 
@@ -693,7 +708,7 @@ export function SettingsScreen() {
               image={currentUser?.image}
               name={currentUser?.name ?? state.authEmail ?? "K"}
               subtitle="Take a quiet moment with God."
-              onPress={() => openCheckInComposer("detail")}
+              onPress={openCheckInComposer}
             />
 
             <FilterChips
@@ -771,6 +786,7 @@ export function SettingsScreen() {
           roomName={group.name}
           roomImage={group.image}
         />
+        {communityCheckInModal}
         <BottomSheet title="Community settings" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
@@ -1251,7 +1267,7 @@ function CommunityPrayerDetailScreen({
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
           <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>prayed</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer.count)}</Text>
         </View>
         <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
@@ -1409,81 +1425,6 @@ function CommunityCheckInsScreen({
   );
 }
 
-function CommunityCheckInComposerScreen({
-  mood,
-  note,
-  onBack,
-  onMood,
-  onNote,
-  onSubmit,
-  onVerses,
-  verses,
-}: {
-  mood: number;
-  note: string;
-  onBack: () => void;
-  onMood: (value: number) => void;
-  onNote: (value: string) => void;
-  onSubmit: () => void;
-  onVerses: (verses: BibleVerse[]) => void;
-  verses: BibleVerse[];
-}) {
-  return (
-    <AppScreen topInset={false}>
-      <FocusedScreenHeader onBack={onBack} title="Check-in" />
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>How is your heart today?</Text>
-        <BodyText muted>Take a quiet moment with God.</BodyText>
-      </View>
-      <View style={{ gap: 10 }}>
-        {moodOptions.map((option) => {
-          const selected = option.value === mood;
-          return (
-            <Pressable accessibilityRole="button" accessibilityState={{ selected }} key={option.value} onPress={() => onMood(option.value)}>
-              <Card
-                style={{
-                  alignItems: "center",
-                  backgroundColor: selected ? colors.accentSubtle : colors.paper,
-                  borderColor: selected ? colors.gold : colors.line,
-                  flexDirection: "row",
-                  gap: 14,
-                  padding: 14,
-                }}
-              >
-                <View style={{ alignItems: "center", backgroundColor: colors.paper, borderRadius: 999, height: 38, justifyContent: "center", width: 38 }}>
-                  <Feather name={selected ? "check" : "heart"} size={18} color={selected ? colors.gold : colors.olive} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{option.label}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{option.description}</Text>
-                </View>
-              </Card>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={{ gap: 8 }}>
-        <SectionHeading>Reflection</SectionHeading>
-        <TextInputField
-          multiline
-          maxLength={350}
-          value={note}
-          onChangeText={(value) => onNote(value.slice(0, 350))}
-          onSubmitEditing={onSubmit}
-          placeholder="Share a sentence about what you are carrying today."
-          returnKeyType="send"
-          submitBehavior="submit"
-        />
-        <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
-      </View>
-      <BibleVerseField verses={verses} onChange={onVerses} />
-      <PrimaryButton icon="send" onPress={onSubmit}>
-        Share check-in
-      </PrimaryButton>
-    </AppScreen>
-  );
-}
-
 function PrayerRequestCard({
   authorImage,
   authorName,
@@ -1522,7 +1463,7 @@ function PrayerRequestCard({
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           {prayedBy?.length ? <AvatarStack users={prayedBy} size={24} /> : null}
-          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerCount} prayed</Text>
+          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerCountLabel(prayerCount)}</Text>
           {!answered ? (
             <Pressable
               accessibilityRole="button"
