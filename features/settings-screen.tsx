@@ -333,6 +333,18 @@ export function SettingsScreen() {
     dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
   }
 
+  function deletePost(item: Extract<FeedItem, { type: "post" }>) {
+    confirmAction({
+      title: "Delete post?",
+      message: "This removes the post and its replies from your community.",
+      confirmText: "Delete",
+      destructive: true,
+      onConfirm: () => {
+        dispatch({ type: "deletePost", id: item.id });
+      },
+    });
+  }
+
   async function sendEncouragement(item: FeedItem) {
     const body = encouragementDraft.trim();
     if (!body) return;
@@ -755,6 +767,7 @@ export function SettingsScreen() {
                         onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
                         onPray={() => prayForItem(item)}
                         onReact={() => togglePostAction(item)}
+                        onDelete={() => deletePost(item)}
                       />
                     );
                   })

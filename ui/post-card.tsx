@@ -160,28 +160,32 @@ export function PostCard({
             }),
           }}
         >
-          <Pressable
-            onPressIn={(event) => event.stopPropagation()}
-            onPress={(event) => {
-              event.stopPropagation();
-              runMenuAction(onEdit!);
-            }}
-            style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-          >
-            <Feather name="edit-2" size={14} color={colors.ink} />
-            <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
-          </Pressable>
-          <Pressable
-            onPressIn={(event) => event.stopPropagation()}
-            onPress={(event) => {
-              event.stopPropagation();
-              runMenuAction(onDelete!);
-            }}
-            style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-          >
-            <Feather name="trash-2" size={14} color={colors.danger} />
-            <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
-          </Pressable>
+          {onEdit ? (
+            <Pressable
+              onPressIn={(event) => event.stopPropagation()}
+              onPress={(event) => {
+                event.stopPropagation();
+                runMenuAction(onEdit);
+              }}
+              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <Feather name="edit-2" size={14} color={colors.ink} />
+              <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable
+              onPressIn={(event) => event.stopPropagation()}
+              onPress={(event) => {
+                event.stopPropagation();
+                runMenuAction(onDelete);
+              }}
+              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+            >
+              <Feather name="trash-2" size={14} color={colors.danger} />
+              <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
