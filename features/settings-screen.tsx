@@ -6,6 +6,8 @@ import * as ImagePicker from "expo-image-picker";
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
+import { localDayKey } from "@/features/bible-plan-utils";
+import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
@@ -116,12 +118,18 @@ export function SettingsScreen() {
   const [checkInText, setCheckInText] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
   const [shareCheckIn, setShareCheckIn] = useState(true);
+  const [submittedCheckInKey, setSubmittedCheckInKey] = useState<string>();
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
   const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 4);
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
+  const todayKey = localDayKey(new Date());
+  const currentCheckInKey = `${state.currentUserId}:${state.currentGroupId}:${todayKey}`;
+  const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
+    (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
+  ) || submittedCheckInKey === currentCheckInKey;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const communityMembers = useMemo(
@@ -377,6 +385,7 @@ export function SettingsScreen() {
       verse: primaryBibleVerse(checkInVerses),
       verses: checkInVerses,
     });
+    setSubmittedCheckInKey(currentCheckInKey);
     setCheckInStep("thanks");
   }
 
@@ -680,6 +689,7 @@ export function SettingsScreen() {
         <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <CommunityCheckInsScreen
             checkIns={sharedCheckIns}
+            checkedInToday={todaysCheckIn}
             onBack={goBackFromRoomView}
             onCheckIn={openCheckInComposer}
             onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
@@ -719,14 +729,16 @@ export function SettingsScreen() {
               </View>
             </View>
 
-            <HeartPromptCard
-              actionIcon="edit-3"
-              actionLabel="Check in"
-              image={currentUser?.image}
-              name={currentUser?.name ?? state.authEmail ?? "K"}
-              subtitle="Take a quiet moment with God."
-              onPress={openCheckInComposer}
-            />
+            {!todaysCheckIn ? (
+              <HeartPromptCard
+                actionIcon="edit-3"
+                actionLabel="Check in"
+                image={currentUser?.image}
+                name={currentUser?.name ?? state.authEmail ?? "K"}
+                subtitle="Take a quiet moment with God."
+                onPress={openCheckInComposer}
+              />
+            ) : null}
 
             <FilterChips
               value={detailTab}
@@ -1411,6 +1423,7 @@ function PrayerActionButton({ onPress }: { onPress: () => void }) {
 
 function CommunityCheckInsScreen({
   checkIns,
+  checkedInToday,
   onBack,
   onCheckIn,
   onOpenCheckIn,
@@ -1418,6 +1431,7 @@ function CommunityCheckInsScreen({
   userImageById,
 }: {
   checkIns: Extract<FeedItem, { type: "check_in" }>[];
+  checkedInToday: boolean;
   onBack: () => void;
   onCheckIn: () => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
@@ -1431,13 +1445,15 @@ function CommunityCheckInsScreen({
         <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Check-ins</Text>
         <BodyText muted>Take a gentle moment to share how your heart is doing.</BodyText>
       </View>
-      <Card>
-        <SectionHeading>This week's check-in</SectionHeading>
-        <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
-        <PrimaryButton icon="edit-3" onPress={onCheckIn}>
-          Check in now
-        </PrimaryButton>
-      </Card>
+      {!checkedInToday ? (
+        <Card>
+          <SectionHeading>This week's check-in</SectionHeading>
+          <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
+          <PrimaryButton icon="edit-3" onPress={onCheckIn}>
+            Check in now
+          </PrimaryButton>
+        </Card>
+      ) : null}
       <SectionHeading>Recent check-ins</SectionHeading>
       {checkIns.length === 0 ? (
         <Card>
