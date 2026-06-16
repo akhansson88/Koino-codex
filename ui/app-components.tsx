@@ -111,7 +111,6 @@ export function AppHeader({
           <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-          <ThemeDots />
           <AvatarButton />
         </View>
       </View>
@@ -184,39 +183,6 @@ export function CurrentRoomHeader() {
           </Text>
         ) : null}
       </View>
-    </Pressable>
-  );
-}
-
-function ThemeDots() {
-  const { state, dispatch } = useKoino();
-  const isNight = state.theme === "dark";
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityState={{ checked: isNight }}
-      accessibilityLabel={`Switch to ${isNight ? "light" : "night"} mode`}
-      onPress={() => dispatch({ type: "setTheme", theme: isNight ? "light" : "dark" })}
-      style={{
-        alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 6,
-        height: 34,
-        paddingHorizontal: 8,
-        ...platformShadow({
-          boxShadow: "0 3px 8px rgba(11, 18, 32, 0.08)",
-          offset: { width: 0, height: 3 },
-          opacity: 0.08,
-          radius: 8,
-        }),
-      }}
-    >
-      <Ionicons name="sunny" color={!isNight ? colors.olive : colors.textSecondary} size={15} />
-      <Ionicons name="moon" color={isNight ? colors.olive : colors.textSecondary} size={14} />
     </Pressable>
   );
 }

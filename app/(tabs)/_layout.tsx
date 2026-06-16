@@ -1,15 +1,14 @@
 import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef } from "react";
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
 import { tabs } from "@/state/product";
 import { AvatarButton } from "@/ui/app-components";
-import { brandPalette, colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
+import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
@@ -169,88 +168,7 @@ function KoinoTabHeader() {
 function HeaderRightControls() {
   return (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-      <ThemeSelector />
       <AvatarButton />
     </View>
-  );
-}
-
-function ThemeSelector() {
-  const { state, dispatch } = useKoino();
-  const progress = useRef(new Animated.Value(state.theme === "dark" ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(progress, {
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
-      toValue: state.theme === "dark" ? 1 : 0,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, state.theme]);
-
-  const isNight = state.theme === "dark";
-  const nextTheme = state.theme === "light" ? "dark" : "light";
-  const trackBackground = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.warmSoft, "#172237"],
-  });
-  const thumbTranslate = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [2, 38],
-  });
-
-  if (!state.currentUserId) return null;
-
-  return (
-    <Pressable
-      accessibilityLabel={`Switch to ${isNight ? "light" : "night"} mode`}
-      accessibilityRole="button"
-      accessibilityState={{ checked: isNight }}
-      onPress={() => dispatch({ type: "setTheme", theme: nextTheme })}
-      style={{
-        alignItems: "center",
-        flexDirection: "row",
-        gap: 8,
-      }}
-    >
-      <Animated.View
-        style={{
-          alignItems: "center",
-          backgroundColor: trackBackground,
-          borderColor: colors.line,
-          borderRadius: 999,
-          borderWidth: 1,
-          flexDirection: "row",
-          height: 34,
-          justifyContent: "space-between",
-          paddingHorizontal: 8,
-          width: 74,
-        }}
-      >
-        <Ionicons name="sunny" color={colors.textMuted} size={15} />
-        <Ionicons name="moon" color="#D6D9EA" size={14} />
-        <Animated.View
-          style={{
-            alignItems: "center",
-            backgroundColor: isNight ? colors.cream : colors.paper,
-            borderRadius: 999,
-            height: 28,
-            justifyContent: "center",
-            left: 2,
-            position: "absolute",
-            ...platformShadow({
-              boxShadow: "0 2px 5px rgba(11, 18, 32, 0.16)",
-              offset: { width: 0, height: 2 },
-              opacity: 0.16,
-              radius: 5,
-            }),
-            transform: [{ translateX: thumbTranslate }],
-            width: 32,
-          }}
-        >
-          <Ionicons name={isNight ? "moon" : "sunny"} color={isNight ? brandPalette.warmPersika : colors.textMuted} size={16} />
-        </Animated.View>
-      </Animated.View>
-    </Pressable>
   );
 }
