@@ -22,7 +22,6 @@ import {
   BodyText,
   Card,
   IconButton,
-  PrimaryButton,
   SectionHeading,
   StatusPill,
   TextInputField,
@@ -264,16 +263,11 @@ export function FeedDetailScreen() {
             {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
           </View>
         ) : null}
-        <PrayerActivity activity={prayer?.activity ?? []} />
-        <View style={{ gap: 12 }}>
-          <SectionHeading>Encouragement</SectionHeading>
-          <Card style={{ gap: 0, padding: 0 }}>
-            {replies.length === 0 ? (
-              <BodyText muted style={{ padding: 14 }}>
-                No encouragement yet.
-              </BodyText>
-            ) : (
-              replies.map((reply, index) => (
+        {replies.length > 0 ? (
+          <View style={{ gap: 12 }}>
+            <SectionHeading>Encouragement</SectionHeading>
+            <Card style={{ gap: 0, padding: 0 }}>
+              {replies.map((reply, index) => (
                 <View
                   key={reply.id}
                   style={{
@@ -298,10 +292,10 @@ export function FeedDetailScreen() {
                   <BodyText>{reply.body}</BodyText>
                   <LinkPreview text={reply.body} />
                 </View>
-              ))
-            )}
-          </Card>
-        </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           <TextInputField
             value={replyDraft}
@@ -326,6 +320,7 @@ export function FeedDetailScreen() {
             <Feather name="send" size={22} color={colors.gold} />
           </Pressable>
         </View>
+        <PrayerActivity activity={prayer?.activity ?? []} />
       </AppScreen>
       <PrayerMoment
         target={prayerTarget}

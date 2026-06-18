@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { Pressable, Text, View } from "react-native";
 
 import type { GroupImage, Id } from "@/state/types";
-import { Avatar, BodyText, Card, SecondaryButton, SectionHeading } from "@/ui/app-components";
+import { Avatar, Card, SecondaryButton } from "@/ui/app-components";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
@@ -24,61 +25,64 @@ export function formatPrayerDuration(seconds?: number) {
 
 export function PrayerActivity({
   activity,
-  emptyText = "No prayer activity yet.",
   title = "Prayer activity",
 }: {
   activity: PrayerActivityEntry[];
-  emptyText?: string;
   title?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(3);
   const activityKey = activity.map((entry) => entry.id).join("|");
   const visibleActivity = activity.slice(0, visibleCount);
   const remainingCount = Math.max(0, activity.length - visibleActivity.length);
 
   useEffect(() => {
+    setExpanded(false);
     setVisibleCount(3);
   }, [activityKey]);
 
+  if (activity.length === 0) return null;
+
   return (
-    <View style={{ gap: 12 }}>
-      <SectionHeading>{title}</SectionHeading>
-      <Card style={{ gap: 0, padding: 0 }}>
-        {activity.length === 0 ? (
-          <BodyText muted style={{ padding: 14 }}>{emptyText}</BodyText>
-        ) : (
-          <>
-            {visibleActivity.map((entry, index) => (
-              <View
-                key={entry.id}
-                style={{
-                  alignItems: "center",
-                  borderBottomColor: colors.line,
-                  borderBottomWidth: index === visibleActivity.length - 1 && remainingCount === 0 ? 0 : 1,
-                  flexDirection: "row",
-                  gap: 10,
-                  padding: 14,
-                }}
-              >
-                <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                    {formatRelativeTime(entry.createdAt)} - {formatPrayerDuration(entry.durationSeconds)}
-                  </Text>
-                </View>
+    <Card style={{ gap: 0, padding: 0 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded((current) => !current)}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12 }}>
+          <Text style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>{`${title} (${activity.length})`}</Text>
+          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View style={{ borderTopColor: colors.line, borderTopWidth: 1 }}>
+          {visibleActivity.map((entry, index) => (
+            <View
+              key={entry.id}
+              style={{
+                alignItems: "center",
+                borderBottomColor: colors.line,
+                borderBottomWidth: index === visibleActivity.length - 1 && remainingCount === 0 ? 0 : 1,
+                flexDirection: "row",
+                gap: 10,
+                padding: 14,
+              }}
+            >
+              <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  {formatRelativeTime(entry.createdAt)} - {formatPrayerDuration(entry.durationSeconds)}
+                </Text>
               </View>
-            ))}
-            {remainingCount > 0 ? (
-              <View style={{ padding: 12 }}>
-                <SecondaryButton icon="chevron-down" onPress={() => setVisibleCount((count) => Math.min(activity.length, count + 10))} style={{ minHeight: 42 }}>
-                  View more
-                </SecondaryButton>
-              </View>
-            ) : null}
-          </>
-        )}
-      </Card>
-    </View>
+            </View>
+          ))}
+          {remainingCount > 0 ? (
+            <View style={{ padding: 12 }}>
+              <SecondaryButton icon="chevron-down" onPress={() => setVisibleCount((count) => Math.min(activity.length, count + 10))} style={{ minHeight: 42 }}>
+                View more
+              </SecondaryButton>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+    </Card>
   );
 }
