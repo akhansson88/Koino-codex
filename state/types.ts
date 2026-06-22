@@ -132,7 +132,7 @@ export type BibleHighlight = {
   updatedAt: string;
 };
 
-export type EntryKind = "reflection" | "prayer_request" | "praise" | "update" | "scripture";
+export type EntryKind = "reflection" | "prayer_request" | "prayer_moment" | "praise" | "update" | "scripture";
 export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
 export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
 
@@ -167,7 +167,7 @@ export type Post = {
 export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply" | "user";
 export type PrayerReactionTargetType = "post" | "check_in" | "reply";
 export type PostReactionTargetType = "post" | "check_in";
-export type PostReactionKind = Exclude<EntryKind, "prayer_request">;
+export type PostReactionKind = Exclude<EntryKind, "prayer_request" | "prayer_moment">;
 export type ReplyTargetType = "post" | "check_in";
 export type PrayerSession = {
   id: Id;

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
+import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { localDayKey } from "@/features/bible-plan-utils";
@@ -31,6 +31,7 @@ import {
   Card,
   FilterChips,
   HeartPromptCard,
+  FullScreenModal,
   IconButton,
   PrimaryButton,
   RoomImage,
@@ -57,6 +58,40 @@ type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
+type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
+type CommunityPrayerIntent = {
+  recipientImage?: GroupImage;
+  recipientName?: string;
+  recipientUserId?: Id;
+  type: "pray_for_someone" | "pray_now";
+};
+type PendingPrayerPost = CommunityPrayerIntent & { completedAt: string };
+
+const PRAYER_POST_NOTE_LIMIT = 280;
+
+function isPrayerFeedKind(kind: EntryKind | "post" | undefined) {
+  const normalized = normalizeEntryKind(kind);
+  return normalized === "prayer_request" || normalized === "prayer_moment";
+}
+
+function isPrayerMomentKind(kind: EntryKind | "post" | undefined) {
+  return normalizeEntryKind(kind) === "prayer_moment";
+}
+
+function prayerMomentPostCopy(intent: CommunityPrayerIntent, note: string) {
+  const recipientName = intent.recipientName?.trim();
+  const lines = [recipientName ? `A prayer was made for ${recipientName}.` : "A prayer was made."];
+  const trimmedNote = note.trim();
+
+  if (trimmedNote) {
+    lines.push(`About: ${trimmedNote}`);
+  }
+
+  return {
+    body: lines.join("\n\n"),
+    title: recipientName ? `Prayed for ${recipientName}` : "Prayer made",
+  };
+}
 
 function memberLabel(count: number) {
   return `${count} ${count === 1 ? "member" : "members"}`;
@@ -113,6 +148,10 @@ export function SettingsScreen() {
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
   const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [communityPrayerIntent, setCommunityPrayerIntent] = useState<CommunityPrayerIntent>();
+  const [memberSelectVisible, setMemberSelectVisible] = useState(false);
+  const [pendingPrayerPost, setPendingPrayerPost] = useState<PendingPrayerPost>();
+  const [prayerPostNote, setPrayerPostNote] = useState("");
   const [encouragementDraft, setEncouragementDraft] = useState("");
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
@@ -147,6 +186,7 @@ export function SettingsScreen() {
       }),
     [state.memberships, state.users],
   );
+  const otherCommunityMembers = useMemo(() => communityMembers.filter((member) => member.id !== state.currentUserId), [communityMembers, state.currentUserId]);
   const transferableMemberships = useMemo(
     () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
     [state.currentUserId, state.memberships],
@@ -186,16 +226,17 @@ export function SettingsScreen() {
     return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
   const reflectionItems = feedItems.filter(
-    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) !== "prayer_request",
+    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && !isPrayerFeedKind(item.kind),
   );
-  const prayerRequests = feedItems.filter(
-    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request",
+  const prayerPosts = feedItems.filter(
+    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && isPrayerFeedKind(item.kind),
   );
-  const selectedPrayer = prayerRequests.find((item) => item.id === selectedPrayerId);
-  const visiblePrayerRequests = prayerRequests.filter((item) => {
+  const selectedPrayer = prayerPosts.find((item) => item.id === selectedPrayerId);
+  const visiblePrayerPosts = prayerPosts.filter((item) => {
     if (item.type !== "post") return false;
-    if (prayerFilter === "open") return !item.answeredAt;
-    if (prayerFilter === "answered") return Boolean(item.answeredAt);
+    const prayerMoment = isPrayerMomentKind(item.kind);
+    if (prayerFilter === "open") return prayerMoment || !item.answeredAt;
+    if (prayerFilter === "answered") return !prayerMoment && Boolean(item.answeredAt);
     return true;
   });
   const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
@@ -219,6 +260,9 @@ export function SettingsScreen() {
       setDetailTab("reflections");
       setSelectedPrayerId(undefined);
       setEncouragementDraft("");
+      setMemberSelectVisible(false);
+      setPendingPrayerPost(undefined);
+      setPrayerPostNote("");
     }, []),
   );
 
@@ -323,7 +367,7 @@ export function SettingsScreen() {
   function itemReactionState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     const itemReactionKind = feedItemKind(item);
-    const kind = (itemReactionKind === "prayer_request" ? "reflection" : itemReactionKind) as PostReactionKind;
+    const kind = (itemReactionKind === "prayer_request" || itemReactionKind === "prayer_moment" ? "reflection" : itemReactionKind) as PostReactionKind;
     const reactions = state.postReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id && reaction.kind === kind);
     const reactedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
@@ -358,7 +402,63 @@ export function SettingsScreen() {
 
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
+    setCommunityPrayerIntent(undefined);
     setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
+  }
+
+  function startCommunityPrayer(intent: CommunityPrayerIntent) {
+    const targetId = intent.recipientUserId ?? state.currentUserId;
+    if (!targetId) return;
+
+    setCommunityPrayerIntent(intent);
+    setPrayerTarget({ targetType: "user", targetId, body: "", recipientUserId: targetId });
+  }
+
+  function closePrayerMoment() {
+    setPrayerTarget(undefined);
+    setCommunityPrayerIntent(undefined);
+  }
+
+  async function finishPrayerMoment(status: "completed" | "skipped", startedAt: string, completedAt: string) {
+    const target = prayerTarget;
+    const intent = communityPrayerIntent;
+
+    if (target) {
+      await dispatch({
+        type: "finishPrayer",
+        targetType: target.targetType,
+        targetId: target.targetId,
+        status,
+        startedAt,
+        recipientUserId: target.recipientUserId,
+      });
+    }
+
+    setPrayerTarget(undefined);
+    setCommunityPrayerIntent(undefined);
+
+    if (status === "completed" && intent) {
+      setPrayerPostNote("");
+      setPendingPrayerPost({ ...intent, completedAt });
+    }
+  }
+
+  async function publishPendingPrayerPost(noteOverride = prayerPostNote) {
+    const pending = pendingPrayerPost;
+    if (!pending) return;
+
+    setPendingPrayerPost(undefined);
+    setPrayerPostNote("");
+
+    const copy = prayerMomentPostCopy(pending, noteOverride);
+    await dispatch({
+      type: "createPost",
+      kind: "prayer_moment",
+      title: copy.title,
+      body: copy.body,
+    });
+    setPrayerFilter("open");
+    navigateToRoomView("prayer");
   }
 
   function togglePostAction(item: FeedItem) {
@@ -628,7 +728,7 @@ export function SettingsScreen() {
             onFilter={setPrayerFilter}
             onOpenPrayer={openPrayerDetail}
             onPray={prayForItem}
-            prayerRequests={visiblePrayerRequests}
+            prayerPosts={visiblePrayerPosts}
             prayerState={itemPrayerState}
             userById={userById}
             userImageById={userImageById}
@@ -655,20 +755,8 @@ export function SettingsScreen() {
         />
         <PrayerMoment
           target={prayerTarget}
-          onClose={() => setPrayerTarget(undefined)}
-          onFinish={(status, startedAt) => {
-            if (prayerTarget) {
-              dispatch({
-                type: "finishPrayer",
-                targetType: prayerTarget.targetType,
-                targetId: prayerTarget.targetId,
-                status,
-                startedAt,
-                recipientUserId: prayerTarget.recipientUserId,
-              });
-            }
-            setPrayerTarget(undefined);
-          }}
+          onClose={closePrayerMoment}
+          onFinish={finishPrayerMoment}
         />
       </>
     );
@@ -712,20 +800,8 @@ export function SettingsScreen() {
         </CommunityTransitionFrame>
         <PrayerMoment
           target={prayerTarget}
-          onClose={() => setPrayerTarget(undefined)}
-          onFinish={(status, startedAt) => {
-            if (prayerTarget) {
-              dispatch({
-                type: "finishPrayer",
-                targetType: prayerTarget.targetType,
-                targetId: prayerTarget.targetId,
-                status,
-                startedAt,
-                recipientUserId: prayerTarget.recipientUserId,
-              });
-            }
-            setPrayerTarget(undefined);
-          }}
+          onClose={closePrayerMoment}
+          onFinish={finishPrayerMoment}
         />
       </>
     );
@@ -787,6 +863,15 @@ export function SettingsScreen() {
                 onPress={openCheckInComposer}
               />
             ) : null}
+
+            <View style={{ gap: 10 }}>
+              <PrimaryButton icon="heart" onPress={() => startCommunityPrayer({ type: "pray_now" })}>
+                Pray now
+              </PrimaryButton>
+              <SecondaryButton icon="users" onPress={() => setMemberSelectVisible(true)}>
+                Pray for someone
+              </SecondaryButton>
+            </View>
 
             <FilterChips
               value={detailTab}
@@ -872,6 +957,27 @@ export function SettingsScreen() {
           roomImage={group.image}
         />
         {communityCheckInModal}
+        <CommunityPrayerMemberModal
+          members={otherCommunityMembers}
+          onClose={() => setMemberSelectVisible(false)}
+          onSelect={(member) => {
+            setMemberSelectVisible(false);
+            startCommunityPrayer({
+              recipientImage: member.image,
+              recipientName: member.name,
+              recipientUserId: member.id,
+              type: "pray_for_someone",
+            });
+          }}
+          visible={memberSelectVisible}
+        />
+        <PrayerPostSheet
+          note={prayerPostNote}
+          onChangeNote={(value) => setPrayerPostNote(value.slice(0, PRAYER_POST_NOTE_LIMIT))}
+          onPublish={() => publishPendingPrayerPost()}
+          onSkip={() => publishPendingPrayerPost("")}
+          pending={pendingPrayerPost}
+        />
         <BottomSheet title="Community settings" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
@@ -937,20 +1043,8 @@ export function SettingsScreen() {
         <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
         <PrayerMoment
           target={prayerTarget}
-          onClose={() => setPrayerTarget(undefined)}
-          onFinish={(status, startedAt) => {
-            if (prayerTarget) {
-              dispatch({
-                type: "finishPrayer",
-                targetType: prayerTarget.targetType,
-                targetId: prayerTarget.targetId,
-                status,
-                startedAt,
-                recipientUserId: prayerTarget.recipientUserId,
-              });
-            }
-            setPrayerTarget(undefined);
-          }}
+          onClose={closePrayerMoment}
+          onFinish={finishPrayerMoment}
         />
       </>
     );
@@ -1263,6 +1357,99 @@ function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: str
   );
 }
 
+function CommunityPrayerMemberModal({
+  members,
+  onClose,
+  onSelect,
+  visible,
+}: {
+  members: CommunityMember[];
+  onClose: () => void;
+  onSelect: (member: CommunityMember) => void;
+  visible: boolean;
+}) {
+  return (
+    <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
+      <AppScreen>
+        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+          <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={onClose} />
+          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
+          <View style={{ width: 38 }} />
+        </View>
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>Who would you like to pray for?</Text>
+          <BodyText muted>Select a member from your community.</BodyText>
+        </View>
+        <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
+          {members.map((member) => (
+            <Pressable accessibilityRole="button" key={member.id} onPress={() => onSelect(member)}>
+              <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
+                <Avatar image={member.image} name={member.name} size={46} tone="green" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
+                </View>
+                <Feather name="heart" size={18} color={colors.gold} />
+              </Card>
+            </Pressable>
+          ))}
+          {members.length === 0 ? (
+            <Card>
+              <BodyText muted>No other members in this community yet.</BodyText>
+            </Card>
+          ) : null}
+        </ScrollView>
+      </AppScreen>
+    </FullScreenModal>
+  );
+}
+
+function PrayerPostSheet({
+  note,
+  onChangeNote,
+  onPublish,
+  onSkip,
+  pending,
+}: {
+  note: string;
+  onChangeNote: (value: string) => void;
+  onPublish: () => void;
+  onSkip: () => void;
+  pending?: PendingPrayerPost;
+}) {
+  const recipientName = pending?.recipientName?.trim();
+
+  return (
+    <BottomSheet title="Share prayer" visible={Boolean(pending)} onClose={onSkip}>
+      {recipientName ? (
+        <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+          <Avatar image={pending?.recipientImage} name={recipientName} size={38} tone="green" />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{recipientName}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Prayer will be posted for this person.</Text>
+          </View>
+        </Card>
+      ) : null}
+      <View style={{ gap: 6 }}>
+        <TextInputField
+          maxLength={PRAYER_POST_NOTE_LIMIT}
+          multiline
+          onChangeText={onChangeNote}
+          placeholder="What did you pray for? (optional)"
+          returnKeyType="done"
+          style={{ minHeight: 120 }}
+          value={note}
+        />
+        <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/{PRAYER_POST_NOTE_LIMIT}</Text>
+      </View>
+      <PrimaryButton icon="send" onPress={onPublish}>
+        Post prayer
+      </PrimaryButton>
+      <SecondaryButton onPress={onSkip}>Skip note</SecondaryButton>
+    </BottomSheet>
+  );
+}
+
 function CommunityPrayerScreen({
   filter,
   onBack,
@@ -1270,7 +1457,7 @@ function CommunityPrayerScreen({
   onFilter,
   onOpenPrayer,
   onPray,
-  prayerRequests,
+  prayerPosts,
   prayerState,
   userById,
   userImageById,
@@ -1281,7 +1468,7 @@ function CommunityPrayerScreen({
   onFilter: (filter: PrayerFilter) => void;
   onOpenPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
   onPray: (item: FeedItem) => void;
-  prayerRequests: Extract<FeedItem, { type: "post" }>[];
+  prayerPosts: Extract<FeedItem, { type: "post" }>[];
   prayerState: (item: FeedItem) => { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
@@ -1297,17 +1484,17 @@ function CommunityPrayerScreen({
       </View>
       <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-        <BodyText muted>{prayerRequests.length} {countLabel} {prayerRequests.length === 1 ? "request" : "requests"}</BodyText>
+        <BodyText muted>{prayerPosts.length} {countLabel} {prayerPosts.length === 1 ? "prayer" : "prayers"}</BodyText>
         <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
           Share prayer
         </PrimaryButton>
       </View>
-      {prayerRequests.length === 0 ? (
+      {prayerPosts.length === 0 ? (
         <Card>
-          <BodyText muted>{filter === "answered" ? "No answered prayers yet." : "No open prayer requests yet."}</BodyText>
+          <BodyText muted>{filter === "answered" ? "No answered prayers yet." : "No prayers here yet."}</BodyText>
         </Card>
       ) : (
-        prayerRequests.map((item) => {
+        prayerPosts.map((item) => {
           const prayer = prayerState(item);
           return (
             <PrayerRequestCard
@@ -1362,6 +1549,7 @@ function CommunityPrayerDetailScreen({
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
   const answered = Boolean(item.answeredAt);
+  const prayerMoment = isPrayerMomentKind(item.kind);
 
   return (
     <AppScreen topInset={false}>
@@ -1378,17 +1566,28 @@ function CommunityPrayerDetailScreen({
         <BodyText style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>{item.body || "No words today, just presence."}</BodyText>
         <LinkPreview text={item.body} />
       </View>
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
-        <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer.count)}</Text>
-        </View>
-        <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
-        <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <StatusPill status={answered ? "answered" : "open"} />
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
-        </View>
-      </Card>
+      {prayerMoment ? (
+        <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
+          <MaterialCommunityIcons name="hands-pray" size={20} color={colors.gold} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Prayer made</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Shared {formatRelativeTime(item.createdAt)}</Text>
+          </View>
+          <PrayerMomentPill />
+        </Card>
+      ) : (
+        <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+          <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer.count)}</Text>
+          </View>
+          <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
+          <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+            <StatusPill status={answered ? "answered" : "open"} />
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
+          </View>
+        </Card>
+      )}
       {answered ? (
         <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
@@ -1398,10 +1597,10 @@ function CommunityPrayerDetailScreen({
           <BodyText muted>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</BodyText>
         </Card>
       ) : null}
-      {!answered ? (
+      {!answered && !prayerMoment ? (
         <PrayerActionButton onPress={onPray} />
       ) : null}
-      {ownsItem && !answered ? (
+      {ownsItem && !answered && !prayerMoment ? (
         <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
           Mark as answered
         </SecondaryButton>
@@ -1481,6 +1680,23 @@ function PrayerActionButton({ onPress }: { onPress: () => void }) {
   );
 }
 
+function PrayerMomentPill() {
+  return (
+    <View
+      style={{
+        backgroundColor: colors.rhythmSoft,
+        borderColor: colors.accentRhythm,
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: "800" }}>Prayed</Text>
+    </View>
+  );
+}
+
 function CommunityCheckInsScreen({
   checkIns,
   checkedInToday,
@@ -1554,6 +1770,7 @@ function PrayerRequestCard({
   prayerCount: number;
 }) {
   const answered = Boolean(item.answeredAt);
+  const prayerMoment = isPrayerMomentKind(item.kind);
   return (
     <Pressable accessibilityRole="button" onPress={onOpen}>
       <Card style={{ gap: 12, padding: 16 }}>
@@ -1563,7 +1780,7 @@ function PrayerRequestCard({
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{authorName}</Text>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
           </View>
-          <StatusPill status={answered ? "answered" : "open"} />
+          {prayerMoment ? <PrayerMomentPill /> : <StatusPill status={answered ? "answered" : "open"} />}
         </View>
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>{item.title || defaultTitle(item)}</Text>
@@ -1572,8 +1789,8 @@ function PrayerRequestCard({
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           {prayedBy?.length ? <AvatarStack users={prayedBy} size={24} /> : null}
-          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerCountLabel(prayerCount)}</Text>
-          {!answered ? (
+          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerMoment ? "Prayer made" : prayerCountLabel(prayerCount)}</Text>
+          {!answered && !prayerMoment ? (
             <Pressable
               accessibilityRole="button"
               onPress={(event) => {

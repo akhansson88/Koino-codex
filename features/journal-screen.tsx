@@ -44,7 +44,7 @@ function composerKindForJournalType(type: JournalEntryType): EntryKind {
 }
 
 function journalTypeForKind(kind: EntryKind): JournalEntryType {
-  if (kind === "prayer_request") return "prayer";
+  if (kind === "prayer_request" || kind === "prayer_moment") return "prayer";
   if (kind === "praise") return "answered_prayer";
   if (kind === "scripture") return "scripture_note";
   return "reflection";

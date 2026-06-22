@@ -1434,7 +1434,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const entry: JournalEntry = {
                 id: id("journal"),
                 userId: firebaseUser.uid,
-                journalType: action.journalType ?? (action.entryKind === "prayer_request" ? "prayer" : action.entryKind === "praise" ? "answered_prayer" : action.entryKind === "scripture" ? "scripture_note" : "reflection"),
+                journalType: action.journalType ?? (action.entryKind === "prayer_request" || action.entryKind === "prayer_moment" ? "prayer" : action.entryKind === "praise" ? "answered_prayer" : action.entryKind === "scripture" ? "scripture_note" : "reflection"),
                 ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                 body: action.body.trim(),
                 source: "manual",

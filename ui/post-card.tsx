@@ -89,9 +89,10 @@ export function PostCard({
 
   const itemKind = feedItemKind(item);
   const isPrayerRequest = itemKind === "prayer_request";
+  const isPrayerPost = isPrayerRequest || itemKind === "prayer_moment";
   const reactionCopy = actionPastLabels[itemKind].toLowerCase();
   const hasPrayerActivity = Boolean(prayedBy?.length);
-  const hasReactionActivity = !isPrayerRequest && Boolean(reactedBy?.length);
+  const hasReactionActivity = !isPrayerPost && Boolean(reactedBy?.length);
 
   return (
     <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
@@ -224,7 +225,7 @@ export function PostCard({
             Pray
           </Text>
         </Pressable>
-        {!isPrayerRequest && onReact ? (
+        {!isPrayerPost && onReact ? (
           <Pressable
             onPress={(event) => {
               event.stopPropagation();

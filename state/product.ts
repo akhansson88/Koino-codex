@@ -20,7 +20,7 @@ export const prayerFilters = [
   { value: "all", label: "All" },
 ] as const;
 
-export const postTypes: { value: EntryKind; label: string; composerLabel: string }[] = [
+export const postTypes: { value: Exclude<EntryKind, "prayer_moment">; label: string; composerLabel: string }[] = [
   { value: "reflection", label: "Reflection", composerLabel: "Reflection" },
   { value: "prayer_request", label: "Prayer request", composerLabel: "Prayer" },
   { value: "praise", label: "Praise", composerLabel: "Praise" },
@@ -50,7 +50,7 @@ export const heartMoods: { value: HeartMood; label: string; description: string;
 export function journalEntryTypeFor(entry: Pick<JournalEntry, "journalType" | "entryKind" | "source">): JournalEntryType {
   if (entry.journalType) return entry.journalType;
   if (entry.source === "private_check_in") return "heart_checkin";
-  if (entry.entryKind === "prayer_request") return "prayer";
+  if (entry.entryKind === "prayer_request" || entry.entryKind === "prayer_moment") return "prayer";
   if (entry.entryKind === "praise") return "answered_prayer";
   if (entry.entryKind === "scripture") return "scripture_note";
   return "reflection";
@@ -81,9 +81,10 @@ export function moodLabel(mood: number) {
   return moodOptionForValue(mood).label;
 }
 
-export const postTypeLabels = {
+export const postTypeLabels: Record<EntryKind, string> = {
   reflection: "Reflection",
   prayer_request: "Prayer request",
+  prayer_moment: "Prayer made",
   praise: "Praise",
   update: "Update",
   scripture: "Scripture",
@@ -99,6 +100,7 @@ export type EntryVisibility = (typeof visibility)[keyof typeof visibility];
 export const actionLabels: Record<EntryKind, string> = {
   reflection: "Encourage",
   prayer_request: "Pray",
+  prayer_moment: "Pray",
   praise: "Amen",
   update: "Respond",
   scripture: "Reflect",
@@ -107,27 +109,28 @@ export const actionLabels: Record<EntryKind, string> = {
 export const actionPastLabels: Record<EntryKind, string> = {
   reflection: "Encouraged",
   prayer_request: "Prayed",
+  prayer_moment: "Prayed",
   praise: "Amen",
   update: "Responded",
   scripture: "Reflected",
 };
 
 export function normalizeEntryKind(kind: EntryKind | "post" | undefined): EntryKind {
-  if (kind === "prayer_request" || kind === "praise" || kind === "update" || kind === "scripture") return kind;
+  if (kind === "prayer_request" || kind === "prayer_moment" || kind === "praise" || kind === "update" || kind === "scripture") return kind;
   return "reflection";
 }
 
 export function entryKindLabel(kind: EntryKind | "post" | undefined) {
-  return postTypes.find((item) => item.value === normalizeEntryKind(kind))?.label ?? "Reflection";
+  return postTypeLabels[normalizeEntryKind(kind)];
 }
 
 export function entryKindComposerLabel(kind: EntryKind) {
-  return postTypes.find((item) => item.value === kind)?.composerLabel ?? "Reflection";
+  return postTypes.find((item) => item.value === kind)?.composerLabel ?? postTypeLabels[kind];
 }
 
 export function entryKindIcon(kind: EntryKind | "post" | undefined) {
   const normalized = normalizeEntryKind(kind);
-  if (normalized === "prayer_request") return "heart" as const;
+  if (normalized === "prayer_request" || normalized === "prayer_moment") return "heart" as const;
   if (normalized === "praise") return "star" as const;
   if (normalized === "update") return "send" as const;
   if (normalized === "scripture") return "book-open" as const;
@@ -148,6 +151,7 @@ export function defaultFeedTitle(item: FeedItem, moodLabel: (mood: number) => st
   if (item.type === "check_in") return moodLabel(item.mood);
   const kind = normalizeEntryKind(item.kind);
   if (kind === "prayer_request") return "Please pray";
+  if (kind === "prayer_moment") return "Prayer made";
   if (kind === "praise") return "Grateful for a new day";
   if (kind === "update") return "A small update";
   if (kind === "scripture") return "Shared Scripture";

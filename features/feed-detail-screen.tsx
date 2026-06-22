@@ -128,7 +128,7 @@ export function FeedDetailScreen() {
   const reaction = useMemo(() => {
     if (!item || !targetType) return undefined;
     const itemReactionKind = feedItemKind(item);
-    if (itemReactionKind === "prayer_request") return undefined;
+    if (itemReactionKind === "prayer_request" || itemReactionKind === "prayer_moment") return undefined;
     const kind = itemReactionKind as PostReactionKind;
     const reactions = state.postReactions.filter((candidate) => candidate.targetType === targetType && candidate.targetId === item.id && candidate.kind === kind);
     const reactedByUserIds = [...new Set(reactions.map((candidate) => candidate.userId))];
@@ -170,9 +170,11 @@ export function FeedDetailScreen() {
   const authorImage = userImageById.get(item.userId);
   const itemKind = feedItemKind(item);
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
+  const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
   const actionPastLabel = actionPastLabels[itemKind];
+  const canReact = !isPrayerRequest && !isPrayerMoment;
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -187,7 +189,7 @@ export function FeedDetailScreen() {
   }
 
   function toggleReaction() {
-    if (!item || !targetType || isPrayerRequest || !reaction) return;
+    if (!item || !targetType || !canReact || !reaction) return;
     dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: reaction.kind });
   }
 
@@ -238,24 +240,26 @@ export function FeedDetailScreen() {
               <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</Text>
             </View>
           </Card>
-        ) : (
+        ) : !isPrayerMoment ? (
           <View style={{ gap: 10 }}>
             <DetailPrayerButton onPress={startPrayer} />
-            {!isPrayerRequest ? (
+            {canReact ? (
               <DetailReactionButton active={Boolean(reaction?.reacted)} label={reaction?.reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]} onPress={toggleReaction} />
             ) : null}
           </View>
-        )}
+        ) : null}
         {ownsItem && isPrayerRequest && !prayerAnswered ? (
           <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
-        <View style={{ gap: 12 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-            {`${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`}
-          </Text>
-          {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
-        </View>
-        {!isPrayerRequest ? (
+        {!isPrayerMoment ? (
+          <View style={{ gap: 12 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+              {`${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`}
+            </Text>
+            {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
+          </View>
+        ) : null}
+        {canReact ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {`${actionPastLabel} by ${reaction?.count ?? 0} ${(reaction?.count ?? 0) === 1 ? "member" : "members"}`}
