@@ -99,6 +99,7 @@ type Action =
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "removeGroupMember"; groupId: Id; userId: Id }
+  | { type: "transferGroupOwnership"; groupId: Id; userId: Id }
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "uploadGroupImage"; id: Id; localUri: string }
   | { type: "deleteGroupImage"; id: Id }
@@ -1018,6 +1019,39 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               });
               return;
             }
+            case "transferGroupOwnership": {
+              if (!firebaseUser || action.userId === firebaseUser.uid) return;
+
+              const groupSnapshot = await get(ref(database, `groups/${action.groupId}`));
+              const groupToUpdate = groupSnapshot.val() as Group | null;
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
+                throw new Error("Only the community host can transfer ownership.");
+              }
+
+              const [currentOwnerSnapshot, nextOwnerSnapshot] = await Promise.all([
+                get(ref(database, `groupMembers/${action.groupId}/${firebaseUser.uid}`)),
+                get(ref(database, `groupMembers/${action.groupId}/${action.userId}`)),
+              ]);
+              const currentOwnerMembership = currentOwnerSnapshot.val() as Membership | null;
+              const nextOwnerMembership = nextOwnerSnapshot.val() as Membership | null;
+              if (!currentOwnerMembership || !nextOwnerMembership || nextOwnerMembership.userId !== action.userId || nextOwnerMembership.role === "owner") {
+                throw new Error("Choose another current member of this community.");
+              }
+
+              const timestamp = now();
+              const previousOwner: Membership = { ...currentOwnerMembership, role: "member" };
+              const nextOwner: Membership = { ...nextOwnerMembership, role: "owner" };
+
+              await update(ref(database), {
+                [`groups/${action.groupId}/ownerId`]: action.userId,
+                [`groups/${action.groupId}/updatedAt`]: timestamp,
+                [`groupMembers/${action.groupId}/${firebaseUser.uid}`]: previousOwner,
+                [`userGroups/${firebaseUser.uid}/${action.groupId}`]: previousOwner,
+                [`groupMembers/${action.groupId}/${action.userId}`]: nextOwner,
+                [`userGroups/${action.userId}/${action.groupId}`]: nextOwner,
+              });
+              return;
+            }
             case "updateGroup":
               await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
               return;
@@ -1824,6 +1858,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "createGroup" ||
           action.type === "joinGroup" ||
           action.type === "removeGroupMember" ||
+          action.type === "transferGroupOwnership" ||
           action.type === "uploadGroupImage" ||
           action.type === "deleteGroupImage" ||
           action.type === "uploadUserAvatar" ||

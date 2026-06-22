@@ -21,7 +21,7 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, Reply } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Membership, PostReactionKind, Reply } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -96,6 +96,7 @@ export function SettingsScreen() {
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [manageSheetVisible, setManageSheetVisible] = useState(false);
+  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [joinInviteCode, setJoinInviteCode] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [currentGroupName, setCurrentGroupName] = useState("");
@@ -144,6 +145,10 @@ export function SettingsScreen() {
         };
       }),
     [state.memberships, state.users],
+  );
+  const transferableMemberships = useMemo(
+    () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
+    [state.currentUserId, state.memberships],
   );
   const feedItems = useMemo<FeedItem[]>(() => {
     const checkIns: FeedItem[] = state.checkIns
@@ -530,6 +535,28 @@ export function SettingsScreen() {
     });
   }
 
+  function openTransferOwnership() {
+    if (!ownsGroup) return;
+    setManageSheetVisible(false);
+    setTransferSheetVisible(true);
+  }
+
+  function handleTransferOwnership(membership: Membership) {
+    if (!group || !ownsGroup || membership.userId === state.currentUserId || membership.role === "owner") return;
+
+    setTransferSheetVisible(false);
+    confirmAction({
+      title: "Transfer ownership?",
+      message: `${membership.userName} will become the community host for ${group.name}. You will remain a member.`,
+      confirmText: "Transfer",
+      onConfirm: () => {
+        void dispatch({ type: "transferGroupOwnership", groupId: group.id, userId: membership.userId })
+          .then(() => setRoomImageMessage(`Ownership transferred to ${membership.userName}.`))
+          .catch(() => setRoomImageMessage("Could not transfer ownership. Please try again."));
+      },
+    });
+  }
+
   async function handleSignOut() {
     setJoinSheetVisible(false);
     setManageSheetVisible(false);
@@ -856,9 +883,11 @@ export function SettingsScreen() {
             ) : null}
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <View style={{ paddingHorizontal: 14 }}>
-              <Row icon="user" onPress={() => undefined}>
+              <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
                 <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Hand over ownership to another member</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  {ownsGroup ? "Hand over ownership to another member" : "Only the owner can transfer this"}
+                </Text>
               </Row>
             </View>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -877,6 +906,10 @@ export function SettingsScreen() {
             </Pressable>
           </Card>
           <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
+        </BottomSheet>
+        <BottomSheet title="Transfer ownership" visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
+          <BodyText muted>Choose another member to become the community host.</BodyText>
+          <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
         </BottomSheet>
         <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
         <PrayerMoment
@@ -1085,9 +1118,11 @@ export function SettingsScreen() {
           ) : null}
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ paddingHorizontal: 14 }}>
-            <Row icon="user" onPress={() => undefined}>
+            <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Hand over ownership to another member</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                {ownsGroup ? "Hand over ownership to another member" : "Only the owner can transfer this"}
+              </Text>
             </Row>
           </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -1106,6 +1141,10 @@ export function SettingsScreen() {
           </Pressable>
         </Card>
         <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
+      </BottomSheet>
+      <BottomSheet title="Transfer ownership" visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
+        <BodyText muted>Choose another member to become the community host.</BodyText>
+        <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
       </BottomSheet>
         </AppScreen>
       </CommunityTransitionFrame>
@@ -1648,5 +1687,60 @@ function MembersPanel({
         Join or create community
       </SecondaryButton>
     </View>
+  );
+}
+
+function TransferOwnershipList({
+  memberships,
+  onTransfer,
+}: {
+  memberships: Membership[];
+  onTransfer: (membership: Membership) => void;
+}) {
+  if (memberships.length === 0) {
+    return <BodyText muted>Invite another member before transferring ownership.</BodyText>;
+  }
+
+  return (
+    <Card style={{ gap: 0, padding: 0 }}>
+      {memberships.map((membership, index) => (
+        <View
+          key={membership.id}
+          style={{
+            alignItems: "center",
+            borderBottomColor: colors.line,
+            borderBottomWidth: index === memberships.length - 1 ? 0 : 1,
+            flexDirection: "row",
+            gap: 10,
+            padding: 14,
+          }}
+        >
+          <Avatar image={membership.image} name={membership.userName} size={38} tone="green" />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Member</Text>
+          </View>
+          <Pressable
+            accessibilityLabel={`Transfer ownership to ${membership.userName}`}
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => onTransfer(membership)}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              backgroundColor: colors.mossSurface,
+              borderColor: colors.moss,
+              borderRadius: 999,
+              borderWidth: 1,
+              height: 36,
+              justifyContent: "center",
+              opacity: pressed ? 0.75 : 1,
+              width: 36,
+            })}
+          >
+            <Feather name="user-check" size={17} color={colors.olive} />
+          </Pressable>
+        </View>
+      ))}
+    </Card>
   );
 }

@@ -366,6 +366,21 @@ export function RoomDetailsScreen() {
     });
   }
 
+  function handleTransferOwnership(membership: Membership) {
+    if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
+
+    confirmAction({
+      title: "Transfer ownership?",
+      message: `${membership.userName} will become the community host for ${group.name}. You will remain a member.`,
+      confirmText: "Transfer",
+      onConfirm: () => {
+        void dispatch({ type: "transferGroupOwnership", groupId: group.id, userId: membership.userId })
+          .then(() => setRoomMessage(`Ownership transferred to ${membership.userName}.`))
+          .catch(() => setRoomMessage("Could not transfer ownership. Please try again."));
+      },
+    });
+  }
+
   return (
     <>
       <AppScreen>
@@ -414,7 +429,7 @@ export function RoomDetailsScreen() {
       </AppScreen>
 
       <BottomSheet title="Manage members" visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
-        <MemberList currentUserId={state.currentUserId} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} />
+        <MemberList currentUserId={state.currentUserId} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} onTransfer={ownsGroup ? handleTransferOwnership : undefined} />
       </BottomSheet>
 
       <BottomSheet title="Community name" visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
@@ -748,10 +763,12 @@ function MemberList({
   currentUserId,
   memberships,
   onRemove,
+  onTransfer,
 }: {
   currentUserId?: Id;
   memberships: Membership[];
   onRemove?: (membership: Membership) => void;
+  onTransfer?: (membership: Membership) => void;
 }) {
   if (memberships.length === 0) {
     return <BodyText muted>No members are listed for this community yet.</BodyText>;
@@ -761,7 +778,7 @@ function MemberList({
     <View style={{ gap: 8 }}>
       {memberships.map((membership) => (
         <View key={membership.id}>
-          <RoomMemberRow currentUserId={currentUserId} membership={membership} onRemove={onRemove} />
+          <RoomMemberRow currentUserId={currentUserId} membership={membership} onRemove={onRemove} onTransfer={onTransfer} />
         </View>
       ))}
     </View>
@@ -772,12 +789,15 @@ function RoomMemberRow({
   currentUserId,
   membership,
   onRemove,
+  onTransfer,
 }: {
   currentUserId?: Id;
   membership: Membership;
   onRemove?: (membership: Membership) => void;
+  onTransfer?: (membership: Membership) => void;
 }) {
   const canRemove = Boolean(onRemove && membership.role !== "owner" && membership.userId !== currentUserId);
+  const canTransfer = Boolean(onTransfer && membership.role !== "owner" && membership.userId !== currentUserId);
 
   return (
     <View
@@ -797,6 +817,27 @@ function RoomMemberRow({
         <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Community host" : "Member"}</Text>
       </View>
+      {canTransfer ? (
+        <Pressable
+          accessibilityLabel={`Transfer ownership to ${membership.userName}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => onTransfer?.(membership)}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            backgroundColor: colors.mossSurface,
+            borderColor: colors.moss,
+            borderRadius: 999,
+            borderWidth: 1,
+            height: 36,
+            justifyContent: "center",
+            opacity: pressed ? 0.75 : 1,
+            width: 36,
+          })}
+        >
+          <Feather name="user-check" size={17} color={colors.olive} />
+        </Pressable>
+      ) : null}
       {canRemove ? (
         <Pressable
           accessibilityLabel={`Remove ${membership.userName}`}
