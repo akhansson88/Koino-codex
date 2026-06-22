@@ -597,46 +597,79 @@ export function VersePreviewCard({
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
   const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
+  const previewCardStyle: ViewStyle = {
+    alignItems: compact ? "flex-start" : "center",
+    backgroundColor: colors.input,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: compact ? 12 : 14,
+  };
+  const header = (
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+      <Text numberOfLines={1} style={[typography.label, { color: colors.ink, flex: 1, fontSize: compact ? 12 : 13 }]}>
+        {displayVerse.reference}
+      </Text>
+      {displayVerse.translation ? <Text style={[typography.caption, { color: colors.muted, fontSize: 11 }]}>{displayVerse.translation}</Text> : null}
+    </View>
+  );
+
   return (
     <>
-      <Pressable
-        accessibilityLabel={`Open ${displayVerse.reference}`}
-        accessibilityRole="button"
-        onPress={(event) => {
-          event.stopPropagation();
-          setDetailVisible(true);
-        }}
-        style={{
-          alignItems: compact ? "flex-start" : "center",
-          backgroundColor: colors.input,
-          borderColor: colors.line,
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          flexDirection: "row",
-          gap: 12,
-          padding: compact ? 12 : 14,
-        }}
-      >
-        <Ionicons name="sunny-outline" size={20} color={colors.olive} />
-        <View style={{ flex: 1, gap: 4 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-            <Text numberOfLines={1} style={[typography.label, { color: colors.ink, flex: 1, fontSize: compact ? 12 : 13 }]}>
-              {displayVerse.reference}
-            </Text>
-            {displayVerse.translation ? <Text style={[typography.caption, { color: colors.muted, fontSize: 11 }]}>{displayVerse.translation}</Text> : null}
-          </View>
-          {showFullText ? (
+      {showFullText ? (
+        <View style={previewCardStyle}>
+          <Ionicons name="sunny-outline" size={20} color={colors.olive} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Pressable
+              accessibilityLabel={`Open ${displayVerse.reference}`}
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                setDetailVisible(true);
+              }}
+            >
+              {header}
+            </Pressable>
             <ExpandableBodyText collapsedLines={compact ? 3 : 5} style={verseTextStyle}>
               {displayVerse.text}
             </ExpandableBodyText>
-          ) : (
+            {showOpenIndicator ? (
+              <Pressable
+                accessibilityLabel={`Open ${displayVerse.reference}`}
+                accessibilityRole="button"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setDetailVisible(true);
+                }}
+                style={{ alignSelf: "flex-start" }}
+              >
+                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityLabel={`Open ${displayVerse.reference}`}
+          accessibilityRole="button"
+          onPress={(event) => {
+            event.stopPropagation();
+            setDetailVisible(true);
+          }}
+          style={previewCardStyle}
+        >
+          <Ionicons name="sunny-outline" size={20} color={colors.olive} />
+          <View style={{ flex: 1, gap: 4 }}>
+            {header}
             <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
               {displayVerse.text}
             </Text>
-          )}
-          {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text> : null}
-        </View>
-      </Pressable>
+            {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text> : null}
+          </View>
+        </Pressable>
+      )}
       <VerseDetailSheet
         onAddToJournal={onAddToJournal}
         onClose={() => setDetailVisible(false)}
@@ -834,6 +867,7 @@ export function ExpandableBodyText({
   const collapsedHeight = collapsedLines * collapsedLineHeight;
   const heightAnimation = useRef(new Animated.Value(collapsedHeight)).current;
   const hasMeasuredRef = useRef(false);
+  const fullHeightRef = useRef(0);
   const [expanded, setExpanded] = useState(false);
   const [fullHeight, setFullHeight] = useState(0);
   const hasMeasured = fullHeight > 0;
@@ -842,6 +876,7 @@ export function ExpandableBodyText({
 
   useEffect(() => {
     hasMeasuredRef.current = false;
+    fullHeightRef.current = 0;
     setFullHeight(0);
     setExpanded(false);
     heightAnimation.setValue(collapsedHeight);
@@ -870,7 +905,12 @@ export function ExpandableBodyText({
       </Animated.View>
       <BodyText
         muted={muted}
-        onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
+        onLayout={(event) => {
+          const nextHeight = event.nativeEvent.layout.height;
+          if (Math.abs(fullHeightRef.current - nextHeight) < 1) return;
+          fullHeightRef.current = nextHeight;
+          setFullHeight(nextHeight);
+        }}
         style={[style, { left: 0, opacity: 0, position: "absolute", right: 0, zIndex: -1 }]}
       >
         {children}

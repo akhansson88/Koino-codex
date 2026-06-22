@@ -444,14 +444,16 @@ function JournalEntryCard({
           <Text style={[typography.caption, { color: colors.textMuted }]}>{typeLabel}</Text>
         </View>
       </View>
-      <Pressable accessibilityRole="button" onPress={onOpen} style={{ gap: 8 }}>
-        <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
-          {entry.title || (type === "heart_checkin" && mood ? mood : typeLabel)}
-        </Text>
+      <View style={{ gap: 8 }}>
+        <Pressable accessibilityRole="button" onPress={onOpen}>
+          <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
+            {entry.title || (type === "heart_checkin" && mood ? mood : typeLabel)}
+          </Text>
+        </Pressable>
         <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>{entry.body}</ExpandableBodyText>
         {mood ? <BodyText muted>{mood}</BodyText> : null}
         <VerseList verse={entry.verse} verses={entry.verses} compact onAddToJournal={onAddToJournal} onShareToRoom={onShareToRoom} />
-      </Pressable>
+      </View>
       <LinkPreview text={entry.body} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         <SecondaryButton icon="edit-2" onPress={onEdit} style={{ flex: 1 }}>

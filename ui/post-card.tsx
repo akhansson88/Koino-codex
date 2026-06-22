@@ -189,23 +189,24 @@ export function PostCard({
         </View>
       ) : null}
 
-      <Pressable
-        onPress={() => {
-          if (menuOpen || suppressOpenRef.current) {
-            setMenuOpen(false);
-            return;
-          }
-          onOpen();
-        }}
-        style={{ gap: 8 }}
-      >
-        <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
-          {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
-        </Text>
+      <View style={{ gap: 8 }}>
+        <Pressable
+          onPress={() => {
+            if (menuOpen || suppressOpenRef.current) {
+              setMenuOpen(false);
+              return;
+            }
+            onOpen();
+          }}
+        >
+          <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
+            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+          </Text>
+        </Pressable>
         <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
           {item.body || "No words today, just presence."}
         </ExpandableBodyText>
-      </Pressable>
+      </View>
       <LinkPreview text={item.body} />
 
       <VerseList verse={item.verse} verses={item.verses} compact />
