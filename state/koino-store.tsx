@@ -98,6 +98,7 @@ type Action =
   | { type: "joinGroup"; inviteCode: string }
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
+  | { type: "removeGroupMember"; groupId: Id; userId: Id }
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "uploadGroupImage"; id: Id; localUri: string }
   | { type: "deleteGroupImage"; id: Id }
@@ -1003,6 +1004,20 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database), updates);
               return;
             }
+            case "removeGroupMember": {
+              if (!firebaseUser || action.userId === firebaseUser.uid) return;
+              const groupToUpdate = groups.find((item) => item.id === action.groupId);
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid || groupToUpdate.ownerId === action.userId) return;
+
+              const membership = memberships.find((item) => item.groupId === action.groupId && item.userId === action.userId);
+              if (!membership || membership.role === "owner") return;
+
+              await update(ref(database), {
+                [`groupMembers/${action.groupId}/${action.userId}`]: null,
+                [`userGroups/${action.userId}/${action.groupId}`]: null,
+              });
+              return;
+            }
             case "updateGroup":
               await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
               return;
@@ -1808,6 +1823,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "changePassword" ||
           action.type === "createGroup" ||
           action.type === "joinGroup" ||
+          action.type === "removeGroupMember" ||
           action.type === "uploadGroupImage" ||
           action.type === "deleteGroupImage" ||
           action.type === "uploadUserAvatar" ||
@@ -1827,6 +1843,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       groupBiblePlanProgress,
       groups,
       journalEntries,
+      memberships,
       posts,
       postReactions,
       prayerReactions,

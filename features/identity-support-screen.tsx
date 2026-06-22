@@ -350,6 +350,22 @@ export function RoomDetailsScreen() {
     });
   }
 
+  function handleRemoveMember(membership: Membership) {
+    if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
+
+    confirmAction({
+      title: "Remove member?",
+      message: `${membership.userName} will lose access to ${group.name}.`,
+      confirmText: "Remove",
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "removeGroupMember", groupId: group.id, userId: membership.userId })
+          .then(() => setRoomMessage(`${membership.userName} was removed from the community.`))
+          .catch(() => setRoomMessage("Could not remove that member. Please try again."));
+      },
+    });
+  }
+
   return (
     <>
       <AppScreen>
@@ -398,7 +414,7 @@ export function RoomDetailsScreen() {
       </AppScreen>
 
       <BottomSheet title="Manage members" visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
-        <MemberList memberships={state.memberships} />
+        <MemberList currentUserId={state.currentUserId} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} />
       </BottomSheet>
 
       <BottomSheet title="Community name" visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
@@ -728,7 +744,15 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
   );
 }
 
-function MemberList({ memberships }: { memberships: Membership[] }) {
+function MemberList({
+  currentUserId,
+  memberships,
+  onRemove,
+}: {
+  currentUserId?: Id;
+  memberships: Membership[];
+  onRemove?: (membership: Membership) => void;
+}) {
   if (memberships.length === 0) {
     return <BodyText muted>No members are listed for this community yet.</BodyText>;
   }
@@ -737,14 +761,24 @@ function MemberList({ memberships }: { memberships: Membership[] }) {
     <View style={{ gap: 8 }}>
       {memberships.map((membership) => (
         <View key={membership.id}>
-          <RoomMemberRow membership={membership} />
+          <RoomMemberRow currentUserId={currentUserId} membership={membership} onRemove={onRemove} />
         </View>
       ))}
     </View>
   );
 }
 
-function RoomMemberRow({ membership }: { membership: Membership }) {
+function RoomMemberRow({
+  currentUserId,
+  membership,
+  onRemove,
+}: {
+  currentUserId?: Id;
+  membership: Membership;
+  onRemove?: (membership: Membership) => void;
+}) {
+  const canRemove = Boolean(onRemove && membership.role !== "owner" && membership.userId !== currentUserId);
+
   return (
     <View
       style={{
@@ -763,6 +797,27 @@ function RoomMemberRow({ membership }: { membership: Membership }) {
         <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Community host" : "Member"}</Text>
       </View>
+      {canRemove ? (
+        <Pressable
+          accessibilityLabel={`Remove ${membership.userName}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => onRemove?.(membership)}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            backgroundColor: colors.dangerSurface,
+            borderColor: colors.dangerBorder,
+            borderRadius: 999,
+            borderWidth: 1,
+            height: 36,
+            justifyContent: "center",
+            opacity: pressed ? 0.75 : 1,
+            width: 36,
+          })}
+        >
+          <Feather name="user-x" size={17} color={colors.danger} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
