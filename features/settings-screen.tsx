@@ -40,7 +40,7 @@ import {
   StatusPill,
   TextInputField,
 } from "@/ui/app-components";
-import { primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { prayerCountLabel, prayerCountNoun } from "@/ui/prayer-copy";
@@ -110,6 +110,7 @@ export function SettingsScreen() {
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
+  const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
   const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [encouragementDraft, setEncouragementDraft] = useState("");
@@ -249,6 +250,7 @@ export function SettingsScreen() {
   }, [goBackFromRoomView]);
 
   function openComposer(kind: EntryKind = "reflection") {
+    setEditingPost(undefined);
     setComposerKind(kind);
     setComposerVisibility(visibility.room);
     setComposerTitle("");
@@ -257,9 +259,26 @@ export function SettingsScreen() {
     setComposerVisible(true);
   }
 
+  function editPost(item: Extract<FeedItem, { type: "post" }>) {
+    setEditingPost(item);
+    setComposerKind(normalizeEntryKind(item.kind));
+    setComposerVisibility(visibility.room);
+    setComposerTitle(item.title ?? "");
+    setComposerBody(item.body);
+    setComposerVerses(normalizeBibleVerses(item.verse, item.verses));
+    setComposerVisible(true);
+  }
+
+  function closeComposer() {
+    setComposerVisible(false);
+    setEditingPost(undefined);
+  }
+
   async function submitComposer() {
     if (!composerBody.trim()) return;
-    if (composerVisibility === visibility.private) {
+    if (editingPost) {
+      await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+    } else if (composerVisibility === visibility.private) {
       await dispatch({ type: "createJournalEntry", entryKind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
     } else {
       await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
@@ -268,6 +287,7 @@ export function SettingsScreen() {
     setComposerBody("");
     setComposerTitle("");
     setComposerVerses([]);
+    setEditingPost(undefined);
   }
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
@@ -627,8 +647,9 @@ export function SettingsScreen() {
           onTitle={setComposerTitle}
           onBody={setComposerBody}
           onVerses={setComposerVerses}
-          onClose={() => setComposerVisible(false)}
+          onClose={closeComposer}
           onSubmit={submitComposer}
+          editing={Boolean(editingPost)}
           roomName={group.name}
           roomImage={group.image}
         />
@@ -806,6 +827,7 @@ export function SettingsScreen() {
                         onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
                         onPray={() => prayForItem(item)}
                         onReact={() => togglePostAction(item)}
+                        onEdit={() => editPost(item)}
                         onDelete={() => deletePost(item)}
                       />
                     );
@@ -843,8 +865,9 @@ export function SettingsScreen() {
           onTitle={setComposerTitle}
           onBody={setComposerBody}
           onVerses={setComposerVerses}
-          onClose={() => setComposerVisible(false)}
+          onClose={closeComposer}
           onSubmit={submitComposer}
+          editing={Boolean(editingPost)}
           roomName={group.name}
           roomImage={group.image}
         />
