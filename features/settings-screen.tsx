@@ -720,7 +720,7 @@ export function SettingsScreen() {
   if (roomView === "prayer" && group) {
     return (
       <>
-        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <CommunityPrayerScreen
             filter={prayerFilter}
             onBack={goBackFromRoomView}
@@ -765,7 +765,7 @@ export function SettingsScreen() {
   if (roomView === "prayerDetail" && group) {
     if (!selectedPrayer) {
       return (
-        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <AppScreen topInset={false}>
             <FocusedScreenHeader onBack={() => navigateToRoomView("prayer", "back")} title="Prayer" />
             <Card>
@@ -779,7 +779,7 @@ export function SettingsScreen() {
     const prayer = itemPrayerState(selectedPrayer);
     return (
       <>
-        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <CommunityPrayerDetailScreen
             activity={itemPrayerActivity(selectedPrayer)}
             authorImage={userImageById.get(selectedPrayer.userId)}
@@ -810,7 +810,7 @@ export function SettingsScreen() {
   if (roomView === "checkins" && group) {
     return (
       <>
-        <CommunityTransitionFrame canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <CommunityCheckInsScreen
             checkIns={sharedCheckIns}
             checkedInToday={todaysCheckIn}
@@ -829,7 +829,7 @@ export function SettingsScreen() {
   if (roomView === "detail" && group) {
     return (
       <>
-        <CommunityTransitionFrame direction={transitionDirection}>
+        <CommunityTransitionFrame animationKey={roomView} direction={transitionDirection}>
           <AppScreen topInset={false}>
             <View style={{ gap: 12 }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
@@ -1052,7 +1052,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <CommunityTransitionFrame canSwipeBack={roomView === "rooms"} direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+      <CommunityTransitionFrame animationKey={roomView} canSwipeBack={roomView === "rooms"} direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
         <AppScreen topInset={false}>
           <View style={{ gap: 8 }}>
         <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Community</Text>
@@ -1274,11 +1274,13 @@ export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
 
 function CommunityTransitionFrame({
+  animationKey,
   canSwipeBack = false,
   children,
   direction,
   onSwipeBack,
 }: {
+  animationKey?: string;
   canSwipeBack?: boolean;
   children: ReactNode;
   direction: TransitionDirection;
@@ -1295,7 +1297,7 @@ function CommunityTransitionFrame({
       toValue: 0,
       useNativeDriver: true,
     }).start();
-  }, [direction, entryOffset, translateX]);
+  }, [animationKey, direction, entryOffset, translateX]);
 
   const opacity = translateX.interpolate({
     inputRange: [-entryOffset, 0, width],
