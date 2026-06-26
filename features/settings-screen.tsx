@@ -864,11 +864,19 @@ export function SettingsScreen() {
               />
             ) : null}
 
-            <View style={{ gap: 10 }}>
-              <PrimaryButton icon="heart" onPress={() => startCommunityPrayer({ type: "pray_now" })}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <PrimaryButton
+                icon="heart"
+                onPress={() => startCommunityPrayer({ type: "pray_now" })}
+                style={{ flex: 1, minHeight: 46, paddingHorizontal: 10 }}
+              >
                 Pray now
               </PrimaryButton>
-              <SecondaryButton icon="users" onPress={() => setMemberSelectVisible(true)}>
+              <SecondaryButton
+                icon="users"
+                onPress={() => setMemberSelectVisible(true)}
+                style={{ flex: 1, minHeight: 46, paddingHorizontal: 10 }}
+              >
                 Pray for someone
               </SecondaryButton>
             </View>
