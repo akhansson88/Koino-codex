@@ -853,17 +853,6 @@ export function SettingsScreen() {
               </View>
             </View>
 
-            {!todaysCheckIn ? (
-              <HeartPromptCard
-                actionIcon="edit-3"
-                actionLabel="Check in"
-                image={currentUser?.image}
-                name={currentUser?.name ?? state.authEmail ?? "K"}
-                subtitle="Take a quiet moment with God."
-                onPress={openCheckInComposer}
-              />
-            ) : null}
-
             <View style={{ flexDirection: "row", gap: 10 }}>
               <PrimaryButton
                 icon="heart"
