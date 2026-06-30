@@ -1,9 +1,10 @@
 import type { ComponentProps, PropsWithChildren } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Image, Platform, Pressable, Share, Text, View } from "react-native";
+import { Animated, Easing, Image, KeyboardAvoidingView, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useKoino } from "@/state/koino-store";
 import type { Group, Id, Membership } from "@/state/types";
@@ -24,10 +25,11 @@ import { confirmAction } from "@/ui/confirm";
 import { openLinkInApp } from "@/ui/open-link";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
-import { colors, radius, typography } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "account" | "help" | "security" | "privacy" | "terms";
+type IdentityPresentation = "screen" | "sheet";
 type RoomSheet = "members" | "rename" | "notifications";
 
 function memberLabel(count: number) {
@@ -69,7 +71,177 @@ async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
   });
 }
 
-export function IdentitySupportScreen() {
+function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismiss: () => void }>) {
+  const insets = useSafeAreaInsets();
+  const { height, width } = useWindowDimensions();
+  const entrance = useRef(new Animated.Value(1)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
+  const exitDistance = height + 64;
+  const topGap = Math.max(insets.top + 26, 58);
+  const sheetWidth = width >= 760 ? Math.min(width - 48, 680) : "100%";
+
+  const dismiss = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+
+    Animated.timing(entrance, {
+      duration: 240,
+      easing: Easing.in(Easing.cubic),
+      toValue: 1,
+      useNativeDriver: true,
+    }).start(() => onDismiss());
+  }, [entrance, onDismiss]);
+
+  useEffect(() => {
+    Animated.timing(entrance, {
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_event, gesture) => dragY.setValue(Math.max(0, gesture.dy)),
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 86 || gesture.vy > 0.85) {
+            dismiss();
+            return;
+          }
+
+          Animated.spring(dragY, {
+            damping: 24,
+            mass: 0.8,
+            stiffness: 220,
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(dragY, {
+            damping: 24,
+            mass: 0.8,
+            stiffness: 220,
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+        onStartShouldSetPanResponder: () => false,
+      }),
+    [dismiss, dragY],
+  );
+  const translateY = Animated.add(
+    entrance.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, exitDistance],
+    }),
+    dragY,
+  );
+
+  return (
+    <View style={{ backgroundColor: "rgba(11, 18, 32, 0.24)", flex: 1 }}>
+      <Pressable
+        accessibilityLabel="Close identity and support"
+        accessibilityRole="button"
+        onPress={dismiss}
+        style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        pointerEvents="box-none"
+        style={{ flex: 1, justifyContent: "flex-end", paddingTop: topGap }}
+      >
+        <Animated.View
+          style={{
+            alignSelf: "center",
+            backgroundColor: colors.cream,
+            borderTopLeftRadius: 36,
+            borderTopRightRadius: 36,
+            height: "100%",
+            overflow: "hidden",
+            transform: [{ translateY }],
+            width: sheetWidth,
+            ...platformShadow({
+              boxShadow: "0 -22px 54px rgba(11, 18, 32, 0.24)",
+              elevation: 22,
+              offset: { width: 0, height: -16 },
+              opacity: 0.22,
+              radius: 34,
+            }),
+          }}
+        >
+          <View {...panResponder.panHandlers} style={{ gap: 18, paddingBottom: 12, paddingHorizontal: 22, paddingTop: 12 }}>
+            <View style={{ alignItems: "center" }}>
+              <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 48 }} />
+            </View>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: colors.paper,
+                  borderColor: colors.line,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  height: 36,
+                  justifyContent: "center",
+                  width: 36,
+                }}
+              >
+                <Feather name="user" size={17} color={colors.ink} />
+              </View>
+              <Text style={{ color: colors.ink, flex: 1, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>Identity & Support</Text>
+              <Pressable
+                accessibilityLabel="Close identity and support"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={dismiss}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  backgroundColor: colors.paper,
+                  borderColor: "rgba(255,255,255,0.7)",
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  height: 58,
+                  justifyContent: "center",
+                  opacity: pressed ? 0.72 : 1,
+                  width: 58,
+                  ...platformShadow({
+                    boxShadow: "0 12px 28px rgba(11, 18, 32, 0.16)",
+                    elevation: 10,
+                    offset: { width: 0, height: 10 },
+                    opacity: 0.16,
+                    radius: 24,
+                  }),
+                })}
+              >
+                <Feather name="x" size={34} color={colors.ink} />
+              </Pressable>
+            </View>
+          </View>
+          <ScrollView
+            contentContainerStyle={{
+              gap: 16,
+              paddingBottom: Math.max(36, insets.bottom + 24),
+              paddingHorizontal: 18,
+              paddingTop: 4,
+            }}
+            contentInsetAdjustmentBehavior="never"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
   const [activeSheet, setActiveSheet] = useState<IdentitySheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
@@ -165,69 +337,80 @@ export function IdentitySupportScreen() {
     openLinkInApp("https://example.com/koino-support").catch(() => undefined);
   }
 
-  return (
+  const content = (
     <>
-      <AppScreen>
-        <AppHeader showBack onBack={() => router.back()} />
-
+      {presentation === "screen" ? (
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Identity & Support</Text>
           <BodyText muted>Manage your profile, community, privacy, and help.</BodyText>
         </View>
+      ) : null}
 
-        <SettingsSection label="Identity">
-          <SettingsRow icon="user" title="Profile" subtitle="View and edit your profile" onPress={() => setActiveSheet("profile")} />
-          <SettingsRow
-            icon="sun"
-            title="Appearance"
-            subtitle="Theme, light or dark mode"
-            value={themeLabel}
-            onPress={() => dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" })}
-            showDivider
-          />
-          <SettingsRow
-            icon="settings"
-            title="Account options"
-            subtitle="Email, notifications, and account settings"
-            onPress={() => setActiveSheet("account")}
-            showDivider
-          />
-        </SettingsSection>
+      <SettingsSection label="Identity">
+        <SettingsRow icon="user" title="Profile" subtitle="View and edit your profile" onPress={() => setActiveSheet("profile")} />
+        <SettingsRow
+          icon="sun"
+          title="Appearance"
+          subtitle="Theme, light or dark mode"
+          value={themeLabel}
+          onPress={() => dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" })}
+          showDivider
+        />
+        <SettingsRow
+          icon="settings"
+          title="Account options"
+          subtitle="Email, notifications, and account settings"
+          onPress={() => setActiveSheet("account")}
+          showDivider
+        />
+      </SettingsSection>
 
-        <View style={{ gap: 10 }}>
-          <SectionLabel>Community</SectionLabel>
-          <RoomSummaryCard group={group} memberCount={memberCount} onDetails={() => router.push("/room-details" as never)} />
-          <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
-            <SettingsRow
-              icon="repeat"
-              title="Switch or join community"
-              subtitle="Join another community or create a new one"
-              onPress={() => setSwitcherVisible(true)}
-            />
-          </Card>
-        </View>
-
-        <SettingsSection label="Support & Trust">
-          <SettingsRow icon="message-circle" title="Help & contact" subtitle="FAQ, support, and contact" onPress={() => setActiveSheet("help")} />
+      <View style={{ gap: 10 }}>
+        <SectionLabel>Community</SectionLabel>
+        <RoomSummaryCard group={group} memberCount={memberCount} onDetails={() => router.push("/room-details" as never)} />
+        <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
           <SettingsRow
-            icon="lock"
-            title="Password & security"
-            subtitle="Manage login and security"
-            onPress={() => setActiveSheet("security")}
-            showDivider
+            icon="repeat"
+            title="Switch or join community"
+            subtitle="Join another community or create a new one"
+            onPress={() => setSwitcherVisible(true)}
           />
-          <SettingsRow icon="shield" title="Privacy" subtitle="Manage your data and privacy" onPress={() => setActiveSheet("privacy")} showDivider />
-          <SettingsRow
-            icon="file-text"
-            title="Terms & policies"
-            subtitle="Read our terms and privacy policy"
-            onPress={() => setActiveSheet("terms")}
-            showDivider
-          />
-        </SettingsSection>
+        </Card>
+      </View>
 
-        <GivingCard amount={amount} onAmount={setAmount} onGive={handleGive} />
-      </AppScreen>
+      <SettingsSection label="Support & Trust">
+        <SettingsRow icon="message-circle" title="Help & contact" subtitle="FAQ, support, and contact" onPress={() => setActiveSheet("help")} />
+        <SettingsRow
+          icon="lock"
+          title="Password & security"
+          subtitle="Manage login and security"
+          onPress={() => setActiveSheet("security")}
+          showDivider
+        />
+        <SettingsRow icon="shield" title="Privacy" subtitle="Manage your data and privacy" onPress={() => setActiveSheet("privacy")} showDivider />
+        <SettingsRow
+          icon="file-text"
+          title="Terms & policies"
+          subtitle="Read our terms and privacy policy"
+          onPress={() => setActiveSheet("terms")}
+          showDivider
+        />
+      </SettingsSection>
+
+      <GivingCard amount={amount} onAmount={setAmount} onGive={handleGive} />
+    </>
+  );
+
+  return (
+    <>
+      {presentation === "sheet" ? (
+        <IdentityRouteSheet onDismiss={() => router.back()}>{content}</IdentityRouteSheet>
+      ) : (
+        <AppScreen>
+          <AppHeader showBack onBack={() => router.back()} />
+          {content}
+        </AppScreen>
+      )}
 
       <BottomSheet title="Profile" visible={activeSheet === "profile"} onClose={() => setActiveSheet(undefined)}>
         <View style={{ alignItems: "center", gap: 12 }}>

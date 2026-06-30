@@ -57,7 +57,16 @@ function RootNavigator() {
       >
         <Stack.Screen name="index" options={{ gestureEnabled: false, headerShown: false }} />
         <Stack.Screen name="reset-password" options={{ gestureEnabled: false, headerShown: false }} />
-        <Stack.Screen name="identity" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="identity"
+          options={{
+            animation: "none",
+            contentStyle: { backgroundColor: "transparent" },
+            gestureEnabled: false,
+            headerShown: false,
+            presentation: "transparentModal",
+          }}
+        />
         <Stack.Screen name="room-details" options={{ headerShown: false }} />
         <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
         <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
