@@ -5033,11 +5033,70 @@ function BibleDrawer({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
+  const translateY = useRef(new Animated.Value(sheetHeight)).current;
   const [stage, setStage] = useState<PickerStage>("home");
   const [bookQuery, setBookQuery] = useState("");
   const [selectedBook, setSelectedBook] = useState(initialPosition.book);
   const [selectedChapter, setSelectedChapter] = useState(initialPosition.chapter);
   const [testament, setTestament] = useState<TestamentFilter>("all");
+  const drawerCornerRadius = 44;
+
+  const closeWithAnimation = useCallback(() => {
+    Animated.timing(translateY, {
+      duration: 190,
+      easing: Easing.out(Easing.cubic),
+      toValue: sheetHeight,
+      useNativeDriver: true,
+    }).start(() => onClose());
+  }, [onClose, sheetHeight, translateY]);
+
+  const settleOpen = useCallback(() => {
+    Animated.spring(translateY, {
+      damping: 24,
+      stiffness: 240,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  }, [translateY]);
+
+  const topPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderMove: (_event, gesture) => {
+          translateY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 70 || gesture.vy > 0.45) {
+            closeWithAnimation();
+            return;
+          }
+          settleOpen();
+        },
+        onPanResponderTerminate: settleOpen,
+      }),
+    [closeWithAnimation, settleOpen, translateY],
+  );
+
+  const handlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderMove: (_event, gesture) => {
+          translateY.setValue(Math.max(0, gesture.dy));
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 50 || gesture.vy > 0.35) {
+            closeWithAnimation();
+            return;
+          }
+          settleOpen();
+        },
+        onPanResponderTerminate: settleOpen,
+      }),
+    [closeWithAnimation, settleOpen, translateY],
+  );
 
   useEffect(() => {
     if (!visible) return;
@@ -5048,6 +5107,17 @@ function BibleDrawer({
     setSelectedChapter(normalized.chapter);
     setTestament("all");
   }, [initialPosition, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    translateY.setValue(sheetHeight);
+    Animated.timing(translateY, {
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  }, [sheetHeight, translateY, visible]);
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
   const normalizedQuery = bookQuery.trim().toLowerCase();
@@ -5096,7 +5166,7 @@ function BibleDrawer({
       setBookQuery("");
       return;
     }
-    onClose();
+    closeWithAnimation();
   }
 
   function openBookList(nextTestament: TestamentFilter) {
@@ -5119,17 +5189,18 @@ function BibleDrawer({
   }
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={goBack}>
+    <Modal transparent visible={visible} onRequestClose={goBack}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close Bible drawer" accessibilityRole="button" onPress={onClose} style={{ backgroundColor: palette.dim, flex: 1 }} />
-        <View
+        <Pressable accessibilityLabel="Close Bible drawer" accessibilityRole="button" onPress={closeWithAnimation} style={{ backgroundColor: palette.dim, flex: 1 }} />
+        <Animated.View
           style={{
             backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
+            borderTopLeftRadius: drawerCornerRadius,
+            borderTopRightRadius: drawerCornerRadius,
             height: sheetHeight,
             overflow: "hidden",
             paddingBottom: insets.bottom,
+            transform: [{ translateY }],
             ...platformShadow({
               boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
               color: palette.shadow,
@@ -5139,8 +5210,10 @@ function BibleDrawer({
             }),
           }}
         >
-          <View style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 10 }}>
-            <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
+          <View {...topPanResponder.panHandlers} style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 10 }}>
+            <View {...handlePanResponder.panHandlers} style={{ alignItems: "center", height: 28, justifyContent: "center", width: 150 }}>
+              <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 58 }} />
+            </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
               <ReaderCircleButton accessibilityLabel={stage === "home" ? "Close Bible drawer" : "Back"} icon={stage === "home" ? "x" : "chevron-left"} onPress={goBack} palette={palette} />
               <View style={{ flex: 1, gap: 2 }}>
@@ -5333,7 +5406,7 @@ function BibleDrawer({
               </View>
             ) : null}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
