@@ -15,17 +15,16 @@ import {
   BodyText,
   BottomSheet,
   Card,
-  FilterChips,
   PrimaryButton,
   RoomImage,
   SecondaryButton,
   TextInputField,
 } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
-import { openLinkInApp } from "@/ui/open-link";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { SupportKoinoCard } from "@/features/donation-flow-screen";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "account" | "help" | "security" | "privacy" | "terms";
@@ -245,7 +244,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const { state, dispatch } = useKoino();
   const [activeSheet, setActiveSheet] = useState<IdentitySheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
-  const [amount, setAmount] = useState("50");
   const [avatarCropSource, setAvatarCropSource] = useState<RoomImageCropSource>();
   const [avatarMessage, setAvatarMessage] = useState("");
   const [securityMessage, setSecurityMessage] = useState("");
@@ -331,12 +329,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
     }
   }
 
-  function handleGive() {
-    const resolvedAmount = Number(amount === "custom" ? "50" : amount);
-    void dispatch({ type: "createSupportIntent", amount: resolvedAmount });
-    openLinkInApp("https://example.com/koino-support").catch(() => undefined);
-  }
-
   const content = (
     <>
       {presentation === "screen" ? (
@@ -397,7 +389,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         />
       </SettingsSection>
 
-      <GivingCard amount={amount} onAmount={setAmount} onGive={handleGive} />
+      <SupportKoinoCard onPress={() => router.replace("/donation-amount" as never)} />
     </>
   );
 
@@ -746,46 +738,6 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
           <BodyText muted>Join or create a community for the people you pray with.</BodyText>
         </>
       )}
-    </Card>
-  );
-}
-
-function GivingCard({ amount, onAmount, onGive }: { amount: string; onAmount: (value: string) => void; onGive: () => void }) {
-  return (
-    <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, gap: 14 }}>
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        <View
-          style={{
-            alignItems: "center",
-            backgroundColor: colors.warmSoft,
-            borderColor: colors.line,
-            borderRadius: 999,
-            borderWidth: 1,
-            height: 42,
-            justifyContent: "center",
-            width: 42,
-          }}
-        >
-          <Feather name="heart" size={19} color={colors.textMuted} />
-        </View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[typography.title, { color: colors.ink }]}>Give to KOINO</Text>
-          <BodyText muted>Support the mission and help KOINO grow.</BodyText>
-        </View>
-      </View>
-      <FilterChips
-        value={amount}
-        onChange={onAmount}
-        options={[
-          { label: "10 kr", value: "10" },
-          { label: "25 kr", value: "25" },
-          { label: "50 kr", value: "50" },
-          { label: "Custom", value: "custom" },
-        ]}
-      />
-      <PrimaryButton icon="heart" onPress={onGive}>
-        Give
-      </PrimaryButton>
     </Card>
   );
 }
