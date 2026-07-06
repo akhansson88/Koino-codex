@@ -307,7 +307,9 @@ export function PrimaryButton({
       ]}
     >
       {icon ? <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} /> : null}
-      <Text style={[typography.button, { color: disabled ? colors.disabledText : colors.onAccent }]}>{children}</Text>
+      <Text style={[typography.button, { color: disabled ? colors.disabledText : colors.onAccent, flexShrink: 1, textAlign: "center" }]}>
+        {children}
+      </Text>
     </Pressable>
   );
 }
@@ -350,7 +352,9 @@ export function SecondaryButton({
       ]}
     >
       {icon ? <Feather name={icon} size={18} color={disabled ? colors.disabledText : color} /> : null}
-      <Text style={[typography.button, { color: disabled ? colors.disabledText : color }]}>{children}</Text>
+      <Text style={[typography.button, { color: disabled ? colors.disabledText : color, flexShrink: 1, textAlign: "center" }]}>
+        {children}
+      </Text>
     </Pressable>
   );
 }
