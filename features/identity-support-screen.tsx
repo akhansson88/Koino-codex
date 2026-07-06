@@ -389,7 +389,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         />
       </SettingsSection>
 
-      <SupportKoinoCard onPress={() => router.push("/donation-amount" as never)} />
+      <SupportKoinoCard onPress={() => router.replace("/donation-amount" as never)} />
     </>
   );
 

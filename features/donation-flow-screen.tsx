@@ -995,6 +995,13 @@ export function DonationThankYouScreen() {
     // TODO: Connect this to a private prayer composer or prayer route when that flow exists.
   }
 
+  function returnToMeTab() {
+    router.dismissAll();
+    requestAnimationFrame(() => {
+      router.replace("/(tabs)/me" as never);
+    });
+  }
+
   return (
     <DonationScreenFrame>
       <DonationHeader title="Tack" />
@@ -1048,7 +1055,7 @@ export function DonationThankYouScreen() {
           title="Be för KOINO"
         />
       </View>
-      <DonationPrimaryButton onPress={() => router.replace("/(tabs)/me")} tone="warm">
+      <DonationPrimaryButton onPress={returnToMeTab} tone="warm">
         Tillbaka till Du
       </DonationPrimaryButton>
     </DonationScreenFrame>
