@@ -145,6 +145,8 @@ export function JournalScreen() {
 
       <ReflectTodayCard onPress={() => beginEntry("reflection", visibility.private)} />
 
+      <BiblePlansCard count={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length} />
+
       <JourneySummaryCard count={entries.length} onPress={() => setHistoryVisible(true)} />
 
       {entries.length === 0 ? (
@@ -204,6 +206,20 @@ export function JournalScreen() {
         visible={historyVisible}
       />
     </AppScreen>
+  );
+}
+
+function BiblePlansCard({ count }: { count: number }) {
+  return (
+    <QuietActionCard icon="calendar" onPress={() => router.push("/bible-plans" as never)} subtitle="Custom reading rhythms" title="Bible plans">
+      <View style={{ backgroundColor: colors.line, height: 1 }} />
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+        <Feather name="book-open" size={15} color={colors.muted} />
+        <Text style={[typography.caption, { color: colors.muted }]}>
+          {count} {count === 1 ? "plan" : "plans"}
+        </Text>
+      </View>
+    </QuietActionCard>
   );
 }
 

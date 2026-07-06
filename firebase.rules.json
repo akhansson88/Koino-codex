@@ -509,6 +509,49 @@
       }
     },
 
+    "biblePlans": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$planId": {
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $planId && newData.child('userId').val() == $uid && newData.child('title').isString() && newData.child('startDate').isString() && newData.child('dayCount').isNumber() && newData.child('createdAt').isString() && newData.child('updatedAt').isString())"
+        }
+      }
+    },
+
+    "groupBiblePlanAnnouncements": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        "$announcementId": {
+          ".write": "auth != null && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
+          ".validate": "newData.val() == null || (newData.child('id').val() == $announcementId && newData.child('groupId').val() == $groupId && newData.child('ownerId').val() == auth.uid && newData.child('title').isString() && newData.child('startDate').isString() && newData.child('dayCount').isNumber() && newData.child('createdAt').isString() && newData.child('updatedAt').isString())"
+        }
+      }
+    },
+
+    "groupBiblePlanParticipantIds": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$announcementId": {
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.val() == null || newData.isString()"
+        }
+      }
+    },
+
+    "groupBiblePlanParticipation": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        "$announcementId": {
+          ".write": "auth != null && !newData.exists() && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
+          "$participantId": {
+            ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+            ".validate": "newData.val() == null || (newData.child('id').val() == $participantId && newData.child('announcementId').val() == $announcementId && newData.child('totalDays').isNumber() && newData.child('joinedAt').isString() && newData.child('updatedAt').isString())"
+          }
+        }
+      }
+    },
+
     "supportIntents": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",

@@ -29,6 +29,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import {
+  currentPlanDay,
+  firstPositionForPlanDay,
+  planMarkersForChapter,
+  type BiblePlanMarker,
+  type BiblePlanMarkerKind,
+  type BiblePlanCurrentDay,
+  completionPercent,
+  dayKeyForPlanDay,
+  todayDateKey,
+} from "@/features/bible-plans";
+import {
   bibleChapterVerses,
   bibleCrossReferences,
   bibleVerseFromReference,
@@ -55,7 +66,7 @@ import { confirmAction } from "@/ui/confirm";
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
-import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
+import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -673,12 +684,26 @@ export function BibleScreen() {
   const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const readerPalette = useMemo(() => readerPaletteFor(readerTheme), [readerTheme]);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
+  const activeBiblePlans = useMemo(
+    () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId && plan.status === "active"),
+    [state.biblePlans, state.currentUserId],
+  );
+  const selectedPlan = useMemo(
+    () => activeBiblePlans.find((plan) => plan.id === selectedPlanId) ?? activeBiblePlans[0],
+    [activeBiblePlans, selectedPlanId],
+  );
+  const selectedPlanCurrentDay = useMemo(() => (selectedPlan ? currentPlanDay(selectedPlan) : undefined), [selectedPlan]);
+  const selectedPlanMarkers = useMemo(
+    () => (selectedPlan ? planMarkersForChapter(selectedPlan, position) : []),
+    [position, selectedPlan],
+  );
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
   const chapterHighlightByVerse = useMemo(() => {
@@ -773,6 +798,16 @@ export function BibleScreen() {
               ? `Ready to listen from ${referenceLabel(audioPosition)}`
             : "Loading voice service...";
   const group = state.groups.find((item) => item.id === state.currentGroupId);
+
+  useEffect(() => {
+    if (activeBiblePlans.length === 0) {
+      setSelectedPlanId(undefined);
+      return;
+    }
+    if (!selectedPlanId || !activeBiblePlans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(activeBiblePlans[0].id);
+    }
+  }, [activeBiblePlans, selectedPlanId]);
 
   useEffect(() => {
     positionRef.current = position;
@@ -935,6 +970,23 @@ export function BibleScreen() {
     },
     [showTemporaryHighlight, tryScrollToVerse],
   );
+
+  const jumpToSelectedPlanDay = useCallback(() => {
+    const start = firstPositionForPlanDay(selectedPlanCurrentDay?.day);
+    if (start) {
+      jumpToPosition(start, true, true);
+    }
+  }, [jumpToPosition, selectedPlanCurrentDay?.day]);
+
+  const toggleSelectedPlanDay = useCallback(() => {
+    if (!selectedPlan || !selectedPlanCurrentDay?.day || selectedPlanCurrentDay.isBeforeStart || selectedPlanCurrentDay.isAfterEnd) return;
+    void dispatch({
+      type: "markBiblePlanDay",
+      planId: selectedPlan.id,
+      dayNumber: selectedPlanCurrentDay.day.dayNumber,
+      read: !selectedPlanCurrentDay.day.completedAt,
+    });
+  }, [dispatch, selectedPlan, selectedPlanCurrentDay]);
 
   const updateAudioPosition = useCallback((nextPosition: Partial<BiblePosition>) => {
     const normalized = normalizeBiblePosition(nextPosition);
@@ -1797,6 +1849,16 @@ export function BibleScreen() {
           <Animated.View
             style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
           >
+            <BiblePlanReaderPanel
+              currentDay={selectedPlanCurrentDay}
+              markers={selectedPlanMarkers}
+              onJump={jumpToSelectedPlanDay}
+              onMarkRead={toggleSelectedPlanDay}
+              onSelectPlan={setSelectedPlanId}
+              palette={readerPalette}
+              plan={selectedPlan}
+              plans={activeBiblePlans}
+            />
             <BibleText
               audioHighlightActive={audioHighlightActive}
               audioPosition={audioPosition}
@@ -1812,6 +1874,7 @@ export function BibleScreen() {
               position={position}
               readerLineHeight={readerLineHeight}
               readerTextStyle={readerTextStyle}
+              planMarkers={selectedPlanMarkers}
               selectedVerseNumbers={selectedVerseNumbers}
               selectedVersePosition={selectedVersePosition}
               showCrossReferences={showCrossReferences}
@@ -2570,6 +2633,7 @@ function BibleText({
   onVerseLayout,
   onVerseLongPress,
   palette,
+  planMarkers,
   position,
   readerLineHeight,
   readerTextStyle,
@@ -2589,6 +2653,7 @@ function BibleText({
   onVerseLayout: (verse: number, offset: number) => void;
   onVerseLongPress: (verse: number) => void;
   palette: ReaderPalette;
+  planMarkers: BiblePlanMarker[];
   position: BiblePosition;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
@@ -2618,6 +2683,8 @@ function BibleText({
   return (
     <View style={{ gap: compactMode ? 4 : 7 }}>
       {verses.map((item, index) => {
+        const markersBefore = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "start");
+        const markersAfter = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "finish");
         const highlighted =
           highlightedPosition?.book === position.book &&
           highlightedPosition.chapter === position.chapter &&
@@ -2638,11 +2705,14 @@ function BibleText({
         const verseTextStyle = [persistedHighlightColor ? { backgroundColor: persistedHighlightColor } : undefined, tapSelected ? selectedTextStyle : undefined];
         const isFirstVerse = index === 0;
         return (
+          <View key={item.reference} style={{ gap: 5 }}>
+          {markersBefore.map((marker) => (
+            <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
+          ))}
           <Pressable
             accessibilityLabel={`${position.book} ${position.chapter}:${item.verse}`}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            key={item.reference}
             delayLongPress={1000}
             onLayout={(event) => onVerseLayout(item.verse, event.nativeEvent.layout.y)}
             onLongPress={() => onVerseLongPress(item.verse)}
@@ -2683,8 +2753,169 @@ function BibleText({
               </View>
             )}
           </Pressable>
+          {markersAfter.map((marker) => (
+            <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
+          ))}
+          </View>
         );
       })}
+    </View>
+  );
+}
+
+function BiblePlanReaderPanel({
+  currentDay,
+  markers,
+  onJump,
+  onMarkRead,
+  onSelectPlan,
+  palette,
+  plan,
+  plans,
+}: {
+  currentDay?: BiblePlanCurrentDay;
+  markers: BiblePlanMarker[];
+  onJump: () => void;
+  onMarkRead: () => void;
+  onSelectPlan: (id: string) => void;
+  palette: ReaderPalette;
+  plan?: BiblePlan;
+  plans: BiblePlan[];
+}) {
+  if (!plan || plans.length === 0) return null;
+
+  const completed = plan.days.filter((day) => Boolean(day.completedAt)).length;
+  const percent = completionPercent(completed, plan.days.length);
+  const day = currentDay?.day;
+  const dayCompleted = Boolean(day?.completedAt);
+  const outOfSchedule = Boolean(currentDay?.isBeforeStart || currentDay?.isAfterEnd);
+  const hasMarkersInChapter = markers.length > 0;
+  const dateLabel = day ? dayKeyForPlanDay(plan, day.dayNumber) : todayDateKey();
+
+  return (
+    <View
+      style={{
+        backgroundColor: palette.surface,
+        borderColor: palette.line,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        gap: 10,
+        padding: 12,
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+        <Feather name="calendar" size={17} color={palette.accent} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
+            {plan.title}
+          </Text>
+          <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
+            {day ? `Day ${day.dayNumber} · ${dateLabel} · ${percent}% complete` : `${percent}% complete`}
+          </Text>
+        </View>
+        {plans.length > 1 ? (
+          <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900" }}>
+            {plans.findIndex((item) => item.id === plan.id) + 1}/{plans.length}
+          </Text>
+        ) : null}
+      </View>
+      {plans.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {plans.map((item) => {
+            const selected = item.id === plan.id;
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={item.id}
+                onPress={() => onSelectPlan(item.id)}
+                style={{
+                  backgroundColor: selected ? palette.peach : palette.input,
+                  borderColor: selected ? palette.accent : palette.line,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  minHeight: 34,
+                  justifyContent: "center",
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Text numberOfLines={1} style={{ color: selected ? palette.accent : palette.muted, fontSize: 12, fontWeight: "900", maxWidth: 160 }}>
+                  {item.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!day}
+          onPress={onJump}
+          style={{
+            alignItems: "center",
+            backgroundColor: palette.input,
+            borderColor: palette.line,
+            borderRadius: 999,
+            borderWidth: 1,
+            flex: 1,
+            flexDirection: "row",
+            gap: 7,
+            justifyContent: "center",
+            minHeight: 40,
+            opacity: day ? 1 : 0.5,
+            paddingHorizontal: 10,
+          }}
+        >
+          <Feather name={hasMarkersInChapter ? "map-pin" : "corner-up-right"} size={15} color={palette.accent} />
+          <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "900" }}>{hasMarkersInChapter ? "Markers here" : "Today"}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!day || outOfSchedule}
+          onPress={onMarkRead}
+          style={{
+            alignItems: "center",
+            backgroundColor: dayCompleted ? palette.peach : palette.accent,
+            borderColor: dayCompleted ? palette.accent : palette.accent,
+            borderRadius: 999,
+            borderWidth: 1,
+            flex: 1,
+            flexDirection: "row",
+            gap: 7,
+            justifyContent: "center",
+            minHeight: 40,
+            opacity: !day || outOfSchedule ? 0.5 : 1,
+            paddingHorizontal: 10,
+          }}
+        >
+          <Feather name={dayCompleted ? "check-circle" : "circle"} size={15} color={dayCompleted ? palette.accent : palette.surface} />
+          <Text style={{ color: dayCompleted ? palette.accent : palette.surface, fontSize: 12, fontWeight: "900" }}>{dayCompleted ? "Read" : "Mark read"}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function BiblePlanInlineMarker({ kind, label, palette }: { kind: BiblePlanMarkerKind; label: string; palette: ReaderPalette }) {
+  const isStart = kind === "start";
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        alignSelf: "flex-start",
+        backgroundColor: isStart ? palette.peach : palette.input,
+        borderColor: isStart ? palette.accent : palette.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 7,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      }}
+    >
+      <Feather name={isStart ? "play-circle" : "flag"} size={13} color={palette.accent} />
+      <Text style={{ color: palette.accent, fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>{label}</Text>
     </View>
   );
 }

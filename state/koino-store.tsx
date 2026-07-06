@@ -6,6 +6,7 @@ import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/da
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
+import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
@@ -14,7 +15,11 @@ import {
   BibleHighlightPaletteColor,
   CheckIn,
   BibleVerse,
+  BiblePlan,
+  BiblePlanRange,
   EntryKind,
+  GroupBiblePlanAnnouncement,
+  GroupBiblePlanParticipation,
   Group,
   Id,
   JournalEntry,
@@ -118,6 +123,13 @@ type Action =
   | { type: "removeBibleHighlight"; id: Id }
   | { type: "saveBibleHighlightColor"; hex: BibleHighlightColor; id?: Id; label?: string }
   | { type: "deleteBibleHighlightColor"; id: Id }
+  | { type: "createBiblePlan"; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
+  | { type: "updateBiblePlan"; id: Id; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
+  | { type: "deleteBiblePlan"; id: Id }
+  | { type: "markBiblePlanDay"; planId: Id; dayNumber: number; read: boolean }
+  | { type: "announceBiblePlan"; planId: Id }
+  | { type: "unannounceBiblePlan"; announcementId: Id }
+  | { type: "joinGroupBiblePlan"; announcementId: Id }
   | { type: "createSupportIntent"; amount: number }
   | { type: "setTheme"; theme: ThemeName };
 
@@ -447,6 +459,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
   const [bibleHighlightColors, setBibleHighlightColors] = useState<BibleHighlightPaletteColor[]>([]);
+  const [biblePlans, setBiblePlans] = useState<BiblePlan[]>([]);
+  const [groupBiblePlanAnnouncements, setGroupBiblePlanAnnouncements] = useState<GroupBiblePlanAnnouncement[]>([]);
+  const [groupBiblePlanParticipations, setGroupBiblePlanParticipations] = useState<GroupBiblePlanParticipation[]>([]);
+  const [groupBiblePlanParticipantIds, setGroupBiblePlanParticipantIds] = useState<Record<Id, Id>>({});
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
   const [theme, setTheme] = useState<ThemeName>("light");
@@ -476,6 +492,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setSavedVerses([]);
     setBibleHighlights([]);
     setBibleHighlightColors([]);
+    setBiblePlans([]);
+    setGroupBiblePlanAnnouncements([]);
+    setGroupBiblePlanParticipations([]);
+    setGroupBiblePlanParticipantIds({});
     setSupportIntents([]);
   }, []);
 
@@ -644,6 +664,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     const bibleHighlightColorsRef = ref(database, `bibleHighlightColors/${firebaseUser.uid}`);
     const bibleHighlightColorSettingsRef = ref(database, `bibleHighlightColorSettings/${firebaseUser.uid}`);
+    const biblePlansRef = ref(database, `biblePlans/${firebaseUser.uid}`);
+    const participantIdsRef = ref(database, `groupBiblePlanParticipantIds/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     const unsubs = [
@@ -679,6 +701,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           [`bibleHighlightColorSettings/${firebaseUser.uid}/seededAt`]: timestamp,
         });
       }),
+      onValue(biblePlansRef, (snapshot) =>
+        setBiblePlans(
+          asArray<BiblePlan>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
+        ),
+      ),
+      onValue(participantIdsRef, (snapshot) => setGroupBiblePlanParticipantIds((snapshot.val() as Record<Id, Id> | null) ?? {})),
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
@@ -693,6 +721,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setReplies([]);
       setPrayerReactions([]);
       setPostReactions([]);
+      setGroupBiblePlanAnnouncements([]);
+      setGroupBiblePlanParticipations([]);
       return;
     }
 
@@ -703,6 +733,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const repliesRef = ref(database, `replies/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
     const postReactionsRef = ref(database, `postReactions/${groupId}`);
+    const planAnnouncementsRef = ref(database, `groupBiblePlanAnnouncements/${groupId}`);
+    const planParticipationsRef = ref(database, `groupBiblePlanParticipation/${groupId}`);
 
     const unsubs = [
       onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
@@ -711,6 +743,22 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
       onValue(postReactionsRef, (snapshot) => setPostReactions(asArray<PostReaction>(snapshot.val()))),
+      onValue(planAnnouncementsRef, (snapshot) =>
+        setGroupBiblePlanAnnouncements(
+          asArray<GroupBiblePlanAnnouncement>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
+        ),
+      ),
+      onValue(planParticipationsRef, (snapshot) => {
+        const value = snapshot.val();
+        if (!value || typeof value !== "object") {
+          setGroupBiblePlanParticipations([]);
+          return;
+        }
+        const participations = Object.values(value as Record<string, Record<string, GroupBiblePlanParticipation>>)
+          .flatMap((items) => asArray<GroupBiblePlanParticipation>(items))
+          .sort((a, b) => Date.parse(b.updatedAt || b.joinedAt) - Date.parse(a.updatedAt || a.joinedAt));
+        setGroupBiblePlanParticipations(participations);
+      }),
     ];
 
     return () => unsubs.forEach((unsubscribe) => unsubscribe());
@@ -748,6 +796,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       savedVerses,
       bibleHighlights,
       bibleHighlightColors,
+      biblePlans,
+      groupBiblePlanAnnouncements,
+      groupBiblePlanParticipations,
+      groupBiblePlanParticipantIds,
       supportIntents,
     };
   }, [
@@ -773,6 +825,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     savedVerses,
     bibleHighlights,
     bibleHighlightColors,
+    biblePlans,
+    groupBiblePlanAnnouncements,
+    groupBiblePlanParticipations,
+    groupBiblePlanParticipantIds,
     supportIntents,
     userGroupsReady,
   ]);
@@ -1462,6 +1518,187 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               });
               return;
             }
+            case "createBiblePlan": {
+              if (!firebaseUser || !action.title.trim() || action.ranges.length === 0) return;
+              const timestamp = now();
+              const planId = id("bibleplan");
+              const dayCount = Math.max(1, Math.floor(action.dayCount));
+              const days = buildBiblePlanDays(action.ranges, dayCount);
+              const plan: BiblePlan = {
+                id: planId,
+                userId: firebaseUser.uid,
+                title: action.title.trim().slice(0, 80),
+                source: "personal",
+                status: "active",
+                startDate: action.startDate,
+                dayCount,
+                ranges: action.ranges,
+                days,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `biblePlans/${firebaseUser.uid}/${planId}`), plan);
+              return;
+            }
+            case "updateBiblePlan": {
+              if (!firebaseUser || !action.title.trim() || action.ranges.length === 0) return;
+              const existing = biblePlans.find((plan) => plan.id === action.id && plan.userId === firebaseUser.uid);
+              if (!existing) return;
+              const timestamp = now();
+              const dayCount = Math.max(1, Math.floor(action.dayCount));
+              const rebuiltDays = buildBiblePlanDays(action.ranges, dayCount).map((day) => ({
+                ...day,
+                completedAt: existing.days.find((item) => item.dayNumber === day.dayNumber)?.completedAt,
+              }));
+              const completedAt = rebuiltDays.every((day) => Boolean(day.completedAt)) ? (existing.completedAt ?? timestamp) : undefined;
+              await update(ref(database, `biblePlans/${firebaseUser.uid}/${action.id}`), {
+                title: action.title.trim().slice(0, 80),
+                status: completedAt ? "completed" : planCompletionStatus(rebuiltDays),
+                startDate: action.startDate,
+                dayCount,
+                ranges: action.ranges,
+                days: rebuiltDays,
+                completedAt: completedAt ?? null,
+                updatedAt: timestamp,
+              });
+              return;
+            }
+            case "deleteBiblePlan": {
+              if (!firebaseUser) return;
+              const plan = biblePlans.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
+              if (!plan) return;
+              const updates: Record<string, null> = {
+                [`biblePlans/${firebaseUser.uid}/${action.id}`]: null,
+              };
+              if (plan.announcementId) {
+                const participantId = groupBiblePlanParticipantIds[plan.announcementId];
+                if (plan.groupId && participantId) {
+                  updates[`groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}/${participantId}`] = null;
+                }
+                updates[`groupBiblePlanParticipantIds/${firebaseUser.uid}/${plan.announcementId}`] = null;
+              }
+              await update(ref(database), updates);
+              return;
+            }
+            case "markBiblePlanDay": {
+              if (!firebaseUser) return;
+              const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
+              if (!plan) return;
+              const timestamp = now();
+              const days = plan.days.map((day) =>
+                day.dayNumber === action.dayNumber ? { ...day, completedAt: action.read ? day.completedAt ?? timestamp : undefined } : day,
+              );
+              const status = planCompletionStatus(days);
+              const completedAt = status === "completed" ? plan.completedAt ?? timestamp : undefined;
+              const updates: Record<string, unknown> = {
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/days`]: days,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/status`]: status,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/completedAt`]: completedAt ?? null,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/updatedAt`]: timestamp,
+              };
+              if (plan.groupId && plan.announcementId) {
+                const participantId = groupBiblePlanParticipantIds[plan.announcementId];
+                if (participantId) {
+                  updates[`groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}/${participantId}`] = {
+                    id: participantId,
+                    announcementId: plan.announcementId,
+                    completedDayNumbers: completedDayNumbers(days),
+                    totalDays: plan.days.length,
+                    joinedAt:
+                      groupBiblePlanParticipations.find((item) => item.id === participantId && item.announcementId === plan.announcementId)?.joinedAt ??
+                      plan.createdAt,
+                    updatedAt: timestamp,
+                  } satisfies GroupBiblePlanParticipation;
+                }
+              }
+              await update(ref(database), updates);
+              return;
+            }
+            case "announceBiblePlan": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const group = groups.find((item) => item.id === profile.currentGroupId);
+              if (!group || group.ownerId !== firebaseUser.uid) return;
+              const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
+              if (!plan) return;
+              const timestamp = now();
+              const announcementId = id("planannouncement");
+              const announcement: GroupBiblePlanAnnouncement = {
+                id: announcementId,
+                groupId: group.id,
+                ownerId: firebaseUser.uid,
+                title: plan.title,
+                startDate: plan.startDate,
+                dayCount: plan.dayCount,
+                ranges: plan.ranges,
+                days: plan.days.map((day) => ({ dayNumber: day.dayNumber, ranges: day.ranges })),
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await update(ref(database), {
+                [`groupBiblePlanAnnouncements/${group.id}/${announcementId}`]: announcement,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/groupId`]: group.id,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/announcementId`]: announcementId,
+                [`biblePlans/${firebaseUser.uid}/${plan.id}/updatedAt`]: timestamp,
+              });
+              return;
+            }
+            case "unannounceBiblePlan": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const group = groups.find((item) => item.id === profile.currentGroupId);
+              const announcement = groupBiblePlanAnnouncements.find((item) => item.id === action.announcementId && item.groupId === profile.currentGroupId);
+              if (!group || group.ownerId !== firebaseUser.uid || !announcement) return;
+              const updates: Record<string, null> = {
+                [`groupBiblePlanAnnouncements/${group.id}/${action.announcementId}`]: null,
+                [`groupBiblePlanParticipation/${group.id}/${action.announcementId}`]: null,
+              };
+              biblePlans
+                .filter((plan) => plan.userId === firebaseUser.uid && plan.announcementId === action.announcementId)
+                .forEach((plan) => {
+                  updates[`biblePlans/${firebaseUser.uid}/${plan.id}/groupId`] = null;
+                  updates[`biblePlans/${firebaseUser.uid}/${plan.id}/announcementId`] = null;
+                });
+              await update(ref(database), updates);
+              return;
+            }
+            case "joinGroupBiblePlan": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const announcement = groupBiblePlanAnnouncements.find((item) => item.id === action.announcementId && item.groupId === profile.currentGroupId);
+              if (!announcement) return;
+              const existingPlan = biblePlans.find((plan) => plan.announcementId === action.announcementId && plan.userId === firebaseUser.uid);
+              if (existingPlan) return;
+              const timestamp = now();
+              const planId = id("bibleplan");
+              const participantId = groupBiblePlanParticipantIds[action.announcementId] ?? id("planparticipant");
+              const plan: BiblePlan = {
+                id: planId,
+                userId: firebaseUser.uid,
+                title: announcement.title,
+                source: "group",
+                status: "active",
+                startDate: announcement.startDate,
+                dayCount: announcement.dayCount,
+                ranges: announcement.ranges,
+                days: announcement.days.map((day) => ({ dayNumber: day.dayNumber, ranges: day.ranges })),
+                groupId: announcement.groupId,
+                announcementId: announcement.id,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              const participation: GroupBiblePlanParticipation = {
+                id: participantId,
+                announcementId: announcement.id,
+                completedDayNumbers: {},
+                totalDays: announcement.dayCount,
+                joinedAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await update(ref(database), {
+                [`biblePlans/${firebaseUser.uid}/${planId}`]: plan,
+                [`groupBiblePlanParticipantIds/${firebaseUser.uid}/${announcement.id}`]: participantId,
+                [`groupBiblePlanParticipation/${announcement.groupId}/${announcement.id}/${participantId}`]: participation,
+              });
+              return;
+            }
             case "createSupportIntent": {
               if (!firebaseUser) return;
               const intent: SupportIntent = {
@@ -1516,9 +1753,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     [
       bibleHighlightColors,
       bibleHighlights,
+      biblePlans,
       checkIns,
       clearUserSession,
       firebaseUser,
+      groupBiblePlanAnnouncements,
+      groupBiblePlanParticipantIds,
+      groupBiblePlanParticipations,
       groups,
       journalEntries,
       memberships,

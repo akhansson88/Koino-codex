@@ -95,6 +95,67 @@ export type BibleHighlight = {
   updatedAt: string;
 };
 
+export type BiblePlanPosition = {
+  book: string;
+  chapter: number;
+  verse: number;
+};
+
+export type BiblePlanRange = {
+  id: Id;
+  displayReference: string;
+  start: BiblePlanPosition;
+  end: BiblePlanPosition;
+};
+
+export type BiblePlanDay = {
+  dayNumber: number;
+  ranges: BiblePlanRange[];
+  completedAt?: string;
+};
+
+export type BiblePlanStatus = "saved" | "active" | "completed";
+export type BiblePlanSource = "personal" | "group";
+
+export type BiblePlan = {
+  id: Id;
+  userId: Id;
+  title: string;
+  source: BiblePlanSource;
+  status: BiblePlanStatus;
+  startDate: string;
+  dayCount: number;
+  ranges: BiblePlanRange[];
+  days: BiblePlanDay[];
+  groupId?: Id;
+  announcementId?: Id;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+};
+
+export type GroupBiblePlanAnnouncement = {
+  id: Id;
+  groupId: Id;
+  ownerId: Id;
+  title: string;
+  startDate: string;
+  dayCount: number;
+  ranges: BiblePlanRange[];
+  days: BiblePlanDay[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GroupBiblePlanParticipation = {
+  id: Id;
+  announcementId: Id;
+  completedDayNumbers: Record<string, true>;
+  totalDays: number;
+  joinedAt: string;
+  updatedAt: string;
+};
+
 export type EntryKind = "reflection" | "prayer_request" | "prayer_moment" | "praise" | "update" | "scripture";
 export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
 export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
@@ -237,6 +298,10 @@ export type KoinoState = {
   savedVerses: SavedVerse[];
   bibleHighlights: BibleHighlight[];
   bibleHighlightColors: BibleHighlightPaletteColor[];
+  biblePlans: BiblePlan[];
+  groupBiblePlanAnnouncements: GroupBiblePlanAnnouncement[];
+  groupBiblePlanParticipations: GroupBiblePlanParticipation[];
+  groupBiblePlanParticipantIds: Record<Id, Id>;
   supportIntents: SupportIntent[];
 };
 
