@@ -172,23 +172,27 @@ export function completionPercent(completed: number, total: number) {
   return Math.round((completed / total) * 100);
 }
 
+export function biblePlanDayRegionLabel(day?: BiblePlanDay) {
+  if (!day?.ranges.length) return "";
+  if (day.ranges.length === 1) return day.ranges[0].displayReference;
+  const firstRange = day.ranges[0];
+  const lastRange = day.ranges[day.ranges.length - 1];
+  return readablePlanRange(firstRange.start, lastRange.end);
+}
+
 export function planMarkersForChapter(plan: BiblePlan, chapter: Pick<BiblePosition, "book" | "chapter">): BiblePlanMarker[] {
   const current = currentPlanDay(plan);
   if (!current || current.isBeforeStart || current.isAfterEnd) return [];
-  const ranges = current.day.ranges.filter((range) => {
-    const chapterStart = normalizeBiblePosition({ book: chapter.book, chapter: chapter.chapter, verse: firstVerse(chapter.book, chapter.chapter) });
-    const chapterEnd = normalizeBiblePosition({ book: chapter.book, chapter: chapter.chapter, verse: lastVerse(chapter.book, chapter.chapter) });
-    return comparePositions(range.start, chapterEnd) <= 0 && comparePositions(range.end, chapterStart) >= 0;
-  });
+  const firstRange = current.day.ranges[0];
+  const lastRange = current.day.ranges[current.day.ranges.length - 1];
+  if (!firstRange || !lastRange) return [];
   const markers: BiblePlanMarker[] = [];
-  ranges.forEach((range) => {
-    if (range.start.book === chapter.book && range.start.chapter === chapter.chapter) {
-      markers.push({ kind: "start", label: `Start ${plan.title}`, planId: plan.id, verse: range.start.verse });
-    }
-    if (range.end.book === chapter.book && range.end.chapter === chapter.chapter) {
-      markers.push({ kind: "finish", label: `Finish ${plan.title}`, planId: plan.id, verse: range.end.verse });
-    }
-  });
+  if (firstRange.start.book === chapter.book && firstRange.start.chapter === chapter.chapter) {
+    markers.push({ kind: "start", label: "Start here", planId: plan.id, verse: firstRange.start.verse });
+  }
+  if (lastRange.end.book === chapter.book && lastRange.end.chapter === chapter.chapter) {
+    markers.push({ kind: "finish", label: "Finish here", planId: plan.id, verse: lastRange.end.verse });
+  }
   return markers;
 }
 

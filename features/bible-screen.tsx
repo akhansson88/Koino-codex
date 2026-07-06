@@ -30,6 +30,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import {
   currentPlanDay,
+  biblePlanDayRegionLabel,
   firstPositionForPlanDay,
   planMarkersForChapter,
   type BiblePlanMarker,
@@ -2791,6 +2792,7 @@ function BiblePlanReaderPanel({
   const outOfSchedule = Boolean(currentDay?.isBeforeStart || currentDay?.isAfterEnd);
   const hasMarkersInChapter = markers.length > 0;
   const dateLabel = day ? dayKeyForPlanDay(plan, day.dayNumber) : todayDateKey();
+  const regionLabel = biblePlanDayRegionLabel(day);
 
   return (
     <View
@@ -2812,6 +2814,11 @@ function BiblePlanReaderPanel({
           <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
             {day ? `Day ${day.dayNumber} · ${dateLabel} · ${percent}% complete` : `${percent}% complete`}
           </Text>
+          {regionLabel ? (
+            <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
+              Today: {regionLabel}
+            </Text>
+          ) : null}
         </View>
         {plans.length > 1 ? (
           <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900" }}>
