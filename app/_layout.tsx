@@ -69,6 +69,9 @@ function RootNavigator() {
         />
         <Stack.Screen name="room-details" options={{ headerShown: false }} />
         <Stack.Screen name="bible-plans" options={{ headerShown: false }} />
+        <Stack.Screen name="donation-amount" options={{ headerShown: false }} />
+        <Stack.Screen name="donation-confirm" options={{ headerShown: false }} />
+        <Stack.Screen name="donation-thank-you" options={{ headerShown: false }} />
         <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
         <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
