@@ -71,43 +71,6 @@ export type BiblePassageReference = {
   translation?: string;
 };
 
-export type BiblePlanScope = "group" | "private";
-
-export type BiblePlanReading = {
-  id: Id;
-  day: number;
-  dateKey?: string;
-  passage: BiblePassageReference;
-  prompt?: string;
-};
-
-export type BiblePlan = {
-  id: Id;
-  scope: BiblePlanScope;
-  ownerId: Id;
-  title: string;
-  status: "active" | "archived";
-  startDate: string;
-  createdBy: Id;
-  createdAt: string;
-  updatedAt: string;
-  readings: Record<string, BiblePlanReading>;
-};
-
-export type BiblePlanProgress = {
-  id: Id;
-  planId: Id;
-  readingId: Id;
-  userId: Id;
-  dateKey: string;
-  read: boolean;
-  reflectionText?: string;
-  reflectionVisibility: "private" | "group";
-  journalEntryId?: Id;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type BibleHighlightColor = string;
 
 export type BibleHighlightPaletteColor = {
@@ -226,15 +189,13 @@ export type JournalEntry = {
   title?: string;
   body: string;
   images?: string[];
-  source: "manual" | "private_check_in" | "bible_plan";
+  source: "manual" | "private_check_in";
   entryKind?: EntryKind;
   mood?: number;
   heartMood?: HeartMood;
   verse?: BibleVerse;
   verses?: BibleVerse[];
   passage?: BiblePassageReference;
-  biblePlanId?: Id;
-  biblePlanReadingId?: Id;
   sharedPostId?: Id;
   linkedPrayerRequestId?: Id;
   isPrivate?: boolean;
@@ -276,10 +237,6 @@ export type KoinoState = {
   savedVerses: SavedVerse[];
   bibleHighlights: BibleHighlight[];
   bibleHighlightColors: BibleHighlightPaletteColor[];
-  groupBiblePlan?: BiblePlan;
-  groupBiblePlanProgress: BiblePlanProgress[];
-  privateBiblePlan?: BiblePlan;
-  privateBiblePlanProgress: BiblePlanProgress[];
   supportIntents: SupportIntent[];
 };
 

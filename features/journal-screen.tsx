@@ -3,8 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
-import { BiblePlanReflectionEditor } from "@/features/bible-plan-reflection-editor";
-import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { EntryVisibility, heartMoodLabel, journalEntryTypeFor, journalEntryTypeLabel, visibility } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, ProfileImage } from "@/state/types";
@@ -25,12 +23,11 @@ import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
-import { QuietActionCard, ScriptureRhythmCard } from "@/ui/rhythm-cards";
+import { QuietActionCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
 
 const JOURNAL_BODY_PREVIEW_LINES = 3;
-const fallbackPassage = "Philippians 2:1-11";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
@@ -64,34 +61,10 @@ export function JournalScreen() {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | undefined>();
   const [historyVisible, setHistoryVisible] = useState(false);
-  const [planReflectionVisible, setPlanReflectionVisible] = useState(false);
-  const [planReflectionText, setPlanReflectionText] = useState("");
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
-  const todayKey = localDayKey(new Date());
-  const privatePlanReadings = useMemo(() => sortedBiblePlanReadings(state.privateBiblePlan), [state.privateBiblePlan]);
-  const privatePlanReading = useMemo(() => todayBiblePlanReading(state.privateBiblePlan, todayKey), [state.privateBiblePlan, todayKey]);
-  const privatePlanProgress = useMemo(
-    () => (privatePlanReading ? state.privateBiblePlanProgress.find((item) => item.readingId === privatePlanReading.id) : undefined),
-    [privatePlanReading, state.privateBiblePlanProgress],
-  );
-  const privatePlanLinkedEntry = useMemo(
-    () =>
-      state.privateBiblePlan && privatePlanReading
-        ? state.journalEntries.find(
-            (entry) =>
-              entry.userId === state.currentUserId &&
-              entry.source === "bible_plan" &&
-              entry.biblePlanId === state.privateBiblePlan?.id &&
-              entry.biblePlanReadingId === privatePlanReading.id,
-          )
-        : undefined,
-    [privatePlanReading, state.currentUserId, state.journalEntries, state.privateBiblePlan],
-  );
-  const privatePlanCompleted = Boolean(privatePlanProgress?.read);
-  const savedPlanReflection = privatePlanProgress?.reflectionText || privatePlanLinkedEntry?.body || "";
   const entries = useMemo<DisplayEntry[]>(() => {
     return state.journalEntries
       .filter((entry) => entry.userId === state.currentUserId)
@@ -107,17 +80,6 @@ export function JournalScreen() {
     setTitle(attachedVerse ? attachedVerse.reference : "");
     setBody(initialBody);
     setVerses(attachedVerse ? [attachedVerse] : []);
-    setEditingEntry(undefined);
-    setComposerVisible(true);
-  }
-
-  function beginFallbackScriptureReflection() {
-    setJournalType("scripture_note");
-    setEntryKind("scripture");
-    setEntryVisibility(visibility.private);
-    setTitle(fallbackPassage);
-    setBody("");
-    setVerses([]);
     setEditingEntry(undefined);
     setComposerVisible(true);
   }
@@ -168,39 +130,6 @@ export function JournalScreen() {
     setEditingEntry(undefined);
   }
 
-  async function readPrivatePlan() {
-    if (state.privateBiblePlan && privatePlanReading) {
-      await dispatch({
-        type: "markPrivateBiblePlanRead",
-        planId: state.privateBiblePlan.id,
-        readingId: privatePlanReading.id,
-        dateKey: todayKey,
-      });
-    }
-    router.push("/(tabs)/bible" as never);
-  }
-
-  function openPlanReflection() {
-    if (!state.privateBiblePlan || !privatePlanReading) {
-      beginFallbackScriptureReflection();
-      return;
-    }
-    setPlanReflectionText(savedPlanReflection);
-    setPlanReflectionVisible(true);
-  }
-
-  async function submitPlanReflection() {
-    if (!state.privateBiblePlan || !privatePlanReading || !planReflectionText.trim()) return;
-    await dispatch({
-      type: "savePrivateBiblePlanReflection",
-      planId: state.privateBiblePlan.id,
-      readingId: privatePlanReading.id,
-      reflectionText: planReflectionText,
-      dateKey: todayKey,
-    });
-    setPlanReflectionVisible(false);
-  }
-
   useEffect(() => {
     if (!params.newEntry || params.newEntry === lastNewEntryParamRef.current) return;
     lastNewEntryParamRef.current = params.newEntry;
@@ -213,27 +142,6 @@ export function JournalScreen() {
         <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Journal</Text>
         <BodyText muted>A space for reflection, growth and spiritual memory.</BodyText>
       </View>
-
-      <ScriptureRhythmCard
-        completed={privatePlanCompleted}
-        onRead={readPrivatePlan}
-        onReflect={openPlanReflection}
-        passageReference={privatePlanReading?.passage.reference ?? fallbackPassage}
-        progressLabel={privatePlanReading ? biblePlanDayLabel(privatePlanReading, privatePlanReadings.length) : "Day 1 of 3"}
-        rhythmLabel="Private Scripture rhythm"
-      />
-
-      {planReflectionVisible && state.privateBiblePlan && privatePlanReading ? (
-        <BiblePlanReflectionEditor
-          onCancel={() => setPlanReflectionVisible(false)}
-          onChangeText={setPlanReflectionText}
-          onSave={submitPlanReflection}
-          passageReference={privatePlanReading.passage.reference}
-          placeholder="Write a private thought or prayer..."
-          title="Private reflection"
-          value={planReflectionText}
-        />
-      ) : null}
 
       <ReflectTodayCard onPress={() => beginEntry("reflection", visibility.private)} />
 

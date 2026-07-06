@@ -3,8 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { BiblePlanReflectionEditor } from "@/features/bible-plan-reflection-editor";
-import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { defaultFeedTitle as productDefaultFeedTitle, feedItemLabel, heartMoods, moodLabel, normalizeEntryKind } from "@/state/product";
@@ -23,13 +21,17 @@ import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { prayerCountLabel } from "@/ui/prayer-copy";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { QuietActionCard, ScriptureRhythmCard } from "@/ui/rhythm-cards";
+import { QuietActionCard } from "@/ui/rhythm-cards";
 import { colors } from "@/ui/theme";
-
-const fallbackPassage = "Philippians 2:1-11";
 
 function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
+}
+
+function localDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function kindLabel(item: FeedItem) {
@@ -51,8 +53,6 @@ export function HomeScreen() {
   const [shareCheckIn, setShareCheckIn] = useState(true);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
-  const [groupPlanReflectionVisible, setGroupPlanReflectionVisible] = useState(false);
-  const [groupPlanReflectionText, setGroupPlanReflectionText] = useState("");
   const lastCheckInParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -110,17 +110,6 @@ export function HomeScreen() {
   }, [state.checkIns, state.currentGroupId, state.posts]);
   const latestCommunityItem = feedItems[0];
   const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request" && !item.answeredAt);
-  const groupPlanReadings = useMemo(() => sortedBiblePlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
-  const groupPlanReading = useMemo(() => todayBiblePlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
-  const currentGroupPlanProgress = useMemo(
-    () =>
-      groupPlanReading && state.currentUserId
-        ? state.groupBiblePlanProgress.find((item) => item.userId === state.currentUserId && item.readingId === groupPlanReading.id)
-        : undefined,
-    [groupPlanReading, state.currentUserId, state.groupBiblePlanProgress],
-  );
-  const savedGroupPlanReflection = currentGroupPlanProgress?.reflectionText ?? "";
-  const groupPlanCompletedByCurrentUser = Boolean(currentGroupPlanProgress?.read);
   const greeting = firstName(user?.name);
 
   function resetCheckIn() {
@@ -141,40 +130,6 @@ export function HomeScreen() {
     lastCheckInParamRef.current = params.checkIn;
     openCheckIn();
   }, [params.checkIn]);
-
-  function openGroupPlanReflection() {
-    if (!state.groupBiblePlan || !groupPlanReading) {
-      router.push({ pathname: "/(tabs)/me", params: { newEntry: Date.now().toString() } } as never);
-      return;
-    }
-    setGroupPlanReflectionText(savedGroupPlanReflection);
-    setGroupPlanReflectionVisible(true);
-  }
-
-  async function readGroupPlan() {
-    if (state.groupBiblePlan && groupPlanReading) {
-      await dispatch({
-        type: "markGroupBiblePlanRead",
-        planId: state.groupBiblePlan.id,
-        readingId: groupPlanReading.id,
-        dateKey: todayKey,
-      });
-    }
-    router.push("/(tabs)/bible" as never);
-  }
-
-  async function submitGroupPlanReflection() {
-    if (!state.groupBiblePlan || !groupPlanReading || !groupPlanReflectionText.trim()) return;
-    await dispatch({
-      type: "saveGroupBiblePlanReflection",
-      planId: state.groupBiblePlan.id,
-      readingId: groupPlanReading.id,
-      reflectionText: groupPlanReflectionText,
-      reflectionVisibility: "group",
-      dateKey: todayKey,
-    });
-    setGroupPlanReflectionVisible(false);
-  }
 
   function openPrayerSurface() {
     if (openPrayer) {
@@ -209,29 +164,6 @@ export function HomeScreen() {
         </View>
 
         <HeartCheckInCard checkedIn={todaysCheckIn} onPress={openCheckIn} />
-
-        <ScriptureRhythmCard
-          completed={groupPlanCompletedByCurrentUser}
-          onRead={readGroupPlan}
-          onReflect={openGroupPlanReflection}
-          passageReference={groupPlanReading?.passage.reference ?? fallbackPassage}
-          progressLabel={groupPlanReading ? biblePlanDayLabel(groupPlanReading, groupPlanReadings.length) : "Day 1 of 3"}
-          reflectLabel={savedGroupPlanReflection ? "Reflect" : "Reflect"}
-          rhythmLabel="Today's Scripture rhythm"
-        />
-
-        {groupPlanReflectionVisible && state.groupBiblePlan && groupPlanReading ? (
-          <BiblePlanReflectionEditor
-            onCancel={() => setGroupPlanReflectionVisible(false)}
-            onChangeText={setGroupPlanReflectionText}
-            onSave={submitGroupPlanReflection}
-            passageReference={groupPlanReading.passage.reference}
-            placeholder="Write a brief reflection with your community..."
-            saveIcon="send"
-            title="Reflect"
-            value={groupPlanReflectionText}
-          />
-        ) : null}
 
         <PrayerPreviewCard
           members={communityMembers}

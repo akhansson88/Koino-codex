@@ -47,7 +47,6 @@ import {
   previousBibleChapter,
   versesForChapter,
 } from "@/features/bible-kjv";
-import { biblePlanDayLabel, localDayKey, sortedBiblePlanReadings, todayBiblePlanReading } from "@/features/bible-plan-utils";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
@@ -735,14 +734,6 @@ export function BibleScreen() {
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const previousAudioChapter = useMemo(() => previousBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
   const nextAudioChapter = useMemo(() => nextBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
-  const todayKey = useMemo(() => localDayKey(new Date()), []);
-  const groupPlanReadings = useMemo(() => sortedBiblePlanReadings(state.groupBiblePlan), [state.groupBiblePlan]);
-  const privatePlanReadings = useMemo(() => sortedBiblePlanReadings(state.privateBiblePlan), [state.privateBiblePlan]);
-  const groupPlanReading = useMemo(() => todayBiblePlanReading(state.groupBiblePlan, todayKey), [state.groupBiblePlan, todayKey]);
-  const privatePlanReading = useMemo(() => todayBiblePlanReading(state.privateBiblePlan, todayKey), [state.privateBiblePlan, todayKey]);
-  const activeDrawerPlan = state.groupBiblePlan?.status === "active" ? state.groupBiblePlan : state.privateBiblePlan?.status === "active" ? state.privateBiblePlan : undefined;
-  const activeDrawerPlanReading = state.groupBiblePlan?.status === "active" ? groupPlanReading : privatePlanReading;
-  const activeDrawerPlanReadings = state.groupBiblePlan?.status === "active" ? groupPlanReadings : privatePlanReadings;
   const readerFontFamily = fontFamilyFor(fontId);
   const effectiveFontSize = compactMode ? Math.max(minFontSize, fontSize - 1) : fontSize;
   const readerLineHeight = Math.round(effectiveFontSize * (compactMode ? 1.48 : 1.62));
@@ -1942,12 +1933,6 @@ export function BibleScreen() {
         visible={Boolean(crossReferencePosition)}
       />
       <BibleDrawer
-        activePlanDetail={
-          activeDrawerPlanReading
-            ? `${activeDrawerPlanReading.passage.reference} - ${biblePlanDayLabel(activeDrawerPlanReading, activeDrawerPlanReadings.length)}`
-            : undefined
-        }
-        activePlanTitle={activeDrawerPlan?.title}
         highlights={state.bibleHighlights}
         initialPosition={position}
         journalEntries={state.journalEntries.filter((entry) => entry.userId === state.currentUserId)}
@@ -1955,10 +1940,6 @@ export function BibleScreen() {
         onOpenJournal={() => {
           setPickerVisible(false);
           router.push("/(tabs)/me" as never);
-        }}
-        onOpenToday={() => {
-          setPickerVisible(false);
-          router.push("/(tabs)" as never);
         }}
         onSelect={(nextPosition) => {
           setPickerVisible(false);
@@ -5002,28 +4983,22 @@ const PuterAudioBridge = forwardRef<WebView, { onClose: () => void; onMessage: (
 });
 
 function BibleDrawer({
-  activePlanDetail,
-  activePlanTitle,
   highlights,
   initialPosition,
   journalEntries,
   onClose,
   onOpenJournal,
-  onOpenToday,
   onSelect,
   palette,
   savedVerses,
   versionLabel,
   visible,
 }: {
-  activePlanDetail?: string;
-  activePlanTitle?: string;
   highlights: BibleHighlight[];
   initialPosition: BiblePosition;
   journalEntries: JournalEntry[];
   onClose: () => void;
   onOpenJournal: () => void;
-  onOpenToday: () => void;
   onSelect: (position: BiblePosition) => void;
   palette: ReaderPalette;
   savedVerses: SavedVerse[];
@@ -5209,11 +5184,6 @@ function BibleDrawer({
                     subtitle={bibleReflections.length ? `${bibleReflections.length} linked notes` : "Create one from a verse"}
                     title="My Bible reflections"
                   />
-                </DrawerSection>
-
-                <DrawerSection title="Reading plans" palette={palette}>
-                  <DrawerRow icon="calendar" onPress={onOpenToday} palette={palette} subtitle={activePlanDetail ?? "Open Today's rhythm"} title={activePlanTitle ?? "Active plan"} />
-                  <DrawerRow icon="compass" onPress={onOpenToday} palette={palette} subtitle="Find a rhythm from Today" title="Discover plans" />
                 </DrawerSection>
               </>
             ) : null}

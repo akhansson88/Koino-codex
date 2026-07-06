@@ -6,7 +6,6 @@ import * as ImagePicker from "expo-image-picker";
 import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
-import { localDayKey } from "@/features/bible-plan-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   EntryVisibility,
@@ -68,6 +67,12 @@ type CommunityPrayerIntent = {
 type PendingPrayerPost = CommunityPrayerIntent & { completedAt: string };
 
 const PRAYER_POST_NOTE_LIMIT = 280;
+
+function localDayKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 function isPrayerFeedKind(kind: EntryKind | "post" | undefined) {
   const normalized = normalizeEntryKind(kind);
