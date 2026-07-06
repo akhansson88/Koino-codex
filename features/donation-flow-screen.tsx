@@ -316,6 +316,53 @@ function DonationThankYouHero() {
   );
 }
 
+function DonationSummaryMark() {
+  return (
+    <View style={{ height: 92, position: "relative", width: 92 }}>
+      <View
+        style={{
+          backgroundColor: donationColors.warmTint,
+          borderRadius: 999,
+          height: 82,
+          left: 5,
+          position: "absolute",
+          top: 5,
+          width: 82,
+        }}
+      />
+      <View style={{ left: 4, position: "absolute", top: 8, transform: [{ rotate: "-18deg" }] }}>
+        <Feather name="feather" size={34} color={donationColors.lavenderHaze} />
+      </View>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: donationColors.warmTintStrong,
+          borderRadius: 999,
+          height: 68,
+          justifyContent: "center",
+          left: 12,
+          position: "absolute",
+          top: 16,
+          width: 68,
+        }}
+      >
+        <Feather name="heart" size={40} color={donationColors.warmPersika} />
+      </View>
+    </View>
+  );
+}
+
+function DonationAmountLine({ amount, frequency }: { amount: string; frequency: DonationFrequency }) {
+  return (
+    <View style={{ alignItems: "baseline", flexDirection: "row", flexWrap: "wrap", columnGap: 7 }}>
+      <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 34, lineHeight: 41 }]}>{amount} kr</Text>
+      {frequency === "monthly" ? (
+        <Text style={[typography.body, { color: donationColors.deepNavy, fontSize: 22, lineHeight: 29 }]}>/ månad</Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
@@ -415,7 +462,7 @@ function DonationFrequencySelector({
                 style={[
                   typography.title,
                   {
-                    color: selected ? donationColors.lavenderHaze : donationColors.deepNavy,
+                    color: selected ? donationColors.mutedNavy : donationColors.deepNavy,
                     fontSize: 18,
                     lineHeight: 24,
                   },
@@ -663,11 +710,9 @@ function DonationSummaryCard({ amount, frequency }: { amount: string; frequency:
         padding: 18,
       }}
     >
-      <DonationEntryIllustration compact />
+      <DonationSummaryMark />
       <View style={{ flex: 1, gap: 8 }}>
-        <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 34, lineHeight: 41 }]}>
-          {amountLine(amount, frequency)}
-        </Text>
+        <DonationAmountLine amount={amount} frequency={frequency} />
         <Text style={[typography.body, { color: donationColors.stone, fontSize: 17 }]}>
           Mottagare: <Text style={[typography.bodyMedium, { color: donationColors.deepNavy, fontSize: 17 }]}>KOINO</Text>
         </Text>
