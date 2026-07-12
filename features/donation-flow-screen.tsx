@@ -113,9 +113,9 @@ function DonationHeader({ title, wordmark = false }: { title: string; wordmark?:
             typography.heading,
             {
               color: donationColors.deepNavy,
-              fontSize: 23,
+              fontSize: 20,
               letterSpacing: 8,
-              lineHeight: 30,
+              lineHeight: 26,
             },
           ]}
         >
@@ -134,8 +134,8 @@ function DonationHeader({ title, wordmark = false }: { title: string; wordmark?:
           {
             color: donationColors.deepNavy,
             flex: 1,
-            fontSize: 25,
-            lineHeight: 31,
+            fontSize: 21,
+            lineHeight: 27,
             marginRight: 54,
             textAlign: "center",
           },
@@ -355,9 +355,9 @@ function DonationSummaryMark() {
 function DonationAmountLine({ amount, frequency }: { amount: string; frequency: DonationFrequency }) {
   return (
     <View style={{ alignItems: "baseline", flexDirection: "row", flexWrap: "wrap", columnGap: 7 }}>
-      <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 34, lineHeight: 41 }]}>{amount} kr</Text>
+      <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 28, lineHeight: 34 }]}>{amount} kr</Text>
       {frequency === "monthly" ? (
-        <Text style={[typography.body, { color: donationColors.deepNavy, fontSize: 22, lineHeight: 29 }]}>/ månad</Text>
+        <Text style={[typography.body, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>/ månad</Text>
       ) : null}
     </View>
   );
@@ -388,7 +388,7 @@ export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
         <View style={{ flex: 1, gap: 12, minWidth: 0, paddingRight: 2 }}>
           <View style={{ gap: 8 }}>
-            <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 22, lineHeight: 28 }]}>Stötta KOINO</Text>
+            <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>Stötta KOINO</Text>
             <Text style={[typography.body, { color: donationColors.deepNavy, lineHeight: 22 }]}>
               Hjälp oss bygga en lugn plats för bön, Ordet och verklig gemenskap.
             </Text>
@@ -463,8 +463,8 @@ function DonationFrequencySelector({
                   typography.title,
                   {
                     color: selected ? donationColors.mutedNavy : donationColors.deepNavy,
-                    fontSize: 18,
-                    lineHeight: 24,
+                    fontSize: 16,
+                    lineHeight: 22,
                   },
                 ]}
               >
@@ -526,8 +526,8 @@ function DonationAmountGrid({
                   typography.heading,
                   {
                     color: donationColors.deepNavy,
-                    fontSize: option.value === "custom" ? 25 : 30,
-                    lineHeight: 36,
+                    fontSize: option.value === "custom" ? 20 : 24,
+                    lineHeight: 30,
                   },
                 ]}
               >
@@ -558,7 +558,7 @@ function DonationAmountGrid({
           placeholder="Ange valfritt belopp"
           placeholderTextColor={donationColors.stone}
           returnKeyType="done"
-          style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 19, minHeight: 58 }]}
+          style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 16, minHeight: 58 }]}
           value={customAmount}
         />
         {customAmount ? <Text style={[typography.bodyMedium, { color: donationColors.stone }]}>kr</Text> : null}
@@ -595,7 +595,7 @@ function DonationTrustNote({
       }}
     >
       <CircleIcon backgroundColor={iconBackground} color={iconColor} icon={icon} size={44} />
-      <Text style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 16, lineHeight: 24 }]}>{children}</Text>
+      <Text style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 15, lineHeight: 22 }]}>{children}</Text>
     </View>
   );
 }
@@ -632,8 +632,8 @@ function DonationPrimaryButton({
           typography.title,
           {
             color: navy ? donationColors.surfaceWhite : donationColors.deepNavy,
-            fontSize: 20,
-            lineHeight: 26,
+            fontSize: 16,
+            lineHeight: 22,
             textAlign: "center",
           },
         ]}
@@ -663,8 +663,8 @@ export function DonationAmountScreen() {
     <DonationScreenFrame>
       <DonationHeader title="KOINO" wordmark />
       <View style={{ gap: 12 }}>
-        <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 36, lineHeight: 43 }]}>Välj gåva</Text>
-        <Text style={[typography.body, { color: donationColors.mutedNavy, fontSize: 18, lineHeight: 29 }]}>
+        <Text style={[typography.screenTitle, { color: donationColors.deepNavy }]}>Välj gåva</Text>
+        <Text style={[typography.body, { color: donationColors.mutedNavy, fontSize: 16, lineHeight: 24 }]}>
           Välj ett belopp som känns rätt för dig.{"\n"}Varje gåva är frivillig.
         </Text>
       </View>
@@ -713,10 +713,10 @@ function DonationSummaryCard({ amount, frequency }: { amount: string; frequency:
       <DonationSummaryMark />
       <View style={{ flex: 1, gap: 8 }}>
         <DonationAmountLine amount={amount} frequency={frequency} />
-        <Text style={[typography.body, { color: donationColors.stone, fontSize: 17 }]}>
-          Mottagare: <Text style={[typography.bodyMedium, { color: donationColors.deepNavy, fontSize: 17 }]}>KOINO</Text>
+        <Text style={[typography.body, { color: donationColors.stone, fontSize: 15 }]}>
+          Mottagare: <Text style={[typography.bodyMedium, { color: donationColors.deepNavy, fontSize: 15 }]}>KOINO</Text>
         </Text>
-        <Text style={[typography.body, { color: donationColors.stone, fontSize: 16, lineHeight: 23 }]}>
+        <Text style={[typography.body, { color: donationColors.stone, fontSize: 14, lineHeight: 20 }]}>
           {frequency === "monthly" ? "Förnyas månadsvis tills du avslutar." : "Engångsgåva."}
         </Text>
       </View>
@@ -743,7 +743,7 @@ function DonationContactRow({ email }: { email?: string | null }) {
       })}
     >
       <CircleIcon backgroundColor={donationColors.lavenderTint} color={donationColors.lavenderHaze} icon="mail" size={44} />
-      <Text numberOfLines={1} style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 17 }]}>
+      <Text numberOfLines={1} style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 15 }]}>
         {email ?? "Lägg till e-post"}
       </Text>
       <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
@@ -781,8 +781,8 @@ function DonationMethodRow({
     >
       <CircleIcon backgroundColor={donationColors.warmTint} color={donationColors.deepNavy} icon={icon} size={52} />
       <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[typography.title, { color: donationColors.deepNavy, fontSize: 18 }]}>{title}</Text>
-        <Text style={[typography.body, { color: donationColors.stone, fontSize: 15 }]}>{subtitle}</Text>
+        <Text style={[typography.title, { color: donationColors.deepNavy, fontSize: 16, lineHeight: 22 }]}>{title}</Text>
+        <Text style={[typography.body, { color: donationColors.stone, fontSize: 14, lineHeight: 20 }]}>{subtitle}</Text>
       </View>
       <View
         style={{
@@ -832,7 +832,7 @@ function DonationMethodSection({ method, onChange }: { method: DonationMethod; o
 }
 
 function SectionTitle({ children }: PropsWithChildren) {
-  return <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 24, lineHeight: 30 }]}>{children}</Text>;
+  return <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 20, lineHeight: 26 }]}>{children}</Text>;
 }
 
 export function DonationConfirmScreen() {
@@ -857,7 +857,7 @@ export function DonationConfirmScreen() {
       <DonationSummaryCard amount={amount} frequency={frequency} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingHorizontal: 4 }}>
         <Feather name="lock" size={22} color={donationColors.deepNavy} />
-        <Text style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 16 }]}>
+        <Text style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 15, lineHeight: 22 }]}>
           Säker betalning sker via extern betaltjänst.
         </Text>
       </View>
@@ -895,7 +895,7 @@ export function DonationConfirmScreen() {
         })}
       >
         <CircleIcon backgroundColor={donationColors.lavenderTint} color={donationColors.lavenderHaze} icon="feather" size={42} />
-        <Text style={[typography.bodyMedium, { color: donationColors.deepNavy, flex: 1, fontSize: 15 }]}>
+        <Text style={[typography.bodyMedium, { color: donationColors.deepNavy, flex: 1, fontSize: 14, lineHeight: 20 }]}>
           Integritetspolicy   ·   Villkor för givande
         </Text>
         <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
@@ -918,7 +918,7 @@ function DonationStatusPill({ frequency }: { frequency: DonationFrequency }) {
         paddingVertical: 7,
       }}
     >
-      <Text style={[typography.label, { color: donationColors.mutedNavy, fontSize: 14 }]}>{monthly ? "aktiv" : "mottagen"}</Text>
+      <Text style={[typography.label, { color: donationColors.mutedNavy, fontSize: 12, lineHeight: 17 }]}>{monthly ? "aktiv" : "mottagen"}</Text>
     </View>
   );
 }
@@ -939,7 +939,7 @@ function DonationReceiptCard({ amount, frequency }: { amount: string; frequency:
       }}
     >
       <CircleIcon backgroundColor={donationColors.lavenderTint} color={donationColors.deepNavy} icon="feather" size={52} />
-      <Text style={[typography.heading, { color: donationColors.deepNavy, flex: 1, fontSize: 25, lineHeight: 31, textAlign: "center" }]}>
+      <Text style={[typography.heading, { color: donationColors.deepNavy, flex: 1, fontSize: 20, lineHeight: 26, textAlign: "center" }]}>
         {amountLine(amount, frequency)}
       </Text>
       <DonationStatusPill frequency={frequency} />
@@ -970,8 +970,8 @@ function DonationActionRow({
       <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: 76, paddingHorizontal: 16, paddingVertical: 12 }}>
         <CircleIcon backgroundColor={iconBackground} color={iconColor} icon={icon} size={48} />
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[typography.title, { color: donationColors.deepNavy, fontSize: 17 }]}>{title}</Text>
-          <Text style={[typography.body, { color: donationColors.stone, fontSize: 14, lineHeight: 20 }]}>{subtitle}</Text>
+          <Text style={[typography.title, { color: donationColors.deepNavy, fontSize: 15, lineHeight: 21 }]}>{title}</Text>
+          <Text style={[typography.body, { color: donationColors.stone, fontSize: 13, lineHeight: 18 }]}>{subtitle}</Text>
         </View>
         <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
       </View>
@@ -1007,10 +1007,10 @@ export function DonationThankYouScreen() {
       <DonationHeader title="Tack" />
       <DonationThankYouHero />
       <View style={{ alignItems: "center", gap: 12 }}>
-        <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 31, lineHeight: 38, textAlign: "center" }]}>
+        <Text style={[typography.screenTitle, { color: donationColors.deepNavy, fontSize: 26, lineHeight: 32, textAlign: "center" }]}>
           Tack för att du stöttar KOINO
         </Text>
-        <Text style={[typography.body, { color: donationColors.stone, fontSize: 18, lineHeight: 28, textAlign: "center" }]}>
+        <Text style={[typography.body, { color: donationColors.stone, fontSize: 16, lineHeight: 24, textAlign: "center" }]}>
           Din gåva hjälper oss bygga en plats för bön, Ordet och verklig gemenskap.
         </Text>
       </View>
