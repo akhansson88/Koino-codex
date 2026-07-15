@@ -264,7 +264,14 @@ export function HomeScreen() {
                   key={member.id}
                   onPress={() => {
                     setMemberSelectVisible(false);
-                    setPrayerTarget({ targetType: "user", targetId: member.id, body: "", recipientUserId: member.id });
+                    setPrayerTarget({
+                      targetType: "user",
+                      targetId: member.id,
+                      body: "",
+                      recipientUserId: member.id,
+                      recipientName: member.name,
+                      recipientImage: member.image,
+                    });
                   }}
                 >
                   <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>

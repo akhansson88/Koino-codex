@@ -185,7 +185,14 @@ export function FeedDetailScreen() {
 
   function startPrayer() {
     if (!item || !targetType) return;
-    setPrayerTarget({ targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
+    setPrayerTarget({
+      targetType,
+      targetId: item.id,
+      body: item.body,
+      recipientUserId: item.userId,
+      recipientName: authorName,
+      recipientImage: authorImage,
+    });
   }
 
   function toggleReaction() {
@@ -242,7 +249,7 @@ export function FeedDetailScreen() {
           </Card>
         ) : !isPrayerMoment ? (
           <View style={{ gap: 10 }}>
-            <DetailPrayerButton onPress={startPrayer} />
+            <DetailPrayerButton onPress={startPrayer} prayed={Boolean(prayer?.prayed)} />
             {canReact ? (
               <DetailReactionButton active={Boolean(reaction?.reacted)} label={reaction?.reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]} onPress={toggleReaction} />
             ) : null}
@@ -347,15 +354,15 @@ export function FeedDetailScreen() {
   );
 }
 
-function DetailPrayerButton({ onPress }: { onPress: () => void }) {
+function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: colors.gold,
-        borderColor: colors.gold,
+        backgroundColor: prayed ? colors.prayerSoft : colors.gold,
+        borderColor: prayed ? colors.accentPrayer : colors.gold,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -365,8 +372,8 @@ function DetailPrayerButton({ onPress }: { onPress: () => void }) {
         paddingHorizontal: 18,
       }}
     >
-      <MaterialCommunityIcons name="hands-pray" size={21} color={colors.onAccent} />
-      <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Pray</Text>
+      <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
+      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
     </Pressable>
   );
 }

@@ -408,7 +408,14 @@ export function SettingsScreen() {
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
     setCommunityPrayerIntent(undefined);
-    setPrayerTarget({ targetType: prayer.targetType, targetId: item.id, body: item.body, recipientUserId: item.userId });
+    setPrayerTarget({
+      targetType: prayer.targetType,
+      targetId: item.id,
+      body: item.body,
+      recipientUserId: item.userId,
+      recipientName: userById.get(item.userId),
+      recipientImage: userImageById.get(item.userId),
+    });
   }
 
   function startCommunityPrayer(intent: CommunityPrayerIntent) {
@@ -416,7 +423,14 @@ export function SettingsScreen() {
     if (!targetId) return;
 
     setCommunityPrayerIntent(intent);
-    setPrayerTarget({ targetType: "user", targetId, body: "", recipientUserId: targetId });
+    setPrayerTarget({
+      targetType: "user",
+      targetId,
+      body: "",
+      recipientUserId: targetId,
+      recipientName: userById.get(targetId),
+      recipientImage: userImageById.get(targetId),
+    });
   }
 
   function closePrayerMoment() {
@@ -428,6 +442,9 @@ export function SettingsScreen() {
     const target = prayerTarget;
     const intent = communityPrayerIntent;
 
+    setPrayerTarget(undefined);
+    setCommunityPrayerIntent(undefined);
+
     if (target) {
       await dispatch({
         type: "finishPrayer",
@@ -438,9 +455,6 @@ export function SettingsScreen() {
         recipientUserId: target.recipientUserId,
       });
     }
-
-    setPrayerTarget(undefined);
-    setCommunityPrayerIntent(undefined);
 
     if (status === "completed" && intent) {
       setPrayerPostNote("");
@@ -1602,7 +1616,7 @@ function CommunityPrayerDetailScreen({
         </Card>
       ) : null}
       {!answered && !prayerMoment ? (
-        <PrayerActionButton onPress={onPray} />
+        <PrayerActionButton onPress={onPray} prayed={prayer.prayed} />
       ) : null}
       {ownsItem && !answered && !prayerMoment ? (
         <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
@@ -1660,15 +1674,15 @@ function CommunityPrayerDetailScreen({
   );
 }
 
-function PrayerActionButton({ onPress }: { onPress: () => void }) {
+function PrayerActionButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: colors.gold,
-        borderColor: colors.gold,
+        backgroundColor: prayed ? colors.prayerSoft : colors.gold,
+        borderColor: prayed ? colors.accentPrayer : colors.gold,
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
@@ -1678,8 +1692,8 @@ function PrayerActionButton({ onPress }: { onPress: () => void }) {
         paddingHorizontal: 18,
       }}
     >
-      <MaterialCommunityIcons name="hands-pray" size={21} color={colors.onAccent} />
-      <Text style={{ color: colors.onAccent, fontSize: 16, fontWeight: "900" }}>Pray</Text>
+      <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
+      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
     </Pressable>
   );
 }
@@ -1803,8 +1817,8 @@ function PrayerRequestCard({
               }}
               style={{
                 alignItems: "center",
-                backgroundColor: colors.gold,
-                borderColor: colors.gold,
+                backgroundColor: prayed ? colors.prayerSoft : colors.gold,
+                borderColor: prayed ? colors.accentPrayer : colors.gold,
                 borderRadius: 999,
                 borderWidth: 1,
                 flexDirection: "row",
@@ -1813,8 +1827,8 @@ function PrayerRequestCard({
                 paddingHorizontal: 12,
               }}
             >
-              <MaterialCommunityIcons name="hands-pray" size={16} color={colors.onAccent} />
-              <Text style={{ color: colors.onAccent, fontSize: 12, fontWeight: "900" }}>Pray</Text>
+              <MaterialCommunityIcons name="hands-pray" size={16} color={prayed ? colors.textMuted : colors.onAccent} />
+              <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 12, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
             </Pressable>
           ) : (
             <Feather name="bookmark" size={18} color={colors.gold} />

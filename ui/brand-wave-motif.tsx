@@ -16,33 +16,40 @@ const waves = [
 
 export function BrandWaveMotif({
   height = 128,
+  intensity = 1,
   opacity = 1,
   style,
+  variant = "full",
   width = 288,
 }: {
   height?: number;
+  intensity?: number;
   opacity?: number;
   style?: StyleProp<ViewStyle>;
+  variant?: "accent" | "full";
   width?: number;
 }) {
+  const accent = variant === "accent";
+  const visibleWaves = accent ? waves.slice(1, 4) : waves;
+
   return (
     <Svg
       height={height}
       opacity={opacity}
       pointerEvents="none"
       style={style}
-      viewBox="0 0 288 128"
+      viewBox={accent ? "0 18 288 52" : "0 0 288 128"}
       width={width}
     >
-      {waves.map((wave, index) => (
+      {visibleWaves.map((wave, index) => (
         <Path
           d={wave.d}
           fill="none"
           key={`${wave.color}-${index}`}
-          opacity={0.22 + (index % 2) * 0.06}
+          opacity={Math.min(1, (0.22 + (index % 2) * 0.06) * intensity)}
           stroke={wave.color}
           strokeLinecap="round"
-          strokeWidth={1.35}
+          strokeWidth={accent ? 5 : 1.35}
         />
       ))}
     </Svg>

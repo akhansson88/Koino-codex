@@ -220,9 +220,9 @@ export function PostCard({
           }}
           style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
         >
-          <MaterialCommunityIcons name="hands-pray" size={22} color={colors.ink} />
-          <Text style={[typography.label, { color: colors.muted }]}>
-            Pray
+          <MaterialCommunityIcons name="hands-pray" size={22} color={prayed ? colors.accentPrayer : colors.ink} />
+          <Text style={[typography.label, { color: prayed ? colors.textMuted : colors.muted }]}>
+            {prayed ? "Prayed" : "Pray"}
           </Text>
         </Pressable>
         {!isPrayerPost && onReact ? (
