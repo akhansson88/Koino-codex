@@ -22,12 +22,18 @@ import { useKoino } from "@/state/koino-store";
 import type { GroupImage, PrayerSessionTargetType } from "@/state/types";
 import { Avatar } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
-import { KoinoLogo } from "@/ui/koino-logo";
 import { brandPalette, fontFamilies, platformShadow } from "@/ui/theme";
 
 const AMEN_REVEAL_DELAY_MS = 1_800;
 const ENTER_DURATION_MS = 620;
 const EXIT_DURATION_MS = 460;
+const AMBIENT_WAVE_INPUT_RANGE = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
+const AMBIENT_WAVE_PATTERN = [0, 0.707, 1, 0.707, 0, -0.707, -1, -0.707, 0];
+const AMBIENT_WAVE_MOTIONS = [
+  { duration: 11_000, layerIndices: [0, 3, 6], translateX: 3, translateY: 0.75 },
+  { duration: 13_500, layerIndices: [1, 4, 7], translateX: -4, translateY: -1 },
+  { duration: 15_500, layerIndices: [2, 5], translateX: 5, translateY: 1.5 },
+] as const;
 
 export type PrayerMomentTarget = {
   targetType: PrayerSessionTargetType;
@@ -40,6 +46,113 @@ export type PrayerMomentTarget = {
 
 function firstName(name: string) {
   return name.trim().split(/\s+/)[0] || "någon";
+}
+
+function initialMotionPreference() {
+  if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    return { known: true, reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches };
+  }
+  return { known: false, reduced: false };
+}
+
+function AmbientPrayerWaves({
+  active,
+  bottom,
+  compactHeight,
+  exitTranslateY,
+  reducedMotion,
+  width,
+}: {
+  active: boolean;
+  bottom: number;
+  compactHeight: boolean;
+  exitTranslateY: Animated.Value;
+  reducedMotion: boolean;
+  width: number;
+}) {
+  const layerProgress = useRef(AMBIENT_WAVE_MOTIONS.map(() => new Animated.Value(0))).current;
+  const waveHeight = compactHeight ? 142 : 180;
+  const waveWidth = Math.max(width + 172, 520);
+
+  useEffect(() => {
+    layerProgress.forEach((value) => {
+      value.stopAnimation();
+      value.setValue(0);
+    });
+
+    if (!active || reducedMotion) return undefined;
+
+    const animations = AMBIENT_WAVE_MOTIONS.map((motion, index) => {
+      const progress = layerProgress[index];
+      progress.setValue(0);
+
+      return Animated.loop(
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: motion.duration,
+          easing: Easing.linear,
+          isInteraction: false,
+          useNativeDriver: Platform.OS !== "web",
+        }),
+        { resetBeforeIteration: true },
+      );
+    });
+
+    animations.forEach((animation) => animation.start());
+
+    return () => {
+      animations.forEach((animation) => animation.stop());
+      layerProgress.forEach((value) => {
+        value.stopAnimation();
+        value.setValue(0);
+      });
+    };
+  }, [active, layerProgress, reducedMotion]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        bottom,
+        height: waveHeight,
+        left: -86,
+        opacity: 0.78,
+        position: "absolute",
+        right: -86,
+        transform: [{ translateY: exitTranslateY }],
+      }}
+    >
+      {AMBIENT_WAVE_MOTIONS.map((motion, index) => {
+        const progress = layerProgress[index];
+        return (
+          <Animated.View
+            key={`ambient-wave-${index}`}
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              alignItems: "center",
+              justifyContent: "center",
+              transform: [
+                {
+                  translateX: progress.interpolate({
+                    inputRange: AMBIENT_WAVE_INPUT_RANGE,
+                    outputRange: AMBIENT_WAVE_PATTERN.map((value) => value * motion.translateX),
+                  }),
+                },
+                {
+                  translateY: progress.interpolate({
+                    inputRange: AMBIENT_WAVE_INPUT_RANGE,
+                    outputRange: AMBIENT_WAVE_PATTERN.map((value) => value * motion.translateY),
+                  }),
+                },
+              ],
+            }}
+          >
+            <BrandWaveMotif height={waveHeight} layerIndices={motion.layerIndices} opacity={0.72} width={waveWidth} />
+          </Animated.View>
+        );
+      })}
+    </Animated.View>
+  );
 }
 
 export function PrayerMoment({
@@ -61,7 +174,7 @@ export function PrayerMoment({
   const startedAtRef = useRef(new Date().toISOString());
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const [{ known: motionPreferenceKnown, reduced: reduceMotion }, setMotionPreference] = useState(initialMotionPreference);
 
   const recipient = useMemo(
     () => state.users.find((user) => user.id === target?.recipientUserId),
@@ -92,10 +205,14 @@ export function PrayerMoment({
   useEffect(() => {
     let active = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReduceMotion(enabled);
+      if (active) {
+        setMotionPreference({ known: true, reduced: enabled });
+      }
     });
 
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (enabled) => {
+      setMotionPreference({ known: true, reduced: enabled });
+    });
     return () => {
       active = false;
       subscription.remove();
@@ -321,7 +438,6 @@ export function PrayerMoment({
             }),
           }}
         >
-          <KoinoLogo size={compactHeight ? 42 : 60} />
           <Text
             selectable
             style={{
@@ -329,7 +445,6 @@ export function PrayerMoment({
               fontFamily: fontFamilies.headingMedium,
               fontSize: compactHeight ? 24 : 30,
               lineHeight: compactHeight ? 30 : 38,
-              marginTop: compactHeight ? 6 : 12,
               textAlign: "center",
             }}
           >
@@ -370,20 +485,14 @@ export function PrayerMoment({
           ) : null}
         </View>
 
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            alignItems: "center",
-            bottom: buttonBottom + (compactHeight ? 72 : 70),
-            left: -86,
-            opacity: 0.78,
-            position: "absolute",
-            right: -86,
-            transform: [{ translateY: wavesTranslateY }],
-          }}
-        >
-          <BrandWaveMotif height={compactHeight ? 142 : 180} opacity={0.72} width={Math.max(width + 172, 520)} />
-        </Animated.View>
+        <AmbientPrayerWaves
+          active={Boolean(target)}
+          bottom={buttonBottom + (compactHeight ? 72 : 70)}
+          compactHeight={compactHeight}
+          exitTranslateY={wavesTranslateY}
+          reducedMotion={!motionPreferenceKnown || reduceMotion}
+          width={width}
+        />
 
         <View
           style={{

@@ -17,6 +17,7 @@ const waves = [
 export function BrandWaveMotif({
   height = 128,
   intensity = 1,
+  layerIndices,
   opacity = 1,
   style,
   variant = "full",
@@ -24,13 +25,19 @@ export function BrandWaveMotif({
 }: {
   height?: number;
   intensity?: number;
+  layerIndices?: readonly number[];
   opacity?: number;
   style?: StyleProp<ViewStyle>;
   variant?: "accent" | "full";
   width?: number;
 }) {
   const accent = variant === "accent";
-  const visibleWaves = accent ? waves.slice(1, 4) : waves;
+  const indexedWaves = waves.map((wave, index) => ({ index, wave }));
+  const visibleWaves = accent
+    ? waves.slice(1, 4).map((wave, index) => ({ index, wave }))
+    : layerIndices
+      ? indexedWaves.filter(({ index }) => layerIndices.includes(index))
+      : indexedWaves;
 
   return (
     <Svg
@@ -41,7 +48,7 @@ export function BrandWaveMotif({
       viewBox={accent ? "0 18 288 52" : "0 0 288 128"}
       width={width}
     >
-      {visibleWaves.map((wave, index) => (
+      {visibleWaves.map(({ index, wave }) => (
         <Path
           d={wave.d}
           fill="none"
