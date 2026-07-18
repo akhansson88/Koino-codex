@@ -20,7 +20,12 @@
       "themeColor": "#F7EFE4"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoadsInWebContent": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {

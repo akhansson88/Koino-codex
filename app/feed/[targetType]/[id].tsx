@@ -1,5 +1,10 @@
 import { FeedDetailScreen } from "@/features/feed-detail-screen";
+import { InAppBrowserProvider } from "@/ui/in-app-browser";
 
 export default function FeedDetailRoute() {
-  return <FeedDetailScreen />;
+  return (
+    <InAppBrowserProvider>
+      <FeedDetailScreen />
+    </InAppBrowserProvider>
+  );
 }

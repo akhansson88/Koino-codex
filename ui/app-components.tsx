@@ -10,8 +10,8 @@ import { bibleVerseForVersion } from "@/features/bible-kjv";
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
+import { useOpenExternalLink } from "@/ui/in-app-browser";
 import { splitLinkText } from "@/ui/link-utils";
-import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -832,6 +832,7 @@ export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: 
 }
 
 export function BodyText({ children, muted = false, style, ...props }: PropsWithChildren<TextProps & { muted?: boolean; style?: StyleProp<TextStyle> }>) {
+  const openExternalLink = useOpenExternalLink();
   const content =
     typeof children === "string"
       ? splitLinkText(children).map((part, index) =>
@@ -841,7 +842,7 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
               key={`${part.url}-${index}`}
               onPress={(event) => {
                 event.stopPropagation();
-                void openLinkInApp(part.url ?? "");
+                openExternalLink(part.url ?? "");
               }}
               style={[typography.bodyMedium, { color: muted ? colors.olive : colors.textMuted, textDecorationLine: "underline" }]}
             >
@@ -908,6 +909,8 @@ export function ExpandableBodyText({
         </BodyText>
       </Animated.View>
       <BodyText
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         muted={muted}
         onLayout={(event) => {
           const nextHeight = event.nativeEvent.layout.height;
@@ -915,7 +918,7 @@ export function ExpandableBodyText({
           fullHeightRef.current = nextHeight;
           setFullHeight(nextHeight);
         }}
-        style={[style, { left: 0, opacity: 0, position: "absolute", right: 0, zIndex: -1 }]}
+        style={[style, { left: 0, opacity: 0, pointerEvents: "none", position: "absolute", right: 0, zIndex: -1 }]}
       >
         {children}
       </BodyText>

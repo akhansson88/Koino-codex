@@ -3,7 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 
 import { firstUrl } from "@/ui/link-utils";
-import { openLinkInApp } from "@/ui/open-link";
+import { useOpenExternalLink } from "@/ui/in-app-browser";
 import { colors, radius } from "@/ui/theme";
 
 type LinkPreviewData = {
@@ -179,6 +179,7 @@ function isVideoPreview(preview: LinkPreviewData) {
 }
 
 export function LinkPreview({ text }: { text?: string }) {
+  const openExternalLink = useOpenExternalLink();
   const url = useMemo(() => firstUrl(text), [text]);
   const [preview, setPreview] = useState<LinkPreviewData | null>();
   const [imageFailed, setImageFailed] = useState(false);
@@ -232,7 +233,7 @@ export function LinkPreview({ text }: { text?: string }) {
       accessibilityRole="link"
       onPress={(event) => {
         event.stopPropagation();
-        void openLinkInApp(preview?.url ?? url);
+        openExternalLink(preview?.url ?? url);
       }}
       style={{
         backgroundColor: colors.input,
