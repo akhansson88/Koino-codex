@@ -230,19 +230,40 @@ function InAppBrowserSheet({
     }).start();
   }, [translateY]);
 
-  const panResponder = useMemo(
+  const headerPanResponder = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => translateY.stopAnimation(),
         onPanResponderMove: (_event, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
         onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 86 || gesture.vy > 0.85) {
+          if (gesture.dy > 70 || gesture.vy > 0.45) {
             closeWithAnimation();
             return;
           }
           settleOpen();
         },
         onPanResponderTerminate: settleOpen,
+      }),
+    [closeWithAnimation, settleOpen, translateY],
+  );
+
+  const handlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => translateY.stopAnimation(),
+        onPanResponderMove: (_event, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 50 || gesture.vy > 0.35) {
+            closeWithAnimation();
+            return;
+          }
+          settleOpen();
+        },
+        onPanResponderTerminate: settleOpen,
+        onPanResponderTerminationRequest: () => false,
       }),
     [closeWithAnimation, settleOpen, translateY],
   );
@@ -330,7 +351,7 @@ function InAppBrowserSheet({
           }}
         >
           <View
-            {...panResponder.panHandlers}
+            {...headerPanResponder.panHandlers}
             style={{
               backgroundColor: colors.paper,
               borderBottomColor: colors.line,
@@ -339,7 +360,11 @@ function InAppBrowserSheet({
               paddingTop: 6,
             }}
           >
-            <View style={{ alignItems: "center", height: 10, justifyContent: "center" }}>
+            <View
+              {...handlePanResponder.panHandlers}
+              accessibilityLabel="Swipe down to close browser"
+              style={{ alignItems: "center", alignSelf: "center", height: 22, justifyContent: "center", width: 150 }}
+            >
               <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 54, paddingBottom: 4 }}>
