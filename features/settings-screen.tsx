@@ -170,7 +170,7 @@ export function SettingsScreen() {
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
-  const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 4);
+  const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 1);
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const currentCheckInKey = `${state.currentUserId}:${state.currentGroupId}:${todayKey}`;
@@ -739,6 +739,33 @@ export function SettingsScreen() {
     />
   ) : null;
 
+  const communityPrayerMemberModal = group ? (
+    <CommunityPrayerMemberModal
+      members={otherCommunityMembers}
+      onClose={() => setMemberSelectVisible(false)}
+      onSelect={(member) => {
+        setMemberSelectVisible(false);
+        startCommunityPrayer({
+          recipientImage: member.image,
+          recipientName: member.name,
+          recipientUserId: member.id,
+          type: "pray_for_someone",
+        });
+      }}
+      visible={memberSelectVisible}
+    />
+  ) : null;
+
+  const communityPrayerPostSheet = (
+    <PrayerPostSheet
+      note={prayerPostNote}
+      onChangeNote={(value) => setPrayerPostNote(value.slice(0, PRAYER_POST_NOTE_LIMIT))}
+      onPublish={() => publishPendingPrayerPost()}
+      onSkip={() => publishPendingPrayerPost("")}
+      pending={pendingPrayerPost}
+    />
+  );
+
   if (roomView === "prayer" && group) {
     return (
       <>
@@ -750,6 +777,7 @@ export function SettingsScreen() {
             onFilter={setPrayerFilter}
             onOpenPrayer={openPrayerDetail}
             onPray={prayForItem}
+            onPrayForSomeone={() => setMemberSelectVisible(true)}
             prayerPosts={visiblePrayerPosts}
             prayerState={itemPrayerState}
             userById={userById}
@@ -780,6 +808,8 @@ export function SettingsScreen() {
           onClose={closePrayerMoment}
           onFinish={finishPrayerMoment}
         />
+        {communityPrayerMemberModal}
+        {communityPrayerPostSheet}
       </>
     );
   }
@@ -877,21 +907,22 @@ export function SettingsScreen() {
         <CommunityTransitionFrame animationKey={roomView} direction={transitionDirection}>
           <AppScreen topInset={false}>
             <View style={{ gap: 12 }}>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <RoomImage image={group.image} name={group.name} size={54} />
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 21, fontWeight: "900" }}>{group.name}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Open community members"
-                    onPress={() => navigateToRoomView("members")}
-                    style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 3 }}
-                  >
-                    <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
-                    <Feather name="chevron-right" size={14} color={colors.muted} />
-                  </Pressable>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>A quiet place to pray, reflect, and walk together.</Text>
-                </View>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${group.name} details, ${memberLabel(memberCount)}, Private`}
+                  onPress={() => router.push("/room-details" as never)}
+                  style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 }}
+                >
+                  <RoomImage image={group.image} name={group.name} size={44} />
+                  <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+                      {memberLabel(memberCount)} · Private
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={17} color={colors.muted} />
+                </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Open community management"
@@ -904,50 +935,43 @@ export function SettingsScreen() {
                   <Feather name="more-horizontal" size={20} color={colors.ink} />
                 </Pressable>
               </View>
-            </View>
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
               <PrimaryButton
                 icon="heart"
                 onPress={() => startCommunityPrayer({ type: "pray_now" })}
-                style={{ flex: 1, minHeight: 46, paddingHorizontal: 10 }}
+                style={{ minHeight: 42, paddingHorizontal: 12 }}
               >
                 Pray now
               </PrimaryButton>
-              <SecondaryButton
-                icon="users"
-                onPress={() => setMemberSelectVisible(true)}
-                style={{ flex: 1, minHeight: 46, paddingHorizontal: 10 }}
-              >
-                Pray for someone
-              </SecondaryButton>
-            </View>
 
-            <FilterChips
-              value={detailTab}
-              onChange={handleCommunityTabChange}
-              options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
-            />
-
-            <View style={{ gap: 12 }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
                 <SectionHeading>
                   {detailTab === "recent" ? "Recent activity" : detailTab === "prayer" ? "Prayer" : detailTab === "checkins" ? "Check-ins" : "Reflections"}
                 </SectionHeading>
                 {detailTab === "prayer" ? (
-                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
                     Open Prayer
                   </PrimaryButton>
                 ) : detailTab === "checkins" ? (
-                  <PrimaryButton icon="check-circle" onPress={() => navigateToRoomView("checkins")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                  <PrimaryButton icon="check-circle" onPress={() => navigateToRoomView("checkins")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
                     Open Check-ins
                   </PrimaryButton>
                 ) : (
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
                     Share
                   </PrimaryButton>
                 )}
               </View>
+
+              <FilterChips
+                fit
+                value={detailTab}
+                onChange={handleCommunityTabChange}
+                options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
+              />
+            </View>
+
+            <View style={{ gap: 12 }}>
               {visibleFeedItems.length === 0 ? (
                 <Card>
                   <BodyText muted>
@@ -1039,27 +1063,8 @@ export function SettingsScreen() {
           roomImage={group.image}
         />
         {communityCheckInModal}
-        <CommunityPrayerMemberModal
-          members={otherCommunityMembers}
-          onClose={() => setMemberSelectVisible(false)}
-          onSelect={(member) => {
-            setMemberSelectVisible(false);
-            startCommunityPrayer({
-              recipientImage: member.image,
-              recipientName: member.name,
-              recipientUserId: member.id,
-              type: "pray_for_someone",
-            });
-          }}
-          visible={memberSelectVisible}
-        />
-        <PrayerPostSheet
-          note={prayerPostNote}
-          onChangeNote={(value) => setPrayerPostNote(value.slice(0, PRAYER_POST_NOTE_LIMIT))}
-          onPublish={() => publishPendingPrayerPost()}
-          onSkip={() => publishPendingPrayerPost("")}
-          pending={pendingPrayerPost}
-        />
+        {communityPrayerMemberModal}
+        {communityPrayerPostSheet}
         <BottomSheet title="Community settings" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
@@ -1541,6 +1546,7 @@ function CommunityPrayerScreen({
   onFilter,
   onOpenPrayer,
   onPray,
+  onPrayForSomeone,
   prayerPosts,
   prayerState,
   userById,
@@ -1552,6 +1558,7 @@ function CommunityPrayerScreen({
   onFilter: (filter: PrayerFilter) => void;
   onOpenPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
   onPray: (item: FeedItem) => void;
+  onPrayForSomeone: () => void;
   prayerPosts: Extract<FeedItem, { type: "post" }>[];
   prayerState: (item: FeedItem) => { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
   userById: Map<Id, string>;
@@ -1573,6 +1580,9 @@ function CommunityPrayerScreen({
           Share prayer
         </PrimaryButton>
       </View>
+      <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 42 }}>
+        Pray for someone
+      </SecondaryButton>
       {prayerPosts.length === 0 ? (
         <Card>
           <BodyText muted>{filter === "answered" ? "No answered prayers yet." : "No prayers here yet."}</BodyText>

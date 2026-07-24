@@ -563,7 +563,7 @@ export function RoomDetailsScreen() {
 
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Community details</Text>
-          <BodyText muted>Manage your community and members.</BodyText>
+          <BodyText muted>A quiet place to pray, reflect, and walk together.</BodyText>
         </View>
 
         {group ? (

@@ -418,40 +418,54 @@ export function IconButton({
 }
 
 export function FilterChips<T extends string>({
+  fit = false,
   options,
   value,
   onChange,
 }: {
+  fit?: boolean;
   options: { label: string; value: T }[];
   value: T;
   onChange: (value: T) => void;
 }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={{
-              backgroundColor: selected ? colors.accentSubtle : colors.paper,
-              borderColor: selected ? colors.gold : colors.line,
-              borderRadius: 999,
-              borderWidth: 1,
-              minHeight: 36,
-              paddingHorizontal: 18,
-              justifyContent: "center",
-            }}
-          >
-            <Text style={[typography.label, { color: selected ? colors.olive : colors.muted }]}>{option.label}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+  const chips = options.map((option) => {
+    const selected = option.value === value;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        key={option.value}
+        onPress={() => onChange(option.value)}
+        style={{
+          alignItems: "center",
+          backgroundColor: selected ? colors.accentSubtle : colors.paper,
+          borderColor: selected ? colors.gold : colors.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          flex: fit ? 1 : undefined,
+          justifyContent: "center",
+          minHeight: 36,
+          minWidth: fit ? 0 : undefined,
+          paddingHorizontal: fit ? 4 : 18,
+        }}
+      >
+        <Text
+          adjustsFontSizeToFit={fit}
+          minimumFontScale={fit ? 0.78 : undefined}
+          numberOfLines={1}
+          style={[typography.label, { color: selected ? colors.olive : colors.muted, fontSize: fit ? 12 : typography.label.fontSize }]}
+        >
+          {option.label}
+        </Text>
+      </Pressable>
+    );
+  });
+
+  if (fit) {
+    return <View style={{ flexDirection: "row", gap: 6, width: "100%" }}>{chips}</View>;
+  }
+
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{chips}</ScrollView>;
 }
 
 export function StatusPill({ status }: { status: "answered" | "open" }) {
