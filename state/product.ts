@@ -3,10 +3,10 @@ import type { EntryKind, FeedItem, HeartMood, JournalEntry, JournalEntryType } f
 export const tabs = ["Bible", "Today", "Me", "Community"] as const;
 
 export const roomTabs = [
-  { value: "reflections", label: "Reflections" },
+  { value: "recent", label: "Recent" },
   { value: "prayer", label: "Prayer" },
   { value: "checkins", label: "Check-ins" },
-  { value: "members", label: "Members" },
+  { value: "reflections", label: "Reflections" },
 ] as const;
 
 export const prayerStatuses = {

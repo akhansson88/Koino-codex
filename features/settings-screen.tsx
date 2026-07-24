@@ -53,7 +53,7 @@ import { PostCard } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
-type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins";
+type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "members";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
@@ -132,7 +132,7 @@ export function SettingsScreen() {
   const [roomView, setRoomView] = useState<RoomView>("detail");
   const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("forward");
   const roomViewRef = useRef<RoomView>("detail");
-  const [detailTab, setDetailTab] = useState<RoomDetailTab>("reflections");
+  const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [manageSheetVisible, setManageSheetVisible] = useState(false);
@@ -152,6 +152,7 @@ export function SettingsScreen() {
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
   const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
+  const [prayerDetailReturnView, setPrayerDetailReturnView] = useState<"detail" | "prayer">("prayer");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [communityPrayerIntent, setCommunityPrayerIntent] = useState<CommunityPrayerIntent>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
@@ -230,9 +231,18 @@ export function SettingsScreen() {
       }));
     return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const reflectionItems = feedItems.filter(
-    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && !isPrayerFeedKind(item.kind),
-  );
+  const visibleFeedItems = useMemo(() => {
+    if (detailTab === "prayer") {
+      return feedItems.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
+    }
+    if (detailTab === "checkins") {
+      return feedItems.filter((item) => item.type === "check_in");
+    }
+    if (detailTab === "reflections") {
+      return feedItems.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
+    }
+    return feedItems;
+  }, [detailTab, feedItems]);
   const prayerPosts = feedItems.filter(
     (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && isPrayerFeedKind(item.kind),
   );
@@ -262,8 +272,8 @@ export function SettingsScreen() {
         setTransitionDirection("back");
       }
       setRoomView("detail");
-      setDetailTab("reflections");
       setSelectedPrayerId(undefined);
+      setPrayerDetailReturnView("prayer");
       setEncouragementDraft("");
       setMemberSelectVisible(false);
       setPendingPrayerPost(undefined);
@@ -282,15 +292,15 @@ export function SettingsScreen() {
 
   const goBackFromRoomView = useCallback(() => {
     if (roomView === "prayerDetail") {
-      navigateToRoomView("prayer", "back");
+      navigateToRoomView(prayerDetailReturnView, "back");
       return true;
     }
-    if (roomView === "prayer" || roomView === "checkins" || roomView === "rooms") {
+    if (roomView === "prayer" || roomView === "checkins" || roomView === "members" || roomView === "rooms") {
       navigateToRoomView("detail", "back");
       return true;
     }
     return false;
-  }, [navigateToRoomView, roomView]);
+  }, [navigateToRoomView, prayerDetailReturnView, roomView]);
 
   useEffect(() => {
     if (Platform.OS === "web") return undefined;
@@ -340,19 +350,12 @@ export function SettingsScreen() {
   }
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
-    if (tab === "prayer") {
-      navigateToRoomView("prayer");
-      return;
-    }
-    if (tab === "checkins") {
-      navigateToRoomView("checkins");
-      return;
-    }
     setDetailTab(tab);
   }
 
-  function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>) {
+  function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
     setSelectedPrayerId(item.id);
+    setPrayerDetailReturnView(returnView);
     setEncouragementDraft("");
     navigateToRoomView("prayerDetail");
   }
@@ -786,7 +789,7 @@ export function SettingsScreen() {
       return (
         <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <AppScreen topInset={false}>
-            <FocusedScreenHeader onBack={() => navigateToRoomView("prayer", "back")} title="Prayer" />
+            <FocusedScreenHeader onBack={goBackFromRoomView} title="Prayer" />
             <Card>
               <BodyText muted>This prayer request is no longer available.</BodyText>
             </Card>
@@ -845,6 +848,29 @@ export function SettingsScreen() {
     );
   }
 
+  if (roomView === "members" && group) {
+    return (
+      <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <AppScreen topInset={false}>
+          <FocusedScreenHeader onBack={goBackFromRoomView} title="Members" />
+          <MembersPanel
+            group={group}
+            latestCheckInByUser={latestCheckInByUser}
+            memberCount={memberCount}
+            members={communityMembers}
+            onInvite={handleInvite}
+            onManage={() => {
+              setCurrentGroupName(group.name);
+              setManageSheetVisible(true);
+              navigateToRoomView("detail", "back");
+            }}
+            onSwitchRoom={openRoomOverview}
+          />
+        </AppScreen>
+      </CommunityTransitionFrame>
+    );
+  }
+
   if (roomView === "detail" && group) {
     return (
       <>
@@ -855,7 +881,15 @@ export function SettingsScreen() {
                 <RoomImage image={group.image} name={group.name} size={54} />
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 21, fontWeight: "900" }}>{group.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open community members"
+                    onPress={() => navigateToRoomView("members")}
+                    style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 3 }}
+                  >
+                    <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+                    <Feather name="chevron-right" size={14} color={colors.muted} />
+                  </Pressable>
                   <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>A quiet place to pray, reflect, and walk together.</Text>
                 </View>
                 <Pressable
@@ -895,62 +929,94 @@ export function SettingsScreen() {
               options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
             />
 
-            {detailTab === "reflections" ? (
-              <View style={{ gap: 12 }}>
-                <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-                  <SectionHeading>Reflections</SectionHeading>
+            <View style={{ gap: 12 }}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+                <SectionHeading>
+                  {detailTab === "recent" ? "Recent activity" : detailTab === "prayer" ? "Prayer" : detailTab === "checkins" ? "Check-ins" : "Reflections"}
+                </SectionHeading>
+                {detailTab === "prayer" ? (
+                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                    Open Prayer
+                  </PrimaryButton>
+                ) : detailTab === "checkins" ? (
+                  <PrimaryButton icon="check-circle" onPress={() => navigateToRoomView("checkins")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+                    Open Check-ins
+                  </PrimaryButton>
+                ) : (
                   <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 42, paddingHorizontal: 14 }}>
                     Share
                   </PrimaryButton>
-                </View>
-                {reflectionItems.length === 0 ? (
-                  <Card>
-                    <BodyText muted>No reflections yet. When you are ready, share one honest line with your community.</BodyText>
-                  </Card>
-                ) : (
-                  reflectionItems.map((item) => {
-                    const prayer = itemPrayerState(item);
-                    const reaction = itemReactionState(item);
+                )}
+              </View>
+              {visibleFeedItems.length === 0 ? (
+                <Card>
+                  <BodyText muted>
+                    {detailTab === "recent"
+                      ? "No recent activity yet. Shared prayers, reflections, check-ins, and praise will appear here."
+                      : detailTab === "prayer"
+                        ? "No prayers here yet."
+                        : detailTab === "checkins"
+                          ? "No shared check-ins yet. This space will stay gentle until someone is ready."
+                          : "No reflections yet. When you are ready, share one honest line with your community."}
+                  </BodyText>
+                </Card>
+              ) : (
+                visibleFeedItems.map((item) => {
+                  if (item.type === "check_in") {
                     return (
-                      <PostCard
+                      <CheckInCard
                         key={`${item.type}-${item.id}`}
                         authorImage={userImageById.get(item.userId)}
                         authorName={userById.get(item.userId) ?? "Someone"}
                         item={item}
-                        ownsItem={item.userId === state.currentUserId}
+                        onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                      />
+                    );
+                  }
+
+                  if (isPrayerFeedKind(item.kind)) {
+                    const prayer = itemPrayerState(item);
+                    return (
+                      <PrayerRequestCard
+                        key={`${item.type}-${item.id}`}
+                        authorImage={userImageById.get(item.userId)}
+                        authorName={userById.get(item.userId) ?? "Someone"}
+                        item={item}
                         prayed={prayer.prayed}
                         prayedBy={prayer.prayedBy}
                         prayerCount={prayer.count}
-                        reacted={reaction.reacted}
-                        reactedBy={reaction.reactedBy}
-                        reactionCount={reaction.count}
-                        replyCount={itemReplies(item).length}
-                        onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                        onOpen={() => openPrayerDetail(item, "detail")}
                         onPray={() => prayForItem(item)}
-                        onReact={() => togglePostAction(item)}
-                        onEdit={() => editPost(item)}
-                        onDelete={() => deletePost(item)}
                       />
                     );
-                  })
-                )}
-              </View>
-            ) : null}
+                  }
 
-            {detailTab === "members" ? (
-              <MembersPanel
-                group={group}
-                latestCheckInByUser={latestCheckInByUser}
-                memberCount={memberCount}
-                members={communityMembers}
-                onInvite={handleInvite}
-                onManage={() => {
-                  setCurrentGroupName(group.name);
-                  setManageSheetVisible(true);
-                }}
-                onSwitchRoom={openRoomOverview}
-              />
-            ) : null}
+                  const prayer = itemPrayerState(item);
+                  const reaction = itemReactionState(item);
+                  return (
+                    <PostCard
+                      key={`${item.type}-${item.id}`}
+                      authorImage={userImageById.get(item.userId)}
+                      authorName={userById.get(item.userId) ?? "Someone"}
+                      item={item}
+                      ownsItem={item.userId === state.currentUserId}
+                      prayed={prayer.prayed}
+                      prayedBy={prayer.prayedBy}
+                      prayerCount={prayer.count}
+                      reacted={reaction.reacted}
+                      reactedBy={reaction.reactedBy}
+                      reactionCount={reaction.count}
+                      replyCount={itemReplies(item).length}
+                      onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+                      onPray={() => prayForItem(item)}
+                      onReact={() => togglePostAction(item)}
+                      onEdit={() => editPost(item)}
+                      onDelete={() => deletePost(item)}
+                    />
+                  );
+                })
+              )}
+            </View>
           </AppScreen>
         </CommunityTransitionFrame>
         <SharedComposer
@@ -1139,7 +1205,7 @@ export function SettingsScreen() {
                 key={room.id}
                 onPress={() => {
                   dispatch({ type: "switchGroup", id: room.id });
-                  setDetailTab("reflections");
+                  setDetailTab("recent");
                   navigateToRoomView("detail", "back");
                 }}
                 style={{
