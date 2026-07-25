@@ -10,6 +10,7 @@ import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBol
 import { ActivityIndicator, Platform, View } from "react-native";
 
 import { KoinoProvider, useKoino } from "@/state/koino-store";
+import { AppLanguageProvider } from "@/ui/app-language";
 import { colors, statusBarStyle } from "@/ui/theme";
 
 const enableNativeBackGesture = Platform.OS === "ios";
@@ -33,9 +34,11 @@ export default function RootLayout() {
   }
 
   return (
-    <KoinoProvider>
-      <RootNavigator />
-    </KoinoProvider>
+    <AppLanguageProvider>
+      <KoinoProvider>
+        <RootNavigator />
+      </KoinoProvider>
+    </AppLanguageProvider>
   );
 }
 

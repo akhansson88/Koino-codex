@@ -110,6 +110,13 @@ function previewWithFallback(data, url) {
   };
 }
 
+function previewEnvelope(data, url) {
+  return {
+    preview: previewWithFallback(data, url),
+    provenance: data ? "success" : "fallback",
+  };
+}
+
 async function oEmbedPreview(url) {
   const youtubeId = youtubeVideoId(url);
   if (!youtubeId) return null;
@@ -167,7 +174,7 @@ export default async function linkPreview(request) {
     }
 
     const embeddedPreview = await oEmbedPreview(url.toString()).catch(() => null);
-    if (embeddedPreview) return jsonResponse(embeddedPreview);
+    if (embeddedPreview) return jsonResponse(previewEnvelope(embeddedPreview, url.toString()));
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6500);
@@ -191,7 +198,7 @@ export default async function linkPreview(request) {
     }
 
     const html = (await response.text()).slice(0, 180000);
-    return jsonResponse(previewWithFallback(parsePreviewHtml(html, url.toString()), url.toString()));
+    return jsonResponse(previewEnvelope(parsePreviewHtml(html, url.toString()), url.toString()));
   } catch {
     return jsonResponse({ error: "Invalid URL" }, 400);
   }

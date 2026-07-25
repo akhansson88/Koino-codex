@@ -10,8 +10,10 @@ import { bibleVerseForVersion } from "@/features/bible-kjv";
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
+import { useAppTranslation } from "@/ui/app-language";
+import { communityMemberCount } from "@/ui/community-copy";
 import { useOpenExternalLink } from "@/ui/in-app-browser";
-import { splitLinkText } from "@/ui/link-utils";
+import { hasVisibleLinkText, visibleLinkParts } from "@/ui/link-utils";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -119,12 +121,13 @@ export function AppHeader({
   showBack?: boolean;
   onBack?: () => void;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ gap: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           {showBack ? (
-            <IconButton accessibilityLabel="Go back" icon="arrow-left" onPress={onBack ?? (() => router.back())} />
+            <IconButton accessibilityLabel={t("shared.app.goBack")} icon="arrow-left" onPress={onBack ?? (() => router.back())} />
           ) : null}
           <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
         </View>
@@ -147,7 +150,7 @@ export function AppHeader({
             </View>
             {typeof memberCount === "number" ? (
               <Text style={[typography.label, { color: colors.muted }]}>
-                {memberCount} {memberCount === 1 ? "member" : "members"}
+                {communityMemberCount(memberCount, t)}
               </Text>
             ) : null}
           </View>
@@ -159,6 +162,7 @@ export function AppHeader({
 
 export function AvatarButton({ size = 38 }: { size?: number }) {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
   const pathname = usePathname();
   const user = state.users.find((item) => item.id === state.currentUserId);
 
@@ -170,7 +174,7 @@ export function AvatarButton({ size = 38 }: { size?: number }) {
   };
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Open identity and support" hitSlop={8} onPress={openIdentitySupport}>
+    <Pressable accessibilityRole="button" accessibilityLabel={t("shared.app.openIdentitySupport")} hitSlop={8} onPress={openIdentitySupport}>
       <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={size} tone="pink" />
     </Pressable>
   );
@@ -178,6 +182,7 @@ export function AvatarButton({ size = 38 }: { size?: number }) {
 
 export function CurrentRoomHeader() {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
 
@@ -191,14 +196,12 @@ export function CurrentRoomHeader() {
       <View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, maxWidth: 220 }]}>
-            {group?.name ?? "No community"}
+            {group?.name ?? t("community.management.noneShort")}
           </Text>
           <Feather name="chevron-down" size={16} color={colors.ink} />
         </View>
         {group ? (
-          <Text style={[typography.label, { color: colors.muted }]}>
-            {memberCount} {memberCount === 1 ? "member" : "members"}
-          </Text>
+          <Text style={[typography.label, { color: colors.muted }]}>{communityMemberCount(memberCount, t)}</Text>
         ) : null}
       </View>
     </Pressable>
@@ -238,7 +241,7 @@ export function HeartPromptCard({
   image,
   name,
   onPress,
-  subtitle = "Share, reflect or ask for prayer...",
+  subtitle,
 }: {
   actionIcon?: FeatherName;
   actionLabel?: string;
@@ -247,6 +250,9 @@ export function HeartPromptCard({
   onPress: () => void;
   subtitle?: string;
 }) {
+  const { t } = useAppTranslation();
+  const resolvedSubtitle = subtitle ?? t("community.checkIn.heartPromptSubtitle");
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -270,8 +276,8 @@ export function HeartPromptCard({
     >
       <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={[typography.cardTitle, { color: colors.ink }]}>How is your heart today?</Text>
-        <Text style={[typography.subtitle, { color: colors.muted }]}>{subtitle}</Text>
+        <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.checkIn.promptTitle")}</Text>
+        <Text style={[typography.subtitle, { color: colors.muted }]}>{resolvedSubtitle}</Text>
       </View>
       <View
         style={{
@@ -487,6 +493,7 @@ export function FilterChips<T extends string>({
 }
 
 export function StatusPill({ status }: { status: "answered" | "open" }) {
+  const { t } = useAppTranslation();
   const answered = status === "answered";
   return (
     <View
@@ -499,7 +506,9 @@ export function StatusPill({ status }: { status: "answered" | "open" }) {
         paddingVertical: 5,
       }}
     >
-      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{answered ? "Answered" : "Open"}</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>
+        {t(answered ? "shared.status.answered" : "shared.status.open")}
+      </Text>
     </View>
   );
 }
@@ -557,6 +566,7 @@ export function Avatar({
 }
 
 export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name?: string; size?: number }) {
+  const { t } = useAppTranslation();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -587,7 +597,7 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
     );
   }
 
-  return <Avatar name={name ?? "Community"} size={size} tone="blue" />;
+  return <Avatar name={name ?? t("tabs.community")} size={size} tone="blue" />;
 }
 
 export function AvatarStack({ users, size = 42 }: { users: { name: string; image?: GroupImage }[]; size?: number }) {
@@ -627,6 +637,7 @@ export function VersePreviewCard({
   verse?: BibleVerse;
 }) {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
   const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
@@ -659,7 +670,7 @@ export function VersePreviewCard({
           <Ionicons name="sunny-outline" size={20} color={colors.olive} />
           <View style={{ flex: 1, gap: 4 }}>
             <Pressable
-              accessibilityLabel={`Open ${displayVerse.reference}`}
+              accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
               accessibilityRole="button"
               onPress={(event) => {
                 event.stopPropagation();
@@ -673,7 +684,7 @@ export function VersePreviewCard({
             </ExpandableBodyText>
             {showOpenIndicator ? (
               <Pressable
-                accessibilityLabel={`Open ${displayVerse.reference}`}
+                accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
                 accessibilityRole="button"
                 onPress={(event) => {
                   event.stopPropagation();
@@ -681,14 +692,14 @@ export function VersePreviewCard({
                 }}
                 style={{ alignSelf: "flex-start" }}
               >
-                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t("shared.scripture.open")}</Text>
               </Pressable>
             ) : null}
           </View>
         </View>
       ) : (
         <Pressable
-          accessibilityLabel={`Open ${displayVerse.reference}`}
+          accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
           accessibilityRole="button"
           onPress={(event) => {
             event.stopPropagation();
@@ -702,7 +713,7 @@ export function VersePreviewCard({
             <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
               {displayVerse.text}
             </Text>
-            {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>Open</Text> : null}
+            {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t("shared.scripture.open")}</Text> : null}
           </View>
         </Pressable>
       )}
@@ -769,6 +780,7 @@ export function VerseDetailSheet({
   visible: boolean;
 }) {
   const { dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [busy, setBusy] = useState(false);
   if (!verse) return null;
   const currentVerse = verse;
@@ -807,7 +819,7 @@ export function VerseDetailSheet({
     }
     await dispatch({
       type: "createPost",
-      body: "A Scripture for today.",
+      body: t("community.scripture.shareBody"),
       kind: "scripture",
       title: currentVerse.reference,
       verse: currentVerse,
@@ -828,7 +840,7 @@ export function VerseDetailSheet({
   return (
     <BottomSheet title={verse.reference} visible={visible} onClose={onClose}>
       <View style={{ gap: 6 }}>
-        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{verse.translation ?? "Bible"}</Text>
+        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{verse.translation ?? t("shared.scripture.bible")}</Text>
         <Text selectable style={[typography.bodyMedium, { color: colors.ink, fontSize: 17, lineHeight: 26 }]}>
           {verse.text}
         </Text>
@@ -840,16 +852,16 @@ export function VerseDetailSheet({
         </Card>
       ) : null}
       <PrimaryButton disabled={busy || saved} icon="bookmark" onPress={saveVerse}>
-        {saved ? "Saved verse" : "Save verse"}
+        {t(saved ? "shared.scripture.savedVerse" : "shared.scripture.saveVerse")}
       </PrimaryButton>
       <SecondaryButton icon="book-open" onPress={addToJournal}>
-        Add to Journal
+        {t("shared.scripture.addToJournal")}
       </SecondaryButton>
       <SecondaryButton icon="users" onPress={shareToRoom}>
-        Share to Community
+        {t("shared.scripture.shareToCommunity")}
       </SecondaryButton>
       <SecondaryButton icon="corner-up-right" onPress={openInBible}>
-        Open in Bible
+        {t("shared.scripture.openInBible")}
       </SecondaryButton>
     </BottomSheet>
   );
@@ -863,11 +875,20 @@ export function SectionHeading({ children, muted }: PropsWithChildren<{ muted?: 
   );
 }
 
-export function BodyText({ children, muted = false, style, ...props }: PropsWithChildren<TextProps & { muted?: boolean; style?: StyleProp<TextStyle> }>) {
+export function BodyText({
+  children,
+  hiddenUrl,
+  muted = false,
+  style,
+  ...props
+}: PropsWithChildren<TextProps & { hiddenUrl?: string; muted?: boolean; style?: StyleProp<TextStyle> }>) {
   const openExternalLink = useOpenExternalLink();
+  const visibleParts = typeof children === "string" ? visibleLinkParts(children, hiddenUrl) : undefined;
+  if (typeof children === "string" && hiddenUrl && !visibleParts?.some((part) => /\S/.test(part.text))) return null;
+
   const content =
-    typeof children === "string"
-      ? splitLinkText(children).map((part, index) =>
+    visibleParts
+      ? visibleParts.map((part, index) =>
           part.url ? (
             <Text
               accessibilityRole="link"
@@ -896,9 +917,11 @@ export function BodyText({ children, muted = false, style, ...props }: PropsWith
 export function ExpandableBodyText({
   children,
   collapsedLines = 3,
+  hiddenUrl,
   muted = false,
   style,
-}: PropsWithChildren<{ collapsedLines?: number; muted?: boolean; style?: StyleProp<TextStyle> }>) {
+}: PropsWithChildren<{ collapsedLines?: number; hiddenUrl?: string; muted?: boolean; style?: StyleProp<TextStyle> }>) {
+  const { t } = useAppTranslation();
   const flattenedStyle = StyleSheet.flatten(style);
   const collapsedLineHeight = typeof flattenedStyle?.lineHeight === "number" ? flattenedStyle.lineHeight : 22;
   const collapsedHeight = collapsedLines * collapsedLineHeight;
@@ -917,7 +940,7 @@ export function ExpandableBodyText({
     setFullHeight(0);
     setExpanded(false);
     heightAnimation.setValue(collapsedHeight);
-  }, [children, collapsedHeight, heightAnimation]);
+  }, [children, collapsedHeight, hiddenUrl, heightAnimation]);
 
   useEffect(() => {
     if (!fullHeight) return;
@@ -933,15 +956,18 @@ export function ExpandableBodyText({
     }).start();
   }, [fullHeight, heightAnimation, visibleHeight]);
 
+  if (typeof children === "string" && hiddenUrl && !hasVisibleLinkText(children, hiddenUrl)) return null;
+
   return (
     <View style={{ gap: 6 }}>
       <Animated.View style={[{ overflow: "hidden" }, hasMeasured ? { height: heightAnimation } : null]}>
-        <BodyText muted={muted} numberOfLines={hasMeasured ? undefined : collapsedLines} style={style}>
+        <BodyText hiddenUrl={hiddenUrl} muted={muted} numberOfLines={hasMeasured ? undefined : collapsedLines} style={style}>
           {children}
         </BodyText>
       </Animated.View>
       <BodyText
         accessibilityElementsHidden
+        hiddenUrl={hiddenUrl}
         importantForAccessibility="no-hide-descendants"
         muted={muted}
         onLayout={(event) => {
@@ -963,7 +989,9 @@ export function ExpandableBodyText({
           }}
           style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: 28 }}
         >
-          <Text style={[typography.label, { color: muted ? colors.muted : colors.olive }]}>{expanded ? "Show less" : "Show more"}</Text>
+          <Text style={[typography.label, { color: muted ? colors.muted : colors.olive }]}>
+            {t(expanded ? "shared.expand.showLess" : "shared.expand.showMore")}
+          </Text>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
         </Pressable>
       ) : null}
@@ -1001,11 +1029,12 @@ export function BottomSheet({
   visible,
 }: PropsWithChildren<{ onClose: () => void; title: string; visible: boolean }>) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation();
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <View style={{ backgroundColor: "rgba(11, 18, 32, 0.45)", flex: 1, justifyContent: "flex-end" }}>
-          <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+          <Pressable accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
           <View
             style={{
               backgroundColor: colors.paper,

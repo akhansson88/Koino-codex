@@ -22,6 +22,7 @@ import { useKoino } from "@/state/koino-store";
 import type { GroupImage, PrayerSessionTargetType } from "@/state/types";
 import { Avatar } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
+import { useAppTranslation } from "@/ui/app-language";
 import { brandPalette, fontFamilies, platformShadow } from "@/ui/theme";
 
 const AMEN_REVEAL_DELAY_MS = 1_800;
@@ -44,8 +45,8 @@ export type PrayerMomentTarget = {
   recipientImage?: GroupImage;
 };
 
-function firstName(name: string) {
-  return name.trim().split(/\s+/)[0] || "någon";
+function firstName(name: string, fallback: string) {
+  return name.trim().split(/\s+/)[0] || fallback;
 }
 
 function initialMotionPreference() {
@@ -165,6 +166,7 @@ export function PrayerMoment({
   onFinish: (status: "completed" | "skipped", startedAt: string, completedAt: string) => void;
 }) {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const sceneOpacity = useRef(new Animated.Value(0)).current;
@@ -180,9 +182,10 @@ export function PrayerMoment({
     () => state.users.find((user) => user.id === target?.recipientUserId),
     [state.users, target?.recipientUserId],
   );
-  const displayName = target?.recipientName?.trim() || recipient?.name?.trim() || "Någon";
+  const someone = t("community.prayerMoment.someone");
+  const displayName = target?.recipientName?.trim() || recipient?.name?.trim() || someone;
   const recipientImage = target?.recipientImage ?? recipient?.image;
-  const givenName = firstName(displayName);
+  const givenName = firstName(displayName, someone);
   const requestBody = target?.body?.trim() || "";
 
   const compactHeight = height < 720;
@@ -358,7 +361,7 @@ export function PrayerMoment({
           style={StyleSheet.absoluteFillObject}
         />
         <Pressable
-          accessibilityLabel="Lämna bönen"
+          accessibilityLabel={t("community.prayerMoment.leave")}
           accessibilityRole="button"
           disabled={closing}
           hitSlop={10}
@@ -446,7 +449,7 @@ export function PrayerMoment({
               textAlign: "center",
             }}
           >
-            Be för {givenName}
+            {t("community.prayerMoment.prayForPerson", { name: givenName })}
           </Text>
           <BrandWaveMotif
             height={compactHeight ? 12 : 14}
@@ -512,7 +515,7 @@ export function PrayerMoment({
               textAlign: "center",
             }}
           >
-            Stanna här en stund.
+            {t("community.prayerMoment.pause")}
           </Text>
         </View>
 
@@ -527,8 +530,8 @@ export function PrayerMoment({
           }}
         >
           <Pressable
-            accessibilityHint="Avslutar bönen och återgår till gemenskapen"
-            accessibilityLabel="Amen"
+            accessibilityHint={t("community.prayerMoment.amenHint")}
+            accessibilityLabel={t("community.prayerMoment.amen")}
             accessibilityRole="button"
             disabled={closing}
             onPress={completeMoment}
@@ -571,7 +574,7 @@ export function PrayerMoment({
                   lineHeight: compactHeight ? 24 : 28,
                 }}
               >
-                Amen
+                {t("community.prayerMoment.amen")}
               </Text>
             </LinearGradient>
           </Pressable>

@@ -17,10 +17,38 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
+import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 export type CheckInStep = "choose" | "details" | "thanks";
 type FeatherName = ComponentProps<typeof Feather>["name"];
+
+const moodCopyKeys = {
+  peaceful: {
+    description: "community.checkIn.mood.peaceful.description",
+    label: "community.checkIn.mood.peaceful.label",
+  },
+  grateful: {
+    description: "community.checkIn.mood.grateful.description",
+    label: "community.checkIn.mood.grateful.label",
+  },
+  heavy: {
+    description: "community.checkIn.mood.heavy.description",
+    label: "community.checkIn.mood.heavy.label",
+  },
+  anxious: {
+    description: "community.checkIn.mood.anxious.description",
+    label: "community.checkIn.mood.anxious.label",
+  },
+  hopeful: {
+    description: "community.checkIn.mood.hopeful.description",
+    label: "community.checkIn.mood.hopeful.label",
+  },
+  tired: {
+    description: "community.checkIn.mood.tired.description",
+    label: "community.checkIn.mood.tired.label",
+  },
+} as const satisfies Record<HeartMood, { description: string; label: string }>;
 
 export function moodNumber(mood?: HeartMood) {
   if (mood === "grateful") return 5;
@@ -73,6 +101,7 @@ export function CheckInModal({
   onSubmit: () => void;
   onVerses: (verses: BibleVerse[]) => void;
 }) {
+  const { t } = useAppTranslation();
   const selectedMood = heartMoods.find((option) => option.value === mood);
 
   return (
@@ -81,10 +110,10 @@ export function CheckInModal({
         <AppScreen topInset>
           {step !== "thanks" ? (
             <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-              <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
+              <IconButton accessibilityLabel={t("community.checkIn.back")} icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
               {step === "details" ? (
                 <Pressable accessibilityRole="button" onPress={onSubmit} style={{ padding: 8 }}>
-                  <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Save</Text>
+                  <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t("community.checkIn.save")}</Text>
                 </Pressable>
               ) : (
                 <View style={{ width: 38 }} />
@@ -95,23 +124,30 @@ export function CheckInModal({
           {step === "choose" ? (
             <>
               <View style={{ gap: 7 }}>
-                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>How is your heart today?</Text>
-                <BodyText muted>Choose how your heart feels right now.</BodyText>
+                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>{t("community.checkIn.promptTitle")}</Text>
+                <BodyText muted>{t("community.checkIn.promptBody")}</BodyText>
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {heartMoods.map((option) => (
-                  <MoodOptionCard key={option.value} option={option} selected={option.value === mood} onPress={() => onMood(option.value)} />
+                  <MoodOptionCard
+                    description={t(moodCopyKeys[option.value].description)}
+                    key={option.value}
+                    label={t(moodCopyKeys[option.value].label)}
+                    option={option}
+                    selected={option.value === mood}
+                    onPress={() => onMood(option.value)}
+                  />
                 ))}
               </View>
-              <SecondaryButton onPress={onClose}>Skip</SecondaryButton>
+              <SecondaryButton onPress={onClose}>{t("community.checkIn.skip")}</SecondaryButton>
             </>
           ) : null}
 
           {step === "details" ? (
             <>
               <View style={{ gap: 7 }}>
-                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>What's on your heart?</Text>
-                <BodyText muted>Be honest. God already knows.</BodyText>
+                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>{t("community.checkIn.detailsTitle")}</Text>
+                <BodyText muted>{t("community.checkIn.detailsBody")}</BodyText>
               </View>
               <View style={{ gap: 6 }}>
                 <TextInputField
@@ -120,7 +156,7 @@ export function CheckInModal({
                   value={note}
                   onChangeText={(value) => onNote(value.slice(0, 350))}
                   onSubmitEditing={onSubmit}
-                  placeholder="Write your thoughts..."
+                  placeholder={t("community.checkIn.notePlaceholder")}
                   returnKeyType="send"
                   style={{ minHeight: 210 }}
                   submitBehavior="submit"
@@ -130,19 +166,19 @@ export function CheckInModal({
               {selectedMood ? (
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                   <MoodIcon mood={selectedMood.value} size={34} />
-                  <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{selectedMood.label}</Text>
+                  <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{t(moodCopyKeys[selectedMood.value].label)}</Text>
                 </View>
               ) : null}
-              <BibleVerseField label="Add Scripture (optional)" verses={verses} onChange={onVerses} />
+              <BibleVerseField label={t("community.checkIn.scriptureOptional")} verses={verses} onChange={onVerses} />
               <View style={{ gap: 8, marginTop: 8 }}>
-                <SectionHeading>Share with</SectionHeading>
+                <SectionHeading>{t("community.checkIn.shareWith")}</SectionHeading>
                 <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
                   <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : "Private journal"} size={36} />
+                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : "Private journal"}</Text>
+                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                        {share ? "Shared with your room" : "Only you can see this"}
+                        {share ? t("community.checkIn.sharedWithRoom") : t("community.checkIn.privateOnly")}
                       </Text>
                     </View>
                     <Feather name="chevron-down" size={18} color={colors.muted} />
@@ -150,12 +186,12 @@ export function CheckInModal({
                 </Pressable>
               </View>
               <PrimaryButton icon="send" onPress={onSubmit} style={{ minHeight: 58 }}>
-                {share ? "Share check-in" : "Save privately"}
+                {share ? t("community.checkIn.shareAction") : t("community.checkIn.savePrivateAction")}
               </PrimaryButton>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
                 <Feather name="lock" size={13} color={colors.muted} />
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {share ? "This will be shared with your room" : "This will stay in your private journal"}
+                  {share ? t("community.checkIn.sharedNotice") : t("community.checkIn.privateNotice")}
                 </Text>
               </View>
             </>
@@ -176,13 +212,13 @@ export function CheckInModal({
                 <Feather name="heart" size={42} color={colors.gold} />
               </View>
               <View style={{ alignItems: "center", gap: 8 }}>
-                <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Check-in shared</Text>
+                <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>{t("community.checkIn.completionTitle")}</Text>
                 <BodyText muted style={{ textAlign: "center" }}>
-                  Thank you for taking a quiet moment with God.
+                  {t("community.checkIn.completionBody")}
                 </BodyText>
               </View>
               <PrimaryButton onPress={onDone} style={{ alignSelf: "stretch" }}>
-                Done
+                {t("community.checkIn.done")}
               </PrimaryButton>
             </View>
           ) : null}
@@ -193,10 +229,14 @@ export function CheckInModal({
 }
 
 function MoodOptionCard({
+  description,
+  label,
   onPress,
   option,
   selected,
 }: {
+  description: string;
+  label: string;
   onPress: () => void;
   option: (typeof heartMoods)[number];
   selected: boolean;
@@ -223,8 +263,8 @@ function MoodOptionCard({
       >
         <MoodIcon mood={option.value} />
         <View style={{ alignItems: "center", gap: 4 }}>
-          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900", textAlign: "center" }}>{option.label}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{option.description}</Text>
+          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900", textAlign: "center" }}>{label}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{description}</Text>
         </View>
       </View>
     </Pressable>

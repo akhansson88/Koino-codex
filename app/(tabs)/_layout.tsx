@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { tabs } from "@/state/product";
 import { AvatarButton } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
 
   if (state.ready && !state.currentUserId) {
     return <OnboardingScreen />;
@@ -71,8 +72,8 @@ export default function TabLayout() {
         name="bible"
         options={{
           headerShown: false,
-          title: tabs[0],
-          tabBarLabel: tabs[0],
+          title: t("tabs.bible"),
+          tabBarLabel: t("tabs.bible"),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "library" : "library-outline"} color={color} size={size} />
           ),
@@ -81,8 +82,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: tabs[1],
-          tabBarLabel: tabs[1],
+          title: t("tabs.home"),
+          tabBarLabel: t("tabs.home"),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "sunny" : "sunny-outline"} color={color} size={size} />
           ),
@@ -91,8 +92,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="me"
         options={{
-          title: tabs[2],
-          tabBarLabel: tabs[2],
+          title: t("tabs.me"),
+          tabBarLabel: t("tabs.me"),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "person" : "person-outline"} color={color} size={size} />
           ),
@@ -101,8 +102,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
-          title: tabs[3],
-          tabBarLabel: tabs[3],
+          title: t("tabs.community"),
+          tabBarLabel: t("tabs.community"),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
           ),

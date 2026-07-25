@@ -5,29 +5,44 @@ import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/sta
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
+import { useAppTranslation } from "@/ui/app-language";
 import { colors } from "@/ui/theme";
 
 const MAX_BODY_LENGTH = 500;
 
-function primaryActionLabel(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
-  if (editing) return "Update entry";
+function primaryActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
+  if (editing) return "community.composer.action.updateEntry" as const;
   if (context === "room" || entryVisibility === visibility.room) {
-    if (kind === "prayer_request") return "Share prayer";
-    if (kind === "reflection") return "Share reflection";
-    return "Share";
+    if (kind === "prayer_request") return "community.composer.action.sharePrayer" as const;
+    if (kind === "reflection") return "community.composer.action.shareReflection" as const;
+    return "community.composer.action.share" as const;
   }
-  if (context === "journal" && kind === "prayer_request") return "Save prayer";
-  if (context === "journal" && kind === "praise") return "Save answered prayer";
-  if (context === "journal" && kind === "scripture") return "Save Scripture note";
-  if (context === "journal") return "Save reflection";
-  return "Save entry";
+  if (context === "journal" && kind === "prayer_request") return "community.composer.action.savePrayer" as const;
+  if (context === "journal" && kind === "praise") return "community.composer.action.saveAnsweredPrayer" as const;
+  if (context === "journal" && kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
+  if (context === "journal") return "community.composer.action.saveReflection" as const;
+  return "community.composer.action.saveEntry" as const;
 }
 
-function titleFor(context: "journal" | "today" | "room", editing: boolean) {
-  if (editing) return "Edit your entry";
-  if (context === "room") return "Share with your community";
-  return "Write your entry";
+function headerActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
+  if (editing) return "community.composer.action.updateShort" as const;
+  const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
+  return actionKey === "community.composer.action.saveEntry" ? "community.composer.action.saveShort" as const : actionKey;
 }
+
+function titleKey(context: "journal" | "today" | "room", editing: boolean) {
+  if (editing) return "community.composer.title.edit" as const;
+  if (context === "room") return "community.composer.title.shareCommunity" as const;
+  return "community.composer.title.write" as const;
+}
+
+const composerTypeKeys = {
+  reflection: "community.composer.type.reflection",
+  prayer_request: "community.composer.type.prayer",
+  praise: "community.composer.type.praise",
+  update: "community.composer.type.update",
+  scripture: "community.composer.type.scripture",
+} as const;
 
 export function SharedComposer({
   body,
@@ -66,25 +81,27 @@ export function SharedComposer({
   verses: BibleVerse[];
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   const showVisibility = context !== "room";
-  const actionLabel = primaryActionLabel(context, entryVisibility, editing, kind);
-  const activeRoomName = roomName ?? "Community";
+  const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
+  const actionLabel = t(actionKey);
+  const activeRoomName = roomName ?? t("community.composer.communityFallback");
   const typeOptions = context === "journal" ? postTypes : composerPostTypes;
 
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Close composer" icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{actionLabel.replace(" entry", "")}</Text>
+          <IconButton accessibilityLabel={t("community.composer.close")} icon="arrow-left" onPress={onClose} />
+          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
         </View>
 
         <View style={{ gap: 10 }}>
-          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{titleFor(context, editing)}</Text>
+          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing))}</Text>
           <FilterChips
             value={kind}
             onChange={onKind}
-            options={typeOptions.map((type) => ({ label: type.composerLabel, value: type.value }))}
+            options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
           />
         </View>
 
@@ -92,7 +109,13 @@ export function SharedComposer({
           value={title}
           onChangeText={onTitle}
           onSubmitEditing={onSubmit}
-          placeholder={kind === "prayer_request" ? "Prayer title (optional)" : kind === "praise" ? "Answered prayer title" : kind === "scripture" ? "Scripture note title" : "Title (optional)"}
+          placeholder={kind === "prayer_request"
+            ? t("community.composer.placeholder.prayerTitle")
+            : kind === "praise"
+              ? t("community.composer.placeholder.praiseTitle")
+              : kind === "scripture"
+                ? t("community.composer.placeholder.scriptureTitle")
+                : t("community.composer.placeholder.title")}
           returnKeyType="send"
         />
 
@@ -103,7 +126,13 @@ export function SharedComposer({
             value={body}
             onChangeText={(value) => onBody(value.slice(0, MAX_BODY_LENGTH))}
             onSubmitEditing={onSubmit}
-            placeholder={kind === "prayer_request" ? "Write your prayer..." : kind === "praise" ? "How did God answer?" : kind === "scripture" ? "What is this Scripture stirring in you?" : "Share, reflect, or write one honest sentence..."}
+            placeholder={kind === "prayer_request"
+              ? t("community.composer.placeholder.prayerBody")
+              : kind === "praise"
+                ? t("community.composer.placeholder.praiseBody")
+                : kind === "scripture"
+                  ? t("community.composer.placeholder.scriptureBody")
+                  : t("community.composer.placeholder.body")}
             returnKeyType="send"
             style={{ minHeight: 170 }}
             submitBehavior="submit"
@@ -113,17 +142,17 @@ export function SharedComposer({
           </Text>
         </View>
 
-        <BibleVerseField verses={verses} onChange={onVerses} />
+        <BibleVerseField label={t("community.composer.scriptureOptional")} verses={verses} onChange={onVerses} />
 
         <View style={{ gap: 8 }}>
-          <SectionHeading>Share with</SectionHeading>
+          <SectionHeading>{t("community.composer.shareWith")}</SectionHeading>
           {showVisibility ? (
             <FilterChips
               value={entryVisibility}
               onChange={onVisibility}
               options={[
-                { label: "Private", value: visibility.private },
-                { label: "Share with community", value: visibility.room },
+                { label: t("community.composer.visibility.private"), value: visibility.private },
+                { label: t("community.composer.visibility.community"), value: visibility.room },
               ]}
             />
           ) : null}
@@ -133,13 +162,13 @@ export function SharedComposer({
             onPress={() => onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private)}
           >
             <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-              <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : "Private journal"} size={34} />
+              <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")} size={34} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                  {entryVisibility === visibility.room ? activeRoomName : "Private journal"}
+                  {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {entryVisibility === visibility.room ? "Shared with your community" : "Only you can see this"}
+                  {entryVisibility === visibility.room ? t("community.composer.sharedWithCommunity") : t("community.composer.privateOnly")}
                 </Text>
               </View>
               {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}

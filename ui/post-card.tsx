@@ -5,12 +5,8 @@ import { Pressable, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import {
-  actionLabels,
-  actionPastLabels,
-  defaultFeedTitle as productDefaultFeedTitle,
   entryKindIcon,
   feedItemKind,
-  feedItemLabel,
   moodOptionForValue,
 } from "@/state/product";
 import type { FeedItem, GroupImage } from "@/state/types";
@@ -21,7 +17,17 @@ import {
   ExpandableBodyText,
   VerseList,
 } from "@/ui/app-components";
-import { LinkPreview } from "@/ui/link-preview";
+import { useAppTranslation } from "@/ui/app-language";
+import {
+  communityActionLabel,
+  communityDefaultFeedTitle,
+  communityFeedItemLabel,
+  communityMoodScaleDescription,
+  communityPrayerMomentDisplayCopy,
+  communityPrayerNoun,
+  communityResponseNoun,
+} from "@/ui/community-copy";
+import { LinkPreviewContent } from "@/ui/link-preview";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
@@ -36,6 +42,7 @@ type CommunityFeedCardProps = {
   authorImage?: GroupImage;
   authorName: string;
   body?: string;
+  bodyContent?: ReactNode;
   bodyFallback?: string;
   headerAccessory?: ReactNode;
   item: FeedItem;
@@ -46,10 +53,6 @@ type CommunityFeedCardProps = {
   style?: StyleProp<ViewStyle>;
   title?: string;
 };
-
-function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, (mood) => moodOptionForValue(mood).label);
-}
 
 function kindIcon(item: FeedItem) {
   if (item.type === "check_in") return "check-circle" as const;
@@ -72,15 +75,8 @@ function toneColors(tone: CommunityCardTone) {
   return { accent: colors.textMuted, soft: colors.accentSubtle };
 }
 
-export function communityResponseLabel(item: FeedItem, count: number) {
-  const itemKind = feedItemKind(item);
-  if (itemKind === "reflection") return count === 1 ? "encouragement" : "encouragements";
-  if (itemKind === "praise") return count === 1 ? "amen" : "amens";
-  if (itemKind === "scripture") return count === 1 ? "reflection" : "reflections";
-  return count === 1 ? "response" : "responses";
-}
-
 function TypeLabel({ item }: { item: FeedItem }) {
+  const { t } = useAppTranslation();
   const palette = toneColors(toneForItem(item));
   return (
     <View
@@ -100,7 +96,7 @@ function TypeLabel({ item }: { item: FeedItem }) {
       }}
     >
       <Feather name={kindIcon(item)} size={13} color={palette.accent} />
-      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{feedItemLabel(item)}</Text>
+      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{communityFeedItemLabel(item, t)}</Text>
     </View>
   );
 }
@@ -111,6 +107,7 @@ export function CommunityFeedCard({
   authorImage,
   authorName,
   body,
+  bodyContent,
   bodyFallback,
   headerAccessory,
   item,
@@ -121,6 +118,7 @@ export function CommunityFeedCard({
   style,
   title,
 }: CommunityFeedCardProps) {
+  const { language } = useAppTranslation();
   const visibleBody = body || bodyFallback;
   return (
     <Card style={[{ overflow: "visible", padding: 16, position: "relative" }, style]}>
@@ -130,7 +128,7 @@ export function CommunityFeedCard({
           <Text numberOfLines={2} style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
             {authorName}
           </Text>
-          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt)}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
         {headerAccessory}
       </View>
@@ -167,11 +165,11 @@ export function CommunityFeedCard({
             <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
           )
         ) : null}
-        {visibleBody ? (
+        {bodyContent ?? (visibleBody ? (
           <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
             {visibleBody}
           </ExpandableBodyText>
-        ) : null}
+        ) : null)}
       </View>
 
       {attachment}
@@ -191,6 +189,7 @@ function ActionIcon({ active, icon }: { active: boolean; icon: CommunityCardActi
 }
 
 export function CommunityCardAction({
+  accessibilityLabel,
   active = false,
   icon,
   label,
@@ -198,6 +197,7 @@ export function CommunityCardAction({
   tone,
   variant = "primary",
 }: {
+  accessibilityLabel?: string;
   active?: boolean;
   icon: CommunityCardActionIcon;
   label: string;
@@ -226,7 +226,7 @@ export function CommunityCardAction({
 
   if (!onPress) {
     return (
-      <View accessible accessibilityLabel={label} style={actionStyle}>
+      <View accessible accessibilityLabel={accessibilityLabel ?? label} style={actionStyle}>
         {content}
       </View>
     );
@@ -234,7 +234,7 @@ export function CommunityCardAction({
 
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       onPress={(event) => {
@@ -269,6 +269,7 @@ export function CommunityCardResponseSummary({
 }
 
 export function CommunityCheckInMood({ mood }: { mood: number }) {
+  const { t } = useAppTranslation();
   const option = moodOptionForValue(mood);
   return (
     <View
@@ -294,7 +295,7 @@ export function CommunityCheckInMood({ mood }: { mood: number }) {
         <Ionicons name={option.icon} size={20} color={colors.olive} />
       </View>
       <Text style={[typography.caption, { color: colors.muted, flex: 1, fontSize: 13, lineHeight: 18 }]}>
-        {option.description}
+        {communityMoodScaleDescription(mood, t)}
       </Text>
     </View>
   );
@@ -337,6 +338,7 @@ export function PostCard({
   reactionCount?: number;
   replyCount: number;
 }) {
+  const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
 
@@ -350,6 +352,7 @@ export function PostCard({
   }
 
   const itemKind = feedItemKind(item);
+  const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   const isPrayerPost = itemKind === "prayer_request" || itemKind === "prayer_moment";
   const reactionTone = toneForItem(item);
   const reactionIcon: CommunityCardActionIcon =
@@ -360,7 +363,7 @@ export function PostCard({
   const menuButton = ownsItem && (onEdit || onDelete) ? (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Post options"
+      accessibilityLabel={t("community.card.postOptions")}
       hitSlop={8}
       onPressIn={(event) => event.stopPropagation()}
       onPress={(event) => {
@@ -405,7 +408,7 @@ export function PostCard({
           style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           <Feather name="edit-2" size={14} color={colors.ink} />
-          <Text style={[typography.label, { color: colors.ink }]}>Edit</Text>
+          <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
         </Pressable>
       ) : null}
       {onDelete ? (
@@ -418,7 +421,7 @@ export function PostCard({
           style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           <Feather name="trash-2" size={14} color={colors.danger} />
-          <Text style={[typography.label, { color: colors.danger }]}>Delete</Text>
+          <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -432,32 +435,61 @@ export function PostCard({
             <CommunityCardAction
               active={Boolean(reacted)}
               icon={reactionIcon}
-              label={reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+              label={communityActionLabel(itemKind, Boolean(reacted), t)}
               onPress={onReact}
               tone={reactionTone}
             />
           ) : (
-            <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" />
+            <CommunityCardAction
+              active={prayed}
+              icon="pray"
+              label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+              onPress={onPray}
+              tone="prayer"
+            />
           )}
           {!isPrayerPost && onReact ? (
-            <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" variant="secondary" />
+            <CommunityCardAction
+              active={prayed}
+              icon="pray"
+              label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+              onPress={onPray}
+              tone="prayer"
+              variant="secondary"
+            />
           ) : null}
           {onReply ? (
-            <CommunityCardAction icon="message-circle" label={`${replyCount}`} onPress={onReply} tone="reflection" variant="secondary" />
+            <CommunityCardAction
+              accessibilityLabel={t(replyCount === 1 ? "community.reply.count.one" : "community.reply.count.other", { count: replyCount })}
+              icon="message-circle"
+              label={`${replyCount}`}
+              onPress={onReply}
+              tone="reflection"
+              variant="secondary"
+            />
           ) : null}
         </>
       }
       attachment={
         <>
           {item.type === "check_in" ? <CommunityCheckInMood mood={item.mood} /> : null}
-          <LinkPreview text={item.body} />
           <VerseList verse={item.verse} verses={item.verses} compact />
         </>
       }
       authorImage={authorImage}
       authorName={authorName}
-      body={item.body}
-      bodyFallback="No words today, just presence."
+      bodyContent={
+        <LinkPreviewContent text={displayCopy.body}>
+          {({ hiddenUrl, preview }) => (
+            <>
+              <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES} hiddenUrl={hiddenUrl}>
+                {displayCopy.body || t("community.card.noWords")}
+              </ExpandableBodyText>
+              {preview}
+            </>
+          )}
+        </LinkPreviewContent>
+      }
       headerAccessory={menuButton}
       item={item}
       onOpen={() => {
@@ -474,18 +506,18 @@ export function PostCard({
             {hasReactionActivity ? (
               <CommunityCardResponseSummary
                 count={reactionCount ?? 0}
-                label={communityResponseLabel(item, reactionCount ?? 0)}
+                label={communityResponseNoun(item, reactionCount ?? 0, t)}
                 users={reactedBy}
               />
             ) : null}
             {hasPrayerActivity ? (
-              <CommunityCardResponseSummary count={prayerCount} label={prayerCount === 1 ? "prayer" : "prayers"} users={prayedBy} />
+              <CommunityCardResponseSummary count={prayerCount} label={communityPrayerNoun(prayerCount, t)} users={prayedBy} />
             ) : null}
           </View>
         ) : undefined
       }
       style={{ zIndex: menuOpen ? 10 : 1 }}
-      title={item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+      title={displayCopy.title || communityDefaultFeedTitle(item, t)}
     />
   );
 }

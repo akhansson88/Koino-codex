@@ -5,6 +5,7 @@ import { Image, Modal, PanResponder, Pressable, Text, useWindowDimensions, View 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IconButton, PrimaryButton, SecondaryButton } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 export type RoomImageCropSource = {
@@ -33,7 +34,7 @@ export function RoomImageCropper({
   onCancel,
   onSave,
   source,
-  title = "Crop community image",
+  title,
   visible,
 }: {
   onCancel: () => void;
@@ -42,6 +43,7 @@ export function RoomImageCropper({
   title?: string;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   const dimensions = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cropSize = Math.max(240, Math.min(dimensions.width - 36, 360));
@@ -146,8 +148,8 @@ export function RoomImageCropper({
         { compress: 0.5, format: ImageManipulator.SaveFormat.WEBP },
       );
       await onSave(result.uri);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save the community image.");
+    } catch {
+      setError(t("shared.cropper.saveError"));
       setSaving(false);
     }
   }
@@ -160,8 +162,8 @@ export function RoomImageCropper({
     <Modal animationType="slide" visible={visible} onRequestClose={saving ? undefined : onCancel}>
       <View style={{ backgroundColor: colors.cream, flex: 1, paddingBottom: Math.max(18, insets.bottom + 12), paddingHorizontal: 18, paddingTop: Math.max(18, insets.top + 14) }}>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Cancel community image crop" icon="x" onPress={onCancel} />
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title}</Text>
+          <IconButton accessibilityLabel={t("shared.cropper.cancelAccessibility")} icon="x" onPress={onCancel} />
+          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title || t("shared.cropper.title")}</Text>
           <View style={{ width: 38 }} />
         </View>
 
@@ -238,7 +240,7 @@ export function RoomImageCropper({
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
             <Pressable
-              accessibilityLabel="Zoom out"
+              accessibilityLabel={t("shared.cropper.zoomOut")}
               accessibilityRole="button"
               onPress={() => setZoom(scale - 0.2)}
               style={{
@@ -256,7 +258,7 @@ export function RoomImageCropper({
             </Pressable>
             <Text style={{ color: colors.muted, fontSize: 13, fontVariant: ["tabular-nums"], fontWeight: "900", minWidth: 54, textAlign: "center" }}>{Math.round(scale * 100)}%</Text>
             <Pressable
-              accessibilityLabel="Zoom in"
+              accessibilityLabel={t("shared.cropper.zoomIn")}
               accessibilityRole="button"
               onPress={() => setZoom(scale + 0.2)}
               style={{
@@ -279,10 +281,10 @@ export function RoomImageCropper({
 
         <View style={{ flexDirection: "row", gap: 10 }}>
           <SecondaryButton disabled={saving} onPress={onCancel} style={{ flex: 1 }}>
-            Cancel
+            {t("shared.cropper.cancel")}
           </SecondaryButton>
           <PrimaryButton disabled={saving} icon="check" onPress={handleSave} style={{ flex: 1 }}>
-            {saving ? "Saving" : "Save"}
+            {t(saving ? "shared.cropper.saving" : "shared.cropper.save")}
           </PrimaryButton>
         </View>
       </View>

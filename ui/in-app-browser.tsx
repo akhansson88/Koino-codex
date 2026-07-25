@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
+import { useAppTranslation } from "@/ui/app-language";
 import { normalizeUrl } from "@/ui/link-utils";
 import { openLinkInApp } from "@/ui/open-link";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
@@ -49,11 +50,11 @@ export function normalizeExternalHttpUrl(value: string) {
   return normalizeUrl(trimmed);
 }
 
-export function domainForExternalUrl(value: string) {
+export function domainForExternalUrl(value: string, fallback = "Website") {
   try {
-    return new URL(value).hostname.replace(/^www\./i, "") || "Website";
+    return new URL(value).hostname.replace(/^www\./i, "") || fallback;
   } catch {
-    return "Website";
+    return fallback;
   }
 }
 
@@ -187,6 +188,7 @@ function InAppBrowserSheet({
   progress: number;
   session?: BrowserSession;
 }) {
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const translateY = useRef(new Animated.Value(height)).current;
@@ -294,14 +296,14 @@ function InAppBrowserSheet({
   }, [backdropOpacity, session?.id, sheetHeight, translateY]);
 
   const displayedUrl = currentUrl || session?.url || "";
-  const domain = domainForExternalUrl(displayedUrl);
+  const domain = domainForExternalUrl(displayedUrl, t("shared.browser.website"));
   const progressWidth = `${Math.round(Math.max(0.04, Math.min(progress, 1)) * 100)}%` as `${number}%`;
 
   function openInExternalBrowser() {
     const externalUrl = normalizeExternalHttpUrl(displayedUrl);
     if (!externalUrl) return;
     void Linking.openURL(externalUrl).catch(() => {
-      Alert.alert("Could not open browser", "This page is still open in KOINO. Please try again.");
+      Alert.alert(t("shared.browser.openErrorTitle"), t("shared.browser.openErrorBody"));
     });
   }
 
@@ -326,7 +328,7 @@ function InAppBrowserSheet({
           style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(11, 18, 32, 0.24)", opacity: backdropOpacity, pointerEvents: "none" }]}
         />
         <Pressable
-          accessibilityLabel="Dismiss browser"
+          accessibilityLabel={t("shared.browser.dismiss")}
           accessibilityRole="button"
           onPress={closeWithAnimation}
           style={StyleSheet.absoluteFillObject}
@@ -362,19 +364,19 @@ function InAppBrowserSheet({
           >
             <View
               {...handlePanResponder.panHandlers}
-              accessibilityLabel="Swipe down to close browser"
+              accessibilityLabel={t("shared.browser.swipeToClose")}
               style={{ alignItems: "center", alignSelf: "center", height: 22, justifyContent: "center", width: 150 }}
             >
               <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 54, paddingBottom: 4 }}>
-              <BrowserIconButton accessibilityLabel="Close browser" icon="x" onPress={closeWithAnimation} />
+              <BrowserIconButton accessibilityLabel={t("shared.browser.close")} icon="x" onPress={closeWithAnimation} />
               <View style={{ alignItems: "center", flex: 1, justifyContent: "center", pointerEvents: "none" }}>
                 <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, textAlign: "center" }]}>
                   {domain}
                 </Text>
               </View>
-              <BrowserIconButton accessibilityLabel="Open in external browser" icon="external-link" onPress={openInExternalBrowser} />
+              <BrowserIconButton accessibilityLabel={t("shared.browser.openExternal")} icon="external-link" onPress={openInExternalBrowser} />
             </View>
             <View style={{ height: 2 }}>
               {loading && !loadError ? (
@@ -457,6 +459,7 @@ function BrowserIconButton({
 }
 
 function BrowserErrorState({ domain, onRetry }: { domain: string; onRetry: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", flex: 1, justifyContent: "center", padding: 28 }}>
       <View
@@ -473,9 +476,11 @@ function BrowserErrorState({ domain, onRetry }: { domain: string; onRetry: () =>
       >
         <Feather name="globe" size={24} color={colors.olive} />
       </View>
-      <Text style={[typography.heading, { color: colors.ink, fontSize: 21, marginTop: 18, textAlign: "center" }]}>Page unavailable</Text>
+      <Text style={[typography.heading, { color: colors.ink, fontSize: 21, marginTop: 18, textAlign: "center" }]}>
+        {t("shared.browser.pageUnavailable")}
+      </Text>
       <Text style={[typography.body, { color: colors.muted, marginTop: 8, maxWidth: 310, textAlign: "center" }]}>
-        {domain} could not be reached right now. Check your connection and try again.
+        {t("shared.browser.reachError", { domain })}
       </Text>
       <Pressable
         accessibilityRole="button"
@@ -495,7 +500,7 @@ function BrowserErrorState({ domain, onRetry }: { domain: string; onRetry: () =>
         })}
       >
         <Feather name="refresh-cw" size={17} color={colors.olive} />
-        <Text style={[typography.button, { color: colors.olive }]}>Try again</Text>
+        <Text style={[typography.button, { color: colors.olive }]}>{t("shared.browser.tryAgain")}</Text>
       </Pressable>
     </View>
   );

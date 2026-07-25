@@ -21,27 +21,26 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
+import { useAppTranslation } from "@/ui/app-language";
+import { communityMemberCount, communitySystemError } from "@/ui/community-copy";
+import type { TranslationFunction } from "@/ui/localization";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { SupportKoinoCard } from "@/features/donation-flow-screen";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
-type IdentitySheet = "profile" | "account" | "help" | "security" | "privacy" | "terms";
+type IdentitySheet = "profile" | "language" | "account" | "help" | "security" | "privacy" | "terms";
 type IdentityPresentation = "screen" | "sheet";
 type RoomSheet = "members" | "rename" | "notifications";
-
-function memberLabel(count: number) {
-  return `${count} ${count === 1 ? "member" : "members"}`;
-}
 
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
   return counts[roomId] || fallback;
 }
 
-async function shareRoomInvite(room: Group) {
-  const invitation = `Join ${room.name} on KOINO with community code ${room.inviteCode}.`;
+async function shareRoomInvite(room: Group, t: TranslationFunction) {
+  const invitation = t("community.rooms.invitation", { code: room.inviteCode, name: room.name });
   const clipboard =
     Platform.OS === "web"
       ? (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText?: (text: string) => Promise<void> } } }).navigator?.clipboard
@@ -49,11 +48,11 @@ async function shareRoomInvite(room: Group) {
 
   if (clipboard?.writeText) {
     await clipboard.writeText(invitation);
-    return "Invite copied.";
+    return t("community.rooms.inviteCopied");
   }
 
-  await Share.share({ message: invitation, title: `Join ${room.name}` });
-  return "Invite ready to share.";
+  await Share.share({ message: invitation, title: t("community.rooms.joinNamed", { name: room.name }) });
+  return t("community.rooms.inviteReady");
 }
 
 async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
@@ -71,6 +70,7 @@ async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
 }
 
 function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismiss: () => void }>) {
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const entrance = useRef(new Animated.Value(1)).current;
@@ -144,7 +144,7 @@ function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismi
   return (
     <View style={{ backgroundColor: "rgba(11, 18, 32, 0.24)", flex: 1 }}>
       <Pressable
-        accessibilityLabel="Close identity and support"
+        accessibilityLabel={t("identity.close")}
         accessibilityRole="button"
         onPress={dismiss}
         style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
@@ -192,9 +192,9 @@ function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismi
               >
                 <Feather name="user" size={17} color={colors.ink} />
               </View>
-              <Text style={{ color: colors.ink, flex: 1, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>Identity & Support</Text>
+              <Text style={{ color: colors.ink, flex: 1, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>{t("identity.title")}</Text>
               <Pressable
-                accessibilityLabel="Close identity and support"
+                accessibilityLabel={t("identity.close")}
                 accessibilityRole="button"
                 hitSlop={8}
                 onPress={dismiss}
@@ -242,6 +242,7 @@ function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismi
 
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
+  const { language, setLanguage, t } = useAppTranslation();
   const [activeSheet, setActiveSheet] = useState<IdentitySheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [avatarCropSource, setAvatarCropSource] = useState<RoomImageCropSource>();
@@ -250,7 +251,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
-  const themeLabel = state.theme === "dark" ? "Night" : "Light";
+  const themeLabel = t(state.theme === "dark" ? "identity.appearance.night" : "identity.appearance.light");
 
   function openAvatarCropper(source: RoomImageCropSource) {
     if (Platform.OS === "web") {
@@ -269,7 +270,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       if (Platform.OS !== "web") {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-          setAvatarMessage("Photo library permission is needed to choose a profile image.");
+          setAvatarMessage(t("identity.avatar.permission"));
           return;
         }
       }
@@ -283,49 +284,50 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset?.uri) {
-        setAvatarMessage("Could not read that image.");
+        setAvatarMessage(t("identity.avatar.readError"));
         return;
       }
 
       const size = await selectedImageSize(asset);
       openAvatarCropper({ ...size, uri: asset.uri });
     } catch {
-      setAvatarMessage("Could not open that image.");
+      setAvatarMessage(t("identity.avatar.openError"));
     }
   }
 
   async function handleSaveAvatar(localUri: string) {
     await dispatch({ type: "uploadUserAvatar", localUri });
     setAvatarCropSource(undefined);
-    setAvatarMessage("Profile image updated.");
+    setAvatarMessage(t("identity.avatar.updated"));
   }
 
   function handleDeleteAvatar() {
     if (!user?.image) return;
     confirmAction({
-      title: "Delete profile image?",
-      message: "Your profile will return to its initials avatar.",
-      confirmText: "Delete",
+      title: t("identity.avatar.deleteTitle"),
+      message: t("identity.avatar.deleteBody"),
+      confirmText: t("common.delete"),
+      cancelText: t("common.cancel"),
       destructive: true,
       onConfirm: () => {
         void dispatch({ type: "deleteUserAvatar" })
-          .then(() => setAvatarMessage("Profile image deleted."))
-          .catch(() => setAvatarMessage("Could not delete the profile image."));
+          .then(() => setAvatarMessage(t("identity.avatar.deleted")))
+          .catch(() => setAvatarMessage(t("identity.avatar.deleteError")));
       },
     });
   }
 
   async function handleSendPasswordReset() {
     if (!state.authEmail) {
-      setSecurityMessage("No email is connected to this account.");
+      setSecurityMessage(t("identity.security.noEmail"));
       return;
     }
 
     try {
       await dispatch({ type: "requestPasswordReset", email: state.authEmail });
-      setSecurityMessage("Password reset link sent.");
+      setSecurityMessage(t("identity.security.resetSent"));
     } catch {
-      setSecurityMessage("Could not send a reset link right now.");
+      setSecurityMessage(t("identity.security.error"));
     }
   }
 
@@ -333,57 +335,65 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
     <>
       {presentation === "screen" ? (
         <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Identity & Support</Text>
-          <BodyText muted>Manage your profile, community, privacy, and help.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>{t("identity.title")}</Text>
+          <BodyText muted>{t("identity.description")}</BodyText>
         </View>
       ) : null}
 
-      <SettingsSection label="Identity">
-        <SettingsRow icon="user" title="Profile" subtitle="View and edit your profile" onPress={() => setActiveSheet("profile")} />
+      <SettingsSection label={t("identity.section.identity")}>
+        <SettingsRow icon="user" title={t("identity.profile.title")} subtitle={t("identity.profile.subtitle")} onPress={() => setActiveSheet("profile")} />
         <SettingsRow
           icon="sun"
-          title="Appearance"
-          subtitle="Theme, light or dark mode"
+          title={t("identity.appearance.title")}
+          subtitle={t("identity.appearance.subtitle")}
           value={themeLabel}
           onPress={() => dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" })}
           showDivider
         />
         <SettingsRow
+          icon="globe"
+          title={t("settings.language.title")}
+          subtitle={t("settings.language.subtitle")}
+          value={language === "en" ? t("settings.language.option.english") : t("settings.language.option.swedish")}
+          onPress={() => setActiveSheet("language")}
+          showDivider
+        />
+        <SettingsRow
           icon="settings"
-          title="Account options"
-          subtitle="Email, notifications, and account settings"
+          title={t("identity.account.title")}
+          subtitle={t("identity.account.subtitle")}
           onPress={() => setActiveSheet("account")}
           showDivider
         />
       </SettingsSection>
 
       <View style={{ gap: 10 }}>
-        <SectionLabel>Community</SectionLabel>
+        <SectionLabel>{t("community.page.community")}</SectionLabel>
         <RoomSummaryCard group={group} memberCount={memberCount} onDetails={() => router.push("/room-details" as never)} />
         <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
           <SettingsRow
             icon="repeat"
-            title="Switch or join community"
-            subtitle="Join another community or create a new one"
+            title={t("community.rooms.joinOrCreate")}
+            subtitle={t("community.identity.joinOrCreateBody")}
             onPress={() => setSwitcherVisible(true)}
           />
         </Card>
       </View>
 
-      <SettingsSection label="Support & Trust">
-        <SettingsRow icon="message-circle" title="Help & contact" subtitle="FAQ, support, and contact" onPress={() => setActiveSheet("help")} />
+      <SettingsSection label={t("identity.section.supportTrust")}>
+        <SettingsRow icon="message-circle" title={t("identity.help.title")} subtitle={t("identity.help.subtitle")} onPress={() => setActiveSheet("help")} />
         <SettingsRow
           icon="lock"
-          title="Password & security"
-          subtitle="Manage login and security"
+          title={t("identity.security.title")}
+          subtitle={t("identity.security.subtitle")}
           onPress={() => setActiveSheet("security")}
           showDivider
         />
-        <SettingsRow icon="shield" title="Privacy" subtitle="Manage your data and privacy" onPress={() => setActiveSheet("privacy")} showDivider />
+        <SettingsRow icon="shield" title={t("identity.privacy.title")} subtitle={t("identity.privacy.subtitle")} onPress={() => setActiveSheet("privacy")} showDivider />
         <SettingsRow
           icon="file-text"
-          title="Terms & policies"
-          subtitle="Read our terms and privacy policy"
+          title={t("identity.terms.title")}
+          subtitle={t("identity.terms.subtitle")}
           onPress={() => setActiveSheet("terms")}
           showDivider
         />
@@ -404,30 +414,53 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         </AppScreen>
       )}
 
-      <BottomSheet title="Profile" visible={activeSheet === "profile"} onClose={() => setActiveSheet(undefined)}>
+      <BottomSheet title={t("identity.profile.title")} visible={activeSheet === "profile"} onClose={() => setActiveSheet(undefined)}>
         <View style={{ alignItems: "center", gap: 12 }}>
           <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={86} tone="pink" />
           <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{user?.name ?? "Your profile"}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{state.authEmail ?? "Signed in to KOINO"}</Text>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{user?.name ?? t("identity.profile.fallback")}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{state.authEmail ?? t("identity.profile.signedIn")}</Text>
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
           <SecondaryButton icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
-            {user?.image ? "Change image" : "Choose image"}
+            {t(user?.image ? "identity.profile.changeImage" : "identity.profile.chooseImage")}
           </SecondaryButton>
           {user?.image ? (
             <SecondaryButton icon="trash-2" onPress={handleDeleteAvatar} style={{ flex: 1 }} tone="danger">
-              Delete
+              {t("common.delete")}
             </SecondaryButton>
           ) : null}
         </View>
         {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{avatarMessage}</Text> : null}
       </BottomSheet>
 
-      <BottomSheet title="Account options" visible={activeSheet === "account"} onClose={() => setActiveSheet(undefined)}>
-        <InfoLine label="Email" value={state.authEmail ?? "No email connected"} />
-        <InfoLine label="Notifications" value="Community and prayer updates" />
+      <BottomSheet
+        title={t("settings.language.sheetTitle")}
+        visible={activeSheet === "language"}
+        onClose={() => setActiveSheet(undefined)}
+      >
+        <BodyText muted>{t("settings.language.description")}</BodyText>
+        <SettingsSection label={t("settings.language.options")}>
+          <SettingsRow
+            icon="globe"
+            title={t("settings.language.option.english")}
+            value={language === "en" ? t("settings.language.selected") : undefined}
+            onPress={() => setLanguage("en")}
+          />
+          <SettingsRow
+            icon="globe"
+            title={t("settings.language.option.swedish")}
+            value={language === "sv" ? t("settings.language.selected") : undefined}
+            onPress={() => setLanguage("sv")}
+            showDivider
+          />
+        </SettingsSection>
+      </BottomSheet>
+
+      <BottomSheet title={t("identity.account.title")} visible={activeSheet === "account"} onClose={() => setActiveSheet(undefined)}>
+        <InfoLine label={t("identity.account.email")} value={state.authEmail ?? t("identity.account.noEmail")} />
+        <InfoLine label={t("identity.account.notifications")} value={t("identity.account.communityPrayerUpdates")} />
         <SecondaryButton
           icon="log-out"
           onPress={() => {
@@ -435,43 +468,43 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             dispatch({ type: "signOut" });
           }}
         >
-          Log out
+          {t("common.logOut")}
         </SecondaryButton>
       </BottomSheet>
 
       <InfoSheet
-        title="Help & contact"
+        title={t("identity.help.title")}
         visible={activeSheet === "help"}
         onClose={() => setActiveSheet(undefined)}
-        body="Help is here for account questions, community invitations, prayer rhythms, and anything that makes KOINO harder to use."
+        body={t("identity.help.body")}
       />
 
-      <BottomSheet title="Password & security" visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>Password reset links are sent to your account email.</BodyText>
+      <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{t("identity.security.body")}</BodyText>
         <PrimaryButton icon="mail" onPress={handleSendPasswordReset}>
-          Send reset link
+          {t("identity.security.sendReset")}
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}
       </BottomSheet>
 
       <InfoSheet
-        title="Privacy"
+        title={t("identity.privacy.title")}
         visible={activeSheet === "privacy"}
         onClose={() => setActiveSheet(undefined)}
-        body="Your journal is private by default. Shared reflections and prayers stay connected to the community you choose."
+        body={t("identity.privacy.body")}
       />
 
       <InfoSheet
-        title="Terms & policies"
+        title={t("identity.terms.title")}
         visible={activeSheet === "terms"}
         onClose={() => setActiveSheet(undefined)}
-        body="Terms and privacy policy links can be connected here when the published policy pages are ready."
+        body={t("identity.terms.body")}
       />
 
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
       <RoomImageCropper
         source={avatarCropSource}
-        title="Crop profile image"
+        title={t("identity.profile.cropImage")}
         visible={Boolean(avatarCropSource)}
         onCancel={() => setAvatarCropSource(undefined)}
         onSave={handleSaveAvatar}
@@ -482,6 +515,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
 
 export function RoomDetailsScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [activeSheet, setActiveSheet] = useState<RoomSheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
@@ -494,9 +528,9 @@ export function RoomDetailsScreen() {
   async function handleInvite() {
     if (!group) return;
     try {
-      setInviteMessage(await shareRoomInvite(group));
+      setInviteMessage(await shareRoomInvite(group, t));
     } catch {
-      setInviteMessage("Community code is selectable if sharing is unavailable.");
+      setInviteMessage(t("community.rooms.inviteFallback"));
     }
   }
 
@@ -504,20 +538,20 @@ export function RoomDetailsScreen() {
     if (!group || !ownsGroup || !roomName.trim() || roomName.trim() === group.name) return;
     await dispatch({ type: "updateGroup", id: group.id, name: roomName });
     setActiveSheet(undefined);
-    setRoomMessage("Community name updated.");
+    setRoomMessage(t("community.roomDetails.nameUpdated"));
   }
 
   function handleLeaveRoom() {
     if (!group) return;
     if (ownsGroup) {
-      setRoomMessage("Community hosts need to transfer ownership or delete the community before leaving.");
+      setRoomMessage(t("community.roomDetails.hostLeaveBlocked"));
       return;
     }
 
     confirmAction({
-      title: "Leave community?",
-      message: `You will leave ${group.name}, but your account will stay signed in.`,
-      confirmText: "Leave",
+      title: t("community.management.leaveTitle"),
+      message: t("community.management.leaveBody", { name: group.name }),
+      confirmText: t("community.management.leave"),
       destructive: true,
       onConfirm: () => {
         void dispatch({ type: "leaveGroup", id: group.id }).then(() => router.replace("/identity" as never));
@@ -529,14 +563,14 @@ export function RoomDetailsScreen() {
     if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
 
     confirmAction({
-      title: "Remove member?",
-      message: `${membership.userName} will lose access to ${group.name}.`,
-      confirmText: "Remove",
+      title: t("community.management.removeMemberTitle"),
+      message: t("community.management.removeMemberBody", { community: group.name, name: membership.userName }),
+      confirmText: t("community.management.removeMember"),
       destructive: true,
       onConfirm: () => {
         void dispatch({ type: "removeGroupMember", groupId: group.id, userId: membership.userId })
-          .then(() => setRoomMessage(`${membership.userName} was removed from the community.`))
-          .catch(() => setRoomMessage("Could not remove that member. Please try again."));
+          .then(() => setRoomMessage(t("community.management.removeMemberSuccess", { name: membership.userName })))
+          .catch(() => setRoomMessage(t("community.management.removeMemberError")));
       },
     });
   }
@@ -545,13 +579,13 @@ export function RoomDetailsScreen() {
     if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
 
     confirmAction({
-      title: "Transfer ownership?",
-      message: `${membership.userName} will become the community host for ${group.name}. You will remain a member.`,
-      confirmText: "Transfer",
+      title: t("community.management.transferTitle"),
+      message: t("community.management.transferBody", { community: group.name, name: membership.userName }),
+      confirmText: t("community.management.transfer"),
       onConfirm: () => {
         void dispatch({ type: "transferGroupOwnership", groupId: group.id, userId: membership.userId })
-          .then(() => setRoomMessage(`Ownership transferred to ${membership.userName}.`))
-          .catch(() => setRoomMessage("Could not transfer ownership. Please try again."));
+          .then(() => setRoomMessage(t("community.management.transferSuccess", { name: membership.userName })))
+          .catch(() => setRoomMessage(t("community.management.transferError")));
       },
     });
   }
@@ -562,8 +596,8 @@ export function RoomDetailsScreen() {
         <AppHeader showBack onBack={() => router.back()} />
 
         <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Community details</Text>
-          <BodyText muted>A quiet place to pray, reflect, and walk together.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>{t("community.roomDetails.title")}</Text>
+          <BodyText muted>{t("community.roomDetails.subtitle")}</BodyText>
         </View>
 
         {group ? (
@@ -572,11 +606,11 @@ export function RoomDetailsScreen() {
 
             {roomMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{roomMessage}</Text> : null}
 
-            <SettingsSection label="Community settings">
-              <SettingsRow icon="users" title="Manage members" onPress={() => setActiveSheet("members")} />
+            <SettingsSection label={t("community.management.settingsTitle")}>
+              <SettingsRow icon="users" title={t("community.members.title")} onPress={() => setActiveSheet("members")} />
               <SettingsRow
                 icon="edit-2"
-                title="Community name"
+                title={t("community.management.namePlaceholder")}
                 value={group.name}
                 onPress={() => {
                   setRoomName(group.name);
@@ -584,8 +618,14 @@ export function RoomDetailsScreen() {
                 }}
                 showDivider
               />
-              <SettingsRow icon="bell" title="Notifications" value="All activity" onPress={() => setActiveSheet("notifications")} showDivider />
-              <SettingsRow icon="log-out" title="Leave community" tone="danger" onPress={handleLeaveRoom} showDivider />
+              <SettingsRow
+                icon="bell"
+                title={t("community.roomDetails.notifications")}
+                value={t("community.roomDetails.allActivity")}
+                onPress={() => setActiveSheet("notifications")}
+                showDivider
+              />
+              <SettingsRow icon="log-out" title={t("community.management.leave")} tone="danger" onPress={handleLeaveRoom} showDivider />
             </SettingsSection>
 
             <JoinSwitchCard onBrowse={() => setSwitcherVisible(true)} />
@@ -593,40 +633,43 @@ export function RoomDetailsScreen() {
         ) : (
           <>
             <Card>
-              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>No community selected</Text>
-              <BodyText muted>Join or create a community for the people you pray with.</BodyText>
+              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
+              <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
               <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)}>
-                Browse communities
+                {t("community.rooms.joinOrCreate")}
               </PrimaryButton>
             </Card>
           </>
         )}
       </AppScreen>
 
-      <BottomSheet title="Manage members" visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
+      <BottomSheet title={t("community.members.title")} visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
         <MemberList currentUserId={state.currentUserId} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} onTransfer={ownsGroup ? handleTransferOwnership : undefined} />
       </BottomSheet>
 
-      <BottomSheet title="Community name" visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>{ownsGroup ? "Choose a name that helps your community feel easy to recognize." : "Only the community host can rename this community."}</BodyText>
+      <BottomSheet title={t("community.management.rename")} visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>
+          {t(ownsGroup ? "community.roomDetails.renameOwnerBody" : "community.roomDetails.renameMemberBody")}
+        </BodyText>
         <TextInputField
           editable={ownsGroup}
           value={roomName}
           onChangeText={setRoomName}
           onSubmitEditing={handleRenameRoom}
-          placeholder="Community name"
+          placeholder={t("community.management.namePlaceholder")}
           returnKeyType="done"
         />
         <PrimaryButton disabled={!ownsGroup || !group || !roomName.trim() || roomName.trim() === group.name} icon="check" onPress={handleRenameRoom}>
-          Save community name
+          {t("community.management.rename")}
         </PrimaryButton>
       </BottomSheet>
 
       <InfoSheet
-        title="Notifications"
+        title={t("community.roomDetails.notifications")}
         visible={activeSheet === "notifications"}
         onClose={() => setActiveSheet(undefined)}
-        body="Community notifications are currently set to all activity. More granular controls can be connected when notification preferences exist."
+        body={t("community.roomDetails.notificationsBody")}
+        doneLabel={t("community.checkIn.done")}
       />
 
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
@@ -709,6 +752,7 @@ function SettingsRow({
 }
 
 function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; memberCount: number; onDetails: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Card style={{ gap: 14, padding: 16 }}>
       {group ? (
@@ -719,23 +763,23 @@ function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; mem
               <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>
                 {group.name}
               </Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{communityMemberCount(memberCount, t)}</Text>
             </View>
             <Feather name="chevron-right" size={19} color={colors.muted} />
           </Pressable>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.rooms.code")}</Text>
             <RoomCodeCopy code={group.inviteCode} fontSize={14} iconSize={15} />
           </View>
           <SecondaryButton icon="info" onPress={onDetails}>
-            View community details
+            {t("community.rooms.open")}
           </SecondaryButton>
         </>
       ) : (
         <>
-          <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>No community selected</Text>
-          <BodyText muted>Join or create a community for the people you pray with.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
+          <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
         </>
       )}
     </Card>
@@ -753,6 +797,7 @@ function RoomHeaderCard({
   memberCount: number;
   onInvite: () => void;
 }) {
+  const { t } = useAppTranslation();
   return (
     <Card style={{ gap: 16, padding: 18 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
@@ -761,16 +806,16 @@ function RoomHeaderCard({
           <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 25 }}>
             {group.name}
           </Text>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{communityMemberCount(memberCount, t)}</Text>
         </View>
       </View>
       <View style={{ backgroundColor: colors.line, height: 1 }} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.rooms.code")}</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </View>
       <PrimaryButton icon="share-2" onPress={onInvite}>
-        Invite members
+        {t("community.members.invite")}
       </PrimaryButton>
       {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{inviteMessage}</Text> : null}
     </Card>
@@ -778,14 +823,15 @@ function RoomHeaderCard({
 }
 
 function JoinSwitchCard({ onBrowse }: { onBrowse: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Card style={{ gap: 14 }}>
       <View style={{ gap: 4 }}>
-        <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>Join or switch community</Text>
-        <BodyText muted>Join another community or create a new one.</BodyText>
+        <Text style={{ color: colors.ink, fontSize: 17, fontWeight: "900" }}>{t("community.rooms.joinOrCreate")}</Text>
+        <BodyText muted>{t("community.identity.joinOrCreateBody")}</BodyText>
       </View>
       <SecondaryButton icon="users" onPress={onBrowse}>
-        Browse communities
+        {t("community.rooms.joinOrCreate")}
       </SecondaryButton>
     </Card>
   );
@@ -793,6 +839,7 @@ function JoinSwitchCard({ onBrowse }: { onBrowse: () => void }) {
 
 function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible: boolean }) {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [joinInviteCode, setJoinInviteCode] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [message, setMessage] = useState("");
@@ -804,7 +851,7 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
     if (!canJoin) return;
     await dispatch({ type: "joinGroup", inviteCode: joinInviteCode });
     setJoinInviteCode("");
-    setMessage("Community joined.");
+    setMessage(t("community.rooms.joined"));
     onClose();
   }
 
@@ -812,23 +859,23 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
     if (!canCreate) return;
     await dispatch({ type: "createGroup", name: newGroupName });
     setNewGroupName("");
-    setMessage("Community created.");
+    setMessage(t("community.rooms.created"));
     onClose();
   }
 
   async function handleSwitchRoom(roomId: Id) {
     await dispatch({ type: "switchGroup", id: roomId });
-    setMessage("Community switched.");
+    setMessage(t("community.rooms.switched"));
     onClose();
   }
 
   return (
-    <BottomSheet title="Join or switch community" visible={visible} onClose={onClose}>
+    <BottomSheet title={t("community.rooms.joinOrCreate")} visible={visible} onClose={onClose}>
       <View style={{ gap: 10 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Your communities</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.other")}</Text>
         <View style={{ gap: 8 }}>
           {otherRooms.length === 0 ? (
-            <BodyText muted>No other communities yet.</BodyText>
+            <BodyText muted>{t("community.rooms.noOther")}</BodyText>
           ) : (
             otherRooms.map((room) => (
               <Pressable accessibilityRole="button" key={room.id} onPress={() => handleSwitchRoom(room.id)}>
@@ -840,34 +887,39 @@ function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible:
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Join by community code</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.enterCode")}</Text>
         <TextInputField
           autoCapitalize="characters"
           autoCorrect={false}
           value={joinInviteCode}
           onChangeText={(value) => setJoinInviteCode(value.toUpperCase())}
           onSubmitEditing={handleJoinRoom}
-          placeholder="Community code"
+          placeholder={t("community.rooms.code")}
           returnKeyType="join"
         />
         <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom}>
-          Join community
+          {t("community.rooms.joinByCode")}
         </PrimaryButton>
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>Create a new community</Text>
-        <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="Community name" returnKeyType="done" />
+        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.createNew")}</Text>
+        <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
         <SecondaryButton disabled={!canCreate} icon="plus" onPress={handleCreateRoom}>
-          Create community
+          {t("community.rooms.createAction")}
         </SecondaryButton>
       </View>
-      {message || state.authError ? <Text style={{ color: state.authError ? colors.danger : colors.muted, fontSize: 13, fontWeight: "800" }}>{state.authError ?? message}</Text> : null}
+      {message || state.authError ? (
+        <Text style={{ color: state.authError ? colors.danger : colors.muted, fontSize: 13, fontWeight: "800" }}>
+          {state.authError ? communitySystemError(state.authError, t) : message}
+        </Text>
+      ) : null}
     </BottomSheet>
   );
 }
 
 function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }) {
+  const { t } = useAppTranslation();
   return (
     <View
       style={{
@@ -887,7 +939,7 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
         <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
           {room.name}
         </Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{communityMemberCount(memberCount, t)}</Text>
       </View>
       <Feather name="chevron-right" size={18} color={colors.muted} />
     </View>
@@ -905,8 +957,9 @@ function MemberList({
   onRemove?: (membership: Membership) => void;
   onTransfer?: (membership: Membership) => void;
 }) {
+  const { t } = useAppTranslation();
   if (memberships.length === 0) {
-    return <BodyText muted>No members are listed for this community yet.</BodyText>;
+    return <BodyText muted>{t("community.members.empty")}</BodyText>;
   }
 
   return (
@@ -931,6 +984,7 @@ function RoomMemberRow({
   onRemove?: (membership: Membership) => void;
   onTransfer?: (membership: Membership) => void;
 }) {
+  const { t } = useAppTranslation();
   const canRemove = Boolean(onRemove && membership.role !== "owner" && membership.userId !== currentUserId);
   const canTransfer = Boolean(onTransfer && membership.role !== "owner" && membership.userId !== currentUserId);
 
@@ -950,11 +1004,13 @@ function RoomMemberRow({
       <Avatar image={membership.image} name={membership.userName} size={38} tone={membership.role === "owner" ? "orange" : "green"} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{membership.role === "owner" ? "Community host" : "Member"}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+          {t(membership.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
+        </Text>
       </View>
       {canTransfer ? (
         <Pressable
-          accessibilityLabel={`Transfer ownership to ${membership.userName}`}
+          accessibilityLabel={t("community.management.transferTo", { name: membership.userName })}
           accessibilityRole="button"
           hitSlop={8}
           onPress={() => onTransfer?.(membership)}
@@ -975,7 +1031,7 @@ function RoomMemberRow({
       ) : null}
       {canRemove ? (
         <Pressable
-          accessibilityLabel={`Remove ${membership.userName}`}
+          accessibilityLabel={t("community.management.removeMemberFrom", { name: membership.userName })}
           accessibilityRole="button"
           hitSlop={8}
           onPress={() => onRemove?.(membership)}
@@ -1009,19 +1065,22 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 
 function InfoSheet({
   body,
+  doneLabel,
   onClose,
   title,
   visible,
 }: {
   body: string;
+  doneLabel?: string;
   onClose: () => void;
   title: string;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   return (
     <BottomSheet title={title} visible={visible} onClose={onClose}>
       <BodyText muted>{body}</BodyText>
-      <SecondaryButton onPress={onClose}>Done</SecondaryButton>
+      <SecondaryButton onPress={onClose}>{doneLabel ?? t("common.done")}</SecondaryButton>
     </BottomSheet>
   );
 }

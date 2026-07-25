@@ -9,13 +9,8 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
-  actionLabels,
-  actionPastLabels,
   EntryVisibility,
-  defaultFeedTitle as productDefaultFeedTitle,
   feedItemKind,
-  heartMoods,
-  moodLabel,
   normalizeEntryKind,
   prayerFilters,
   roomTabs,
@@ -29,6 +24,7 @@ import {
   BodyText,
   BottomSheet,
   Card,
+  ExpandableBodyText,
   FilterChips,
   HeartPromptCard,
   FullScreenModal,
@@ -44,9 +40,23 @@ import {
 } from "@/ui/app-components";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
+import { useAppTranslation } from "@/ui/app-language";
+import {
+  communityActionLabel,
+  communityDefaultFeedTitle,
+  communityMemberCount,
+  communityMoodScaleLabel,
+  communityPrayerMomentCanonicalCopy,
+  communityPrayerMomentDisplayCopy,
+  communityPrayerFilterLabel,
+  communityPrayerNoun,
+  communityResponseNoun,
+  communityRoomTabLabel,
+  communitySystemError,
+} from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
-import { LinkPreview } from "@/ui/link-preview";
-import { prayerCountNoun } from "@/ui/prayer-copy";
+import { LinkPreviewContent } from "@/ui/link-preview";
+import type { TranslationFunction } from "@/ui/localization";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
@@ -58,7 +68,6 @@ import {
   CommunityCheckInMood,
   CommunityFeedCard,
   PostCard,
-  communityResponseLabel,
 } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
@@ -99,32 +108,13 @@ function isPrayerMomentKind(kind: EntryKind | "post" | undefined) {
   return normalizeEntryKind(kind) === "prayer_moment";
 }
 
-function prayerMomentPostCopy(intent: CommunityPrayerIntent, note: string) {
-  const recipientName = intent.recipientName?.trim();
-  const lines = [recipientName ? `A prayer was made for ${recipientName}.` : "A prayer was made."];
-  const trimmedNote = note.trim();
-
-  if (trimmedNote) {
-    lines.push(`About: ${trimmedNote}`);
-  }
-
-  return {
-    body: lines.join("\n\n"),
-    title: recipientName ? `Prayed for ${recipientName}` : "Prayer made",
-  };
-}
-
-function memberLabel(count: number) {
-  return `${count} ${count === 1 ? "member" : "members"}`;
-}
-
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
   return counts[roomId] || fallback;
 }
 
-async function shareRoomInvite(room: Group) {
-  const invitation = `Join ${room.name} on KOINO with community code ${room.inviteCode}.`;
+async function shareRoomInvite(room: Group, t: TranslationFunction) {
+  const invitation = t("community.rooms.invitation", { code: room.inviteCode, name: room.name });
   const clipboard =
     Platform.OS === "web"
       ? (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText?: (text: string) => Promise<void> } } }).navigator?.clipboard
@@ -132,15 +122,11 @@ async function shareRoomInvite(room: Group) {
 
   if (clipboard?.writeText) {
     await clipboard.writeText(invitation);
-    return "Invite copied.";
+    return t("community.rooms.inviteCopied");
   }
 
-  await Share.share({ message: invitation, title: `Join ${room.name}` });
-  return "Invite ready to share.";
-}
-
-function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, moodLabel);
+  await Share.share({ message: invitation, title: t("community.rooms.joinNamed", { name: room.name }) });
+  return t("community.rooms.inviteReady");
 }
 
 function communityFeedItemKey(item: FeedItem) {
@@ -177,6 +163,7 @@ function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
 
 export function SettingsScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [roomView, setRoomView] = useState<RoomView>("detail");
   const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("forward");
   const roomViewRef = useRef<RoomView>("detail");
@@ -497,7 +484,12 @@ export function SettingsScreen() {
       };
     });
     AccessibilityInfo.announceForAccessibility(
-      newlyRevealedCount === 1 ? "1 earlier activity item is now shown." : `${newlyRevealedCount} earlier activity items are now shown.`,
+      t(
+        newlyRevealedCount === 1
+          ? "community.feed.earlierRevealed.one"
+          : "community.feed.earlierRevealed.other",
+        { count: newlyRevealedCount },
+      ),
     );
   }
 
@@ -528,7 +520,7 @@ export function SettingsScreen() {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: reactions.length,
       targetType,
-      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
     };
   }
 
@@ -543,7 +535,7 @@ export function SettingsScreen() {
       count: reactions.length,
       kind,
       targetType,
-      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
     };
   }
 
@@ -563,18 +555,19 @@ export function SettingsScreen() {
         durationSeconds:
           reaction.durationSeconds ??
           (reaction.startedAt && reaction.completedAt ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000)) : undefined),
-        name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
+        name: reaction.userId === state.currentUserId ? t("common.you") : userById.get(reaction.userId) ?? t("common.someone"),
         image: userImageById.get(reaction.userId),
       }));
   }
 
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
+    const displayBody = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t).body : item.body;
     setCommunityPrayerIntent(undefined);
     setPrayerTarget({
       targetType: prayer.targetType,
       targetId: item.id,
-      body: item.body,
+      body: displayBody,
       recipientUserId: item.userId,
       recipientName: userById.get(item.userId),
       recipientImage: userImageById.get(item.userId),
@@ -632,7 +625,7 @@ export function SettingsScreen() {
     setPendingPrayerPost(undefined);
     setPrayerPostNote("");
 
-    const copy = prayerMomentPostCopy(pending, noteOverride);
+    const copy = communityPrayerMomentCanonicalCopy(pending.recipientName, noteOverride);
     await dispatch({
       type: "createPost",
       kind: "prayer_moment",
@@ -650,9 +643,9 @@ export function SettingsScreen() {
 
   function deletePost(item: Extract<FeedItem, { type: "post" }>) {
     confirmAction({
-      title: "Delete post?",
-      message: "This removes the post and its replies from your community.",
-      confirmText: "Delete",
+      title: t("community.card.deleteTitle"),
+      message: t("community.card.deleteBody"),
+      confirmText: t("common.delete"),
       destructive: true,
       onConfirm: () => {
         dispatch({ type: "deletePost", id: item.id });
@@ -681,13 +674,12 @@ export function SettingsScreen() {
   }
 
   async function submitCommunityCheckIn() {
-    const selected = heartMoods.find((option) => option.value === heartMood);
     await dispatch({
       type: "submitCheckIn",
       mood: moodNumber(heartMood),
       heartMood,
       readToday: true,
-      reflectionText: checkInText.trim() || selected?.description || "",
+      reflectionText: checkInText.trim(),
       visibility: shareCheckIn ? "group" : "private",
       verse: primaryBibleVerse(checkInVerses),
       verses: checkInVerses,
@@ -699,9 +691,9 @@ export function SettingsScreen() {
   async function handleInvite() {
     if (!group) return;
     try {
-      setInviteMessage(await shareRoomInvite(group));
+      setInviteMessage(await shareRoomInvite(group, t));
     } catch {
-      setInviteMessage("Community code is selectable if sharing is unavailable.");
+      setInviteMessage(t("community.rooms.inviteFallback"));
     }
   }
 
@@ -744,7 +736,7 @@ export function SettingsScreen() {
       Image.getSize(
         asset.uri,
         (width, height) => resolve({ height, width }),
-        () => reject(new Error("Could not read that image.")),
+        () => reject(new Error(t("community.management.imageReadError"))),
       );
     });
   }
@@ -765,7 +757,7 @@ export function SettingsScreen() {
       if (Platform.OS !== "web") {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-          setRoomImageMessage("Photo library permission is needed to choose a community image.");
+          setRoomImageMessage(t("community.management.imagePermission"));
           return;
         }
       }
@@ -779,14 +771,14 @@ export function SettingsScreen() {
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset?.uri) {
-        setRoomImageMessage("Could not read that image.");
+        setRoomImageMessage(t("community.management.imageReadError"));
         return;
       }
 
       const size = await selectedImageSize(asset);
       setCropSource({ ...size, uri: asset.uri });
     } catch {
-      setRoomImageMessage("Could not open that image.");
+      setRoomImageMessage(t("community.management.imageOpenError"));
     }
   }
 
@@ -794,21 +786,21 @@ export function SettingsScreen() {
     if (!group) return;
     await dispatch({ type: "uploadGroupImage", id: group.id, localUri });
     setCropSource(undefined);
-    setRoomImageMessage("Community image updated.");
+    setRoomImageMessage(t("community.management.imageUpdated"));
   }
 
   function handleDeleteRoomImage() {
     if (!group?.image || !ownsGroup) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Delete community image?",
-      message: "The community will return to its initials avatar.",
-      confirmText: "Delete",
+      title: t("community.management.deleteImageTitle"),
+      message: t("community.management.deleteImageBody"),
+      confirmText: t("common.delete"),
       destructive: true,
       onConfirm: () => {
         void dispatch({ type: "deleteGroupImage", id: group.id })
-          .then(() => setRoomImageMessage("Community image deleted."))
-          .catch(() => setRoomImageMessage("Could not delete the community image."));
+          .then(() => setRoomImageMessage(t("community.management.imageDeleted")))
+          .catch(() => setRoomImageMessage(t("community.management.imageDeleteError")));
       },
     });
   }
@@ -817,9 +809,9 @@ export function SettingsScreen() {
     if (!group) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Leave community?",
-      message: `You will leave ${group.name}, but your account will stay signed in.`,
-      confirmText: "Leave",
+      title: t("community.management.leaveTitle"),
+      message: t("community.management.leaveBody", { name: group.name }),
+      confirmText: t("community.management.leave"),
       destructive: true,
       onConfirm: () => dispatch({ type: "leaveGroup", id: group.id }),
     });
@@ -829,9 +821,9 @@ export function SettingsScreen() {
     if (!group) return;
     setManageSheetVisible(false);
     confirmAction({
-      title: "Delete community?",
-      message: "This removes the community, shared check-ins, reflections, replies, and prayers.",
-      confirmText: "Delete",
+      title: t("community.management.deleteTitle"),
+      message: t("community.management.deleteBody"),
+      confirmText: t("common.delete"),
       destructive: true,
       onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
     });
@@ -848,13 +840,13 @@ export function SettingsScreen() {
 
     setTransferSheetVisible(false);
     confirmAction({
-      title: "Transfer ownership?",
-      message: `${membership.userName} will become the community host for ${group.name}. You will remain a member.`,
-      confirmText: "Transfer",
+      title: t("community.management.transferTitle"),
+      message: t("community.management.transferBody", { community: group.name, name: membership.userName }),
+      confirmText: t("community.management.transfer"),
       onConfirm: () => {
         void dispatch({ type: "transferGroupOwnership", groupId: group.id, userId: membership.userId })
-          .then(() => setRoomImageMessage(`Ownership transferred to ${membership.userName}.`))
-          .catch(() => setRoomImageMessage("Could not transfer ownership. Please try again."));
+          .then(() => setRoomImageMessage(t("community.management.transferSuccess", { name: membership.userName })))
+          .catch(() => setRoomImageMessage(t("community.management.transferError")));
       },
     });
   }
@@ -881,7 +873,7 @@ export function SettingsScreen() {
         <CheckInCard
           key={key}
           authorImage={userImageById.get(item.userId)}
-          authorName={userById.get(item.userId) ?? "Someone"}
+          authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
           onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
           onReact={() => togglePostAction(item)}
@@ -898,7 +890,7 @@ export function SettingsScreen() {
         <PrayerRequestCard
           key={key}
           authorImage={userImageById.get(item.userId)}
-          authorName={userById.get(item.userId) ?? "Someone"}
+          authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
           prayed={prayer.prayed}
           prayedBy={prayer.prayedBy}
@@ -915,7 +907,7 @@ export function SettingsScreen() {
       <PostCard
         key={key}
         authorImage={userImageById.get(item.userId)}
-        authorName={userById.get(item.userId) ?? "Someone"}
+        authorName={userById.get(item.userId) ?? t("common.someone")}
         item={item}
         ownsItem={item.userId === state.currentUserId}
         prayed={prayer.prayed}
@@ -1042,9 +1034,9 @@ export function SettingsScreen() {
       return (
         <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <AppScreen topInset={false}>
-            <FocusedScreenHeader onBack={goBackFromRoomView} title="Prayer" />
+            <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.page.prayer")} />
             <Card>
-              <BodyText muted>This prayer request is no longer available.</BodyText>
+              <BodyText muted>{t("community.prayer.unavailable")}</BodyText>
             </Card>
           </AppScreen>
         </CommunityTransitionFrame>
@@ -1058,7 +1050,7 @@ export function SettingsScreen() {
           <CommunityPrayerDetailScreen
             activity={itemPrayerActivity(selectedPrayer)}
             authorImage={userImageById.get(selectedPrayer.userId)}
-            authorName={userById.get(selectedPrayer.userId) ?? "Someone"}
+            authorName={userById.get(selectedPrayer.userId) ?? t("common.someone")}
             encouragementDraft={encouragementDraft}
             item={selectedPrayer}
             onBack={goBackFromRoomView}
@@ -1108,7 +1100,7 @@ export function SettingsScreen() {
     return (
       <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
         <AppScreen topInset={false}>
-          <FocusedScreenHeader onBack={goBackFromRoomView} title="Members" />
+          <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.members.title")} />
           <MembersPanel
             group={group}
             latestCheckInByUser={latestCheckInByUser}
@@ -1143,7 +1135,10 @@ export function SettingsScreen() {
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Open ${group.name} details, ${memberLabel(memberCount)}, Private`}
+                  accessibilityLabel={t("community.detail.openCommunityDetails", {
+                    memberCount: communityMemberCount(memberCount, t),
+                    name: group.name,
+                  })}
                   onPress={() => router.push("/room-details" as never)}
                   style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 }}
                 >
@@ -1151,14 +1146,14 @@ export function SettingsScreen() {
                   <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
                     <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
                     <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
-                      {memberLabel(memberCount)} · Private
+                      {communityMemberCount(memberCount, t)} · {t("common.private")}
                     </Text>
                   </View>
                   <Feather name="chevron-right" size={17} color={colors.muted} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Open community management"
+                  accessibilityLabel={t("community.management.open")}
                   onPress={() => {
                     setCurrentGroupName(group.name);
                     setManageSheetVisible(true);
@@ -1193,19 +1188,19 @@ export function SettingsScreen() {
 
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
                 <SectionHeading>
-                  {detailTab === "recent" ? "Recent activity" : detailTab === "prayer" ? "Prayer" : detailTab === "checkins" ? "Check-ins" : "Reflections"}
+                  {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
                 </SectionHeading>
                 {detailTab === "prayer" ? (
                   <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
-                    Open Prayer
+                    {t("community.feed.openPrayer")}
                   </PrimaryButton>
                 ) : detailTab === "checkins" ? (
                   <PrimaryButton icon="check-circle" onPress={() => navigateToRoomView("checkins")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
-                    Open Check-ins
+                    {t("community.feed.openCheckIns")}
                   </PrimaryButton>
                 ) : (
                   <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
-                    Share
+                    {t("community.feed.share")}
                   </PrimaryButton>
                 )}
               </View>
@@ -1214,7 +1209,7 @@ export function SettingsScreen() {
                 fit
                 value={detailTab}
                 onChange={handleCommunityTabChange}
-                options={roomTabs.map((tab) => ({ label: tab.label, value: tab.value }))}
+                options={roomTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
               />
             </View>
 
@@ -1222,17 +1217,17 @@ export function SettingsScreen() {
               {communityFeedLoading ? (
                 <CommunityFeedLoadingState />
               ) : communityFeedError ? (
-                <CommunityFeedErrorState message={communityFeedError} />
+                <CommunityFeedErrorState />
               ) : visibleFeedItems.length === 0 ? (
                 <Card>
                   <BodyText muted>
                     {detailTab === "recent"
-                      ? "No recent activity yet. Shared prayers, reflections, check-ins, and praise will appear here."
+                      ? t("community.empty.recent")
                       : detailTab === "prayer"
-                        ? "No prayers here yet."
+                        ? t("community.empty.prayer")
                         : detailTab === "checkins"
-                          ? "No shared check-ins yet. This space will stay gentle until someone is ready."
-                          : "No reflections yet. When you are ready, share one honest line with your community."}
+                          ? t("community.empty.checkIns")
+                          : t("community.empty.reflections")}
                   </BodyText>
                 </Card>
               ) : (
@@ -1246,12 +1241,12 @@ export function SettingsScreen() {
                   />
                   {visibleEarlierFeedItems.length > 0 ? (
                     <>
-                      <CommunityActivityDivider label="Earlier activity" />
+                      <CommunityActivityDivider label={t("community.feed.earlierActivity")} />
                       {visibleEarlierFeedItems.map(renderCommunityFeedItem)}
                       {hasMoreEarlierFeedItems ? (
                         <CommunityEarlierActivityAction onPress={revealEarlierActivity} />
                       ) : (
-                        <CommunityActivityDivider label="Beginning of shared activity" />
+                        <CommunityActivityDivider label={t("community.feed.beginning")} />
                       )}
                     </>
                   ) : null}
@@ -1282,13 +1277,13 @@ export function SettingsScreen() {
         {communityCheckInModal}
         {communityPrayerMemberModal}
         {communityPrayerPostSheet}
-        <BottomSheet title="Community settings" visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
+        <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
               <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename community</Text>
-                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Community name" returnKeyType="done" style={{ marginTop: 8 }} />
-                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your community</Text> : null}
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.rename")}</Text>
+                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder={t("community.management.namePlaceholder")} returnKeyType="done" style={{ marginTop: 8 }} />
+                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.renameHint")}</Text> : null}
               </Row>
             </View>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -1297,8 +1292,12 @@ export function SettingsScreen() {
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                   <RoomImage image={group.image} name={group.name} size={42} />
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group.image ? "Change community image" : "Add community image"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new community image" : "Only the owner can change this"}</Text>
+                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+                      {t(group.image ? "community.management.changeImage" : "community.management.addImage")}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                      {t(ownsGroup ? "community.management.imageOwnerHint" : "community.management.ownerOnlyChange")}
+                    </Text>
                   </View>
                 </View>
               </Row>
@@ -1308,8 +1307,8 @@ export function SettingsScreen() {
                 <View style={{ backgroundColor: colors.line, height: 1 }} />
                 <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
                   <Row icon="trash-2" tone="danger">
-                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community image</Text>
-                    <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
+                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.deleteImage")}</Text>
+                    <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteImageHint")}</Text>
                   </Row>
                 </Pressable>
               </>
@@ -1317,34 +1316,34 @@ export function SettingsScreen() {
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <View style={{ paddingHorizontal: 14 }}>
               <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.transfer")}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {ownsGroup ? "Hand over ownership to another member" : "Only the owner can transfer this"}
+                  {t(ownsGroup ? "community.management.transferHint" : "community.management.ownerOnlyTransfer")}
                 </Text>
               </Row>
             </View>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
               <Row icon="log-out">
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave community</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this community</Text>
+                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.leave")}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.leaveHint")}</Text>
               </Row>
             </Pressable>
             <View style={{ backgroundColor: colors.line, height: 1 }} />
             <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
               <Row icon="trash-2" tone="danger">
-                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community</Text>
-                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this community</Text>
+                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.delete")}</Text>
+                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteHint")}</Text>
               </Row>
             </Pressable>
           </Card>
-          <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
+          <SecondaryButton onPress={() => setManageSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
         </BottomSheet>
-        <BottomSheet title="Transfer ownership" visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
-          <BodyText muted>Choose another member to become the community host.</BodyText>
+        <BottomSheet title={t("community.management.transfer")} visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
+          <BodyText muted>{t("community.management.transferChoose")}</BodyText>
           <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
         </BottomSheet>
-        <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
+        <RoomImageCropper source={cropSource} title={t("community.management.cropImage")} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
         <PrayerMoment
           target={prayerTarget}
           onClose={closePrayerMoment}
@@ -1359,12 +1358,12 @@ export function SettingsScreen() {
       <CommunityTransitionFrame animationKey={roomView} canSwipeBack={roomView === "rooms"} direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
         <AppScreen topInset={false}>
           <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>Community</Text>
-        <BodyText muted>A quiet place to pray, reflect, and walk together.</BodyText>
+        <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>{t("community.page.community")}</Text>
+        <BodyText muted>{t("community.page.description")}</BodyText>
       </View>
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Current community</SectionHeading>
+        <SectionHeading>{t("community.rooms.current")}</SectionHeading>
         <Card style={{ gap: 18, padding: 20 }}>
           {group ? (
             <>
@@ -1372,7 +1371,7 @@ export function SettingsScreen() {
                 <RoomImage image={group.image} name={group.name} size={76} />
                 <View style={{ flex: 1, gap: 5 }}>
                   <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>{memberLabel(memberCount)}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>{communityMemberCount(memberCount, t)}</Text>
                   <View
                     style={{
                       alignSelf: "flex-start",
@@ -1383,32 +1382,32 @@ export function SettingsScreen() {
                       paddingVertical: 6,
                     }}
                   >
-                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>Current community</Text>
+                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{t("community.rooms.current")}</Text>
                   </View>
                 </View>
               </View>
               <View style={{ backgroundColor: colors.line, height: 1 }} />
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Community code</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.rooms.code")}</Text>
                   <RoomCodeCopy code={group.inviteCode} />
                 </View>
                 <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
-                  Invite
+                  {t("community.rooms.invite")}
                 </PrimaryButton>
               </View>
               <SecondaryButton icon="message-circle" onPress={() => navigateToRoomView("detail", "back")}>
-                Open Community
+                {t("community.rooms.open")}
               </SecondaryButton>
               {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
               {roomImageMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{roomImageMessage}</Text> : null}
             </>
           ) : (
             <>
-              <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>No community selected</Text>
-              <BodyText muted>Join or create a community for the people you pray with.</BodyText>
+              <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
+              <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
               <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)}>
-                Join or create community
+                {t("community.rooms.joinOrCreate")}
               </PrimaryButton>
             </>
           )}
@@ -1416,10 +1415,10 @@ export function SettingsScreen() {
       </View>
 
       <View style={{ gap: 10 }}>
-        <SectionHeading>Other communities</SectionHeading>
+        <SectionHeading>{t("community.rooms.other")}</SectionHeading>
         <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
           {otherRooms.length === 0 ? (
-            <BodyText muted style={{ padding: 16 }}>No other communities yet.</BodyText>
+            <BodyText muted style={{ padding: 16 }}>{t("community.rooms.noOther")}</BodyText>
           ) : (
             otherRooms.map((room, index) => (
               <Pressable
@@ -1442,7 +1441,9 @@ export function SettingsScreen() {
                 <RoomImage image={room.image} name={room.name} size={48} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{room.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{memberLabel(roomMemberCount(state.groupMemberCounts, room.id))}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
+                    {communityMemberCount(roomMemberCount(state.groupMemberCounts, room.id), t)}
+                  </Text>
                 </View>
                 <Feather name="chevron-right" size={19} color={colors.muted} />
               </Pressable>
@@ -1452,14 +1453,14 @@ export function SettingsScreen() {
         <Card style={{ gap: 0, padding: 0 }}>
           <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
             <Row icon="user-plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Join another community</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.joinAnother")}</Text>
             </Row>
           </Pressable>
         </Card>
         <Card style={{ gap: 0, padding: 0 }}>
           <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
             <Row icon="plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Create a new community</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.createNew")}</Text>
             </Row>
           </Pressable>
         </Card>
@@ -1473,45 +1474,45 @@ export function SettingsScreen() {
             setManageSheetVisible(true);
           }}
         >
-          Community settings
+          {t("community.management.settingsTitle")}
         </SecondaryButton>
       ) : null}
 
       <SecondaryButton icon="log-out" onPress={handleSignOut}>
-        Log out
+        {t("common.logOut")}
       </SecondaryButton>
 
-      <BottomSheet title="Join or create community" visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
+      <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Enter a community code</Text>
-          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder="Community code" returnKeyType="join" />
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.enterCode")}</Text>
+          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder={t("community.rooms.code")} returnKeyType="join" />
           <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
-            Join by code
+            {t("community.rooms.joinByCode")}
           </PrimaryButton>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
           <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>or</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>{t("common.or")}</Text>
           <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Create a new community</Text>
-          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder="New community name" returnKeyType="done" />
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.createNew")}</Text>
+          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
           <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
-            Create new community
+            {t("community.rooms.createAction")}
           </PrimaryButton>
         </View>
-        {state.authError ? <Text style={{ color: colors.danger, fontWeight: "800" }}>{state.authError}</Text> : null}
-        <SecondaryButton onPress={() => setJoinSheetVisible(false)}>Cancel</SecondaryButton>
+        {state.authError ? <Text style={{ color: colors.danger, fontWeight: "800" }}>{communitySystemError(state.authError, t)}</Text> : null}
+        <SecondaryButton onPress={() => setJoinSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
       </BottomSheet>
 
-      <BottomSheet title="Community settings" visible={manageSheetVisible && Boolean(group)} onClose={() => setManageSheetVisible(false)}>
+      <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible && Boolean(group)} onClose={() => setManageSheetVisible(false)}>
         <Card style={{ gap: 0, padding: 0 }}>
           <View style={{ paddingHorizontal: 14 }}>
             <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Rename community</Text>
-              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder="Community name" returnKeyType="done" style={{ marginTop: 8 }} />
-              {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>Tap row to save the name of your community</Text> : null}
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.rename")}</Text>
+              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder={t("community.management.namePlaceholder")} returnKeyType="done" style={{ marginTop: 8 }} />
+              {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.renameHint")}</Text> : null}
             </Row>
           </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
@@ -1520,8 +1521,12 @@ export function SettingsScreen() {
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                 <RoomImage image={group?.image} name={group?.name} size={42} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{group?.image ? "Change community image" : "Add community image"}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{ownsGroup ? "Choose and crop a new community image" : "Only the owner can change this"}</Text>
+                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+                    {t(group?.image ? "community.management.changeImage" : "community.management.addImage")}
+                  </Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                    {t(ownsGroup ? "community.management.imageOwnerHint" : "community.management.ownerOnlyChange")}
+                  </Text>
                 </View>
               </View>
             </Row>
@@ -1531,8 +1536,8 @@ export function SettingsScreen() {
               <View style={{ backgroundColor: colors.line, height: 1 }} />
               <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
                 <Row icon="trash-2" tone="danger">
-                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community image</Text>
-                  <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Return to the initials avatar</Text>
+                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.deleteImage")}</Text>
+                  <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteImageHint")}</Text>
                 </Row>
               </Pressable>
             </>
@@ -1540,36 +1545,36 @@ export function SettingsScreen() {
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <View style={{ paddingHorizontal: 14 }}>
             <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Transfer ownership</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.transfer")}</Text>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                {ownsGroup ? "Hand over ownership to another member" : "Only the owner can transfer this"}
+                {t(ownsGroup ? "community.management.transferHint" : "community.management.ownerOnlyTransfer")}
               </Text>
             </Row>
           </View>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
             <Row icon="log-out">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Leave community</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Leave this community</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.leave")}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.leaveHint")}</Text>
             </Row>
           </Pressable>
           <View style={{ backgroundColor: colors.line, height: 1 }} />
           <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
             <Row icon="trash-2" tone="danger">
-              <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>Delete community</Text>
-              <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>Permanently delete this community</Text>
+              <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.delete")}</Text>
+              <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteHint")}</Text>
             </Row>
           </Pressable>
         </Card>
-        <SecondaryButton onPress={() => setManageSheetVisible(false)}>Cancel</SecondaryButton>
+        <SecondaryButton onPress={() => setManageSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
       </BottomSheet>
-      <BottomSheet title="Transfer ownership" visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
-        <BodyText muted>Choose another member to become the community host.</BodyText>
+      <BottomSheet title={t("community.management.transfer")} visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
+        <BodyText muted>{t("community.management.transferChoose")}</BodyText>
         <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
       </BottomSheet>
         </AppScreen>
       </CommunityTransitionFrame>
-      <RoomImageCropper source={cropSource} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
+      <RoomImageCropper source={cropSource} title={t("community.management.cropImage")} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
     </>
   );
 }
@@ -1577,18 +1582,18 @@ export function SettingsScreen() {
 export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
 
-function communityFeedEndpointBody(detailTab: RoomDetailTab, communityName: string, variant: "caught-up" | "no-recent") {
+function communityFeedEndpointBody(detailTab: RoomDetailTab, communityName: string, variant: "caught-up" | "no-recent", t: TranslationFunction) {
   if (variant === "no-recent") {
-    if (detailTab === "prayer") return `No prayers have been shared in ${communityName} during the last 30 days.`;
-    if (detailTab === "checkins") return `No check-ins have been shared in ${communityName} during the last 30 days.`;
-    if (detailTab === "reflections") return `No reflections have been shared in ${communityName} during the last 30 days.`;
-    return `Nothing has been shared in ${communityName} during the last 30 days.`;
+    if (detailTab === "prayer") return t("community.feed.noRecentPrayer", { name: communityName });
+    if (detailTab === "checkins") return t("community.feed.noRecentCheckIns", { name: communityName });
+    if (detailTab === "reflections") return t("community.feed.noRecentReflections", { name: communityName });
+    return t("community.feed.noRecent", { name: communityName });
   }
 
-  if (detailTab === "prayer") return `You’ve reached the end of the latest prayers in ${communityName}.`;
-  if (detailTab === "checkins") return `You’ve reached the end of the latest check-ins in ${communityName}.`;
-  if (detailTab === "reflections") return `You’ve reached the end of the latest reflections in ${communityName}.`;
-  return `You’ve reached the end of the latest activity in ${communityName}.`;
+  if (detailTab === "prayer") return t("community.feed.caughtUpPrayer", { name: communityName });
+  if (detailTab === "checkins") return t("community.feed.caughtUpCheckIns", { name: communityName });
+  if (detailTab === "reflections") return t("community.feed.caughtUpReflections", { name: communityName });
+  return t("community.feed.caughtUp", { name: communityName });
 }
 
 function CommunityFeedEndpoint({
@@ -1602,24 +1607,25 @@ function CommunityFeedEndpoint({
   onViewEarlier?: () => void;
   variant: "caught-up" | "no-recent";
 }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", gap: 5, paddingBottom: 6, paddingHorizontal: 16, paddingTop: 14 }}>
       <BrandWaveMotif height={12} opacity={0.65} variant="accent" width={58} />
       <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, lineHeight: 20, textAlign: "center" }]}>
-        {variant === "caught-up" ? "You’re caught up" : "No recent activity"}
+        {t(variant === "caught-up" ? "community.feed.caughtUpTitle" : "community.feed.noRecentTitle")}
       </Text>
       <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>
-        {communityFeedEndpointBody(detailTab, communityName, variant)}
+        {communityFeedEndpointBody(detailTab, communityName, variant, t)}
       </Text>
       {onViewEarlier ? (
         <Pressable
-          accessibilityLabel={`View earlier activity in ${communityName}`}
+          accessibilityLabel={t("community.feed.viewEarlierIn", { name: communityName })}
           accessibilityRole="button"
           hitSlop={8}
           onPress={onViewEarlier}
           style={{ alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
         >
-          <Text style={[typography.label, { color: colors.olive }]}>View earlier activity</Text>
+          <Text style={[typography.label, { color: colors.olive }]}>{t("community.feed.viewEarlier")}</Text>
           <Feather name="chevron-down" size={16} color={colors.olive} />
         </Pressable>
       ) : null}
@@ -1628,26 +1634,30 @@ function CommunityFeedEndpoint({
 }
 
 function CommunityFeedLoadingState() {
+  const { t } = useAppTranslation();
   return (
     <View
-      accessibilityLabel="Loading community activity"
+      accessibilityLabel={t("community.feed.loading")}
       accessibilityLiveRegion="polite"
       accessibilityRole="progressbar"
       style={{ alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 24 }}
     >
       <ActivityIndicator color={colors.olive} size="small" />
-      <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>Loading community activity…</Text>
+      <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>{t("community.feed.loading")}</Text>
     </View>
   );
 }
 
-function CommunityFeedErrorState({ message }: { message: string }) {
+function CommunityFeedErrorState() {
+  const { t } = useAppTranslation();
   return (
     <View accessibilityLiveRegion="assertive" accessibilityRole="alert">
       <Card style={{ alignItems: "center", gap: 6, padding: 18 }}>
         <Feather name="cloud-off" size={20} color={colors.muted} />
-        <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, textAlign: "center" }]}>Community activity unavailable</Text>
-        <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>{message}</Text>
+        <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, textAlign: "center" }]}>{t("community.feed.unavailable")}</Text>
+        <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>
+          {t("community.feed.loadError")}
+        </Text>
       </Card>
     </View>
   );
@@ -1664,14 +1674,15 @@ function CommunityActivityDivider({ label }: { label: string }) {
 }
 
 function CommunityEarlierActivityAction({ onPress }: { onPress: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
-      accessibilityLabel="View more earlier activity"
+      accessibilityLabel={t("community.feed.viewMoreEarlier")}
       accessibilityRole="button"
       onPress={onPress}
       style={{ alignItems: "center", alignSelf: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
     >
-      <Text style={[typography.label, { color: colors.olive }]}>View more</Text>
+      <Text style={[typography.label, { color: colors.olive }]}>{t("common.viewMore")}</Text>
       <Feather name="chevron-down" size={16} color={colors.olive} />
     </Pressable>
   );
@@ -1754,9 +1765,10 @@ function CommunityTransitionFrame({
 }
 
 function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: string }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-      <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onBack} />
+      <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onBack} />
       <Text
         numberOfLines={1}
         style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}
@@ -1805,6 +1817,7 @@ function CommunityPrayerActions({
   onPrayForPerson: (assignedMember?: CommunityMember) => void;
   onPrayForRequests: () => void;
 }) {
+  const { t } = useAppTranslation();
   const [assignmentClock, setAssignmentClock] = useState(Date.now);
 
   useEffect(() => {
@@ -1856,16 +1869,16 @@ function CommunityPrayerActions({
         icon="list"
         onPress={onPrayForRequests}
         primary={!personIsPrimary}
-        subtitle="View current requests"
-        title="Pray for requests"
+        subtitle={t("community.prayer.actions.viewRequests")}
+        title={t("community.prayer.actions.prayForRequests")}
       />
       <CommunityPrayerAction
         member={activeAssignedMember}
         icon="users"
         onPress={() => onPrayForPerson(activeAssignedMember)}
         primary={personIsPrimary}
-        subtitle={activeAssignedMember ? "This week’s person" : "Choose a member"}
-        title={assignedFirstName ? `Pray for ${assignedFirstName}` : "Pray for someone"}
+        subtitle={t(activeAssignedMember ? "community.prayer.actions.thisWeeksPerson" : "community.prayer.actions.chooseMember")}
+        title={assignedFirstName ? t("community.prayer.actions.prayForPerson", { name: assignedFirstName }) : t("community.prayer.actions.prayForSomeone")}
       />
     </View>
   );
@@ -1886,12 +1899,13 @@ function CommunityPrayerAction({
   subtitle: string;
   title: string;
 }) {
+  const { t } = useAppTranslation();
   const titleColor = primary ? colors.onAccent : colors.ink;
   const subtitleColor = primary ? colors.onAccent : colors.muted;
 
   return (
     <Pressable
-      accessibilityLabel={`${member ? `Pray for ${member.name}` : title}. ${subtitle}`}
+      accessibilityLabel={`${member ? t("community.prayer.actions.prayForPerson", { name: member.name }) : title}. ${subtitle}`}
       accessibilityRole="button"
       onPress={onPress}
       style={{
@@ -1948,17 +1962,18 @@ function CommunityPrayerMemberModal({
   onSelect: (member: CommunityMember) => void;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
+          <IconButton accessibilityLabel={t("common.close")} icon="arrow-left" onPress={onClose} />
+          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t("community.prayer.actions.prayForSomeone")}</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>Who would you like to pray for?</Text>
-          <BodyText muted>Select a member from your community.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>{t("community.prayer.memberPromptTitle")}</Text>
+          <BodyText muted>{t("community.prayer.memberPromptBody")}</BodyText>
         </View>
         <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
           {members.map((member) => (
@@ -1967,7 +1982,7 @@ function CommunityPrayerMemberModal({
                 <Avatar image={member.image} name={member.name} size={46} tone="green" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{t("community.prayer.actions.prayForPerson", { name: member.name })}</Text>
                 </View>
                 <Feather name="heart" size={18} color={colors.gold} />
               </Card>
@@ -1975,7 +1990,7 @@ function CommunityPrayerMemberModal({
           ))}
           {members.length === 0 ? (
             <Card>
-              <BodyText muted>No other members in this community yet.</BodyText>
+              <BodyText muted>{t("community.prayer.noOtherMembers")}</BodyText>
             </Card>
           ) : null}
         </ScrollView>
@@ -1997,16 +2012,17 @@ function PrayerPostSheet({
   onSkip: () => void;
   pending?: PendingPrayerPost;
 }) {
+  const { t } = useAppTranslation();
   const recipientName = pending?.recipientName?.trim();
 
   return (
-    <BottomSheet title="Share prayer" visible={Boolean(pending)} onClose={onSkip}>
+    <BottomSheet title={t("community.prayer.share")} visible={Boolean(pending)} onClose={onSkip}>
       {recipientName ? (
         <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
           <Avatar image={pending?.recipientImage} name={recipientName} size={38} tone="green" />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{recipientName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Prayer will be posted for this person.</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.prayer.postForPerson")}</Text>
           </View>
         </Card>
       ) : null}
@@ -2015,7 +2031,7 @@ function PrayerPostSheet({
           maxLength={PRAYER_POST_NOTE_LIMIT}
           multiline
           onChangeText={onChangeNote}
-          placeholder="What did you pray for? (optional)"
+          placeholder={t("community.prayer.notePlaceholder")}
           returnKeyType="done"
           style={{ minHeight: 120 }}
           value={note}
@@ -2023,9 +2039,9 @@ function PrayerPostSheet({
         <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/{PRAYER_POST_NOTE_LIMIT}</Text>
       </View>
       <PrimaryButton icon="send" onPress={onPublish}>
-        Post prayer
+        {t("community.prayer.post")}
       </PrimaryButton>
-      <SecondaryButton onPress={onSkip}>Skip note</SecondaryButton>
+      <SecondaryButton onPress={onSkip}>{t("community.prayer.skipNote")}</SecondaryButton>
     </BottomSheet>
   );
 }
@@ -2057,29 +2073,47 @@ function CommunityPrayerScreen({
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
-  const countLabel = filter === "open" ? "open" : filter === "answered" ? "answered" : "total";
+  const { t } = useAppTranslation();
+  const prayerCountKey =
+    filter === "open"
+      ? prayerPosts.length === 1
+        ? "community.prayer.count.open.one"
+        : "community.prayer.count.open.other"
+      : filter === "answered"
+        ? prayerPosts.length === 1
+          ? "community.prayer.count.answered.one"
+          : "community.prayer.count.answered.other"
+        : prayerPosts.length === 1
+          ? "community.prayer.count.total.one"
+          : "community.prayer.count.total.other";
 
   return (
     <AppScreen topInset={false}>
       <FocusedCommunityScreenIntro
         communityName={communityName}
-        description="Hold requests with care, pray with intention, and return with encouragement."
+        description={t("community.prayer.pageDescription")}
         onBack={onBack}
-        title="Prayer"
+        title={t("community.page.prayer")}
       />
-      <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
+      <FilterChips
+        value={filter}
+        onChange={onFilter}
+        options={prayerFilters.map((item) => ({ label: communityPrayerFilterLabel(item.value, t), value: item.value }))}
+      />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-        <BodyText muted>{prayerPosts.length} {countLabel} {prayerPosts.length === 1 ? "prayer" : "prayers"}</BodyText>
+        <BodyText muted>{t(prayerCountKey, { count: prayerPosts.length })}</BodyText>
         <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
-          Share prayer
+          {t("community.prayer.share")}
         </PrimaryButton>
       </View>
       <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 42 }}>
-        Pray for someone
+        {t("community.prayer.prayForSomeone")}
       </SecondaryButton>
       {prayerPosts.length === 0 ? (
         <Card>
-          <BodyText muted>{filter === "answered" ? "No answered prayers yet." : "No prayers here yet."}</BodyText>
+          <BodyText muted>
+            {t(filter === "answered" ? "community.prayer.emptyAnswered" : "community.prayer.empty")}
+          </BodyText>
         </Card>
       ) : (
         prayerPosts.map((item) => {
@@ -2088,7 +2122,7 @@ function CommunityPrayerScreen({
             <PrayerRequestCard
               key={item.id}
               authorImage={userImageById.get(item.userId)}
-              authorName={userById.get(item.userId) ?? "Someone"}
+              authorName={userById.get(item.userId) ?? t("common.someone")}
               item={item}
               prayed={prayer.prayed}
               prayedBy={prayer.prayedBy}
@@ -2136,30 +2170,44 @@ function CommunityPrayerDetailScreen({
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
+  const { language, t } = useAppTranslation();
   const answered = Boolean(item.answeredAt);
   const prayerMoment = isPrayerMomentKind(item.kind);
+  const displayCopy = communityPrayerMomentDisplayCopy(item, t);
 
   return (
     <AppScreen topInset={false}>
-      <FocusedScreenHeader onBack={onBack} title="Prayer" />
+      <FocusedScreenHeader onBack={onBack} title={t("community.page.prayer")} />
       <View style={{ alignItems: "center", gap: 8 }}>
         <Avatar image={authorImage} name={authorName} size={58} tone="green" />
         <View style={{ alignItems: "center", gap: 3 }}>
           <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
       </View>
       <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>{item.title || defaultTitle(item)}</Text>
-        <BodyText style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>{item.body || "No words today, just presence."}</BodyText>
-        <LinkPreview text={item.body} />
+        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
+          {displayCopy.title || communityDefaultFeedTitle(item, t)}
+        </Text>
+        <LinkPreviewContent text={displayCopy.body}>
+          {({ hiddenUrl, preview }) => (
+            <>
+              <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>
+                {displayCopy.body || t("community.card.noWords")}
+              </BodyText>
+              {preview}
+            </>
+          )}
+        </LinkPreviewContent>
       </View>
       {prayerMoment ? (
         <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
           <MaterialCommunityIcons name="hands-pray" size={20} color={colors.gold} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Prayer made</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Shared {formatRelativeTime(item.createdAt)}</Text>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.made")}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+              {t("community.prayer.sharedTime", { time: formatRelativeTime(item.createdAt, language) })}
+            </Text>
           </View>
           <PrayerMomentPill />
         </Card>
@@ -2167,12 +2215,12 @@ function CommunityPrayerDetailScreen({
         <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
           <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
             <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer.count)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{communityPrayerNoun(prayer.count, t)}</Text>
           </View>
           <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
           <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
             <StatusPill status={answered ? "answered" : "open"} />
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.prayer.status.label")}</Text>
           </View>
         </Card>
       )}
@@ -2180,9 +2228,11 @@ function CommunityPrayerDetailScreen({
         <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
             <Feather name="check-circle" size={20} color={colors.olive} />
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Answered prayer</Text>
+            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
           </View>
-          <BodyText muted>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</BodyText>
+          <BodyText muted>
+            {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
+          </BodyText>
         </Card>
       ) : null}
       {!answered && !prayerMoment ? (
@@ -2190,12 +2240,12 @@ function CommunityPrayerDetailScreen({
       ) : null}
       {ownsItem && !answered && !prayerMoment ? (
         <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
-          Mark as answered
+          {t("community.prayer.markAnswered")}
         </SecondaryButton>
       ) : null}
       {replies.length > 0 ? (
         <View style={{ gap: 12 }}>
-          <SectionHeading>Encouragement</SectionHeading>
+          <SectionHeading>{t("community.reply.heading")}</SectionHeading>
           <Card style={{ gap: 0, padding: 0 }}>
             {replies.map((reply, index) => (
               <View
@@ -2210,12 +2260,18 @@ function CommunityPrayerDetailScreen({
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                   <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
                   <View>
-                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>
+                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? t("common.someone")}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
                   </View>
                 </View>
-                <BodyText>{reply.body}</BodyText>
-                <LinkPreview text={reply.body} />
+                <LinkPreviewContent text={reply.body}>
+                  {({ hiddenUrl, preview }) => (
+                    <>
+                      <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                      {preview}
+                    </>
+                  )}
+                </LinkPreviewContent>
               </View>
             ))}
           </Card>
@@ -2226,11 +2282,12 @@ function CommunityPrayerDetailScreen({
           value={encouragementDraft}
           onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
           onSubmitEditing={onSendEncouragement}
-          placeholder="Write an encouragement..."
+          placeholder={t("community.reply.encouragementPlaceholder")}
           returnKeyType="send"
           style={{ flex: 1 }}
         />
         <Pressable
+          accessibilityLabel={t("community.reply.send")}
           accessibilityRole="button"
           disabled={!encouragementDraft.trim()}
           onPress={onSendEncouragement}
@@ -2245,6 +2302,7 @@ function CommunityPrayerDetailScreen({
 }
 
 function PrayerActionButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
       accessibilityRole="button"
@@ -2263,12 +2321,15 @@ function PrayerActionButton({ onPress, prayed }: { onPress: () => void; prayed: 
       }}
     >
       <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
+      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>
+        {communityActionLabel("prayer_request", prayed, t)}
+      </Text>
     </Pressable>
   );
 }
 
 function PrayerMomentPill() {
+  const { t } = useAppTranslation();
   return (
     <View
       style={{
@@ -2280,7 +2341,7 @@ function PrayerMomentPill() {
         paddingVertical: 5,
       }}
     >
-      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: "800" }}>Prayed</Text>
+      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: "800" }}>{t("community.action.prayer.completed")}</Text>
     </View>
   );
 }
@@ -2312,27 +2373,28 @@ function CommunityCheckInsScreen({
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
+  const { t } = useAppTranslation();
   return (
     <AppScreen topInset={false}>
       <FocusedCommunityScreenIntro
         communityName={communityName}
-        description="Take a gentle moment to share how your heart is doing."
+        description={t("community.checkIns.pageDescription")}
         onBack={onBack}
-        title="Check-ins"
+        title={t("community.page.checkIns")}
       />
       {!checkedInToday ? (
         <Card>
-          <SectionHeading>This week's check-in</SectionHeading>
-          <BodyText muted>Take a moment to share how your heart is doing.</BodyText>
+          <SectionHeading>{t("community.checkIns.weeklyTitle")}</SectionHeading>
+          <BodyText muted>{t("community.checkIns.weeklyDescription")}</BodyText>
           <PrimaryButton icon="edit-3" onPress={onCheckIn}>
-            Check in now
+            {t("community.checkIns.action")}
           </PrimaryButton>
         </Card>
       ) : null}
-      <SectionHeading>Recent check-ins</SectionHeading>
+      <SectionHeading>{t("community.checkIns.recent")}</SectionHeading>
       {checkIns.length === 0 ? (
         <Card>
-          <BodyText muted>No shared check-ins yet. This space will stay gentle until someone is ready.</BodyText>
+          <BodyText muted>{t("community.checkIns.empty")}</BodyText>
         </Card>
       ) : (
         checkIns.map((item) => {
@@ -2341,7 +2403,7 @@ function CommunityCheckInsScreen({
             <CheckInCard
               key={item.id}
               authorImage={userImageById.get(item.userId)}
-              authorName={userById.get(item.userId) ?? "Someone"}
+              authorName={userById.get(item.userId) ?? t("common.someone")}
               item={item}
               onOpen={() => onOpenCheckIn(item)}
               onReact={() => onReact(item)}
@@ -2375,41 +2437,56 @@ function PrayerRequestCard({
   prayedBy?: { name: string; image?: GroupImage }[];
   prayerCount: number;
 }) {
+  const { t } = useAppTranslation();
   const answered = Boolean(item.answeredAt);
   const prayerMoment = isPrayerMomentKind(item.kind);
+  const displayCopy = communityPrayerMomentDisplayCopy(item, t);
   return (
     <CommunityFeedCard
       actions={
         prayerMoment ? (
-          <CommunityCardAction active icon="pray" label="Prayed" tone="prayer" />
+          <CommunityCardAction active icon="pray" label={t("community.action.prayer.completed")} tone="prayer" />
         ) : !answered ? (
-          <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" />
+          <CommunityCardAction
+            active={prayed}
+            icon="pray"
+            label={communityActionLabel("prayer_request", prayed, t)}
+            onPress={onPray}
+            tone="prayer"
+          />
         ) : undefined
       }
-      attachment={
-        <>
-          <LinkPreview text={item.body} />
-          <VerseList verse={item.verse} verses={item.verses} compact />
-        </>
-      }
+      attachment={<VerseList verse={item.verse} verses={item.verses} compact />}
       authorImage={authorImage}
       authorName={authorName}
-      body={item.body}
-      bodyFallback="No words today, just presence."
+      body={displayCopy.body}
+      bodyContent={
+        <LinkPreviewContent text={displayCopy.body}>
+          {({ hiddenUrl, preview }) => (
+            <>
+              <ExpandableBodyText collapsedLines={6} hiddenUrl={hiddenUrl}>
+                {displayCopy.body || t("community.card.noWords")}
+              </ExpandableBodyText>
+              {preview}
+            </>
+          )}
+        </LinkPreviewContent>
+      }
+      bodyFallback={t("community.card.noWords")}
       item={item}
       onOpen={onOpen}
       responseSummary={
         prayerMoment ? undefined : (
           <CommunityCardResponseSummary
             count={prayerCount}
-            label={prayerCountNoun(prayerCount)}
+            label={communityPrayerNoun(prayerCount, t)}
             showWhenEmpty
             users={prayedBy}
           />
         )
       }
       status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
-      title={item.title || defaultTitle(item)}
+      title={displayCopy.title || communityDefaultFeedTitle(item, t)}
     />
   );
 }
@@ -2433,6 +2510,7 @@ function CheckInCard({
   reactedBy?: { name: string; image?: GroupImage }[];
   reactionCount: number;
 }) {
+  const { t } = useAppTranslation();
   const itemKind = feedItemKind(item);
   return (
     <CommunityFeedCard
@@ -2440,7 +2518,7 @@ function CheckInCard({
         <CommunityCardAction
           active={reacted}
           icon="heart"
-          label={reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+          label={communityActionLabel(itemKind, reacted, t)}
           onPress={onReact}
           tone="check_in"
         />
@@ -2448,25 +2526,34 @@ function CheckInCard({
       attachment={
         <>
           <CommunityCheckInMood mood={item.mood} />
-          <LinkPreview text={item.body} />
           <VerseList verse={item.verse} verses={item.verses} compact />
         </>
       }
       authorImage={authorImage}
       authorName={authorName}
       body={item.body}
+      bodyContent={
+        <LinkPreviewContent text={item.body}>
+          {({ hiddenUrl, preview }) => (
+            <>
+              <ExpandableBodyText collapsedLines={6} hiddenUrl={hiddenUrl}>{item.body}</ExpandableBodyText>
+              {preview}
+            </>
+          )}
+        </LinkPreviewContent>
+      }
       item={item}
       onOpen={onOpen}
       responseSummary={
         reactedBy?.length ? (
           <CommunityCardResponseSummary
             count={reactionCount}
-            label={communityResponseLabel(item, reactionCount)}
+            label={communityResponseNoun(item, reactionCount, t)}
             users={reactedBy}
           />
         ) : undefined
       }
-      title={defaultTitle(item)}
+      title={communityDefaultFeedTitle(item, t)}
     />
   );
 }
@@ -2488,13 +2575,14 @@ function MembersPanel({
   onManage: () => void;
   onSwitchRoom: () => void;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ gap: 12 }}>
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
         <RoomImage image={group.image} name={group.name} size={58} />
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{memberLabel(memberCount)}</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{communityMemberCount(memberCount, t)}</Text>
         </View>
       </Card>
       <Card style={{ gap: 0, padding: 0 }}>
@@ -2515,10 +2603,12 @@ function MembersPanel({
               <Avatar image={member.image} name={member.name} size={38} tone={member.role === "owner" ? "orange" : "green"} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{member.name}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{member.role === "owner" ? "Community host" : "Member"}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  {t(member.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
+                </Text>
                 {checkIn ? (
                   <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>
-                    Last check-in: {moodLabel(checkIn.mood)}
+                    {t("community.members.lastCheckIn", { mood: communityMoodScaleLabel(checkIn.mood, t) })}
                   </Text>
                 ) : null}
               </View>
@@ -2535,17 +2625,17 @@ function MembersPanel({
         })}
       </Card>
       <PrimaryButton icon="share-2" onPress={onInvite}>
-        Invite members
+        {t("community.members.invite")}
       </PrimaryButton>
       <Card>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Community code</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.rooms.code")}</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </Card>
       <SecondaryButton icon="settings" onPress={onManage}>
-        Community settings
+        {t("community.management.title")}
       </SecondaryButton>
       <SecondaryButton icon="repeat" onPress={onSwitchRoom}>
-        Join or create community
+        {t("community.rooms.joinOrCreate")}
       </SecondaryButton>
     </View>
   );
@@ -2558,8 +2648,9 @@ function TransferOwnershipList({
   memberships: Membership[];
   onTransfer: (membership: Membership) => void;
 }) {
+  const { t } = useAppTranslation();
   if (memberships.length === 0) {
-    return <BodyText muted>Invite another member before transferring ownership.</BodyText>;
+    return <BodyText muted>{t("community.management.transferEmpty")}</BodyText>;
   }
 
   return (
@@ -2579,10 +2670,10 @@ function TransferOwnershipList({
           <Avatar image={membership.image} name={membership.userName} size={38} tone="green" />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Member</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.members.role.member")}</Text>
           </View>
           <Pressable
-            accessibilityLabel={`Transfer ownership to ${membership.userName}`}
+            accessibilityLabel={t("community.management.transferTo", { name: membership.userName })}
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => onTransfer(membership)}

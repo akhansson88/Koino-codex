@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { defaultFeedTitle as productDefaultFeedTitle, feedItemLabel, heartMoods, moodLabel, normalizeEntryKind } from "@/state/product";
+import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, FeedItem, GroupImage, HeartMood } from "@/state/types";
 import {
@@ -17,8 +17,9 @@ import {
   FullScreenModal,
   IconButton,
 } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
-import { prayerCountLabel } from "@/ui/prayer-copy";
+import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communityPrayerNoun, communitySystemError } from "@/ui/community-copy";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { QuietActionCard } from "@/ui/rhythm-cards";
@@ -34,16 +35,9 @@ function localDayKey(value: string | Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function kindLabel(item: FeedItem) {
-  return feedItemLabel(item);
-}
-
-function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, moodLabel);
-}
-
 export function HomeScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ checkIn?: string }>();
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
@@ -158,9 +152,9 @@ export function HomeScreen() {
       >
         <View style={{ gap: 5 }}>
           <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
-            {greeting ? `Good morning, ${greeting}` : "Good morning"}
+            {t(greeting ? "home.greeting.named" : "home.greeting.default", greeting ? { name: greeting } : undefined)}
           </Text>
-          <BodyText muted>Take a quiet moment with God.</BodyText>
+          <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
         </View>
 
         <HeartCheckInCard checkedIn={todaysCheckIn} onPress={openCheckIn} />
@@ -183,7 +177,7 @@ export function HomeScreen() {
 
         {state.authError ? (
           <Card>
-            <BodyText muted>{state.authError}</BodyText>
+            <BodyText muted>{communitySystemError(state.authError, t)}</BodyText>
           </Card>
         ) : null}
       </ScrollView>
@@ -207,13 +201,12 @@ export function HomeScreen() {
         onShare={setShareCheckIn}
         onBack={() => setCheckInStep("choose")}
         onSubmit={async () => {
-          const selected = heartMoods.find((option) => option.value === heartMood);
           await dispatch({
             type: "submitCheckIn",
             mood: moodNumber(heartMood),
             heartMood,
             readToday: true,
-            reflectionText: checkInText.trim() || selected?.description || "",
+            reflectionText: checkInText.trim(),
             visibility: shareCheckIn ? "group" : "private",
             verse: primaryBibleVerse(checkInVerses),
             verses: checkInVerses,
@@ -247,19 +240,20 @@ export function HomeScreen() {
       <FullScreenModal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
         <AppScreen>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-            <IconButton accessibilityLabel="Close" icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
-            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>Pray for someone</Text>
+            <IconButton accessibilityLabel={t("common.close")} icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
+            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t("community.prayer.prayForSomeone")}</Text>
             <View style={{ width: 38 }} />
           </View>
           <View style={{ gap: 6 }}>
-            <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>Who would you like to pray for?</Text>
-            <BodyText muted>Select a member from your community.</BodyText>
+            <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>{t("community.prayer.memberPromptTitle")}</Text>
+            <BodyText muted>{t("community.prayer.memberPromptBody")}</BodyText>
           </View>
           <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
             {state.users
               .filter((member) => member.id !== state.currentUserId)
               .map((member) => (
                 <Pressable
+                  accessibilityLabel={t("community.prayer.actions.prayForPerson", { name: member.name })}
                   accessibilityRole="button"
                   key={member.id}
                   onPress={() => {
@@ -278,7 +272,9 @@ export function HomeScreen() {
                     <Avatar image={member.image} name={member.name} size={46} tone="green" />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Pray for {member.name}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>
+                        {t("community.prayer.actions.prayForPerson", { name: member.name })}
+                      </Text>
                     </View>
                     <Feather name="heart" size={18} color={colors.gold} />
                   </Card>
@@ -286,7 +282,7 @@ export function HomeScreen() {
               ))}
             {state.users.filter((member) => member.id !== state.currentUserId).length === 0 ? (
               <Card>
-                <BodyText muted>No other members in this community yet.</BodyText>
+                <BodyText muted>{t("community.prayer.noOtherMembers")}</BodyText>
               </Card>
             ) : null}
           </ScrollView>
@@ -297,12 +293,13 @@ export function HomeScreen() {
 }
 
 function HeartCheckInCard({ checkedIn, onPress }: { checkedIn: boolean; onPress: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: 90, padding: 14 }}>
         <View style={{ flex: 1, gap: 5 }}>
-          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>How is your heart today?</Text>
-          <BodyText muted>{checkedIn ? "You checked in today. You can still pause with God." : "Check in and invite God into your day."}</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("community.checkIn.promptTitle")}</Text>
+          <BodyText muted>{t(checkedIn ? "home.checkIn.completedHint" : "home.checkIn.promptHint")}</BodyText>
         </View>
         <View
           style={{
@@ -334,15 +331,16 @@ function PrayerPreviewCard({
   userById: Map<string, string>;
   userImageById: Map<string, GroupImage | undefined>;
 }) {
+  const { t } = useAppTranslation();
   const previewUsers =
     openPrayer && openPrayer.type === "post"
-      ? [{ image: userImageById.get(openPrayer.userId), name: userById.get(openPrayer.userId) ?? "Someone" }, ...members]
+      ? [{ image: userImageById.get(openPrayer.userId), name: userById.get(openPrayer.userId) ?? t("common.someone") }, ...members]
       : members;
 
   return (
-    <QuietActionCard icon="heart" onPress={onPress} subtitle="See and pray for someone" title="Someone needs prayer">
+    <QuietActionCard icon="heart" onPress={onPress} subtitle={t("home.prayerPreview.subtitle")} title={t("home.prayerPreview.title")}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        {previewUsers.length ? <AvatarStack users={previewUsers} size={32} /> : <BodyText muted>No open prayer requests right now.</BodyText>}
+        {previewUsers.length ? <AvatarStack users={previewUsers} size={32} /> : <BodyText muted>{t("home.prayerPreview.empty")}</BodyText>}
         {previewUsers.length > 4 ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>+{previewUsers.length - 4}</Text> : null}
       </View>
     </QuietActionCard>
@@ -362,20 +360,22 @@ function CommunityPreviewCard({
   userById: Map<string, string>;
   userImageById: Map<string, GroupImage | undefined>;
 }) {
+  const { language, t } = useAppTranslation();
   if (!item) {
     return (
-      <QuietActionCard icon="users" subtitle="Take a moment to pray or reflect." title="Latest from your community">
-        <BodyText muted>Nothing new right now.</BodyText>
+      <QuietActionCard icon="users" subtitle={t("home.communityPreview.subtitle")} title={t("home.communityPreview.title")}>
+        <BodyText muted>{t("home.communityPreview.empty")}</BodyText>
       </QuietActionCard>
     );
   }
 
-  const authorName = userById.get(item.userId) ?? "Someone";
+  const authorName = userById.get(item.userId) ?? t("common.someone");
+  const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   return (
     <Pressable accessibilityRole="button" onPress={() => onOpen(item)}>
       <Card style={{ gap: 12, padding: 14 }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          <Text style={{ color: colors.ink, flex: 1, fontSize: 16, fontWeight: "900" }}>Latest from your community</Text>
+          <Text style={{ color: colors.ink, flex: 1, fontSize: 16, fontWeight: "900" }}>{t("home.communityPreview.title")}</Text>
           <Feather name="chevron-right" size={19} color={colors.muted} />
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
@@ -385,23 +385,25 @@ function CommunityPreviewCard({
               <Text numberOfLines={1} style={{ color: colors.ink, flex: 1, fontSize: 14, fontWeight: "900" }}>
                 {authorName}
               </Text>
-              <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>{kindLabel(item)}</Text>
+              <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>{communityFeedItemLabel(item, t)}</Text>
             </View>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
           </View>
         </View>
         <View style={{ gap: 5 }}>
           <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+            {displayCopy.title || communityDefaultFeedTitle(item, t)}
           </Text>
           <BodyText muted numberOfLines={2}>
-            {item.body || "No words today, just presence."}
+            {displayCopy.body || t("community.card.noWords")}
           </BodyText>
         </View>
         {prayerCount > 0 ? (
           <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
             <Feather name="heart" size={14} color={colors.muted} />
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountLabel(prayerCount)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+              {prayerCount} {communityPrayerNoun(prayerCount, t)}
+            </Text>
           </View>
         ) : null}
       </Card>

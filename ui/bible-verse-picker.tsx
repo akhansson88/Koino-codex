@@ -7,10 +7,11 @@ import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
 import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 
 export function BibleVerseField({
-  label = "Add verses (optional)",
+  label,
   onChange,
   verses,
 }: {
@@ -19,6 +20,7 @@ export function BibleVerseField({
   verses: BibleVerse[];
 }) {
   const { state } = useKoino();
+  const { t } = useAppTranslation();
   const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [pickerVisible, setPickerVisible] = useState(false);
   const selectedVerses = verses.slice(0, 5);
@@ -36,7 +38,7 @@ export function BibleVerseField({
   return (
     <View style={{ gap: 8 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <SectionHeading>{label}</SectionHeading>
+        <SectionHeading>{label || t("shared.scripturePicker.fieldLabel")}</SectionHeading>
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
       </View>
       {selectedVerses.length > 0 ? (
@@ -46,24 +48,29 @@ export function BibleVerseField({
               <View style={{ flex: 1 }}>
                 <VersePreviewCard verse={verse} compact />
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${verse.reference}`} onPress={() => removeVerse(verse.reference)} style={{ padding: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("shared.scripturePicker.removeReference", { reference: verse.reference })}
+                onPress={() => removeVerse(verse.reference)}
+                style={{ padding: 8 }}
+              >
                 <Feather name="x" size={18} color={colors.olive} />
               </Pressable>
             </View>
           ))}
           {canAddVerse ? (
             <SecondaryButton icon="plus" onPress={() => setPickerVisible(true)}>
-              Add another verse
+              {t("shared.scripturePicker.addAnother")}
             </SecondaryButton>
           ) : null}
         </View>
       ) : (
         <SecondaryButton icon="plus" onPress={() => setPickerVisible(true)}>
-          Add Bible verse
+          {t("shared.scripturePicker.addBibleVerse")}
         </SecondaryButton>
       )}
       {!canAddVerse ? (
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Maximum 5 Bible references</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("shared.scripturePicker.maxReferences")}</Text>
       ) : null}
       {canAddVerse ? (
         <BibleVersePicker
@@ -100,6 +107,7 @@ export function BibleVersePicker({
   onSelect: (verse: BibleVerse) => void;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   const firstBook = kjvBooks[0];
   const [bookQuery, setBookQuery] = useState("");
   const [selectedBook, setSelectedBook] = useState(firstBook?.name ?? "Genesis");
@@ -140,28 +148,28 @@ export function BibleVersePicker({
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={[typography.heading, { color: colors.ink, fontSize: 20, lineHeight: 26 }]}>Choose verse</Text>
+            <Text style={[typography.heading, { color: colors.ink, fontSize: 20, lineHeight: 26 }]}>{t("shared.scripturePicker.title")}</Text>
             <Text numberOfLines={1} style={[typography.caption, { color: colors.muted }]}>
               {bibleVersion.label}
             </Text>
           </View>
-          <IconButton accessibilityLabel="Close verse picker" icon="x" onPress={onBack} />
+          <IconButton accessibilityLabel={t("shared.scripturePicker.close")} icon="x" onPress={onBack} />
         </View>
-        <TextInputField value={bookQuery} onChangeText={setBookQuery} placeholder="Search books" />
+        <TextInputField value={bookQuery} onChangeText={setBookQuery} placeholder={t("shared.scripturePicker.searchBooks")} />
         <View style={{ gap: 10 }}>
-          <SectionHeading muted>Book</SectionHeading>
+          <SectionHeading muted>{t("shared.scripturePicker.book")}</SectionHeading>
           <PickerPills values={selectableBooks.map((item) => item.name)} selected={selectedBook} onSelect={chooseBook} />
         </View>
         <View style={{ gap: 10 }}>
-          <SectionHeading muted>Chapter</SectionHeading>
+          <SectionHeading muted>{t("shared.scripturePicker.chapter")}</SectionHeading>
           <PickerPills values={book?.chapters.map(String) ?? []} selected={String(selectedChapter)} onSelect={(value) => chooseChapter(Number(value))} />
         </View>
         <View style={{ gap: 10 }}>
-          <SectionHeading muted>Start verse</SectionHeading>
+          <SectionHeading muted>{t("shared.scripturePicker.startVerse")}</SectionHeading>
           <PickerPills values={chapterVerses.map(String)} selected={String(startVerse)} onSelect={(value) => chooseStartVerse(Number(value))} />
         </View>
         <View style={{ gap: 10 }}>
-          <SectionHeading muted>End verse</SectionHeading>
+          <SectionHeading muted>{t("shared.scripturePicker.endVerse")}</SectionHeading>
           <PickerPills
             values={chapterVerses.filter((verseNumber) => verseNumber >= startVerse).map(String)}
             selected={String(endVerse)}
@@ -170,7 +178,7 @@ export function BibleVersePicker({
         </View>
         <VersePreviewCard verse={preview} showOpenIndicator={false} />
         <PrimaryButton disabled={!preview} icon="book-open" onPress={() => preview && onSelect(preview)}>
-          Add {preview?.reference ?? "verse"}
+          {t("shared.scripturePicker.addReference", { reference: preview?.reference ?? t("shared.scripturePicker.verseFallback") })}
         </PrimaryButton>
       </AppScreen>
     </Modal>

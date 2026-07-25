@@ -3,6 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { Animated, Pressable, TextStyle, ViewStyle } from "react-native";
 
+import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius } from "@/ui/theme";
 
 export function RoomCodeCopy({
@@ -16,6 +17,7 @@ export function RoomCodeCopy({
   iconSize?: number;
   onCopied?: () => void;
 }) {
+  const { t } = useAppTranslation();
   const [copied, setCopied] = useState(false);
   const pulse = useRef(new Animated.Value(0)).current;
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -64,7 +66,7 @@ export function RoomCodeCopy({
 
   return (
     <Pressable
-      accessibilityLabel={`Copy community code ${code}`}
+      accessibilityLabel={t(copied ? "shared.roomCode.copied" : "shared.roomCode.copy", { code })}
       accessibilityRole="button"
       onPress={handleCopy}
       style={({ pressed }) =>

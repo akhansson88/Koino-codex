@@ -4,6 +4,7 @@ import { Pressable, Text, View } from "react-native";
 
 import type { GroupImage, Id } from "@/state/types";
 import { Avatar, Card, SecondaryButton } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 
@@ -15,26 +16,32 @@ export type PrayerActivityEntry = {
   image?: GroupImage;
 };
 
-export function formatPrayerDuration(seconds?: number) {
-  if (seconds === undefined) return "Duration unavailable";
-  if (seconds < 60) return `${seconds}s`;
+type AppTranslationFunction = ReturnType<typeof useAppTranslation>["t"];
+
+export function formatPrayerDuration(seconds: number | undefined, t: AppTranslationFunction) {
+  if (seconds === undefined) return t("community.prayerActivity.durationUnavailable");
+  if (seconds < 60) return t("community.prayerActivity.durationSeconds", { seconds });
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
-  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  return remainder
+    ? t("community.prayerActivity.durationMinutesSeconds", { minutes, seconds: remainder })
+    : t("community.prayerActivity.durationMinutes", { minutes });
 }
 
 export function PrayerActivity({
   activity,
-  title = "Prayer activity",
+  title,
 }: {
   activity: PrayerActivityEntry[];
   title?: string;
 }) {
+  const { language, t } = useAppTranslation();
   const [expanded, setExpanded] = useState(false);
   const [visibleCount, setVisibleCount] = useState(3);
   const activityKey = activity.map((entry) => entry.id).join("|");
   const visibleActivity = activity.slice(0, visibleCount);
   const remainingCount = Math.max(0, activity.length - visibleActivity.length);
+  const resolvedTitle = title ?? t("community.prayerActivity.title");
 
   useEffect(() => {
     setExpanded(false);
@@ -47,7 +54,9 @@ export function PrayerActivity({
     <Card style={{ gap: 0, padding: 0 }}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded((current) => !current)}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12 }}>
-          <Text style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>{`${title} (${activity.length})`}</Text>
+          <Text style={{ color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900" }}>
+            {t("community.prayerActivity.heading", { count: activity.length, title: resolvedTitle })}
+          </Text>
           <Feather name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
         </View>
       </Pressable>
@@ -67,9 +76,14 @@ export function PrayerActivity({
             >
               <Avatar image={entry.image} name={entry.name} size={34} tone="orange" />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{entry.name} prayed</Text>
+                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                  {t("community.prayerActivity.memberPrayed", { name: entry.name })}
+                </Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {formatRelativeTime(entry.createdAt)} - {formatPrayerDuration(entry.durationSeconds)}
+                  {t("community.prayerActivity.meta", {
+                    duration: formatPrayerDuration(entry.durationSeconds, t),
+                    time: formatRelativeTime(entry.createdAt, language),
+                  })}
                 </Text>
               </View>
             </View>
@@ -77,7 +91,7 @@ export function PrayerActivity({
           {remainingCount > 0 ? (
             <View style={{ padding: 12 }}>
               <SecondaryButton icon="chevron-down" onPress={() => setVisibleCount((count) => Math.min(activity.length, count + 10))} style={{ minHeight: 42 }}>
-                View more
+                {t("community.prayerActivity.viewMore")}
               </SecondaryButton>
             </View>
           ) : null}

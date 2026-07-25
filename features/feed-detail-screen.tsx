@@ -6,13 +6,8 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "re
 
 import { useKoino } from "@/state/koino-store";
 import {
-  actionLabels,
-  actionPastLabels,
-  defaultFeedTitle as productDefaultFeedTitle,
   entryKindIcon,
   feedItemKind,
-  feedItemLabel,
-  moodLabel,
 } from "@/state/product";
 import type { FeedItem, GroupImage, PostReactionKind } from "@/state/types";
 import {
@@ -27,8 +22,15 @@ import {
   TextInputField,
   VerseList,
 } from "@/ui/app-components";
-import { LinkPreview } from "@/ui/link-preview";
-import { prayerCountNoun } from "@/ui/prayer-copy";
+import { useAppTranslation } from "@/ui/app-language";
+import {
+  communityActionLabel,
+  communityDefaultFeedTitle,
+  communityFeedItemLabel,
+  communityPrayerMomentDisplayCopy,
+  communityPrayerNoun,
+} from "@/ui/community-copy";
+import { LinkPreviewContent } from "@/ui/link-preview";
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
@@ -40,17 +42,9 @@ function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function kindLabel(item: FeedItem) {
-  return feedItemLabel(item);
-}
-
 function kindIcon(item: FeedItem) {
   if (item.type === "check_in") return "check-circle" as const;
   return entryKindIcon(item.kind);
-}
-
-function defaultTitle(item: FeedItem) {
-  return productDefaultFeedTitle(item, moodLabel);
 }
 
 function targetTypeFor(item: FeedItem) {
@@ -62,6 +56,7 @@ export function FeedDetailScreen() {
   const routeId = routeParam(id);
   const routeTargetType = routeParam(routeTarget);
   const { state, dispatch } = useKoino();
+  const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const [replyDraft, setReplyDraft] = useState("");
   const [allowRemove, setAllowRemove] = useState(false);
@@ -111,12 +106,12 @@ export function FeedDetailScreen() {
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: reactions.length,
-      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
       activity: reactions
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
         .map((reaction) => ({
           id: reaction.id,
-          name: reaction.userId === state.currentUserId ? "You" : userById.get(reaction.userId) ?? "Someone",
+          name: reaction.userId === state.currentUserId ? t("common.you") : userById.get(reaction.userId) ?? t("common.someone"),
           image: userImageById.get(reaction.userId),
           createdAt: reaction.createdAt,
           durationSeconds:
@@ -124,7 +119,7 @@ export function FeedDetailScreen() {
             (reaction.startedAt && reaction.completedAt ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000)) : undefined),
         })),
     };
-  }, [item, state.currentUserId, state.prayerReactions, targetType, userById, userImageById]);
+  }, [item, state.currentUserId, state.prayerReactions, t, targetType, userById, userImageById]);
   const reaction = useMemo(() => {
     if (!item || !targetType) return undefined;
     const itemReactionKind = feedItemKind(item);
@@ -136,15 +131,15 @@ export function FeedDetailScreen() {
       reacted: reactions.some((candidate) => candidate.userId === state.currentUserId),
       count: reactions.length,
       kind,
-      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? "Someone", image: userImageById.get(userId) })),
+      reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
     };
-  }, [item, state.currentUserId, state.postReactions, targetType, userById, userImageById]);
+  }, [item, state.currentUserId, state.postReactions, t, targetType, userById, userImageById]);
 
   usePreventRemove(Boolean(replyDraft.trim()) && !allowRemove, ({ data }) => {
-    Alert.alert("Discard reply?", "Your draft encouragement has not been sent.", [
-      { text: "Keep writing", style: "cancel" },
+    Alert.alert(t("community.reply.discardTitle"), t("community.reply.discardBody"), [
+      { text: t("community.reply.keepWriting"), style: "cancel" },
       {
-        text: "Discard",
+        text: t("community.reply.discard"),
         style: "destructive",
         onPress: () => {
           setAllowRemove(true);
@@ -158,22 +153,23 @@ export function FeedDetailScreen() {
   if (!item || !targetType) {
     return (
       <AppScreen>
-        <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
+        <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
         <Card>
-          <BodyText muted>This post is no longer available.</BodyText>
+          <BodyText muted>{t("community.detail.unavailable")}</BodyText>
         </Card>
       </AppScreen>
     );
   }
 
-  const authorName = userById.get(item.userId) ?? "Someone";
+  const authorName = userById.get(item.userId) ?? t("common.someone");
   const authorImage = userImageById.get(item.userId);
   const itemKind = feedItemKind(item);
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
+  const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
-  const actionPastLabel = actionPastLabels[itemKind];
+  const actionPastLabel = communityActionLabel(itemKind, true, t);
   const canReact = !isPrayerRequest && !isPrayerMoment;
 
   async function sendReply() {
@@ -188,7 +184,7 @@ export function FeedDetailScreen() {
     setPrayerTarget({
       targetType,
       targetId: item.id,
-      body: item.body,
+      body: displayCopy.body,
       recipientUserId: item.userId,
       recipientName: authorName,
       recipientImage: authorImage,
@@ -204,38 +200,46 @@ export function FeedDetailScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
+          <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
           <Feather name="more-horizontal" size={22} color={colors.ink} />
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
           <Feather name={kindIcon(item)} size={18} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{kindLabel(item)}</Text>
+          <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{communityFeedItemLabel(item, t)}</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
           <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
           <View>
             <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
           </View>
         </View>
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
-            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+            {displayCopy.title || communityDefaultFeedTitle(item, t)}
           </Text>
-          <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{item.body || "No words today, just presence."}</BodyText>
-          <LinkPreview text={item.body} />
+          <LinkPreviewContent text={displayCopy.body}>
+            {({ hiddenUrl, preview }) => (
+              <>
+                <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 17, lineHeight: 25 }}>
+                  {displayCopy.body || t("community.card.noWords")}
+                </BodyText>
+                {preview}
+              </>
+            )}
+          </LinkPreviewContent>
         </View>
         <VerseList verse={item.verse} verses={item.verses} />
         {isPrayerRequest ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
               <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{prayerCountNoun(prayer?.count ?? 0)}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{communityPrayerNoun(prayer?.count ?? 0, t)}</Text>
             </View>
             <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
               <StatusPill status={prayerAnswered ? "answered" : "open"} />
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>status</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.prayer.status.label")}</Text>
             </View>
           </Card>
         ) : null}
@@ -243,15 +247,17 @@ export function FeedDetailScreen() {
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
             <Feather name="check-circle" size={20} color={colors.olive} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>Answered prayer</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Marked answered {formatRelativeTime(item.answeredAt ?? item.createdAt)}</Text>
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
+                {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
+              </Text>
             </View>
           </Card>
         ) : !isPrayerMoment ? (
           <View style={{ gap: 10 }}>
             <DetailPrayerButton onPress={startPrayer} prayed={Boolean(prayer?.prayed)} />
             {canReact ? (
-              <DetailReactionButton active={Boolean(reaction?.reacted)} label={reaction?.reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]} onPress={toggleReaction} />
+              <DetailReactionButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
             ) : null}
           </View>
         ) : null}
@@ -261,7 +267,9 @@ export function FeedDetailScreen() {
         {!isPrayerMoment ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-              {`${prayer?.count ?? 0} ${(prayer?.count ?? 0) === 1 ? "prayer" : "prayers"} recorded`}
+              {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
+                count: prayer?.count ?? 0,
+              })}
             </Text>
             {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
           </View>
@@ -269,14 +277,17 @@ export function FeedDetailScreen() {
         {canReact ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-              {`${actionPastLabel} by ${reaction?.count ?? 0} ${(reaction?.count ?? 0) === 1 ? "member" : "members"}`}
+              {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {
+                action: actionPastLabel,
+                count: reaction?.count ?? 0,
+              })}
             </Text>
             {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
           </View>
         ) : null}
         {replies.length > 0 ? (
           <View style={{ gap: 12 }}>
-            <SectionHeading>Encouragement</SectionHeading>
+            <SectionHeading>{t("community.reply.heading")}</SectionHeading>
             <Card style={{ gap: 0, padding: 0 }}>
               {replies.map((reply, index) => (
                 <View
@@ -291,17 +302,28 @@ export function FeedDetailScreen() {
                   <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                     <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? "Someone"}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt)}</Text>
+                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? t("common.someone")}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
                     </View>
                     {reply.userId === state.currentUserId ? (
-                      <Pressable onPress={() => dispatch({ type: "deleteReply", id: reply.id })} style={{ padding: 6 }}>
+                      <Pressable
+                        accessibilityLabel={t("community.reply.delete")}
+                        accessibilityRole="button"
+                        onPress={() => dispatch({ type: "deleteReply", id: reply.id })}
+                        style={{ padding: 6 }}
+                      >
                         <Feather name="trash-2" size={16} color={colors.danger} />
                       </Pressable>
                     ) : null}
                   </View>
-                  <BodyText>{reply.body}</BodyText>
-                  <LinkPreview text={reply.body} />
+                  <LinkPreviewContent text={reply.body}>
+                    {({ hiddenUrl, preview }) => (
+                      <>
+                        <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                        {preview}
+                      </>
+                    )}
+                  </LinkPreviewContent>
                 </View>
               ))}
             </Card>
@@ -312,11 +334,18 @@ export function FeedDetailScreen() {
             value={replyDraft}
             onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
             onSubmitEditing={sendReply}
-            placeholder={itemKind === "update" ? "Write a response..." : itemKind === "praise" ? "Write an amen..." : "Write an encouragement..."}
+            placeholder={
+              itemKind === "update"
+                ? t("community.reply.responsePlaceholder")
+                : itemKind === "praise"
+                  ? t("community.reply.amenPlaceholder")
+                  : t("community.reply.encouragementPlaceholder")
+            }
             returnKeyType="send"
             style={{ flex: 1 }}
           />
           <Pressable
+            accessibilityLabel={t("community.reply.send")}
             accessibilityRole="button"
             disabled={!replyDraft.trim()}
             onPress={sendReply}
@@ -355,6 +384,7 @@ export function FeedDetailScreen() {
 }
 
 function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
       accessibilityRole="button"
@@ -373,7 +403,9 @@ function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: 
       }}
     >
       <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
+      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>
+        {t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+      </Text>
     </Pressable>
   );
 }
@@ -403,6 +435,7 @@ function DetailReactionButton({ active, label, onPress }: { active: boolean; lab
 }
 
 function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
       accessibilityRole="button"
@@ -421,7 +454,7 @@ function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
       }}
     >
       <Feather name="check-circle" size={18} color={colors.olive} />
-      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>Mark answered</Text>
+      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.markAnswered")}</Text>
     </Pressable>
   );
 }

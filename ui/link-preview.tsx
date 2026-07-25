@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 
 import { firstUrl } from "@/ui/link-utils";
+import { useAppTranslation } from "@/ui/app-language";
 import { useOpenExternalLink } from "@/ui/in-app-browser";
 import { colors, radius } from "@/ui/theme";
 
@@ -15,7 +17,27 @@ type LinkPreviewData = {
   type?: string;
 };
 
-const previewCache = new Map<string, LinkPreviewData | null>();
+export type LinkPreviewProvenance = "loading" | "success" | "fallback";
+
+export type LinkPreviewState = {
+  provenance: LinkPreviewProvenance;
+  sourceUrl: string;
+};
+
+type ResolvedLinkPreview = LinkPreviewState & {
+  preview: LinkPreviewData | null;
+  provenance: Exclude<LinkPreviewProvenance, "loading">;
+};
+
+type LoadingLinkPreview = LinkPreviewState & {
+  preview: null;
+  promise: Promise<ResolvedLinkPreview>;
+  provenance: "loading";
+};
+
+type CachedLinkPreview = LoadingLinkPreview | ResolvedLinkPreview;
+
+const previewCache = new Map<string, CachedLinkPreview>();
 
 function youtubeVideoId(value: string) {
   try {
@@ -70,6 +92,14 @@ function previewWithFallback(data: LinkPreviewData | null, url: string): LinkPre
     siteName: videoId ? "YouTube" : undefined,
     type: videoId ? "video" : "website",
   };
+}
+
+function fallbackPreview(sourceUrl: string, preview = previewWithFallback(null, sourceUrl)): ResolvedLinkPreview {
+  return { preview, provenance: "fallback", sourceUrl };
+}
+
+function successfulPreview(sourceUrl: string, preview: LinkPreviewData): ResolvedLinkPreview {
+  return { preview, provenance: "success", sourceUrl };
 }
 
 function decodeHtml(value: string) {
@@ -156,7 +186,20 @@ function parsePreviewHtml(html: string, url: string): LinkPreviewData | null {
   };
 }
 
-async function fetchPreview(url: string, signal: AbortSignal) {
+function isLinkPreviewData(value: unknown): value is LinkPreviewData {
+  return Boolean(value && typeof value === "object" && typeof (value as { url?: unknown }).url === "string");
+}
+
+function isPreviewEnvelope(
+  value: unknown,
+): value is { preview: LinkPreviewData | null; provenance: Exclude<LinkPreviewProvenance, "loading"> } {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { preview?: unknown; provenance?: unknown };
+  if (candidate.provenance !== "success" && candidate.provenance !== "fallback") return false;
+  return candidate.preview === null || isLinkPreviewData(candidate.preview);
+}
+
+async function fetchPreview(url: string, signal: AbortSignal): Promise<ResolvedLinkPreview> {
   const endpoint = Platform.OS === "web" ? `/.netlify/functions/link-preview?url=${encodeURIComponent(url)}` : url;
   const response = await fetch(endpoint, {
     headers: Platform.OS === "web" ? undefined : { Accept: "text/html,application/xhtml+xml" },
@@ -165,12 +208,39 @@ async function fetchPreview(url: string, signal: AbortSignal) {
   if (!response.ok) throw new Error(`Preview request failed with ${response.status}`);
 
   if (Platform.OS === "web") {
-    const data = (await response.json()) as LinkPreviewData | null;
-    return previewWithFallback(data?.url ? data : null, url);
+    const data: unknown = await response.json();
+    if (!isPreviewEnvelope(data)) return fallbackPreview(url);
+    if (data.provenance === "success" && data.preview) return successfulPreview(url, data.preview);
+    return fallbackPreview(url, data.preview);
   }
 
   const html = await response.text();
-  return previewWithFallback(parsePreviewHtml(html.slice(0, 180000), url), url);
+  const parsedPreview = parsePreviewHtml(html.slice(0, 180000), url);
+  const preview = previewWithFallback(parsedPreview, url);
+  return parsedPreview && preview ? successfulPreview(url, preview) : fallbackPreview(url, preview);
+}
+
+function cachedPreview(sourceUrl: string) {
+  const existing = previewCache.get(sourceUrl);
+  if (existing) return existing;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  const promise = fetchPreview(sourceUrl, controller.signal)
+    .catch(() => fallbackPreview(sourceUrl))
+    .finally(() => clearTimeout(timeout))
+    .then((result) => {
+      previewCache.set(sourceUrl, result);
+      return result;
+    });
+  const loading: LoadingLinkPreview = {
+    preview: null,
+    promise,
+    provenance: "loading",
+    sourceUrl,
+  };
+  previewCache.set(sourceUrl, loading);
+  return loading;
 }
 
 function isVideoPreview(preview: LinkPreviewData) {
@@ -178,62 +248,93 @@ function isVideoPreview(preview: LinkPreviewData) {
   return haystack.includes("video") || haystack.includes("youtube.com") || haystack.includes("youtu.be") || haystack.includes("vimeo.com");
 }
 
-export function LinkPreview({ text }: { text?: string }) {
+function samePreviewText(left?: string, right?: string) {
+  if (!left || !right) return false;
+  return left.trim().replace(/\s+/g, " ").toLocaleLowerCase() === right.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+export function LinkPreview({
+  onPreviewStateChange,
+  text,
+}: {
+  onPreviewStateChange?: (state: LinkPreviewState) => void;
+  text?: string;
+}) {
+  const { t } = useAppTranslation();
   const openExternalLink = useOpenExternalLink();
-  const url = useMemo(() => firstUrl(text), [text]);
-  const [preview, setPreview] = useState<LinkPreviewData | null>();
+  const sourceUrl = useMemo(() => firstUrl(text), [text]);
+  const [result, setResult] = useState<CachedLinkPreview>(() => fallbackPreview("", null));
   const [imageFailed, setImageFailed] = useState(false);
   const [directImage, setDirectImage] = useState(false);
+  const [presentedPreviewUrl, setPresentedPreviewUrl] = useState("");
+  const onPreviewStateChangeRef = useRef(onPreviewStateChange);
+
+  useEffect(() => {
+    onPreviewStateChangeRef.current = onPreviewStateChange;
+  }, [onPreviewStateChange]);
 
   useEffect(() => {
     setImageFailed(false);
     setDirectImage(false);
-    if (!url) {
-      setPreview(null);
+  }, [sourceUrl]);
+
+  useEffect(() => {
+    let active = true;
+    if (!sourceUrl) {
+      setResult(fallbackPreview("", null));
       return;
     }
 
-    if (previewCache.has(url)) {
-      setPreview(previewCache.get(url));
-      return;
-    }
-
-    const controller = new AbortController();
-    setPreview(undefined);
-
-    fetchPreview(url, controller.signal)
-      .then((data) => {
-        previewCache.set(url, data);
-        setPreview(data);
-      })
-      .catch((error) => {
-        if (error instanceof Error && error.name === "AbortError") return;
-        const fallback = previewWithFallback(null, url);
-        previewCache.set(url, fallback);
-        setPreview(fallback);
+    const cached = cachedPreview(sourceUrl);
+    setResult(cached);
+    if (cached.provenance === "loading") {
+      void cached.promise.then((resolved) => {
+        if (active) setResult(resolved);
       });
+    }
 
-    return () => controller.abort();
-  }, [url]);
+    return () => {
+      active = false;
+    };
+  }, [sourceUrl]);
 
-  if (!url || preview === null) return null;
+  const provenance: LinkPreviewProvenance =
+    result.sourceUrl === sourceUrl ? result.provenance : sourceUrl ? "loading" : "fallback";
+  const preview = result.sourceUrl === sourceUrl && result.provenance === "success" ? result.preview : null;
+
+  useEffect(() => {
+    onPreviewStateChangeRef.current?.({ provenance, sourceUrl });
+    setPresentedPreviewUrl(provenance === "success" ? sourceUrl : "");
+  }, [provenance, sourceUrl]);
+
+  if (!sourceUrl || provenance !== "success" || presentedPreviewUrl !== sourceUrl || !preview) return null;
 
   const host = (() => {
     try {
-      return new URL(preview?.url ?? url).hostname.replace(/^www\./, "");
+      return new URL(preview.url || sourceUrl).hostname.replace(/^www\./, "");
     } catch {
       return "";
     }
   })();
-  const video = preview ? isVideoPreview(preview) : false;
-  const imageUri = preview?.image && !imageFailed ? displayImageUrl(preview.image, directImage) : "";
+  const video = isVideoPreview(preview);
+  const imageUri = preview.image && !imageFailed ? displayImageUrl(preview.image, directImage) : "";
+  const siteLabel = preview.siteName?.trim() || host || t("shared.linkPreview.link");
+  const titleLabel = preview.title?.trim() && !samePreviewText(preview.title, siteLabel) ? preview.title.trim() : "";
+  const descriptionLabel =
+    preview.description?.trim() &&
+    !samePreviewText(preview.description, siteLabel) &&
+    !samePreviewText(preview.description, titleLabel)
+      ? preview.description.trim()
+      : "";
+  const accessibilityLabel = [titleLabel, siteLabel, descriptionLabel].filter(Boolean).join(". ") || sourceUrl;
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       onPress={(event) => {
         event.stopPropagation();
-        openExternalLink(preview?.url ?? url);
+        openExternalLink(preview.url || sourceUrl);
       }}
       style={{
         backgroundColor: colors.input,
@@ -288,18 +389,56 @@ export function LinkPreview({ text }: { text?: string }) {
         <View style={{ alignItems: "center", flexDirection: "row", gap: 5 }}>
           <Feather name={video ? "play-circle" : "globe"} size={12} color={colors.gold} />
           <Text numberOfLines={1} style={{ color: colors.gold, flex: 1, fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>
-            {preview?.siteName || host || "Link"}
+            {siteLabel}
           </Text>
         </View>
-        <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 14, fontWeight: "900", lineHeight: 19 }}>
-          {preview?.title || host || url}
-        </Text>
-        {preview?.description ? (
+        {titleLabel ? (
+          <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 14, fontWeight: "900", lineHeight: 19 }}>
+            {titleLabel}
+          </Text>
+        ) : null}
+        {descriptionLabel ? (
           <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, fontWeight: "600", lineHeight: 16 }}>
-            {preview.description}
+            {descriptionLabel}
           </Text>
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+export function LinkPreviewContent({
+  children,
+  text,
+}: {
+  children: (state: {
+    hiddenUrl?: string;
+    preview: ReactNode;
+    provenance: LinkPreviewProvenance;
+    sourceUrl: string;
+  }) => ReactNode;
+  text?: string;
+}) {
+  const sourceUrl = useMemo(() => firstUrl(text), [text]);
+  const [reportedState, setReportedState] = useState<LinkPreviewState>({ provenance: "fallback", sourceUrl: "" });
+  const handlePreviewStateChange = useCallback((nextState: LinkPreviewState) => {
+    setReportedState((currentState) =>
+      currentState.provenance === nextState.provenance && currentState.sourceUrl === nextState.sourceUrl
+        ? currentState
+        : nextState,
+    );
+  }, []);
+  const provenance: LinkPreviewProvenance =
+    reportedState.sourceUrl === sourceUrl ? reportedState.provenance : sourceUrl ? "loading" : "fallback";
+
+  return (
+    <>
+      {children({
+        hiddenUrl: provenance === "success" ? sourceUrl : undefined,
+        preview: <LinkPreview key={sourceUrl || "no-link"} onPreviewStateChange={handlePreviewStateChange} text={text} />,
+        provenance,
+        sourceUrl,
+      })}
+    </>
   );
 }

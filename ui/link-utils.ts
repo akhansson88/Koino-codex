@@ -55,6 +55,24 @@ export function splitLinkText(value: string): LinkPart[] {
   return parts.length ? parts : [{ text: value }];
 }
 
+export function visibleLinkParts(value: string, hiddenUrl?: string) {
+  const normalizedHiddenUrl = hiddenUrl ? normalizeUrl(hiddenUrl) : "";
+  if (!normalizedHiddenUrl) return splitLinkText(value);
+
+  let hidden = false;
+  return splitLinkText(value).filter((part) => {
+    if (!hidden && part.url === normalizedHiddenUrl) {
+      hidden = true;
+      return false;
+    }
+    return true;
+  });
+}
+
+export function hasVisibleLinkText(value: string, hiddenUrl?: string) {
+  return visibleLinkParts(value, hiddenUrl).some((part) => /\S/.test(part.text));
+}
+
 export function firstUrl(value?: string) {
   if (!value) return "";
   return splitLinkText(value).find((part) => part.url)?.url ?? "";
