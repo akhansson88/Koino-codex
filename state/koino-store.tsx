@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FirebaseError, initializeApp, getApp, getApps } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
 import type { Auth, User as FirebaseUser } from "@firebase/auth";
-import { get, getDatabase, onValue, ref, remove, set, update } from "firebase/database";
+import { get, getDatabase, onValue, ref, remove, runTransaction, set, update } from "firebase/database";
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
@@ -67,6 +67,7 @@ try {
 const auth = authInstance;
 const database = getDatabase(app);
 const pendingCheckInKeys = new Set<string>();
+const pendingPrayerCompletionKeys = new Set<string>();
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
 const themeStorageKey = "koino.theme";
 
@@ -156,6 +157,32 @@ function localDayKey(value: string | Date) {
 
 function id(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function prayerReactionId(userId: Id, targetType: PrayerReaction["targetType"], targetId: Id) {
+  return `${userId}_${targetType}_${targetId}`;
+}
+
+function isMatchingPrayerReaction(
+  reaction: PrayerReaction,
+  userId: Id,
+  targetType: PrayerReaction["targetType"],
+  targetId: Id,
+) {
+  return reaction.userId === userId && reaction.targetType === targetType && reaction.targetId === targetId;
+}
+
+function prayerSessionFromReaction(reaction: PrayerReaction, recipientUserId?: Id): PrayerSession {
+  return {
+    id: reaction.id,
+    userId: reaction.userId,
+    targetType: reaction.targetType,
+    targetId: reaction.targetId,
+    ...(recipientUserId ? { recipientUserId } : {}),
+    startedAt: reaction.startedAt ?? reaction.createdAt,
+    completedAt: reaction.completedAt ?? reaction.createdAt,
+    status: "completed",
+  };
 }
 
 function inviteCode() {
@@ -739,6 +766,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     let active = true;
     let checkInsReady = false;
     let postsReady = false;
+    let prayerReactionsReady = false;
 
     setCommunityFeedError(undefined);
     setCommunityFeedGroupId(undefined);
@@ -753,7 +781,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setGroupBiblePlanParticipations([]);
 
     const markCommunityFeedReady = () => {
-      if (!active || !checkInsReady || !postsReady) return;
+      if (!active || !checkInsReady || !postsReady || !prayerReactionsReady) return;
       setCommunityFeedGroupId(groupId);
       setCommunityFeedReady(true);
     };
@@ -788,7 +816,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         markCommunityFeedReady();
       }, handleCommunityFeedError),
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
-      onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
+      onValue(reactionsRef, (snapshot) => {
+        if (!active) return;
+        setPrayerReactions(asArray<PrayerReaction>(snapshot.val()));
+        prayerReactionsReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(postReactionsRef, (snapshot) => setPostReactions(asArray<PostReaction>(snapshot.val()))),
       onValue(planAnnouncementsRef, (snapshot) =>
         setGroupBiblePlanAnnouncements(
@@ -1282,8 +1315,131 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               } else {
                 if (!journalEntries.some((item) => item.id === action.targetId && item.userId === firebaseUser.uid)) return;
               }
+
               const completedAt = now();
               const durationSeconds = Math.max(0, Math.floor((Date.parse(completedAt) - Date.parse(action.startedAt)) / 1000));
+              const reactionTargetType =
+                action.status === "completed" &&
+                (action.targetType === "post" || action.targetType === "check_in" || action.targetType === "reply")
+                  ? action.targetType
+                  : undefined;
+
+              if (reactionTargetType && profile?.currentGroupId) {
+                const groupId = profile.currentGroupId;
+                const reactionId = prayerReactionId(firebaseUser.uid, reactionTargetType, action.targetId);
+                const completionKey = `${groupId}:${reactionId}`;
+                if (pendingPrayerCompletionKeys.has(completionKey)) return;
+
+                const existingLocalReaction = prayerReactions.find((reaction) =>
+                  isMatchingPrayerReaction(reaction, firebaseUser.uid, reactionTargetType, action.targetId),
+                );
+                if (existingLocalReaction) {
+                  if (existingLocalReaction.id === reactionId) {
+                    await set(
+                      ref(database, `prayerSessions/${firebaseUser.uid}/${reactionId}`),
+                      prayerSessionFromReaction(existingLocalReaction, action.recipientUserId),
+                    );
+                  }
+                  return;
+                }
+
+                const reaction: PrayerReaction = {
+                  id: reactionId,
+                  userId: firebaseUser.uid,
+                  targetType: reactionTargetType,
+                  targetId: action.targetId,
+                  startedAt: action.startedAt,
+                  completedAt,
+                  durationSeconds,
+                  createdAt: completedAt,
+                };
+                const session = prayerSessionFromReaction(reaction, action.recipientUserId);
+
+                pendingPrayerCompletionKeys.add(completionKey);
+                setPrayerReactions((current) =>
+                  current.some((item) => isMatchingPrayerReaction(item, firebaseUser.uid, reactionTargetType, action.targetId))
+                    ? current
+                    : [...current, reaction],
+                );
+
+                let reactionCommitted = false;
+                try {
+                  const persistedSnapshot = await get(ref(database, `prayerReactions/${groupId}`));
+                  const persistedReaction = asArray<PrayerReaction>(persistedSnapshot.val()).find((item) =>
+                    isMatchingPrayerReaction(item, firebaseUser.uid, reactionTargetType, action.targetId),
+                  );
+
+                  if (persistedReaction) {
+                    setPrayerReactions((current) => {
+                      const withoutOptimisticReaction = current.filter((item) => item.id !== reactionId);
+                      return withoutOptimisticReaction.some((item) =>
+                        isMatchingPrayerReaction(item, firebaseUser.uid, reactionTargetType, action.targetId),
+                      )
+                        ? withoutOptimisticReaction
+                        : [...withoutOptimisticReaction, persistedReaction];
+                    });
+                    if (persistedReaction.id === reactionId) {
+                      await set(
+                        ref(database, `prayerSessions/${firebaseUser.uid}/${reactionId}`),
+                        prayerSessionFromReaction(persistedReaction, action.recipientUserId),
+                      );
+                    }
+                    return;
+                  }
+
+                  const transaction = await runTransaction(
+                    ref(database, `prayerReactions/${groupId}/${reactionId}`),
+                    (current) => (current ? undefined : reaction),
+                  );
+                  if (!transaction.committed) {
+                    const existingTransactionReaction = transaction.snapshot.val() as PrayerReaction | null;
+                    if (
+                      existingTransactionReaction &&
+                      isMatchingPrayerReaction(existingTransactionReaction, firebaseUser.uid, reactionTargetType, action.targetId)
+                    ) {
+                      await set(
+                        ref(database, `prayerSessions/${firebaseUser.uid}/${reactionId}`),
+                        prayerSessionFromReaction(existingTransactionReaction, action.recipientUserId),
+                      );
+                      return;
+                    }
+                    setPrayerReactions((current) =>
+                      current.filter(
+                        (item) =>
+                          !(
+                            item.id === reaction.id &&
+                            item.startedAt === reaction.startedAt &&
+                            item.completedAt === reaction.completedAt &&
+                            item.createdAt === reaction.createdAt
+                          ),
+                      ),
+                    );
+                    throw new Error("Prayer completion could not be saved.");
+                  }
+
+                  reactionCommitted = true;
+                  await set(ref(database, `prayerSessions/${firebaseUser.uid}/${session.id}`), session);
+                } catch (error) {
+                  if (!reactionCommitted) {
+                    setPrayerReactions((current) =>
+                      current.filter(
+                        (item) =>
+                          !(
+                            item.id === reaction.id &&
+                            item.startedAt === reaction.startedAt &&
+                            item.completedAt === reaction.completedAt &&
+                            item.createdAt === reaction.createdAt
+                          ),
+                      ),
+                    );
+                  }
+                  throw error;
+                } finally {
+                  pendingPrayerCompletionKeys.delete(completionKey);
+                }
+                return;
+              }
+
               const session: PrayerSession = {
                 id: id("prayersession"),
                 userId: firebaseUser.uid,
@@ -1310,25 +1466,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 await set(ref(database, `prayerNotifications/${action.recipientUserId}/${notification.id}`), notification);
               }
 
-              if (action.status === "completed" && action.targetType !== "journal_entry" && action.targetType !== "user" && profile?.currentGroupId) {
-                const reactionId = session.id;
-                const reaction: PrayerReaction = {
-                  id: reactionId,
-                  userId: firebaseUser.uid,
-                  targetType: action.targetType,
-                  targetId: action.targetId,
-                  startedAt: action.startedAt,
-                  completedAt,
-                  durationSeconds,
-                  createdAt: completedAt,
-                };
-                await set(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`), reaction);
-              }
               return;
             }
             case "unpray": {
               if (!firebaseUser || !profile?.currentGroupId) return;
-              const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}`;
+              const reactionId = prayerReactionId(firebaseUser.uid, action.targetType, action.targetId);
               await remove(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`));
               return;
             }

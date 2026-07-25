@@ -309,9 +309,7 @@ export function PrayerMoment({
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ]).start(({ finished }) => {
-        if (finished) complete();
-      });
+      ]).start(() => complete());
     },
     [contentTranslateY, reduceMotion, sceneOpacity, wavesTranslateY],
   );
