@@ -58,6 +58,7 @@ type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
+type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 type CommunityPrayerIntent = {
   recipientImage?: GroupImage;
   recipientName?: string;
@@ -936,13 +937,27 @@ export function SettingsScreen() {
                 </Pressable>
               </View>
 
-              <PrimaryButton
-                icon="heart"
-                onPress={() => startCommunityPrayer({ type: "pray_now" })}
-                style={{ minHeight: 42, paddingHorizontal: 12 }}
-              >
-                Pray now
-              </PrimaryButton>
+              <CommunityPrayerActions
+                groupId={group.id}
+                members={otherCommunityMembers}
+                onPrayForPerson={(assignedMember) => {
+                  if (!assignedMember) {
+                    setMemberSelectVisible(true);
+                    return;
+                  }
+
+                  startCommunityPrayer({
+                    recipientImage: assignedMember.image,
+                    recipientName: assignedMember.name,
+                    recipientUserId: assignedMember.id,
+                    type: "pray_for_someone",
+                  });
+                }}
+                onPrayForRequests={() => {
+                  setPrayerFilter("open");
+                  navigateToRoomView("prayer");
+                }}
+              />
 
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
                 <SectionHeading>
@@ -1443,6 +1458,151 @@ function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: str
       <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title}</Text>
       <View style={{ width: 38 }} />
     </View>
+  );
+}
+
+function CommunityPrayerActions({
+  activeAssignment,
+  groupId,
+  members,
+  onPrayForPerson,
+  onPrayForRequests,
+}: {
+  activeAssignment?: CommunityPrayerAssignment;
+  groupId: Id;
+  members: CommunityMember[];
+  onPrayForPerson: (assignedMember?: CommunityMember) => void;
+  onPrayForRequests: () => void;
+}) {
+  const [assignmentClock, setAssignmentClock] = useState(Date.now);
+
+  useEffect(() => {
+    const weekStartsAt = Date.parse(activeAssignment?.weekStartsAt ?? "");
+    const weekEndsAt = Date.parse(activeAssignment?.weekEndsAt ?? "");
+    if (!Number.isFinite(weekStartsAt) || !Number.isFinite(weekEndsAt)) return;
+
+    let boundaryTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNextBoundary = () => {
+      const currentTime = Date.now();
+      const nextBoundary = [weekStartsAt, weekEndsAt]
+        .filter((boundary) => boundary > currentTime)
+        .sort((left, right) => left - right)[0];
+      if (!nextBoundary) return;
+
+      boundaryTimer = setTimeout(() => {
+        setAssignmentClock(Date.now());
+        scheduleNextBoundary();
+      }, Math.min(nextBoundary - currentTime + 25, 2_147_000_000));
+    };
+
+    scheduleNextBoundary();
+    return () => {
+      if (boundaryTimer) clearTimeout(boundaryTimer);
+    };
+  }, [activeAssignment?.weekEndsAt, activeAssignment?.weekStartsAt]);
+
+  const now = Math.max(assignmentClock, Date.now());
+  const weekStartsAt = Date.parse(activeAssignment?.weekStartsAt ?? "");
+  const weekEndsAt = Date.parse(activeAssignment?.weekEndsAt ?? "");
+  const assignmentIsCurrent = Boolean(
+    activeAssignment?.groupId === groupId
+      && Number.isFinite(weekStartsAt)
+      && Number.isFinite(weekEndsAt)
+      && weekStartsAt <= now
+      && now < weekEndsAt,
+  );
+  const assignedMember = activeAssignment && assignmentIsCurrent
+    ? members.find((member) => member.id === activeAssignment.memberId)
+    : undefined;
+  const assignedName = assignedMember?.name.trim();
+  const activeAssignedMember = assignedName ? assignedMember : undefined;
+  const personIsPrimary = Boolean(activeAssignedMember);
+  const assignedFirstName = assignedName?.split(/\s+/)[0];
+
+  return (
+    <View style={{ alignItems: "stretch", flexDirection: "row", gap: 8 }}>
+      <CommunityPrayerAction
+        icon="list"
+        onPress={onPrayForRequests}
+        primary={!personIsPrimary}
+        subtitle="View current requests"
+        title="Pray for requests"
+      />
+      <CommunityPrayerAction
+        member={activeAssignedMember}
+        icon="users"
+        onPress={() => onPrayForPerson(activeAssignedMember)}
+        primary={personIsPrimary}
+        subtitle={activeAssignedMember ? "This week’s person" : "Choose a member"}
+        title={assignedFirstName ? `Pray for ${assignedFirstName}` : "Pray for someone"}
+      />
+    </View>
+  );
+}
+
+function CommunityPrayerAction({
+  icon,
+  member,
+  onPress,
+  primary,
+  subtitle,
+  title,
+}: {
+  icon: "list" | "users";
+  member?: CommunityMember;
+  onPress: () => void;
+  primary: boolean;
+  subtitle: string;
+  title: string;
+}) {
+  const titleColor = primary ? colors.onAccent : colors.ink;
+  const subtitleColor = primary ? colors.onAccent : colors.muted;
+
+  return (
+    <Pressable
+      accessibilityLabel={`${member ? `Pray for ${member.name}` : title}. ${subtitle}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: primary ? colors.gold : colors.paper,
+        borderColor: primary ? colors.gold : colors.line,
+        borderRadius: 16,
+        borderWidth: 1,
+        flex: 1,
+        flexDirection: "row",
+        gap: 8,
+        minHeight: 70,
+        minWidth: 0,
+        paddingHorizontal: 9,
+        paddingVertical: 9,
+      }}
+    >
+      {member ? (
+        <Avatar image={member.image} name={member.name} size={34} tone="green" />
+      ) : (
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: primary ? colors.paper : colors.accentSubtle,
+            borderRadius: 999,
+            height: 32,
+            justifyContent: "center",
+            width: 32,
+          }}
+        >
+          <Feather name={icon} size={16} color={colors.olive} />
+        </View>
+      )}
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <Text numberOfLines={2} style={{ color: titleColor, fontSize: 13, fontWeight: "900", lineHeight: 16 }}>
+          {title}
+        </Text>
+        <Text numberOfLines={2} style={{ color: subtitleColor, fontSize: 11, fontWeight: "700", lineHeight: 13 }}>
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
