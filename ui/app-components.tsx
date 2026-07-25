@@ -30,6 +30,7 @@ export function AppScreen({
   children,
   onContentSizeChange,
   onScroll,
+  onScrollBeginDrag,
   scroll = true,
   scrollEventThrottle,
   scrollRef,
@@ -37,6 +38,7 @@ export function AppScreen({
 }: PropsWithChildren<{
   onContentSizeChange?: ComponentProps<typeof ScrollView>["onContentSizeChange"];
   onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
+  onScrollBeginDrag?: ComponentProps<typeof ScrollView>["onScrollBeginDrag"];
   scroll?: boolean;
   scrollEventThrottle?: number;
   scrollRef?: Ref<ScrollView>;
@@ -54,6 +56,7 @@ export function AppScreen({
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
         ref={scrollRef}
         scrollEventThrottle={scrollEventThrottle}
         showsVerticalScrollIndicator={false}

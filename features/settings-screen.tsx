@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
@@ -41,6 +42,7 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { prayerCountLabel, prayerCountNoun } from "@/ui/prayer-copy";
@@ -51,7 +53,7 @@ import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-crop
 import { SharedComposer } from "@/ui/shared-composer";
 import { PostCard } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "members";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
@@ -59,6 +61,7 @@ type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
+type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>>>;
 type CommunityPrayerIntent = {
   recipientImage?: GroupImage;
   recipientName?: string;
@@ -68,6 +71,10 @@ type CommunityPrayerIntent = {
 type PendingPrayerPost = CommunityPrayerIntent & { completedAt: string };
 
 const PRAYER_POST_NOTE_LIMIT = 280;
+const COMMUNITY_RECENT_DAYS = 30;
+const COMMUNITY_RECENT_ITEM_LIMIT = 20;
+const COMMUNITY_EARLIER_PAGE_SIZE = 20;
+const COMMUNITY_FEED_TIMER_MAX_DELAY = 2_147_000_000;
 
 function localDayKey(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -128,6 +135,38 @@ function defaultTitle(item: FeedItem) {
   return productDefaultFeedTitle(item, moodLabel);
 }
 
+function communityFeedItemKey(item: FeedItem) {
+  return `${item.type}:${item.id}`;
+}
+
+function compareCommunityFeedItems(left: FeedItem, right: FeedItem) {
+  const leftTime = Date.parse(left.createdAt);
+  const rightTime = Date.parse(right.createdAt);
+  const leftIsValid = Number.isFinite(leftTime);
+  const rightIsValid = Number.isFinite(rightTime);
+
+  if (leftIsValid && rightIsValid && leftTime !== rightTime) return rightTime - leftTime;
+  if (leftIsValid !== rightIsValid) return leftIsValid ? -1 : 1;
+  return communityFeedItemKey(left).localeCompare(communityFeedItemKey(right));
+}
+
+function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
+  const cutoff = now - COMMUNITY_RECENT_DAYS * 24 * 60 * 60 * 1000;
+  const recent: FeedItem[] = [];
+  const earlier: FeedItem[] = [];
+
+  for (const item of items) {
+    const createdAt = Date.parse(item.createdAt);
+    if (Number.isFinite(createdAt) && createdAt >= cutoff && recent.length < COMMUNITY_RECENT_ITEM_LIMIT) {
+      recent.push(item);
+    } else {
+      earlier.push(item);
+    }
+  }
+
+  return { earlier, recent };
+}
+
 export function SettingsScreen() {
   const { state, dispatch } = useKoino();
   const [roomView, setRoomView] = useState<RoomView>("detail");
@@ -167,6 +206,11 @@ export function SettingsScreen() {
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
   const [shareCheckIn, setShareCheckIn] = useState(true);
   const [submittedCheckInKey, setSubmittedCheckInKey] = useState<string>();
+  const [communityFeedRevealState, setCommunityFeedRevealState] = useState<CommunityFeedRevealState>({});
+  const [communityFeedClock, setCommunityFeedClock] = useState(Date.now);
+  const communityScrollRef = useRef<ScrollView | null>(null);
+  const communityScrollOffsetsRef = useRef<Record<string, number>>({});
+  const pendingCommunityScrollRestoreRef = useRef<{ key: string; offset: number } | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -230,7 +274,7 @@ export function SettingsScreen() {
         answeredMarkedAt: item.answeredMarkedAt,
         createdAt: item.createdAt,
       }));
-    return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return [...checkIns, ...posts].sort(compareCommunityFeedItems);
   }, [state.checkIns, state.currentGroupId, state.posts]);
   const visibleFeedItems = useMemo(() => {
     if (detailTab === "prayer") {
@@ -244,6 +288,18 @@ export function SettingsScreen() {
     }
     return feedItems;
   }, [detailTab, feedItems]);
+  const { earlier: earlierFeedItems, recent: recentFeedItems } = partitionCommunityFeed(
+    visibleFeedItems,
+    Math.max(communityFeedClock, Date.now()),
+  );
+  const revealedEarlierCount = group ? Math.min(communityFeedRevealState[group.id]?.[detailTab] ?? 0, earlierFeedItems.length) : 0;
+  const visibleEarlierFeedItems = earlierFeedItems.slice(0, revealedEarlierCount);
+  const hasMoreEarlierFeedItems = revealedEarlierCount < earlierFeedItems.length;
+  const communityFeedStatusMatchesGroup = Boolean(group && state.communityFeedGroupId === group.id);
+  const communityFeedReadyForGroup = Boolean(group && communityFeedStatusMatchesGroup && state.communityFeedReady);
+  const communityFeedError = communityFeedStatusMatchesGroup ? state.communityFeedError : undefined;
+  const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
+  const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
   const prayerPosts = feedItems.filter(
     (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && isPrayerFeedKind(item.kind),
   );
@@ -269,6 +325,30 @@ export function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setCommunityFeedClock(Date.now());
+    }, []),
+  );
+
+  useEffect(() => {
+    const currentTime = Date.now();
+    const recentWindowMs = COMMUNITY_RECENT_DAYS * 24 * 60 * 60 * 1000;
+    const nextExpiration = visibleFeedItems
+      .map((item) => Date.parse(item.createdAt))
+      .filter((createdAt) => Number.isFinite(createdAt))
+      .map((createdAt) => createdAt + recentWindowMs)
+      .filter((expiresAt) => expiresAt > currentTime)
+      .sort((left, right) => left - right)[0];
+    if (!nextExpiration) return;
+
+    const expirationTimer = setTimeout(
+      () => setCommunityFeedClock(Date.now()),
+      Math.min(nextExpiration - currentTime + 25, COMMUNITY_FEED_TIMER_MAX_DELAY),
+    );
+    return () => clearTimeout(expirationTimer);
+  }, [communityFeedClock, visibleFeedItems]);
+
+  useFocusEffect(
+    useCallback(() => {
       if (roomViewRef.current !== "detail") {
         setTransitionDirection("back");
       }
@@ -285,6 +365,19 @@ export function SettingsScreen() {
   useEffect(() => {
     roomViewRef.current = roomView;
   }, [roomView]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (roomView !== "detail" || !communityScrollKey || !communityFeedReadyForGroup || communityFeedError) return;
+
+      pendingCommunityScrollRestoreRef.current = {
+        key: communityScrollKey,
+        offset: communityScrollOffsetsRef.current[communityScrollKey] ?? 0,
+      };
+      const restoreTimer = setTimeout(() => restorePendingCommunityScroll(), 50);
+      return () => clearTimeout(restoreTimer);
+    }, [communityFeedError, communityFeedReadyForGroup, communityScrollKey, roomView]),
+  );
 
   const navigateToRoomView = useCallback((nextView: RoomView, direction: TransitionDirection = "forward") => {
     setTransitionDirection(direction);
@@ -350,7 +443,65 @@ export function SettingsScreen() {
     setEditingPost(undefined);
   }
 
+  function restorePendingCommunityScroll() {
+    const pendingRestore = pendingCommunityScrollRestoreRef.current;
+    if (!pendingRestore || pendingRestore.key !== communityScrollKey) return;
+
+    communityScrollRef.current?.scrollTo({ animated: false, y: pendingRestore.offset });
+  }
+
+  function handleCommunityScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (!communityScrollKey) return;
+    const offset = event.nativeEvent.contentOffset.y;
+    const pendingRestore = pendingCommunityScrollRestoreRef.current;
+    if (pendingRestore?.key === communityScrollKey) {
+      if (Math.abs(offset - pendingRestore.offset) <= 2 || offset >= pendingRestore.offset - 2) {
+        pendingCommunityScrollRestoreRef.current = undefined;
+        communityScrollOffsetsRef.current[communityScrollKey] = offset;
+      }
+      return;
+    }
+
+    communityScrollOffsetsRef.current[communityScrollKey] = offset;
+  }
+
+  function handleCommunityScrollBeginDrag() {
+    const pendingRestore = pendingCommunityScrollRestoreRef.current;
+    if (pendingRestore?.key === communityScrollKey) {
+      pendingCommunityScrollRestoreRef.current = undefined;
+    }
+  }
+
+  function revealEarlierActivity() {
+    if (!group || earlierFeedItems.length === 0) return;
+
+    const nextCount = Math.min(revealedEarlierCount + COMMUNITY_EARLIER_PAGE_SIZE, earlierFeedItems.length);
+    const newlyRevealedCount = nextCount - revealedEarlierCount;
+    if (newlyRevealedCount <= 0) return;
+
+    setCommunityFeedRevealState((current) => {
+      return {
+        ...current,
+        [group.id]: {
+          ...current[group.id],
+          [detailTab]: Math.max(current[group.id]?.[detailTab] ?? 0, nextCount),
+        },
+      };
+    });
+    AccessibilityInfo.announceForAccessibility(
+      newlyRevealedCount === 1 ? "1 earlier activity item is now shown." : `${newlyRevealedCount} earlier activity items are now shown.`,
+    );
+  }
+
   function handleCommunityTabChange(tab: RoomDetailTab) {
+    if (tab === detailTab) return;
+    if (group) {
+      const targetKey = `${group.id}:${tab}`;
+      pendingCommunityScrollRestoreRef.current = {
+        key: targetKey,
+        offset: communityScrollOffsetsRef.current[targetKey] ?? 0,
+      };
+    }
     setDetailTab(tab);
   }
 
@@ -713,6 +864,63 @@ export function SettingsScreen() {
     setManageSheetVisible(false);
   }
 
+  function renderCommunityFeedItem(item: FeedItem) {
+    const key = communityFeedItemKey(item);
+
+    if (item.type === "check_in") {
+      return (
+        <CheckInCard
+          key={key}
+          authorImage={userImageById.get(item.userId)}
+          authorName={userById.get(item.userId) ?? "Someone"}
+          item={item}
+          onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+        />
+      );
+    }
+
+    if (isPrayerFeedKind(item.kind)) {
+      const prayer = itemPrayerState(item);
+      return (
+        <PrayerRequestCard
+          key={key}
+          authorImage={userImageById.get(item.userId)}
+          authorName={userById.get(item.userId) ?? "Someone"}
+          item={item}
+          prayed={prayer.prayed}
+          prayedBy={prayer.prayedBy}
+          prayerCount={prayer.count}
+          onOpen={() => openPrayerDetail(item, "detail")}
+          onPray={() => prayForItem(item)}
+        />
+      );
+    }
+
+    const prayer = itemPrayerState(item);
+    const reaction = itemReactionState(item);
+    return (
+      <PostCard
+        key={key}
+        authorImage={userImageById.get(item.userId)}
+        authorName={userById.get(item.userId) ?? "Someone"}
+        item={item}
+        ownsItem={item.userId === state.currentUserId}
+        prayed={prayer.prayed}
+        prayedBy={prayer.prayedBy}
+        prayerCount={prayer.count}
+        reacted={reaction.reacted}
+        reactedBy={reaction.reactedBy}
+        reactionCount={reaction.count}
+        replyCount={itemReplies(item).length}
+        onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+        onPray={() => prayForItem(item)}
+        onReact={() => togglePostAction(item)}
+        onEdit={() => editPost(item)}
+        onDelete={() => deletePost(item)}
+      />
+    );
+  }
+
   const communityCheckInModal = group ? (
     <CheckInModal
       visible={checkInVisible}
@@ -906,7 +1114,14 @@ export function SettingsScreen() {
     return (
       <>
         <CommunityTransitionFrame animationKey={roomView} direction={transitionDirection}>
-          <AppScreen topInset={false}>
+          <AppScreen
+            onContentSizeChange={restorePendingCommunityScroll}
+            onScroll={handleCommunityScroll}
+            onScrollBeginDrag={handleCommunityScrollBeginDrag}
+            scrollEventThrottle={16}
+            scrollRef={communityScrollRef}
+            topInset={false}
+          >
             <View style={{ gap: 12 }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
                 <Pressable
@@ -987,7 +1202,11 @@ export function SettingsScreen() {
             </View>
 
             <View style={{ gap: 12 }}>
-              {visibleFeedItems.length === 0 ? (
+              {communityFeedLoading ? (
+                <CommunityFeedLoadingState />
+              ) : communityFeedError ? (
+                <CommunityFeedErrorState message={communityFeedError} />
+              ) : visibleFeedItems.length === 0 ? (
                 <Card>
                   <BodyText muted>
                     {detailTab === "recent"
@@ -1000,60 +1219,26 @@ export function SettingsScreen() {
                   </BodyText>
                 </Card>
               ) : (
-                visibleFeedItems.map((item) => {
-                  if (item.type === "check_in") {
-                    return (
-                      <CheckInCard
-                        key={`${item.type}-${item.id}`}
-                        authorImage={userImageById.get(item.userId)}
-                        authorName={userById.get(item.userId) ?? "Someone"}
-                        item={item}
-                        onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                      />
-                    );
-                  }
-
-                  if (isPrayerFeedKind(item.kind)) {
-                    const prayer = itemPrayerState(item);
-                    return (
-                      <PrayerRequestCard
-                        key={`${item.type}-${item.id}`}
-                        authorImage={userImageById.get(item.userId)}
-                        authorName={userById.get(item.userId) ?? "Someone"}
-                        item={item}
-                        prayed={prayer.prayed}
-                        prayedBy={prayer.prayedBy}
-                        prayerCount={prayer.count}
-                        onOpen={() => openPrayerDetail(item, "detail")}
-                        onPray={() => prayForItem(item)}
-                      />
-                    );
-                  }
-
-                  const prayer = itemPrayerState(item);
-                  const reaction = itemReactionState(item);
-                  return (
-                    <PostCard
-                      key={`${item.type}-${item.id}`}
-                      authorImage={userImageById.get(item.userId)}
-                      authorName={userById.get(item.userId) ?? "Someone"}
-                      item={item}
-                      ownsItem={item.userId === state.currentUserId}
-                      prayed={prayer.prayed}
-                      prayedBy={prayer.prayedBy}
-                      prayerCount={prayer.count}
-                      reacted={reaction.reacted}
-                      reactedBy={reaction.reactedBy}
-                      reactionCount={reaction.count}
-                      replyCount={itemReplies(item).length}
-                      onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
-                      onPray={() => prayForItem(item)}
-                      onReact={() => togglePostAction(item)}
-                      onEdit={() => editPost(item)}
-                      onDelete={() => deletePost(item)}
-                    />
-                  );
-                })
+                <>
+                  {recentFeedItems.map(renderCommunityFeedItem)}
+                  <CommunityFeedEndpoint
+                    communityName={group.name}
+                    detailTab={detailTab}
+                    onViewEarlier={earlierFeedItems.length > 0 && visibleEarlierFeedItems.length === 0 ? revealEarlierActivity : undefined}
+                    variant={recentFeedItems.length > 0 ? "caught-up" : "no-recent"}
+                  />
+                  {visibleEarlierFeedItems.length > 0 ? (
+                    <>
+                      <CommunityActivityDivider label="Earlier activity" />
+                      {visibleEarlierFeedItems.map(renderCommunityFeedItem)}
+                      {hasMoreEarlierFeedItems ? (
+                        <CommunityEarlierActivityAction onPress={revealEarlierActivity} />
+                      ) : (
+                        <CommunityActivityDivider label="Beginning of shared activity" />
+                      )}
+                    </>
+                  ) : null}
+                </>
               )}
             </View>
           </AppScreen>
@@ -1374,6 +1559,106 @@ export function SettingsScreen() {
 
 export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
+
+function communityFeedEndpointBody(detailTab: RoomDetailTab, communityName: string, variant: "caught-up" | "no-recent") {
+  if (variant === "no-recent") {
+    if (detailTab === "prayer") return `No prayers have been shared in ${communityName} during the last 30 days.`;
+    if (detailTab === "checkins") return `No check-ins have been shared in ${communityName} during the last 30 days.`;
+    if (detailTab === "reflections") return `No reflections have been shared in ${communityName} during the last 30 days.`;
+    return `Nothing has been shared in ${communityName} during the last 30 days.`;
+  }
+
+  if (detailTab === "prayer") return `You’ve reached the end of the latest prayers in ${communityName}.`;
+  if (detailTab === "checkins") return `You’ve reached the end of the latest check-ins in ${communityName}.`;
+  if (detailTab === "reflections") return `You’ve reached the end of the latest reflections in ${communityName}.`;
+  return `You’ve reached the end of the latest activity in ${communityName}.`;
+}
+
+function CommunityFeedEndpoint({
+  communityName,
+  detailTab,
+  onViewEarlier,
+  variant,
+}: {
+  communityName: string;
+  detailTab: RoomDetailTab;
+  onViewEarlier?: () => void;
+  variant: "caught-up" | "no-recent";
+}) {
+  return (
+    <View style={{ alignItems: "center", gap: 5, paddingBottom: 6, paddingHorizontal: 16, paddingTop: 14 }}>
+      <BrandWaveMotif height={12} opacity={0.65} variant="accent" width={58} />
+      <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, lineHeight: 20, textAlign: "center" }]}>
+        {variant === "caught-up" ? "You’re caught up" : "No recent activity"}
+      </Text>
+      <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>
+        {communityFeedEndpointBody(detailTab, communityName, variant)}
+      </Text>
+      {onViewEarlier ? (
+        <Pressable
+          accessibilityLabel={`View earlier activity in ${communityName}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onViewEarlier}
+          style={{ alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
+        >
+          <Text style={[typography.label, { color: colors.olive }]}>View earlier activity</Text>
+          <Feather name="chevron-down" size={16} color={colors.olive} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function CommunityFeedLoadingState() {
+  return (
+    <View
+      accessibilityLabel="Loading community activity"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+      style={{ alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 24 }}
+    >
+      <ActivityIndicator color={colors.olive} size="small" />
+      <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>Loading community activity…</Text>
+    </View>
+  );
+}
+
+function CommunityFeedErrorState({ message }: { message: string }) {
+  return (
+    <View accessibilityLiveRegion="assertive" accessibilityRole="alert">
+      <Card style={{ alignItems: "center", gap: 6, padding: 18 }}>
+        <Feather name="cloud-off" size={20} color={colors.muted} />
+        <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, textAlign: "center" }]}>Community activity unavailable</Text>
+        <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>{message}</Text>
+      </Card>
+    </View>
+  );
+}
+
+function CommunityActivityDivider({ label }: { label: string }) {
+  return (
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 4 }}>
+      <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
+      <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
+      <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
+    </View>
+  );
+}
+
+function CommunityEarlierActivityAction({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel="View more earlier activity"
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{ alignItems: "center", alignSelf: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
+    >
+      <Text style={[typography.label, { color: colors.olive }]}>View more</Text>
+      <Feather name="chevron-down" size={16} color={colors.olive} />
+    </Pressable>
+  );
+}
 
 function CommunityTransitionFrame({
   animationKey,
