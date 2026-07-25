@@ -1,4 +1,3 @@
-import type { ComponentProps } from "react";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
@@ -21,8 +20,6 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, radius } from "@/ui/theme";
 
 export type CheckInStep = "choose" | "details" | "thanks";
-type FeatherName = ComponentProps<typeof Feather>["name"];
-
 const moodCopyKeys = {
   peaceful: {
     description: "community.checkIn.mood.peaceful.description",
@@ -57,13 +54,13 @@ export function moodNumber(mood?: HeartMood) {
   return 3;
 }
 
-function moodToneFor(mood: HeartMood): { background: string; color: string; icon: FeatherName } {
-  if (mood === "peaceful") return { background: colors.rhythmSoft, color: colors.textMuted, icon: "feather" };
-  if (mood === "grateful") return { background: colors.warmSoft, color: colors.textMuted, icon: "sun" };
-  if (mood === "heavy") return { background: colors.reflectionSoft, color: colors.textSecondary, icon: "cloud" };
-  if (mood === "anxious") return { background: colors.prayerSoft, color: colors.textMuted, icon: "cloud-rain" };
-  if (mood === "hopeful") return { background: colors.warmSoft, color: colors.textMuted, icon: "star" };
-  return { background: colors.lavenderSoft, color: colors.textMuted, icon: "moon" };
+function moodToneFor(mood: HeartMood): { background: string; color: string } {
+  if (mood === "peaceful") return { background: colors.rhythmSoft, color: colors.textMuted };
+  if (mood === "grateful") return { background: colors.warmSoft, color: colors.textMuted };
+  if (mood === "heavy") return { background: colors.reflectionSoft, color: colors.textSecondary };
+  if (mood === "anxious") return { background: colors.prayerSoft, color: colors.textMuted };
+  if (mood === "hopeful") return { background: colors.warmSoft, color: colors.textMuted };
+  return { background: colors.lavenderSoft, color: colors.textMuted };
 }
 
 export function CheckInModal({
@@ -130,6 +127,10 @@ export function CheckInModal({
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {heartMoods.map((option) => (
                   <MoodOptionCard
+                    accessibilityLabel={t("community.checkIn.stateAccessibility", {
+                      description: t(moodCopyKeys[option.value].description),
+                      label: t(moodCopyKeys[option.value].label),
+                    })}
                     description={t(moodCopyKeys[option.value].description)}
                     key={option.value}
                     label={t(moodCopyKeys[option.value].label)}
@@ -229,12 +230,14 @@ export function CheckInModal({
 }
 
 function MoodOptionCard({
+  accessibilityLabel,
   description,
   label,
   onPress,
   option,
   selected,
 }: {
+  accessibilityLabel: string;
   description: string;
   label: string;
   onPress: () => void;
@@ -242,7 +245,13 @@ function MoodOptionCard({
   selected: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={{ flexBasis: "47%", flexGrow: 1 }}>
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={{ flexBasis: "47%", flexGrow: 1, minWidth: 0 }}
+    >
       <View
         style={{
           alignItems: "center",
@@ -253,6 +262,7 @@ function MoodOptionCard({
           gap: 10,
           minHeight: 136,
           padding: 12,
+          width: "100%",
           ...platformShadow({
             boxShadow: "0 8px 18px rgba(11, 18, 32, 0.04)",
             offset: { width: 0, height: 8 },
@@ -262,9 +272,9 @@ function MoodOptionCard({
         }}
       >
         <MoodIcon mood={option.value} />
-        <View style={{ alignItems: "center", gap: 4 }}>
-          <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900", textAlign: "center" }}>{label}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{description}</Text>
+        <View style={{ alignItems: "center", alignSelf: "stretch", gap: 4, minWidth: 0 }}>
+          <Text style={{ color: colors.ink, flexShrink: 1, fontSize: 14, fontWeight: "900", lineHeight: 19, textAlign: "center" }}>{label}</Text>
+          <Text style={{ color: colors.muted, flexShrink: 1, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{description}</Text>
         </View>
       </View>
     </Pressable>
@@ -273,8 +283,12 @@ function MoodOptionCard({
 
 function MoodIcon({ mood, size = 48 }: { mood: HeartMood; size?: number }) {
   const tone = moodToneFor(mood);
+  const icon = heartMoods.find((option) => option.value === mood)?.icon ?? "circle";
   return (
     <View
+      accessibilityElementsHidden
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
       style={{
         alignItems: "center",
         backgroundColor: tone.background,
@@ -284,7 +298,7 @@ function MoodIcon({ mood, size = 48 }: { mood: HeartMood; size?: number }) {
         width: size,
       }}
     >
-      <Feather name={tone.icon} size={Math.round(size * 0.45)} color={tone.color} />
+      <Feather name={icon} size={Math.round(size * 0.45)} color={tone.color} />
     </View>
   );
 }

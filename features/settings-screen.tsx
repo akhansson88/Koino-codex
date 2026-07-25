@@ -2601,13 +2601,13 @@ function MembersPanel({
               }}
             >
               <Avatar image={member.image} name={member.name} size={38} tone={member.role === "owner" ? "orange" : "green"} />
-              <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
                 <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{member.name}</Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
                   {t(member.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
                 </Text>
                 {checkIn ? (
-                  <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}>
+                  <Text style={{ color: colors.muted, flexShrink: 1, fontSize: 12, fontWeight: "600" }}>
                     {t("community.members.lastCheckIn", { mood: communityMoodScaleLabel(checkIn.mood, t) })}
                   </Text>
                 ) : null}

@@ -4,10 +4,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
-import { EntryVisibility, heartMoodLabel, journalEntryTypeFor, journalEntryTypeLabel, visibility } from "@/state/product";
+import { EntryVisibility, heartMoods, journalEntryTypeFor, journalEntryTypeLabel, moodOptionForValue, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import { AppScreen, Avatar, BodyText, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { SharedComposer } from "@/ui/shared-composer";
@@ -27,6 +29,7 @@ export function JournalDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const routeId = routeParam(id);
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [composerVisible, setComposerVisible] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
   const [entryVisibility, setEntryVisibility] = useState<EntryVisibility>(visibility.private);
@@ -75,9 +78,16 @@ export function JournalDetailScreen() {
   }
 
   const currentEntry = entry;
-  const typeLabel = journalEntryTypeLabel(currentEntry);
   const type = journalEntryTypeFor(currentEntry);
-  const mood = heartMoodLabel(currentEntry.heartMood);
+  const typeLabel = type === "heart_checkin" ? t("community.contentType.checkIn") : journalEntryTypeLabel(currentEntry);
+  const exactMood = currentEntry.heartMood ? heartMoods.find((item) => item.value === currentEntry.heartMood) : undefined;
+  const numericMood = typeof currentEntry.mood === "number" ? moodOptionForValue(currentEntry.mood) : undefined;
+  const mood = currentEntry.heartMood
+    ? communityHeartMoodCopy(currentEntry.heartMood, t).label
+    : typeof currentEntry.mood === "number"
+      ? communityMoodScaleLabel(currentEntry.mood, t)
+      : undefined;
+  const checkInIcon = exactMood?.icon ?? numericMood?.icon ?? "circle";
   const isSharedCheckIn = Boolean(currentEntry.isSharedCheckIn);
 
   function openEditor() {
@@ -111,7 +121,14 @@ export function JournalDetailScreen() {
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
         <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather name={type === "heart_checkin" ? "sun" : type === "answered_prayer" ? "check-circle" : type === "prayer" ? "heart" : type === "scripture_note" ? "book-open" : "edit-3"} size={15} color={colors.gold} />
+          <Feather
+            name={type === "heart_checkin" ? checkInIcon : type === "answered_prayer" ? "check-circle" : type === "prayer" ? "heart" : type === "scripture_note" ? "book-open" : "edit-3"}
+            size={15}
+            color={colors.gold}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
           <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{typeLabel}</Text>
         </View>
       </View>

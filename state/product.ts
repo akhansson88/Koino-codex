@@ -38,12 +38,12 @@ export const journalEntryTypes: { value: JournalEntryType; label: string; icon: 
   { value: "scripture_note", label: "Scripture note", icon: "book-open" },
 ];
 
-export const heartMoods: { value: HeartMood; label: string; description: string; icon: "sun" | "heart" | "cloud" | "wind" | "trending-up" | "moon" }[] = [
-  { value: "peaceful", label: "Peaceful", description: "Calm and at rest", icon: "sun" },
-  { value: "grateful", label: "Grateful", description: "Grateful and full of joy", icon: "heart" },
+export const heartMoods: { value: HeartMood; label: string; description: string; icon: "feather" | "sun" | "cloud" | "cloud-rain" | "star" | "moon" }[] = [
+  { value: "peaceful", label: "Peaceful", description: "Calm and at rest", icon: "feather" },
+  { value: "grateful", label: "Grateful", description: "Grateful and full of joy", icon: "sun" },
   { value: "heavy", label: "Heavy", description: "Carrying some burden", icon: "cloud" },
-  { value: "anxious", label: "Anxious", description: "Worried or overwhelmed", icon: "wind" },
-  { value: "hopeful", label: "Hopeful", description: "Expectant and encouraged", icon: "trending-up" },
+  { value: "anxious", label: "Anxious", description: "Worried or overwhelmed", icon: "cloud-rain" },
+  { value: "hopeful", label: "Hopeful", description: "Expectant and encouraged", icon: "star" },
   { value: "tired", label: "Tired", description: "Drained and needing rest", icon: "moon" },
 ];
 
@@ -66,15 +66,23 @@ export function heartMoodLabel(value?: HeartMood) {
 }
 
 export const moodOptions = [
-  { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sunny-outline" as const },
-  { value: 4, label: "Peaceful", description: "Calm and at rest", icon: "leaf-outline" as const },
-  { value: 3, label: "Okay", description: "Doing alright", icon: "happy-outline" as const },
-  { value: 2, label: "Heavy", description: "Carrying some burden", icon: "cloud-outline" as const },
-  { value: 1, label: "Struggling", description: "Finding today difficult", icon: "rainy-outline" as const },
+  { value: 5, label: "Joyful", description: "Grateful and full of joy", icon: "sun" as const },
+  { value: 4, label: "Peaceful", description: "Calm and at rest", icon: "feather" as const },
+  { value: 3, label: "Okay", description: "Doing alright", icon: "circle" as const },
+  { value: 2, label: "Heavy", description: "Carrying some burden", icon: "cloud" as const },
+  { value: 1, label: "Struggling", description: "Finding today difficult", icon: "cloud-rain" as const },
 ];
 
+export function moodScaleValue(mood: number) {
+  if (mood >= 5) return 5;
+  if (mood === 4) return 4;
+  if (mood === 2) return 2;
+  if (mood <= 1) return 1;
+  return 3;
+}
+
 export function moodOptionForValue(mood: number) {
-  return moodOptions.find((option) => option.value === mood) ?? moodOptions[2];
+  return moodOptions.find((option) => option.value === moodScaleValue(mood)) ?? moodOptions[2];
 }
 
 export function moodLabel(mood: number) {

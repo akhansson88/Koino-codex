@@ -23,6 +23,7 @@ import {
   communityDefaultFeedTitle,
   communityFeedItemLabel,
   communityMoodScaleDescription,
+  communityMoodScaleLabel,
   communityPrayerMomentDisplayCopy,
   communityPrayerNoun,
   communityResponseNoun,
@@ -271,8 +272,13 @@ export function CommunityCardResponseSummary({
 export function CommunityCheckInMood({ mood }: { mood: number }) {
   const { t } = useAppTranslation();
   const option = moodOptionForValue(mood);
+  const label = communityMoodScaleLabel(mood, t);
+  const description = communityMoodScaleDescription(mood, t);
   return (
     <View
+      accessibilityLabel={t("community.checkIn.stateAccessibility", { description, label })}
+      accessibilityRole="text"
+      accessible
       style={{
         alignItems: "center",
         backgroundColor: colors.rhythmSoft,
@@ -283,6 +289,9 @@ export function CommunityCheckInMood({ mood }: { mood: number }) {
       }}
     >
       <View
+        accessibilityElementsHidden
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
         style={{
           alignItems: "center",
           backgroundColor: colors.paper,
@@ -292,11 +301,12 @@ export function CommunityCheckInMood({ mood }: { mood: number }) {
           width: 36,
         }}
       >
-        <Ionicons name={option.icon} size={20} color={colors.olive} />
+        <Feather name={option.icon} size={19} color={colors.textSecondary} />
       </View>
-      <Text style={[typography.caption, { color: colors.muted, flex: 1, fontSize: 13, lineHeight: 18 }]}>
-        {communityMoodScaleDescription(mood, t)}
-      </Text>
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <Text style={[typography.label, { color: colors.ink, flexShrink: 1, fontSize: 13, lineHeight: 18 }]}>{label}</Text>
+        <Text style={[typography.caption, { color: colors.muted, flexShrink: 1, fontSize: 12, lineHeight: 17 }]}>{description}</Text>
+      </View>
     </View>
   );
 }

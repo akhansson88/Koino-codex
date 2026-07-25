@@ -391,7 +391,7 @@ function CommunityPreviewCard({
           </View>
         </View>
         <View style={{ gap: 5 }}>
-          <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+          <Text numberOfLines={item.type === "check_in" ? undefined : 2} style={{ color: colors.ink, flexShrink: 1, fontSize: 15, fontWeight: "900" }}>
             {displayCopy.title || communityDefaultFeedTitle(item, t)}
           </Text>
           <BodyText muted numberOfLines={2}>

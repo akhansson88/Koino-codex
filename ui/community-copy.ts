@@ -1,4 +1,4 @@
-import { feedItemKind, normalizeEntryKind } from "@/state/product";
+import { feedItemKind, moodScaleValue, normalizeEntryKind } from "@/state/product";
 import type { EntryKind, FeedItem, HeartMood } from "@/state/types";
 import { translateMessage, type TranslationFunction, type TranslationKey } from "@/ui/localization";
 
@@ -121,18 +121,20 @@ export function communityMemberCount(count: number, t: TranslationFunction) {
 }
 
 export function communityMoodScaleLabel(mood: number, t: TranslationFunction) {
-  if (mood >= 5) return t("community.checkIn.moodScale.joyful");
-  if (mood === 4) return t("community.checkIn.moodScale.peaceful");
-  if (mood === 2) return t("community.checkIn.moodScale.heavy");
-  if (mood <= 1) return t("community.checkIn.moodScale.struggling");
+  const value = moodScaleValue(mood);
+  if (value === 5) return t("community.checkIn.moodScale.joyful");
+  if (value === 4) return t("community.checkIn.moodScale.peaceful");
+  if (value === 2) return t("community.checkIn.moodScale.heavy");
+  if (value === 1) return t("community.checkIn.moodScale.struggling");
   return t("community.checkIn.moodScale.okay");
 }
 
 export function communityMoodScaleDescription(mood: number, t: TranslationFunction) {
-  if (mood >= 5) return t("community.checkIn.moodScale.joyfulDescription");
-  if (mood === 4) return t("community.checkIn.moodScale.peacefulDescription");
-  if (mood === 2) return t("community.checkIn.moodScale.heavyDescription");
-  if (mood <= 1) return t("community.checkIn.moodScale.strugglingDescription");
+  const value = moodScaleValue(mood);
+  if (value === 5) return t("community.checkIn.moodScale.joyfulDescription");
+  if (value === 4) return t("community.checkIn.moodScale.peacefulDescription");
+  if (value === 2) return t("community.checkIn.moodScale.heavyDescription");
+  if (value === 1) return t("community.checkIn.moodScale.strugglingDescription");
   return t("community.checkIn.moodScale.okayDescription");
 }
 

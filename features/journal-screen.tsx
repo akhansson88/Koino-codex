@@ -3,7 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
-import { EntryVisibility, heartMoodLabel, journalEntryTypeFor, journalEntryTypeLabel, visibility } from "@/state/product";
+import { EntryVisibility, heartMoods, journalEntryTypeFor, journalEntryTypeLabel, moodOptionForValue, visibility } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, ProfileImage } from "@/state/types";
 import {
@@ -21,6 +21,8 @@ import {
 } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { useAppTranslation } from "@/ui/app-language";
+import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
 import { QuietActionCard } from "@/ui/rhythm-cards";
@@ -337,9 +339,17 @@ function JournalEntryCard({
   userImage?: ProfileImage;
   userName: string;
 }) {
+  const { t } = useAppTranslation();
   const type = journalEntryTypeFor(entry);
-  const typeLabel = journalEntryTypeLabel(entry);
-  const mood = heartMoodLabel(entry.heartMood);
+  const typeLabel = type === "heart_checkin" ? t("community.contentType.checkIn") : journalEntryTypeLabel(entry);
+  const exactMood = entry.heartMood ? heartMoods.find((item) => item.value === entry.heartMood) : undefined;
+  const numericMood = typeof entry.mood === "number" ? moodOptionForValue(entry.mood) : undefined;
+  const mood = entry.heartMood
+    ? communityHeartMoodCopy(entry.heartMood, t).label
+    : typeof entry.mood === "number"
+      ? communityMoodScaleLabel(entry.mood, t)
+      : undefined;
+  const checkInIcon = exactMood?.icon ?? numericMood?.icon ?? "circle";
 
   return (
     <Card>
@@ -353,7 +363,7 @@ function JournalEntryCard({
           <Feather
             name={
               type === "heart_checkin"
-                ? "sun"
+                ? checkInIcon
                 : type === "scripture_note"
                   ? "book-open"
                   : type === "answered_prayer"
@@ -364,13 +374,16 @@ function JournalEntryCard({
             }
             size={13}
             color={colors.accentReflection}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
           />
           <Text style={[typography.caption, { color: colors.textMuted }]}>{typeLabel}</Text>
         </View>
       </View>
       <View style={{ gap: 8 }}>
         <Pressable accessibilityRole="button" onPress={onOpen}>
-          <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
+          <Text numberOfLines={type === "heart_checkin" && !entry.title ? undefined : 2} style={[typography.title, { color: colors.ink }]}>
             {entry.title || (type === "heart_checkin" && mood ? mood : typeLabel)}
           </Text>
         </Pressable>
