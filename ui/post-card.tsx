@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 
 import {
   actionLabels,
@@ -17,25 +19,285 @@ import {
   AvatarStack,
   Card,
   ExpandableBodyText,
+  VerseList,
 } from "@/ui/app-components";
 import { LinkPreview } from "@/ui/link-preview";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { VerseList } from "@/ui/app-components";
-import { colors, platformShadow, typography } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 const FEED_BODY_PREVIEW_LINES = 3;
+
+export type CommunityCardTone = "check_in" | "praise" | "prayer" | "reflection" | "scripture" | "update";
+type CommunityCardActionIcon = "book-open" | "heart" | "message-circle" | "pray" | "star";
+
+type CommunityFeedCardProps = {
+  actions?: ReactNode;
+  attachment?: ReactNode;
+  authorImage?: GroupImage;
+  authorName: string;
+  body?: string;
+  bodyFallback?: string;
+  headerAccessory?: ReactNode;
+  item: FeedItem;
+  onOpen?: () => void;
+  overlay?: ReactNode;
+  responseSummary?: ReactNode;
+  status?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  title?: string;
+};
 
 function defaultTitle(item: FeedItem) {
   return productDefaultFeedTitle(item, (mood) => moodOptionForValue(mood).label);
 }
 
-function kindLabel(item: FeedItem) {
-  return feedItemLabel(item);
-}
-
 function kindIcon(item: FeedItem) {
   if (item.type === "check_in") return "check-circle" as const;
   return entryKindIcon(item.kind);
+}
+
+function toneForItem(item: FeedItem): CommunityCardTone {
+  if (item.type === "check_in") return "check_in";
+  const itemKind = feedItemKind(item);
+  if (itemKind === "prayer_request" || itemKind === "prayer_moment") return "prayer";
+  return itemKind;
+}
+
+function toneColors(tone: CommunityCardTone) {
+  if (tone === "prayer") return { accent: colors.accentPrayer, soft: colors.prayerSoft };
+  if (tone === "reflection") return { accent: colors.accentReflection, soft: colors.reflectionSoft };
+  if (tone === "praise") return { accent: colors.accentWarm, soft: colors.warmSoft };
+  if (tone === "check_in") return { accent: colors.accentRhythm, soft: colors.rhythmSoft };
+  if (tone === "scripture") return { accent: colors.accentScripture, soft: colors.warmSoft };
+  return { accent: colors.textMuted, soft: colors.accentSubtle };
+}
+
+export function communityResponseLabel(item: FeedItem, count: number) {
+  const itemKind = feedItemKind(item);
+  if (itemKind === "reflection") return count === 1 ? "encouragement" : "encouragements";
+  if (itemKind === "praise") return count === 1 ? "amen" : "amens";
+  if (itemKind === "scripture") return count === 1 ? "reflection" : "reflections";
+  return count === 1 ? "response" : "responses";
+}
+
+function TypeLabel({ item }: { item: FeedItem }) {
+  const palette = toneColors(toneForItem(item));
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        alignSelf: "flex-start",
+        backgroundColor: palette.soft,
+        borderColor: colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        flexShrink: 1,
+        gap: 6,
+        minHeight: 28,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+      }}
+    >
+      <Feather name={kindIcon(item)} size={13} color={palette.accent} />
+      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{feedItemLabel(item)}</Text>
+    </View>
+  );
+}
+
+export function CommunityFeedCard({
+  actions,
+  attachment,
+  authorImage,
+  authorName,
+  body,
+  bodyFallback,
+  headerAccessory,
+  item,
+  onOpen,
+  overlay,
+  responseSummary,
+  status,
+  style,
+  title,
+}: CommunityFeedCardProps) {
+  const visibleBody = body || bodyFallback;
+  return (
+    <Card style={[{ overflow: "visible", padding: 16, position: "relative" }, style]}>
+      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
+        <Avatar image={authorImage} name={authorName} size={42} tone="green" />
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+          <Text numberOfLines={2} style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
+            {authorName}
+          </Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt)}</Text>
+        </View>
+        {headerAccessory}
+      </View>
+
+      <View
+        style={{
+          alignItems: "flex-start",
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 10,
+          justifyContent: "space-between",
+          minWidth: 0,
+        }}
+      >
+        <TypeLabel item={item} />
+        {status}
+      </View>
+
+      <View style={{ gap: 8 }}>
+        {title ? (
+          onOpen ? (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={6}
+              onPress={(event) => {
+                event.stopPropagation();
+                onOpen();
+              }}
+              style={{ justifyContent: "center", minHeight: 44 }}
+            >
+              <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
+            </Pressable>
+          ) : (
+            <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
+          )
+        ) : null}
+        {visibleBody ? (
+          <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
+            {visibleBody}
+          </ExpandableBodyText>
+        ) : null}
+      </View>
+
+      {attachment}
+      {actions ? <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{actions}</View> : null}
+      {responseSummary}
+      {overlay}
+    </Card>
+  );
+}
+
+function ActionIcon({ active, icon }: { active: boolean; icon: CommunityCardActionIcon }) {
+  const iconColor = active ? colors.textMuted : colors.ink;
+  if (icon === "pray") return <MaterialCommunityIcons name="hands-pray" size={20} color={iconColor} />;
+  if (icon === "heart") return <Ionicons name={active ? "heart" : "heart-outline"} size={20} color={iconColor} />;
+  if (icon === "star") return <Ionicons name={active ? "star" : "star-outline"} size={19} color={iconColor} />;
+  return <Feather name={icon} size={19} color={iconColor} />;
+}
+
+export function CommunityCardAction({
+  active = false,
+  icon,
+  label,
+  onPress,
+  tone,
+  variant = "primary",
+}: {
+  active?: boolean;
+  icon: CommunityCardActionIcon;
+  label: string;
+  onPress?: () => void;
+  tone: CommunityCardTone;
+  variant?: "primary" | "secondary";
+}) {
+  const palette = toneColors(tone);
+  const actionStyle: ViewStyle = {
+    alignItems: "center",
+    backgroundColor: variant === "primary" && active ? palette.soft : colors.paper,
+    borderColor: variant === "primary" ? (active ? palette.accent : colors.line) : colors.paper,
+    borderRadius: 999,
+    borderWidth: variant === "primary" ? 1 : 0,
+    flexDirection: "row",
+    gap: 7,
+    minHeight: 44,
+    paddingHorizontal: variant === "primary" ? 13 : 8,
+  };
+  const content = (
+    <>
+      <ActionIcon active={active} icon={icon} />
+      <Text style={[typography.label, { color: active ? colors.textMuted : colors.ink }]}>{label}</Text>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={label} style={actionStyle}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+      style={actionStyle}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+export function CommunityCardResponseSummary({
+  count,
+  label,
+  showWhenEmpty = false,
+  users,
+}: {
+  count: number;
+  label: string;
+  showWhenEmpty?: boolean;
+  users?: { name: string; image?: GroupImage }[];
+}) {
+  if (!showWhenEmpty && !users?.length) return null;
+  return (
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+      {users?.length ? <AvatarStack users={users} size={24} /> : null}
+      <Text style={[typography.caption, { color: colors.muted }]}>{count} {label}</Text>
+    </View>
+  );
+}
+
+export function CommunityCheckInMood({ mood }: { mood: number }) {
+  const option = moodOptionForValue(mood);
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.rhythmSoft,
+        borderRadius: radius.md,
+        flexDirection: "row",
+        gap: 10,
+        padding: 12,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: colors.paper,
+          borderRadius: 999,
+          height: 36,
+          justifyContent: "center",
+          width: 36,
+        }}
+      >
+        <Ionicons name={option.icon} size={20} color={colors.olive} />
+      </View>
+      <Text style={[typography.caption, { color: colors.muted, flex: 1, fontSize: 13, lineHeight: 18 }]}>
+        {option.description}
+      </Text>
+    </View>
+  );
 }
 
 export function PostCard({
@@ -88,206 +350,142 @@ export function PostCard({
   }
 
   const itemKind = feedItemKind(item);
-  const isPrayerRequest = itemKind === "prayer_request";
-  const isPrayerPost = isPrayerRequest || itemKind === "prayer_moment";
-  const reactionCopy = actionPastLabels[itemKind].toLowerCase();
+  const isPrayerPost = itemKind === "prayer_request" || itemKind === "prayer_moment";
+  const reactionTone = toneForItem(item);
+  const reactionIcon: CommunityCardActionIcon =
+    itemKind === "praise" ? "star" : itemKind === "scripture" ? "book-open" : itemKind === "update" ? "message-circle" : "heart";
   const hasPrayerActivity = Boolean(prayedBy?.length);
   const hasReactionActivity = !isPrayerPost && Boolean(reactedBy?.length);
 
-  return (
-    <Card style={{ overflow: "visible", padding: 16, position: "relative", zIndex: menuOpen ? 10 : 1 }}>
-      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, zIndex: menuOpen ? 30 : 1 }}>
-        <Avatar image={authorImage} name={authorName} size={42} tone="green" />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>{authorName}</Text>
-          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt)}</Text>
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather name={kindIcon(item)} size={13} color={colors.accentPrayer} />
-          <Text style={[typography.caption, { color: colors.textMuted }]}>{kindLabel(item)}</Text>
-        </View>
-      </View>
+  const menuButton = ownsItem && (onEdit || onDelete) ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Post options"
+      hitSlop={8}
+      onPressIn={(event) => event.stopPropagation()}
+      onPress={(event) => {
+        event.stopPropagation();
+        setMenuOpen((current) => !current);
+      }}
+      style={{ alignItems: "center", height: 32, justifyContent: "center", width: 32 }}
+    >
+      <Feather name="more-horizontal" size={19} color={colors.ink} />
+    </Pressable>
+  ) : null;
 
-      {item.type === "check_in" ? (
-        <View
-          style={{
-            alignItems: "center",
-            backgroundColor: colors.accentSubtle,
-            borderRadius: 12,
-            flexDirection: "row",
-            gap: 12,
-            marginTop: 10,
-            padding: 12,
-          }}
-        >
-          <View
-            style={{
-              alignItems: "center",
-              backgroundColor: colors.paper,
-              borderRadius: 999,
-              height: 36,
-              justifyContent: "center",
-              width: 36,
-            }}
-          >
-            <Ionicons name={moodOptionForValue(item.mood).icon} size={20} color={colors.olive} />
-          </View>
-          <View style={{ flex: 1, gap: 1 }}>
-            <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>{moodOptionForValue(item.mood).label}</Text>
-            <Text style={[typography.caption, { color: colors.muted, fontSize: 13, lineHeight: 18 }]}>{moodOptionForValue(item.mood).description}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {ownsItem && menuOpen ? (
-        <View
-          style={{
-            backgroundColor: colors.paper,
-            borderColor: colors.line,
-            borderRadius: 12,
-            borderWidth: 1,
-            minWidth: 118,
-            paddingVertical: 4,
-            position: "absolute",
-            bottom: 50,
-            right: 14,
-            zIndex: 40,
-            ...platformShadow({
-              boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-              elevation: 12,
-              offset: { width: 0, height: 10 },
-              opacity: 0.14,
-              radius: 24,
-            }),
-          }}
-        >
-          {onEdit ? (
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onEdit);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="edit-2" size={14} color={colors.ink} />
-              <Text style={{ color: colors.ink, fontWeight: "800" }}>Edit</Text>
-            </Pressable>
-          ) : null}
-          {onDelete ? (
-            <Pressable
-              onPressIn={(event) => event.stopPropagation()}
-              onPress={(event) => {
-                event.stopPropagation();
-                runMenuAction(onDelete);
-              }}
-              style={{ flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="trash-2" size={14} color={colors.danger} />
-              <Text style={{ color: colors.danger, fontWeight: "800" }}>Delete</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={{ gap: 8 }}>
+  const menu = ownsItem && menuOpen ? (
+    <View
+      style={{
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        minWidth: 118,
+        paddingVertical: 4,
+        position: "absolute",
+        right: 14,
+        top: 54,
+        zIndex: 40,
+        ...platformShadow({
+          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+          elevation: 12,
+          offset: { width: 0, height: 10 },
+          opacity: 0.14,
+          radius: 24,
+        }),
+      }}
+    >
+      {onEdit ? (
         <Pressable
-          onPress={() => {
-            if (menuOpen || suppressOpenRef.current) {
-              setMenuOpen(false);
-              return;
-            }
-            onOpen();
-          }}
-        >
-          <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
-            {item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
-          </Text>
-        </Pressable>
-        <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
-          {item.body || "No words today, just presence."}
-        </ExpandableBodyText>
-      </View>
-      <LinkPreview text={item.body} />
-
-      <VerseList verse={item.verse} verses={item.verses} compact />
-
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 22 }}>
-        <Pressable
+          onPressIn={(event) => event.stopPropagation()}
           onPress={(event) => {
             event.stopPropagation();
-            onPray();
+            runMenuAction(onEdit);
           }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
         >
-          <MaterialCommunityIcons name="hands-pray" size={22} color={prayed ? colors.accentPrayer : colors.ink} />
-          <Text style={[typography.label, { color: prayed ? colors.textMuted : colors.muted }]}>
-            {prayed ? "Prayed" : "Pray"}
-          </Text>
+          <Feather name="edit-2" size={14} color={colors.ink} />
+          <Text style={[typography.label, { color: colors.ink }]}>Edit</Text>
         </Pressable>
-        {!isPrayerPost && onReact ? (
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              onReact();
-            }}
-            style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-          >
-            <Ionicons name={reacted ? "heart" : "heart-outline"} size={21} color={reacted ? colors.accentPrayer : colors.ink} />
-            <Text style={[typography.label, { color: colors.muted }]}>
-              {reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
-            </Text>
-          </Pressable>
-        ) : null}
-        {onReply ? (
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              onReply();
-            }}
-            style={{ alignItems: "center", flexDirection: "row", gap: 7 }}
-          >
-            <Feather name="message-circle" size={21} color={colors.ink} />
-            <Text style={[typography.label, { color: colors.muted }]}>{replyCount}</Text>
-          </Pressable>
-        ) : null}
-        <View style={{ flex: 1 }} />
-        {ownsItem && (onEdit || onDelete) ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Post options"
-            hitSlop={8}
-            onPressIn={(event) => event.stopPropagation()}
-            onPress={(event) => {
-              event.stopPropagation();
-              setMenuOpen((current) => !current);
-            }}
-            style={{ alignItems: "center", height: 28, justifyContent: "center", width: 28 }}
-          >
-            <Feather name="more-horizontal" size={19} color={colors.ink} />
-          </Pressable>
-        ) : null}
-      </View>
-      {hasPrayerActivity || hasReactionActivity ? (
-        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 6 }}>
-          {hasPrayerActivity ? (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-              <AvatarStack users={prayedBy!} size={24} />
-              <Text style={[typography.label, { color: colors.muted }]}>
-                {prayerCount} {prayerCount === 1 ? "prayer" : "prayers"}
-              </Text>
-            </View>
-          ) : null}
-          {hasReactionActivity ? (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-              <AvatarStack users={reactedBy!} size={24} />
-              <Text style={[typography.label, { color: colors.muted }]}>
-                {reactionCount ?? 0} {reactionCopy}
-              </Text>
-            </View>
-          ) : null}
-        </View>
       ) : null}
-    </Card>
+      {onDelete ? (
+        <Pressable
+          onPressIn={(event) => event.stopPropagation()}
+          onPress={(event) => {
+            event.stopPropagation();
+            runMenuAction(onDelete);
+          }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+        >
+          <Feather name="trash-2" size={14} color={colors.danger} />
+          <Text style={[typography.label, { color: colors.danger }]}>Delete</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  ) : null;
+
+  return (
+    <CommunityFeedCard
+      actions={
+        <>
+          {!isPrayerPost && onReact ? (
+            <CommunityCardAction
+              active={Boolean(reacted)}
+              icon={reactionIcon}
+              label={reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+              onPress={onReact}
+              tone={reactionTone}
+            />
+          ) : (
+            <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" />
+          )}
+          {!isPrayerPost && onReact ? (
+            <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" variant="secondary" />
+          ) : null}
+          {onReply ? (
+            <CommunityCardAction icon="message-circle" label={`${replyCount}`} onPress={onReply} tone="reflection" variant="secondary" />
+          ) : null}
+        </>
+      }
+      attachment={
+        <>
+          {item.type === "check_in" ? <CommunityCheckInMood mood={item.mood} /> : null}
+          <LinkPreview text={item.body} />
+          <VerseList verse={item.verse} verses={item.verses} compact />
+        </>
+      }
+      authorImage={authorImage}
+      authorName={authorName}
+      body={item.body}
+      bodyFallback="No words today, just presence."
+      headerAccessory={menuButton}
+      item={item}
+      onOpen={() => {
+        if (menuOpen || suppressOpenRef.current) {
+          setMenuOpen(false);
+          return;
+        }
+        onOpen();
+      }}
+      overlay={menu}
+      responseSummary={
+        hasPrayerActivity || hasReactionActivity ? (
+          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+            {hasReactionActivity ? (
+              <CommunityCardResponseSummary
+                count={reactionCount ?? 0}
+                label={communityResponseLabel(item, reactionCount ?? 0)}
+                users={reactedBy}
+              />
+            ) : null}
+            {hasPrayerActivity ? (
+              <CommunityCardResponseSummary count={prayerCount} label={prayerCount === 1 ? "prayer" : "prayers"} users={prayedBy} />
+            ) : null}
+          </View>
+        ) : undefined
+      }
+      style={{ zIndex: menuOpen ? 10 : 1 }}
+      title={item.type === "post" ? item.title || defaultTitle(item) : defaultTitle(item)}
+    />
   );
 }

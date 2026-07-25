@@ -9,10 +9,11 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
+  actionLabels,
+  actionPastLabels,
   EntryVisibility,
   defaultFeedTitle as productDefaultFeedTitle,
   feedItemKind,
-  feedItemLabel,
   heartMoods,
   moodLabel,
   normalizeEntryKind,
@@ -25,7 +26,6 @@ import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id,
 import {
   AppScreen,
   Avatar,
-  AvatarStack,
   BodyText,
   BottomSheet,
   Card,
@@ -40,18 +40,26 @@ import {
   SectionHeading,
   StatusPill,
   TextInputField,
+  VerseList,
 } from "@/ui/app-components";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
-import { prayerCountLabel, prayerCountNoun } from "@/ui/prayer-copy";
+import { prayerCountNoun } from "@/ui/prayer-copy";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
-import { PostCard } from "@/ui/post-card";
+import {
+  CommunityCardAction,
+  CommunityCardResponseSummary,
+  CommunityCheckInMood,
+  CommunityFeedCard,
+  PostCard,
+  communityResponseLabel,
+} from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
 
@@ -868,6 +876,7 @@ export function SettingsScreen() {
     const key = communityFeedItemKey(item);
 
     if (item.type === "check_in") {
+      const reaction = itemReactionState(item);
       return (
         <CheckInCard
           key={key}
@@ -875,6 +884,10 @@ export function SettingsScreen() {
           authorName={userById.get(item.userId) ?? "Someone"}
           item={item}
           onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
+          onReact={() => togglePostAction(item)}
+          reacted={reaction.reacted}
+          reactedBy={reaction.reactedBy}
+          reactionCount={reaction.count}
         />
       );
     }
@@ -1078,6 +1091,8 @@ export function SettingsScreen() {
             onBack={goBackFromRoomView}
             onCheckIn={openCheckInComposer}
             onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
+            onReact={togglePostAction}
+            reactionState={itemReactionState}
             userById={userById}
             userImageById={userImageById}
           />
@@ -2242,6 +2257,8 @@ function CommunityCheckInsScreen({
   onBack,
   onCheckIn,
   onOpenCheckIn,
+  onReact,
+  reactionState,
   userById,
   userImageById,
 }: {
@@ -2250,6 +2267,12 @@ function CommunityCheckInsScreen({
   onBack: () => void;
   onCheckIn: () => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
+  onReact: (item: FeedItem) => void;
+  reactionState: (item: FeedItem) => {
+    reacted: boolean;
+    count: number;
+    reactedBy: { name: string; image?: GroupImage }[];
+  };
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
@@ -2275,15 +2298,22 @@ function CommunityCheckInsScreen({
           <BodyText muted>No shared check-ins yet. This space will stay gentle until someone is ready.</BodyText>
         </Card>
       ) : (
-        checkIns.map((item) => (
-          <CheckInCard
-            key={item.id}
-            authorImage={userImageById.get(item.userId)}
-            authorName={userById.get(item.userId) ?? "Someone"}
-            item={item}
-            onOpen={() => onOpenCheckIn(item)}
-          />
-        ))
+        checkIns.map((item) => {
+          const reaction = reactionState(item);
+          return (
+            <CheckInCard
+              key={item.id}
+              authorImage={userImageById.get(item.userId)}
+              authorName={userById.get(item.userId) ?? "Someone"}
+              item={item}
+              onOpen={() => onOpenCheckIn(item)}
+              onReact={() => onReact(item)}
+              reacted={reaction.reacted}
+              reactedBy={reaction.reactedBy}
+              reactionCount={reaction.count}
+            />
+          );
+        })
       )}
     </AppScreen>
   );
@@ -2311,52 +2341,39 @@ function PrayerRequestCard({
   const answered = Boolean(item.answeredAt);
   const prayerMoment = isPrayerMomentKind(item.kind);
   return (
-    <Pressable accessibilityRole="button" onPress={onOpen}>
-      <Card style={{ gap: 12, padding: 16 }}>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          <Avatar image={authorImage} name={authorName} size={40} tone="green" />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{authorName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-          </View>
-          {prayerMoment ? <PrayerMomentPill /> : <StatusPill status={answered ? "answered" : "open"} />}
-        </View>
-        <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900", lineHeight: 24 }}>{item.title || defaultTitle(item)}</Text>
-          <BodyText muted numberOfLines={3}>{item.body || "No words today, just presence."}</BodyText>
+    <CommunityFeedCard
+      actions={
+        prayerMoment ? (
+          <CommunityCardAction active icon="pray" label="Prayed" tone="prayer" />
+        ) : !answered ? (
+          <CommunityCardAction active={prayed} icon="pray" label={prayed ? "Prayed" : "Pray"} onPress={onPray} tone="prayer" />
+        ) : undefined
+      }
+      attachment={
+        <>
           <LinkPreview text={item.body} />
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          {prayedBy?.length ? <AvatarStack users={prayedBy} size={24} /> : null}
-          <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{prayerMoment ? "Prayer made" : prayerCountLabel(prayerCount)}</Text>
-          {!answered && !prayerMoment ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={(event) => {
-                event.stopPropagation();
-                onPray();
-              }}
-              style={{
-                alignItems: "center",
-                backgroundColor: prayed ? colors.prayerSoft : colors.gold,
-                borderColor: prayed ? colors.accentPrayer : colors.gold,
-                borderRadius: 999,
-                borderWidth: 1,
-                flexDirection: "row",
-                gap: 6,
-                minHeight: 36,
-                paddingHorizontal: 12,
-              }}
-            >
-              <MaterialCommunityIcons name="hands-pray" size={16} color={prayed ? colors.textMuted : colors.onAccent} />
-              <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 12, fontWeight: "900" }}>{prayed ? "Prayed" : "Pray"}</Text>
-            </Pressable>
-          ) : (
-            <Feather name="bookmark" size={18} color={colors.gold} />
-          )}
-        </View>
-      </Card>
-    </Pressable>
+          <VerseList verse={item.verse} verses={item.verses} compact />
+        </>
+      }
+      authorImage={authorImage}
+      authorName={authorName}
+      body={item.body}
+      bodyFallback="No words today, just presence."
+      item={item}
+      onOpen={onOpen}
+      responseSummary={
+        prayerMoment ? undefined : (
+          <CommunityCardResponseSummary
+            count={prayerCount}
+            label={prayerCountNoun(prayerCount)}
+            showWhenEmpty
+            users={prayedBy}
+          />
+        )
+      }
+      status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
+      title={item.title || defaultTitle(item)}
+    />
   );
 }
 
@@ -2365,27 +2382,55 @@ function CheckInCard({
   authorName,
   item,
   onOpen,
+  onReact,
+  reacted,
+  reactedBy,
+  reactionCount,
 }: {
   authorImage?: GroupImage;
   authorName: string;
   item: Extract<FeedItem, { type: "check_in" }>;
   onOpen: () => void;
+  onReact: () => void;
+  reacted: boolean;
+  reactedBy?: { name: string; image?: GroupImage }[];
+  reactionCount: number;
 }) {
+  const itemKind = feedItemKind(item);
   return (
-    <Pressable accessibilityRole="button" onPress={onOpen}>
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
-        <Avatar image={authorImage} name={authorName} size={38} tone="green" />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt)}</Text>
-          {item.body ? <BodyText muted numberOfLines={2}>{item.body}</BodyText> : null}
-        </View>
-        <View style={{ alignItems: "center", gap: 4 }}>
-          <Feather name="smile" size={20} color={colors.olive} />
-          <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{moodLabel(item.mood)}</Text>
-        </View>
-      </Card>
-    </Pressable>
+    <CommunityFeedCard
+      actions={
+        <CommunityCardAction
+          active={reacted}
+          icon="heart"
+          label={reacted ? actionPastLabels[itemKind] : actionLabels[itemKind]}
+          onPress={onReact}
+          tone="check_in"
+        />
+      }
+      attachment={
+        <>
+          <CommunityCheckInMood mood={item.mood} />
+          <LinkPreview text={item.body} />
+          <VerseList verse={item.verse} verses={item.verses} compact />
+        </>
+      }
+      authorImage={authorImage}
+      authorName={authorName}
+      body={item.body}
+      item={item}
+      onOpen={onOpen}
+      responseSummary={
+        reactedBy?.length ? (
+          <CommunityCardResponseSummary
+            count={reactionCount}
+            label={communityResponseLabel(item, reactionCount)}
+            users={reactedBy}
+          />
+        ) : undefined
+      }
+      title={defaultTitle(item)}
+    />
   );
 }
 
