@@ -465,6 +465,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [groupBiblePlanParticipantIds, setGroupBiblePlanParticipantIds] = useState<Record<Id, Id>>({});
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
+  const [communityFeedError, setCommunityFeedError] = useState<string>();
+  const [communityFeedGroupId, setCommunityFeedGroupId] = useState<Id>();
+  const [communityFeedReady, setCommunityFeedReady] = useState(false);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [themeReady, setThemeReady] = useState(false);
   const themeRef = useRef<ThemeName>("light");
@@ -497,6 +500,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setGroupBiblePlanParticipations([]);
     setGroupBiblePlanParticipantIds({});
     setSupportIntents([]);
+    setCommunityFeedError(undefined);
+    setCommunityFeedGroupId(undefined);
+    setCommunityFeedReady(true);
   }, []);
 
   useEffect(() => {
@@ -715,6 +721,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!firebaseUser || !profile?.currentGroupId) {
+      setCommunityFeedError(undefined);
+      setCommunityFeedGroupId(undefined);
+      setCommunityFeedReady(true);
       setMemberships([]);
       setCheckIns([]);
       setPosts([]);
@@ -727,6 +736,34 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     }
 
     const groupId = profile.currentGroupId;
+    let active = true;
+    let checkInsReady = false;
+    let postsReady = false;
+
+    setCommunityFeedError(undefined);
+    setCommunityFeedGroupId(undefined);
+    setCommunityFeedReady(false);
+    setMemberships([]);
+    setCheckIns([]);
+    setPosts([]);
+    setReplies([]);
+    setPrayerReactions([]);
+    setPostReactions([]);
+    setGroupBiblePlanAnnouncements([]);
+    setGroupBiblePlanParticipations([]);
+
+    const markCommunityFeedReady = () => {
+      if (!active || !checkInsReady || !postsReady) return;
+      setCommunityFeedGroupId(groupId);
+      setCommunityFeedReady(true);
+    };
+    const handleCommunityFeedError = () => {
+      if (!active) return;
+      setCommunityFeedError("Community activity could not be fully loaded.");
+      setCommunityFeedGroupId(groupId);
+      setCommunityFeedReady(true);
+    };
+
     const membersRef = ref(database, `groupMembers/${groupId}`);
     const checkInsRef = ref(database, `checkIns/${groupId}`);
     const postsRef = ref(database, `posts/${groupId}`);
@@ -738,8 +775,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     const unsubs = [
       onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
-      onValue(checkInsRef, (snapshot) => setCheckIns(asArray<CheckIn>(snapshot.val()))),
-      onValue(postsRef, (snapshot) => setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()))),
+      onValue(checkInsRef, (snapshot) => {
+        if (!active) return;
+        setCheckIns(asArray<CheckIn>(snapshot.val()));
+        checkInsReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
+      onValue(postsRef, (snapshot) => {
+        if (!active) return;
+        setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()));
+        postsReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
       onValue(reactionsRef, (snapshot) => setPrayerReactions(asArray<PrayerReaction>(snapshot.val()))),
       onValue(postReactionsRef, (snapshot) => setPostReactions(asArray<PostReaction>(snapshot.val()))),
@@ -761,7 +808,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }),
     ];
 
-    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      active = false;
+      unsubs.forEach((unsubscribe) => unsubscribe());
+    };
   }, [firebaseUser, profile?.currentGroupId]);
 
   const state = useMemo<KoinoState>(() => {
@@ -779,6 +829,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       currentGroupId: profile?.currentGroupId ?? undefined,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
       authError,
+      communityFeedError,
+      communityFeedGroupId,
+      communityFeedReady,
       theme,
       users,
       groups,
@@ -804,6 +857,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     };
   }, [
     authError,
+    communityFeedError,
+    communityFeedGroupId,
+    communityFeedReady,
     theme,
     themeReady,
     authReady,

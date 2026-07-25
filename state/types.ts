@@ -281,6 +281,9 @@ export type KoinoState = {
   currentGroupId?: Id;
   authEmail?: string;
   authError?: string;
+  communityFeedError?: string;
+  communityFeedGroupId?: Id;
+  communityFeedReady: boolean;
   theme: ThemeName;
   users: User[];
   groups: Group[];

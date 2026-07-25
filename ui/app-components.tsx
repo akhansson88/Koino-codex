@@ -1,6 +1,6 @@
 import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import type { ComponentProps } from "react";
+import type { ComponentProps, Ref } from "react";
 import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
 import type { ModalProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,9 +28,20 @@ export function initials(name?: string) {
 
 export function AppScreen({
   children,
+  onContentSizeChange,
+  onScroll,
   scroll = true,
+  scrollEventThrottle,
+  scrollRef,
   topInset = true,
-}: PropsWithChildren<{ scroll?: boolean; topInset?: boolean }>) {
+}: PropsWithChildren<{
+  onContentSizeChange?: ComponentProps<typeof ScrollView>["onContentSizeChange"];
+  onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
+  scroll?: boolean;
+  scrollEventThrottle?: number;
+  scrollRef?: Ref<ScrollView>;
+  topInset?: boolean;
+}>) {
   const insets = useSafeAreaInsets();
   if (!scroll) {
     return <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>{children}</View>;
@@ -41,6 +52,10 @@ export function AppScreen({
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={onContentSizeChange}
+        onScroll={onScroll}
+        ref={scrollRef}
+        scrollEventThrottle={scrollEventThrottle}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: (topInset ? insets.top : 0) + 18 }}
       >
