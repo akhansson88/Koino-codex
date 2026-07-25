@@ -993,6 +993,7 @@ export function SettingsScreen() {
       <>
         <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
           <CommunityPrayerScreen
+            communityName={group.name}
             filter={prayerFilter}
             onBack={goBackFromRoomView}
             onCreatePrayer={() => openComposer("prayer_request")}
@@ -1088,6 +1089,7 @@ export function SettingsScreen() {
           <CommunityCheckInsScreen
             checkIns={sharedCheckIns}
             checkedInToday={todaysCheckIn}
+            communityName={group.name}
             onBack={goBackFromRoomView}
             onCheckIn={openCheckInComposer}
             onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
@@ -1755,8 +1757,37 @@ function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: str
   return (
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
       <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onBack} />
-      <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{title}</Text>
+      <Text
+        numberOfLines={1}
+        style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}
+      >
+        {title}
+      </Text>
       <View style={{ width: 38 }} />
+    </View>
+  );
+}
+
+function FocusedCommunityScreenIntro({
+  communityName,
+  description,
+  onBack,
+  title,
+}: {
+  communityName: string;
+  description: string;
+  onBack: () => void;
+  title: string;
+}) {
+  return (
+    <View style={{ gap: 10 }}>
+      <FocusedScreenHeader onBack={onBack} title={communityName} />
+      <View style={{ gap: 6 }}>
+        <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>
+          {title}
+        </Text>
+        <BodyText muted>{description}</BodyText>
+      </View>
     </View>
   );
 }
@@ -2000,6 +2031,7 @@ function PrayerPostSheet({
 }
 
 function CommunityPrayerScreen({
+  communityName,
   filter,
   onBack,
   onCreatePrayer,
@@ -2012,6 +2044,7 @@ function CommunityPrayerScreen({
   userById,
   userImageById,
 }: {
+  communityName: string;
   filter: PrayerFilter;
   onBack: () => void;
   onCreatePrayer: () => void;
@@ -2028,11 +2061,12 @@ function CommunityPrayerScreen({
 
   return (
     <AppScreen topInset={false}>
-      <FocusedScreenHeader onBack={onBack} title="Prayer" />
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Prayer</Text>
-        <BodyText muted>Hold requests with care, pray with intention, and return with encouragement.</BodyText>
-      </View>
+      <FocusedCommunityScreenIntro
+        communityName={communityName}
+        description="Hold requests with care, pray with intention, and return with encouragement."
+        onBack={onBack}
+        title="Prayer"
+      />
       <FilterChips value={filter} onChange={onFilter} options={prayerFilters.map((item) => ({ label: item.label, value: item.value }))} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
         <BodyText muted>{prayerPosts.length} {countLabel} {prayerPosts.length === 1 ? "prayer" : "prayers"}</BodyText>
@@ -2254,6 +2288,7 @@ function PrayerMomentPill() {
 function CommunityCheckInsScreen({
   checkIns,
   checkedInToday,
+  communityName,
   onBack,
   onCheckIn,
   onOpenCheckIn,
@@ -2264,6 +2299,7 @@ function CommunityCheckInsScreen({
 }: {
   checkIns: Extract<FeedItem, { type: "check_in" }>[];
   checkedInToday: boolean;
+  communityName: string;
   onBack: () => void;
   onCheckIn: () => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
@@ -2278,11 +2314,12 @@ function CommunityCheckInsScreen({
 }) {
   return (
     <AppScreen topInset={false}>
-      <FocusedScreenHeader onBack={onBack} title="Check-ins" />
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>Check-ins</Text>
-        <BodyText muted>Take a gentle moment to share how your heart is doing.</BodyText>
-      </View>
+      <FocusedCommunityScreenIntro
+        communityName={communityName}
+        description="Take a gentle moment to share how your heart is doing."
+        onBack={onBack}
+        title="Check-ins"
+      />
       {!checkedInToday ? (
         <Card>
           <SectionHeading>This week's check-in</SectionHeading>
