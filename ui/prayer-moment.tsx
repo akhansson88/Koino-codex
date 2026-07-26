@@ -112,6 +112,9 @@ function AmbientPrayerWaves({
 
   return (
     <Animated.View
+      accessibilityElementsHidden
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
       style={{
         bottom,
@@ -376,8 +379,6 @@ export function PrayerMoment({
             justifyContent: "center",
             left: 12,
             opacity: pressed ? 0.45 : 0.68,
-            outlineColor: "transparent",
-            outlineWidth: 0,
             position: "absolute",
             top: insets.top + 6,
             width: 44,
@@ -413,9 +414,19 @@ export function PrayerMoment({
           </Text>
         </View>
 
-        <View
-          style={{
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={{
             alignItems: "center",
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: compactHeight ? 18 : 28,
+            paddingVertical: compactHeight ? 14 : 24,
+          }}
+          fadingEdgeLength={12}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          style={{
             alignSelf: "center",
             backgroundColor: "rgba(255, 255, 252, 0.9)",
             borderColor: "rgba(255, 255, 255, 0.82)",
@@ -423,10 +434,7 @@ export function PrayerMoment({
             borderRadius: compactHeight ? 34 : 42,
             borderWidth: 1,
             height: cardHeight,
-            justifyContent: "center",
             left: cardLeft,
-            paddingHorizontal: compactHeight ? 18 : 28,
-            paddingVertical: compactHeight ? 14 : 24,
             position: "absolute",
             top: cardTop,
             width: cardWidth,
@@ -451,40 +459,33 @@ export function PrayerMoment({
           >
             {t("community.prayerMoment.prayForPerson", { name: givenName })}
           </Text>
-          <BrandWaveMotif
-            height={compactHeight ? 12 : 14}
-            intensity={3.8}
-            opacity={0.96}
-            style={{ marginBottom: compactHeight ? 1 : 2, marginTop: compactHeight ? 6 : 12 }}
-            variant="accent"
-            width={compactHeight ? 54 : 60}
-          />
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <BrandWaveMotif
+              height={compactHeight ? 12 : 14}
+              intensity={3.8}
+              opacity={0.96}
+              style={{ marginBottom: compactHeight ? 1 : 2, marginTop: compactHeight ? 6 : 12 }}
+              variant="accent"
+              width={compactHeight ? 54 : 60}
+            />
+          </View>
           {requestBody ? (
-            <ScrollView
-              bounces={false}
-              contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-              fadingEdgeLength={12}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              style={{ alignSelf: "stretch", flexShrink: 1 }}
+            <Text
+              selectable
+              style={{
+                alignSelf: "center",
+                color: brandPalette.deepNavy,
+                fontFamily: fontFamilies.bodyRegular,
+                fontSize: compactHeight ? 15 : 18,
+                lineHeight: compactHeight ? 21 : 29,
+                maxWidth: compactHeight ? 224 : 238,
+                textAlign: "center",
+              }}
             >
-              <Text
-                selectable
-                style={{
-                  color: brandPalette.deepNavy,
-                  fontFamily: fontFamilies.bodyRegular,
-                  fontSize: compactHeight ? 15 : 18,
-                  lineHeight: compactHeight ? 21 : 29,
-                  maxWidth: compactHeight ? 224 : 238,
-                  alignSelf: "center",
-                  textAlign: "center",
-                }}
-              >
-                {requestBody}
-              </Text>
-            </ScrollView>
+              {requestBody}
+            </Text>
           ) : null}
-        </View>
+        </ScrollView>
 
         <AmbientPrayerWaves
           active={Boolean(target)}
@@ -505,7 +506,9 @@ export function PrayerMoment({
             right: 24,
           }}
         >
-          <Ionicons color={brandPalette.lavenderHaze} name="heart-outline" size={compactHeight ? 26 : 30} />
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <Ionicons color={brandPalette.lavenderHaze} name="heart-outline" size={compactHeight ? 26 : 30} />
+          </View>
           <Text
             style={{
               color: brandPalette.mutedNavy,

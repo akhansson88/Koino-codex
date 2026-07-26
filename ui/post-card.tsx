@@ -79,8 +79,12 @@ function toneColors(tone: CommunityCardTone) {
 function TypeLabel({ item }: { item: FeedItem }) {
   const { t } = useAppTranslation();
   const palette = toneColors(toneForItem(item));
+  const label = communityFeedItemLabel(item, t);
   return (
     <View
+      accessibilityLabel={label}
+      accessibilityRole="text"
+      accessible
       style={{
         alignItems: "center",
         alignSelf: "flex-start",
@@ -96,8 +100,10 @@ function TypeLabel({ item }: { item: FeedItem }) {
         paddingVertical: 4,
       }}
     >
-      <Feather name={kindIcon(item)} size={13} color={palette.accent} />
-      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{communityFeedItemLabel(item, t)}</Text>
+      <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+        <Feather name={kindIcon(item)} size={13} color={palette.accent} />
+      </View>
+      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{label}</Text>
     </View>
   );
 }
@@ -126,13 +132,15 @@ export function CommunityFeedCard({
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
         <Avatar image={authorImage} name={authorName} size={42} tone="green" />
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <Text numberOfLines={2} style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
+          <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
             {authorName}
           </Text>
           <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
         {headerAccessory}
       </View>
+
+      {overlay}
 
       <View
         style={{
@@ -167,7 +175,7 @@ export function CommunityFeedCard({
           )
         ) : null}
         {bodyContent ?? (visibleBody ? (
-          <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES}>
+          <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES}>
             {visibleBody}
           </ExpandableBodyText>
         ) : null)}
@@ -176,7 +184,6 @@ export function CommunityFeedCard({
       {attachment}
       {actions ? <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{actions}</View> : null}
       {responseSummary}
-      {overlay}
     </Card>
   );
 }
@@ -374,13 +381,13 @@ export function PostCard({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={t("community.card.postOptions")}
-      hitSlop={8}
+      hitSlop={4}
       onPressIn={(event) => event.stopPropagation()}
       onPress={(event) => {
         event.stopPropagation();
         setMenuOpen((current) => !current);
       }}
-      style={{ alignItems: "center", height: 32, justifyContent: "center", width: 32 }}
+      style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
     >
       <Feather name="more-horizontal" size={19} color={colors.ink} />
     </Pressable>
@@ -410,12 +417,14 @@ export function PostCard({
     >
       {onEdit ? (
         <Pressable
+          accessibilityLabel={t("common.edit")}
+          accessibilityRole="button"
           onPressIn={(event) => event.stopPropagation()}
           onPress={(event) => {
             event.stopPropagation();
             runMenuAction(onEdit);
           }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           <Feather name="edit-2" size={14} color={colors.ink} />
           <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
@@ -423,12 +432,14 @@ export function PostCard({
       ) : null}
       {onDelete ? (
         <Pressable
+          accessibilityLabel={t("common.delete")}
+          accessibilityRole="button"
           onPressIn={(event) => event.stopPropagation()}
           onPress={(event) => {
             event.stopPropagation();
             runMenuAction(onDelete);
           }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           <Feather name="trash-2" size={14} color={colors.danger} />
           <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
@@ -492,7 +503,7 @@ export function PostCard({
         <LinkPreviewContent text={displayCopy.body}>
           {({ hiddenUrl, preview }) => (
             <>
-              <ExpandableBodyText collapsedLines={FEED_BODY_PREVIEW_LINES} hiddenUrl={hiddenUrl}>
+              <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES} hiddenUrl={hiddenUrl}>
                 {displayCopy.body || t("community.card.noWords")}
               </ExpandableBodyText>
               {preview}

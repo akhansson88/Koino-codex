@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
@@ -91,7 +91,14 @@ export function SharedComposer({
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
       <AppScreen>
-        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+        <View
+          style={{
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginTop: Platform.OS === "web" && context === "room" ? 52 : 0,
+          }}
+        >
           <IconButton accessibilityLabel={t("community.composer.close")} icon="arrow-left" onPress={onClose} />
           <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
         </View>
@@ -99,6 +106,8 @@ export function SharedComposer({
         <View style={{ gap: 10 }}>
           <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing))}</Text>
           <FilterChips
+            minHeight={context === "room" ? 44 : undefined}
+            showSelectionIndicator
             value={kind}
             onChange={onKind}
             options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}

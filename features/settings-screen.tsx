@@ -26,7 +26,6 @@ import {
   BottomSheet,
   Card,
   ExpandableBodyText,
-  FilterChips,
   HeartPromptCard,
   FullScreenModal,
   IconButton,
@@ -1227,8 +1226,8 @@ export function SettingsScreen() {
                 >
                   <RoomImage image={group.image} name={group.name} size={44} />
                   <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
-                    <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+                    <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
                       {communityMemberCount(memberCount, t)} · {t("common.private")}
                     </Text>
                   </View>
@@ -1241,7 +1240,7 @@ export function SettingsScreen() {
                     setCurrentGroupName(group.name);
                     setManageSheetVisible(true);
                   }}
-                  style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}
+                  style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 }}
                 >
                   <Feather name="more-horizontal" size={20} color={colors.ink} />
                 </Pressable>
@@ -1269,27 +1268,28 @@ export function SettingsScreen() {
                 }}
               />
 
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-                <SectionHeading>
-                  {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
-                </SectionHeading>
+              <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
+                <View style={{ flex: 1, minWidth: 148 }}>
+                  <SectionHeading>
+                    {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
+                  </SectionHeading>
+                </View>
                 {detailTab === "prayer" ? (
-                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
+                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
                     {t("community.feed.openPrayer")}
                   </PrimaryButton>
                 ) : detailTab === "checkins" ? (
-                  <PrimaryButton icon="check-circle" onPress={openCheckInsView} style={{ minHeight: 38, paddingHorizontal: 12 }}>
+                  <PrimaryButton icon="check-circle" onPress={openCheckInsView} style={{ minHeight: 44, paddingHorizontal: 12 }}>
                     {t("community.feed.openCheckIns")}
                   </PrimaryButton>
                 ) : (
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
+                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
                     {t("community.feed.share")}
                   </PrimaryButton>
                 )}
               </View>
 
-              <FilterChips
-                fit
+              <CommunityFilterChips
                 value={detailTab}
                 onChange={handleCommunityTabChange}
                 options={roomTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
@@ -1666,6 +1666,58 @@ export function SettingsScreen() {
 export const CommunityScreen = SettingsScreen;
 export const RoomScreen = SettingsScreen;
 
+function CommunityFilterChips<T extends string>({
+  onChange,
+  options,
+  value,
+}: {
+  onChange: (value: T) => void;
+  options: { label: string; value: T }[];
+  value: T;
+}) {
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            accessibilityLabel={option.label}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            style={{
+              alignItems: "center",
+              alignSelf: "stretch",
+              backgroundColor: selected ? colors.accentSubtle : colors.paper,
+              borderColor: selected ? colors.gold : colors.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              flexShrink: 0,
+              gap: 6,
+              justifyContent: "center",
+              maxWidth: "100%",
+              minHeight: 44,
+              paddingHorizontal: 13,
+              paddingVertical: 8,
+            }}
+          >
+            {selected ? (
+              <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+                <Feather name="check" size={14} color={colors.olive} />
+              </View>
+            ) : null}
+            <Text style={[typography.label, { color: selected ? colors.olive : colors.muted, flexShrink: 1, textAlign: "center" }]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function communityFeedEndpointBody(detailTab: RoomDetailTab, communityName: string, variant: "caught-up" | "no-recent", t: TranslationFunction) {
   if (variant === "no-recent") {
     if (detailTab === "prayer") return t("community.feed.noRecentPrayer", { name: communityName });
@@ -1694,7 +1746,9 @@ function CommunityFeedEndpoint({
   const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", gap: 5, paddingBottom: 6, paddingHorizontal: 16, paddingTop: 14 }}>
-      <BrandWaveMotif height={12} opacity={0.65} variant="accent" width={58} />
+      <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+        <BrandWaveMotif height={12} opacity={0.65} variant="accent" width={58} />
+      </View>
       <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, lineHeight: 20, textAlign: "center" }]}>
         {t(variant === "caught-up" ? "community.feed.caughtUpTitle" : "community.feed.noRecentTitle")}
       </Text>
@@ -1800,14 +1854,45 @@ function CommunityTransitionFrame({
   const { width } = useWindowDimensions();
   const translateX = useRef(new Animated.Value(0)).current;
   const entryOffset = Math.min(width * 0.18, 92);
+  const [reduceMotion, setReduceMotion] = useState<boolean | undefined>(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    return undefined;
+  });
 
   useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion === false) return;
+    translateX.stopAnimation();
+    translateX.setValue(0);
+  }, [reduceMotion, translateX]);
+
+  useEffect(() => {
+    translateX.stopAnimation();
+    if (reduceMotion !== false) {
+      translateX.setValue(0);
+      return undefined;
+    }
     translateX.setValue(direction === "forward" ? entryOffset : -entryOffset);
-    Animated.timing(translateX, {
+    const animation = Animated.timing(translateX, {
       duration: 220,
       toValue: 0,
       useNativeDriver: true,
-    }).start();
+    });
+    animation.start();
+    return () => animation.stop();
   }, [animationKey, direction, entryOffset, translateX]);
 
   const opacity = translateX.interpolate({
@@ -1829,6 +1914,11 @@ function CommunityTransitionFrame({
           if (!canSwipeBack) return;
           const shouldGoBack = gesture.dx > Math.min(width * 0.28, 120) || gesture.vx > 0.75;
           if (shouldGoBack) {
+            if (reduceMotion !== false) {
+              translateX.setValue(0);
+              onSwipeBack?.();
+              return;
+            }
             Animated.timing(translateX, {
               duration: 180,
               toValue: width,
@@ -1836,6 +1926,10 @@ function CommunityTransitionFrame({
             }).start(() => {
               onSwipeBack?.();
             });
+            return;
+          }
+          if (reduceMotion !== false) {
+            translateX.setValue(0);
             return;
           }
           Animated.spring(translateX, {
@@ -1847,7 +1941,7 @@ function CommunityTransitionFrame({
           }).start();
         },
       }),
-    [canSwipeBack, onSwipeBack, translateX, width],
+    [canSwipeBack, onSwipeBack, reduceMotion, translateX, width],
   );
 
   return (
@@ -1866,7 +1960,6 @@ function FocusedScreenHeader({ onBack, title }: { onBack: () => void; title: str
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
       <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onBack} />
       <Text
-        numberOfLines={1}
         style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}
       >
         {title}
@@ -1960,7 +2053,7 @@ function CommunityPrayerActions({
   const assignedFirstName = assignedName?.split(/\s+/)[0];
 
   return (
-    <View style={{ alignItems: "stretch", flexDirection: "row", gap: 8 }}>
+    <View style={{ alignItems: "stretch", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       <CommunityPrayerAction
         icon="list"
         onPress={onPrayForRequests}
@@ -2014,7 +2107,7 @@ function CommunityPrayerAction({
         flexDirection: "row",
         gap: 8,
         minHeight: 70,
-        minWidth: 0,
+        minWidth: 140,
         paddingHorizontal: 9,
         paddingVertical: 9,
       }}
@@ -2036,10 +2129,10 @@ function CommunityPrayerAction({
         </View>
       )}
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text numberOfLines={2} style={{ color: titleColor, fontSize: 13, fontWeight: "900", lineHeight: 16 }}>
+        <Text style={{ color: titleColor, fontSize: 13, fontWeight: "900", lineHeight: 16 }}>
           {title}
         </Text>
-        <Text numberOfLines={2} style={{ color: subtitleColor, fontSize: 11, fontWeight: "700", lineHeight: 13 }}>
+        <Text style={{ color: subtitleColor, fontSize: 11, fontWeight: "700", lineHeight: 13 }}>
           {subtitle}
         </Text>
       </View>
@@ -2197,24 +2290,24 @@ function CommunityPrayerScreen({
         onBack={onBack}
         title={t("community.page.prayer")}
       />
-      <FilterChips
+      <CommunityFilterChips
         value={filter}
         onChange={onFilter}
         options={prayerFilters.map((item) => ({ label: communityPrayerFilterLabel(item.value, t), value: item.value }))}
       />
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-        <BodyText muted>
+      <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
+        <BodyText muted style={{ flex: 1, minWidth: 140 }}>
           {feedLoading
             ? t("community.feed.loading")
             : feedError
               ? t("community.feed.unavailable")
               : t(prayerCountKey, { count: prayerPosts.length })}
         </BodyText>
-        <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
+        <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 44, paddingHorizontal: 14 }}>
           {t("community.prayer.share")}
         </PrimaryButton>
       </View>
-      <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 42 }}>
+      <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 44 }}>
         {t("community.prayer.prayForSomeone")}
       </SecondaryButton>
       {feedOffline && !feedError ? <CommunityFeedOfflineState /> : null}
@@ -2588,7 +2681,7 @@ function PrayerRequestCard({
         <LinkPreviewContent text={displayCopy.body}>
           {({ hiddenUrl, preview }) => (
             <>
-              <ExpandableBodyText collapsedLines={6} hiddenUrl={hiddenUrl}>
+              <ExpandableBodyText actionMinHeight={44} collapsedLines={6} hiddenUrl={hiddenUrl}>
                 {displayCopy.body || t("community.card.noWords")}
               </ExpandableBodyText>
               {preview}
@@ -2660,7 +2753,7 @@ function CheckInCard({
         <LinkPreviewContent text={item.body}>
           {({ hiddenUrl, preview }) => (
             <>
-              <ExpandableBodyText collapsedLines={6} hiddenUrl={hiddenUrl}>{item.body}</ExpandableBodyText>
+              <ExpandableBodyText actionMinHeight={44} collapsedLines={6} hiddenUrl={hiddenUrl}>{item.body}</ExpandableBodyText>
               {preview}
             </>
           )}

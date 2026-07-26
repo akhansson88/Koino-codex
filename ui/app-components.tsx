@@ -310,6 +310,7 @@ export function PrimaryButton({
 }: PropsWithChildren<{ disabled?: boolean; icon?: FeatherName; onPress: () => void; style?: StyleProp<ViewStyle> }>) {
   return (
     <Pressable
+      accessibilityLabel={typeof children === "string" ? children : undefined}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -330,7 +331,11 @@ export function PrimaryButton({
         style,
       ]}
     >
-      {icon ? <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} /> : null}
+      {icon ? (
+        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+          <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} />
+        </View>
+      ) : null}
       <Text style={[typography.button, { color: disabled ? colors.disabledText : colors.onAccent, flexShrink: 1, textAlign: "center" }]}>
         {children}
       </Text>
@@ -355,6 +360,7 @@ export function SecondaryButton({
   const color = tone === "danger" ? colors.danger : colors.olive;
   return (
     <Pressable
+      accessibilityLabel={typeof children === "string" ? children : undefined}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -375,7 +381,11 @@ export function SecondaryButton({
         style,
       ]}
     >
-      {icon ? <Feather name={icon} size={18} color={disabled ? colors.disabledText : color} /> : null}
+      {icon ? (
+        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+          <Feather name={icon} size={18} color={disabled ? colors.disabledText : color} />
+        </View>
+      ) : null}
       <Text style={[typography.button, { color: disabled ? colors.disabledText : color, flexShrink: 1, textAlign: "center" }]}>
         {children}
       </Text>
@@ -443,12 +453,16 @@ export function IconButton({
 
 export function FilterChips<T extends string>({
   fit = false,
+  minHeight = 36,
   options,
+  showSelectionIndicator = false,
   value,
   onChange,
 }: {
   fit?: boolean;
+  minHeight?: number;
   options: { label: string; value: T }[];
+  showSelectionIndicator?: boolean;
   value: T;
   onChange: (value: T) => void;
 }) {
@@ -456,6 +470,7 @@ export function FilterChips<T extends string>({
     const selected = option.value === value;
     return (
       <Pressable
+        accessibilityLabel={option.label}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         key={option.value}
@@ -467,12 +482,19 @@ export function FilterChips<T extends string>({
           borderRadius: 999,
           borderWidth: 1,
           flex: fit ? 1 : undefined,
+          flexDirection: "row",
+          gap: 6,
           justifyContent: "center",
-          minHeight: 36,
+          minHeight,
           minWidth: fit ? 0 : undefined,
           paddingHorizontal: fit ? 4 : 18,
         }}
       >
+        {selected && showSelectionIndicator ? (
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <Feather name="check" size={14} color={colors.olive} />
+          </View>
+        ) : null}
         <Text
           adjustsFontSizeToFit={fit}
           minimumFontScale={fit ? 0.78 : undefined}
@@ -915,12 +937,13 @@ export function BodyText({
 }
 
 export function ExpandableBodyText({
+  actionMinHeight = 28,
   children,
   collapsedLines = 3,
   hiddenUrl,
   muted = false,
   style,
-}: PropsWithChildren<{ collapsedLines?: number; hiddenUrl?: string; muted?: boolean; style?: StyleProp<TextStyle> }>) {
+}: PropsWithChildren<{ actionMinHeight?: number; collapsedLines?: number; hiddenUrl?: string; muted?: boolean; style?: StyleProp<TextStyle> }>) {
   const { t } = useAppTranslation();
   const flattenedStyle = StyleSheet.flatten(style);
   const collapsedLineHeight = typeof flattenedStyle?.lineHeight === "number" ? flattenedStyle.lineHeight : 22;
@@ -982,17 +1005,20 @@ export function ExpandableBodyText({
       </BodyText>
       {canExpand ? (
         <Pressable
+          accessibilityLabel={t(expanded ? "shared.expand.showLess" : "shared.expand.showMore")}
           accessibilityRole="button"
           onPress={(event) => {
             event.stopPropagation();
             setExpanded((current) => !current);
           }}
-          style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: 28 }}
+          style={{ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, minHeight: actionMinHeight }}
         >
           <Text style={[typography.label, { color: muted ? colors.muted : colors.olive }]}>
             {t(expanded ? "shared.expand.showLess" : "shared.expand.showMore")}
           </Text>
-          <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <Feather name={expanded ? "chevron-up" : "chevron-down"} size={15} color={muted ? colors.muted : colors.olive} />
+          </View>
         </Pressable>
       ) : null}
     </View>
