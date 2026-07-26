@@ -1,4 +1,4 @@
-import type { AppLanguage } from "@/ui/localization";
+import { translateMessage, type AppLanguage } from "@/ui/localization";
 
 const formatters: Record<AppLanguage, { date: Intl.DateTimeFormat; time: Intl.DateTimeFormat }> = {
   en: {
@@ -32,14 +32,14 @@ export function formatRelativeTime(value: string, languageOrCurrentDate: AppLang
   const dayDiff = dayDifference(date, currentDate);
   if (dayDiff === 0) {
     const seconds = Math.max(0, Math.floor((currentDate.getTime() - created) / 1000));
-    if (seconds < 60) return language === "sv" ? "nyss" : "just now";
+    if (seconds < 60) return translateMessage(language, "shared.relativeTime.justNow");
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return language === "sv" ? `för ${minutes} min sedan` : `${minutes}m ago`;
-    return language === "sv" ? `I dag kl. ${timeFormatter.format(date)}` : `Today at ${timeFormatter.format(date)}`;
+    if (minutes < 60) return translateMessage(language, "shared.relativeTime.minutesAgo", { minutes });
+    return translateMessage(language, "shared.relativeTime.todayAt", { time: timeFormatter.format(date) });
   }
 
   if (dayDiff === 1) {
-    return language === "sv" ? `I går kl. ${timeFormatter.format(date)}` : `Yesterday at ${timeFormatter.format(date)}`;
+    return translateMessage(language, "shared.relativeTime.yesterdayAt", { time: timeFormatter.format(date) });
   }
   return dateFormatter.format(date);
 }
