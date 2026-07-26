@@ -17,6 +17,7 @@ import {
   visibility,
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
+import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Membership, PostReactionKind, Reply } from "@/state/types";
 import {
   AppScreen,
@@ -535,13 +536,15 @@ export function SettingsScreen() {
 
   function itemPrayerState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
-    const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
+    const reactions = prayerReactionsForTarget(state.prayerReactions, targetType, item.id);
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: reactions.length,
       targetType,
-      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
+      prayedBy: reactions.map((reaction) => ({
+        name: userById.get(reaction.userId) ?? t("common.someone"),
+        image: userImageById.get(reaction.userId),
+      })),
     };
   }
 
@@ -567,8 +570,7 @@ export function SettingsScreen() {
 
   function itemPrayerActivity(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    return state.prayerReactions
-      .filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id)
+    return prayerReactionsForTarget(state.prayerReactions, targetType, item.id)
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .map((reaction) => ({
         id: reaction.id,

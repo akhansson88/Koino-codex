@@ -5,6 +5,7 @@ import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
   entryKindIcon,
   feedItemKind,
@@ -101,12 +102,14 @@ export function FeedDetailScreen() {
   );
   const prayer = useMemo(() => {
     if (!item || !targetType) return undefined;
-    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
-    const prayedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
+    const reactions = prayerReactionsForTarget(state.prayerReactions, targetType, item.id);
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: reactions.length,
-      prayedBy: prayedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
+      prayedBy: reactions.map((reaction) => ({
+        name: userById.get(reaction.userId) ?? t("common.someone"),
+        image: userImageById.get(reaction.userId),
+      })),
       activity: reactions
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
         .map((reaction) => ({

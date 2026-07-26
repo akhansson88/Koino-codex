@@ -7,6 +7,7 @@ import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
+import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import type { BibleVerse, FeedItem, GroupImage, HeartMood } from "@/state/types";
 import {
   AppScreen,
@@ -135,7 +136,7 @@ export function HomeScreen() {
 
   function itemPrayerState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const reactions = state.prayerReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id);
+    const reactions = prayerReactionsForTarget(state.prayerReactions, targetType, item.id);
     return {
       count: reactions.length,
       targetType,
