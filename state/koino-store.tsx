@@ -494,6 +494,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [authError, setAuthError] = useState<string>();
   const [communityFeedError, setCommunityFeedError] = useState<string>();
   const [communityFeedGroupId, setCommunityFeedGroupId] = useState<Id>();
+  const [communityFeedOffline, setCommunityFeedOffline] = useState<boolean>();
   const [communityFeedReady, setCommunityFeedReady] = useState(false);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [themeReady, setThemeReady] = useState(false);
@@ -529,6 +530,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setSupportIntents([]);
     setCommunityFeedError(undefined);
     setCommunityFeedGroupId(undefined);
+    setCommunityFeedOffline(undefined);
     setCommunityFeedReady(true);
   }, []);
 
@@ -750,6 +752,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     if (!firebaseUser || !profile?.currentGroupId) {
       setCommunityFeedError(undefined);
       setCommunityFeedGroupId(undefined);
+      setCommunityFeedOffline(undefined);
       setCommunityFeedReady(true);
       setMemberships([]);
       setCheckIns([]);
@@ -764,12 +767,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     const groupId = profile.currentGroupId;
     let active = true;
+    let membersReady = false;
     let checkInsReady = false;
     let postsReady = false;
+    let repliesReady = false;
     let prayerReactionsReady = false;
+    let postReactionsReady = false;
 
     setCommunityFeedError(undefined);
-    setCommunityFeedGroupId(undefined);
+    setCommunityFeedGroupId(groupId);
+    setCommunityFeedOffline(undefined);
     setCommunityFeedReady(false);
     setMemberships([]);
     setCheckIns([]);
@@ -781,7 +788,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setGroupBiblePlanParticipations([]);
 
     const markCommunityFeedReady = () => {
-      if (!active || !checkInsReady || !postsReady || !prayerReactionsReady) return;
+      if (
+        !active ||
+        !membersReady ||
+        !checkInsReady ||
+        !postsReady ||
+        !repliesReady ||
+        !prayerReactionsReady ||
+        !postReactionsReady
+      ) return;
       setCommunityFeedGroupId(groupId);
       setCommunityFeedReady(true);
     };
@@ -792,6 +807,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setCommunityFeedReady(true);
     };
 
+    const connectedRef = ref(database, ".info/connected");
     const membersRef = ref(database, `groupMembers/${groupId}`);
     const checkInsRef = ref(database, `checkIns/${groupId}`);
     const postsRef = ref(database, `posts/${groupId}`);
@@ -802,7 +818,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const planParticipationsRef = ref(database, `groupBiblePlanParticipation/${groupId}`);
 
     const unsubs = [
-      onValue(membersRef, (snapshot) => setMemberships(asArray<Membership>(snapshot.val()))),
+      onValue(connectedRef, (snapshot) => {
+        if (!active) return;
+        setCommunityFeedOffline(snapshot.val() === false);
+      }),
+      onValue(membersRef, (snapshot) => {
+        if (!active) return;
+        setMemberships(asArray<Membership>(snapshot.val()));
+        membersReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(checkInsRef, (snapshot) => {
         if (!active) return;
         setCheckIns(asArray<CheckIn>(snapshot.val()));
@@ -815,14 +840,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         postsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(repliesRef, (snapshot) => setReplies(asArray<Reply>(snapshot.val()))),
+      onValue(repliesRef, (snapshot) => {
+        if (!active) return;
+        setReplies(asArray<Reply>(snapshot.val()));
+        repliesReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(reactionsRef, (snapshot) => {
         if (!active) return;
         setPrayerReactions(asArray<PrayerReaction>(snapshot.val()));
         prayerReactionsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(postReactionsRef, (snapshot) => setPostReactions(asArray<PostReaction>(snapshot.val()))),
+      onValue(postReactionsRef, (snapshot) => {
+        if (!active) return;
+        setPostReactions(asArray<PostReaction>(snapshot.val()));
+        postReactionsReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(planAnnouncementsRef, (snapshot) =>
         setGroupBiblePlanAnnouncements(
           asArray<GroupBiblePlanAnnouncement>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
@@ -864,6 +899,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       authError,
       communityFeedError,
       communityFeedGroupId,
+      communityFeedOffline,
       communityFeedReady,
       theme,
       users,
@@ -892,6 +928,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     authError,
     communityFeedError,
     communityFeedGroupId,
+    communityFeedOffline,
     communityFeedReady,
     theme,
     themeReady,

@@ -283,6 +283,7 @@ export type KoinoState = {
   authError?: string;
   communityFeedError?: string;
   communityFeedGroupId?: Id;
+  communityFeedOffline?: boolean;
   communityFeedReady: boolean;
   theme: ThemeName;
   users: User[];

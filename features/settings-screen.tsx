@@ -308,6 +308,7 @@ export function SettingsScreen() {
   const communityFeedStatusMatchesGroup = Boolean(group && state.communityFeedGroupId === group.id);
   const communityFeedReadyForGroup = Boolean(group && communityFeedStatusMatchesGroup && state.communityFeedReady);
   const communityFeedError = communityFeedStatusMatchesGroup ? state.communityFeedError : undefined;
+  const communityFeedOffline = Boolean(communityFeedStatusMatchesGroup && state.communityFeedOffline);
   const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
   const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
   const prayerPosts = feedItems.filter(
@@ -1071,6 +1072,9 @@ export function SettingsScreen() {
             onPrayForSomeone={() => setMemberSelectVisible(true)}
             prayerPosts={visiblePrayerPosts}
             prayerState={itemPrayerState}
+            feedError={communityFeedError}
+            feedLoading={communityFeedLoading}
+            feedOffline={communityFeedOffline}
             userById={userById}
             userImageById={userImageById}
           />
@@ -1163,6 +1167,9 @@ export function SettingsScreen() {
             onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
             onReact={togglePostAction}
             reactionState={itemReactionState}
+            feedError={communityFeedError}
+            feedLoading={communityFeedLoading}
+            feedOffline={communityFeedOffline}
             userById={userById}
             userImageById={userImageById}
           />
@@ -1290,6 +1297,7 @@ export function SettingsScreen() {
             </View>
 
             <View style={{ gap: 12 }}>
+              {communityFeedOffline && !communityFeedError ? <CommunityFeedOfflineState /> : null}
               {communityFeedLoading ? (
                 <CommunityFeedLoadingState />
               ) : communityFeedError ? (
@@ -1724,6 +1732,18 @@ function CommunityFeedLoadingState() {
   );
 }
 
+function CommunityFeedOfflineState() {
+  const { t } = useAppTranslation();
+  return (
+    <View accessibilityLabel={t("community.feed.unavailable")} accessibilityLiveRegion="polite">
+      <Card style={{ alignItems: "center", gap: 6, padding: 18 }}>
+        <Feather name="wifi-off" size={20} color={colors.muted} />
+        <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, textAlign: "center" }]}>{t("community.feed.unavailable")}</Text>
+      </Card>
+    </View>
+  );
+}
+
 function CommunityFeedErrorState() {
   const { t } = useAppTranslation();
   return (
@@ -2124,6 +2144,9 @@ function PrayerPostSheet({
 
 function CommunityPrayerScreen({
   communityName,
+  feedError,
+  feedLoading,
+  feedOffline,
   filter,
   onBack,
   onCreatePrayer,
@@ -2137,6 +2160,9 @@ function CommunityPrayerScreen({
   userImageById,
 }: {
   communityName: string;
+  feedError?: string;
+  feedLoading: boolean;
+  feedOffline: boolean;
   filter: PrayerFilter;
   onBack: () => void;
   onCreatePrayer: () => void;
@@ -2177,7 +2203,13 @@ function CommunityPrayerScreen({
         options={prayerFilters.map((item) => ({ label: communityPrayerFilterLabel(item.value, t), value: item.value }))}
       />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
-        <BodyText muted>{t(prayerCountKey, { count: prayerPosts.length })}</BodyText>
+        <BodyText muted>
+          {feedLoading
+            ? t("community.feed.loading")
+            : feedError
+              ? t("community.feed.unavailable")
+              : t(prayerCountKey, { count: prayerPosts.length })}
+        </BodyText>
         <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 42, paddingHorizontal: 14 }}>
           {t("community.prayer.share")}
         </PrimaryButton>
@@ -2185,7 +2217,12 @@ function CommunityPrayerScreen({
       <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 42 }}>
         {t("community.prayer.prayForSomeone")}
       </SecondaryButton>
-      {prayerPosts.length === 0 ? (
+      {feedOffline && !feedError ? <CommunityFeedOfflineState /> : null}
+      {feedLoading ? (
+        <CommunityFeedLoadingState />
+      ) : feedError ? (
+        <CommunityFeedErrorState />
+      ) : prayerPosts.length === 0 ? (
         <Card>
           <BodyText muted>
             {t(filter === "answered" ? "community.prayer.emptyAnswered" : "community.prayer.empty")}
@@ -2426,6 +2463,9 @@ function CommunityCheckInsScreen({
   checkIns,
   checkedInToday,
   communityName,
+  feedError,
+  feedLoading,
+  feedOffline,
   onBack,
   onCheckIn,
   onOpenCheckIn,
@@ -2437,6 +2477,9 @@ function CommunityCheckInsScreen({
   checkIns: Extract<FeedItem, { type: "check_in" }>[];
   checkedInToday: boolean;
   communityName: string;
+  feedError?: string;
+  feedLoading: boolean;
+  feedOffline: boolean;
   onBack: () => void;
   onCheckIn: () => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
@@ -2458,7 +2501,7 @@ function CommunityCheckInsScreen({
         onBack={onBack}
         title={t("community.page.checkIns")}
       />
-      {!checkedInToday ? (
+      {!feedLoading && !feedError && !checkedInToday ? (
         <Card>
           <SectionHeading>{t("community.checkIns.weeklyTitle")}</SectionHeading>
           <BodyText muted>{t("community.checkIns.weeklyDescription")}</BodyText>
@@ -2468,7 +2511,12 @@ function CommunityCheckInsScreen({
         </Card>
       ) : null}
       <SectionHeading>{t("community.checkIns.recent")}</SectionHeading>
-      {checkIns.length === 0 ? (
+      {feedOffline && !feedError ? <CommunityFeedOfflineState /> : null}
+      {feedLoading ? (
+        <CommunityFeedLoadingState />
+      ) : feedError ? (
+        <CommunityFeedErrorState />
+      ) : checkIns.length === 0 ? (
         <Card>
           <BodyText muted>{t("community.checkIns.empty")}</BodyText>
         </Card>
