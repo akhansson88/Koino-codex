@@ -144,6 +144,27 @@ function compareCommunityFeedItems(left: FeedItem, right: FeedItem) {
   return communityFeedItemKey(left).localeCompare(communityFeedItemKey(right));
 }
 
+function uniqueCommunityFeedItems(items: FeedItem[]) {
+  const uniqueItems = new Map<string, FeedItem>();
+  for (const item of items) {
+    uniqueItems.set(communityFeedItemKey(item), item);
+  }
+  return [...uniqueItems.values()];
+}
+
+function filterCommunityFeedItems(items: FeedItem[], detailTab: RoomDetailTab) {
+  if (detailTab === "prayer") {
+    return items.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
+  }
+  if (detailTab === "checkins") {
+    return items.filter((item) => item.type === "check_in");
+  }
+  if (detailTab === "reflections") {
+    return items.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
+  }
+  return items;
+}
+
 function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
   const cutoff = now - COMMUNITY_RECENT_DAYS * 24 * 60 * 60 * 1000;
   const recent: FeedItem[] = [];
@@ -206,6 +227,7 @@ export function SettingsScreen() {
   const communityScrollRef = useRef<ScrollView | null>(null);
   const communityScrollOffsetsRef = useRef<Record<string, number>>({});
   const pendingCommunityScrollRestoreRef = useRef<{ key: string; offset: number } | undefined>(undefined);
+  const communityFeedGroupIdRef = useRef(state.currentGroupId);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
@@ -269,20 +291,9 @@ export function SettingsScreen() {
         answeredMarkedAt: item.answeredMarkedAt,
         createdAt: item.createdAt,
       }));
-    return [...checkIns, ...posts].sort(compareCommunityFeedItems);
+    return uniqueCommunityFeedItems([...checkIns, ...posts]).sort(compareCommunityFeedItems);
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const visibleFeedItems = useMemo(() => {
-    if (detailTab === "prayer") {
-      return feedItems.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
-    }
-    if (detailTab === "checkins") {
-      return feedItems.filter((item) => item.type === "check_in");
-    }
-    if (detailTab === "reflections") {
-      return feedItems.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
-    }
-    return feedItems;
-  }, [detailTab, feedItems]);
+  const visibleFeedItems = useMemo(() => filterCommunityFeedItems(feedItems, detailTab), [detailTab, feedItems]);
   const { earlier: earlierFeedItems, recent: recentFeedItems } = partitionCommunityFeed(
     visibleFeedItems,
     Math.max(communityFeedClock, Date.now()),
@@ -317,6 +328,13 @@ export function SettingsScreen() {
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
   const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
+
+  useEffect(() => {
+    if (communityFeedGroupIdRef.current === state.currentGroupId) return;
+    communityFeedGroupIdRef.current = state.currentGroupId;
+    setDetailTab("recent");
+    pendingCommunityScrollRestoreRef.current = undefined;
+  }, [state.currentGroupId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -442,22 +460,25 @@ export function SettingsScreen() {
     const pendingRestore = pendingCommunityScrollRestoreRef.current;
     if (!pendingRestore || pendingRestore.key !== communityScrollKey) return;
 
-    communityScrollRef.current?.scrollTo({ animated: false, y: pendingRestore.offset });
+    communityScrollRef.current?.scrollTo({ animated: false, y: Math.max(0, pendingRestore.offset) });
   }
 
   function handleCommunityScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     if (!communityScrollKey) return;
-    const offset = event.nativeEvent.contentOffset.y;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const offset = contentOffset.y;
     const pendingRestore = pendingCommunityScrollRestoreRef.current;
     if (pendingRestore?.key === communityScrollKey) {
-      if (Math.abs(offset - pendingRestore.offset) <= 2 || offset >= pendingRestore.offset - 2) {
+      const maximumOffset = Math.max(0, contentSize.height - layoutMeasurement.height);
+      const safeRestoreOffset = Math.min(Math.max(0, pendingRestore.offset), maximumOffset);
+      if (Math.abs(offset - safeRestoreOffset) <= 2 || offset >= safeRestoreOffset - 2) {
         pendingCommunityScrollRestoreRef.current = undefined;
-        communityScrollOffsetsRef.current[communityScrollKey] = offset;
+        communityScrollOffsetsRef.current[communityScrollKey] = Math.max(0, offset);
       }
       return;
     }
 
-    communityScrollOffsetsRef.current[communityScrollKey] = offset;
+    communityScrollOffsetsRef.current[communityScrollKey] = Math.max(0, offset);
   }
 
   function handleCommunityScrollBeginDrag() {
