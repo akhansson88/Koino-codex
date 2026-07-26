@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
@@ -77,6 +77,7 @@ type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "m
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
+const COMMUNITY_CHECK_INS_HISTORY_KEY = "__koinoCommunityCheckIns";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>>>;
@@ -186,9 +187,11 @@ function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
 export function SettingsScreen() {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
+  const navigation = useNavigation();
   const [roomView, setRoomView] = useState<RoomView>("detail");
   const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("forward");
   const roomViewRef = useRef<RoomView>("detail");
+  const checkInsHistoryBackPendingRef = useRef(false);
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
@@ -330,6 +333,10 @@ export function SettingsScreen() {
   const canCreate = newGroupName.trim().length > 0;
   const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: roomView !== "prayer" && roomView !== "checkins" });
+  }, [navigation, roomView]);
+
   useEffect(() => {
     if (communityFeedGroupIdRef.current === state.currentGroupId) return;
     communityFeedGroupIdRef.current = state.currentGroupId;
@@ -398,12 +405,58 @@ export function SettingsScreen() {
     setRoomView(nextView);
   }, []);
 
+  const openCheckInsView = useCallback(() => {
+    if (Platform.OS === "web" && window.history.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] !== true) {
+      const currentHistoryState = window.history.state;
+      window.history.pushState(
+        currentHistoryState && typeof currentHistoryState === "object"
+          ? { ...currentHistoryState, [COMMUNITY_CHECK_INS_HISTORY_KEY]: true }
+          : { [COMMUNITY_CHECK_INS_HISTORY_KEY]: true },
+        "",
+        window.location.href,
+      );
+    }
+    navigateToRoomView("checkins");
+  }, [navigateToRoomView]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return undefined;
+
+    const handlePopState = (event: PopStateEvent) => {
+      const returnsToCheckIns = event.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] === true;
+      const wasReturningToCommunity = checkInsHistoryBackPendingRef.current || roomViewRef.current === "checkins";
+      checkInsHistoryBackPendingRef.current = false;
+
+      if (returnsToCheckIns) {
+        setTransitionDirection("forward");
+        setRoomView("checkins");
+      } else if (wasReturningToCommunity) {
+        setTransitionDirection("back");
+        setRoomView("detail");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   const goBackFromRoomView = useCallback(() => {
     if (roomView === "prayerDetail") {
       navigateToRoomView(prayerDetailReturnView, "back");
       return true;
     }
-    if (roomView === "prayer" || roomView === "checkins" || roomView === "members" || roomView === "rooms") {
+    if (roomView === "checkins") {
+      if (Platform.OS === "web" && window.history.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] === true) {
+        if (!checkInsHistoryBackPendingRef.current) {
+          checkInsHistoryBackPendingRef.current = true;
+          window.history.back();
+        }
+        return true;
+      }
+      navigateToRoomView("detail", "back");
+      return true;
+    }
+    if (roomView === "prayer" || roomView === "members" || roomView === "rooms") {
       navigateToRoomView("detail", "back");
       return true;
     }
@@ -1218,7 +1271,7 @@ export function SettingsScreen() {
                     {t("community.feed.openPrayer")}
                   </PrimaryButton>
                 ) : detailTab === "checkins" ? (
-                  <PrimaryButton icon="check-circle" onPress={() => navigateToRoomView("checkins")} style={{ minHeight: 38, paddingHorizontal: 12 }}>
+                  <PrimaryButton icon="check-circle" onPress={openCheckInsView} style={{ minHeight: 38, paddingHorizontal: 12 }}>
                     {t("community.feed.openCheckIns")}
                   </PrimaryButton>
                 ) : (
@@ -2111,7 +2164,7 @@ function CommunityPrayerScreen({
           : "community.prayer.count.total.other";
 
   return (
-    <AppScreen topInset={false}>
+    <AppScreen>
       <FocusedCommunityScreenIntro
         communityName={communityName}
         description={t("community.prayer.pageDescription")}
@@ -2398,7 +2451,7 @@ function CommunityCheckInsScreen({
 }) {
   const { t } = useAppTranslation();
   return (
-    <AppScreen topInset={false}>
+    <AppScreen>
       <FocusedCommunityScreenIntro
         communityName={communityName}
         description={t("community.checkIns.pageDescription")}
