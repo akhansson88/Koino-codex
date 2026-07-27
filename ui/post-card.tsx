@@ -5,6 +5,7 @@ import { Pressable, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import {
+  entryKindIcon,
   feedItemKind,
   moodOptionForValue,
 } from "@/state/product";
@@ -70,24 +71,61 @@ function toneColors(tone: CommunityCardTone) {
   return { accent: colors.textMuted, soft: colors.accentSubtle };
 }
 
+function kindIcon(item: FeedItem) {
+  if (item.type === "check_in") return "check-circle" as const;
+  return entryKindIcon(item.kind);
+}
+
+function softSemanticLabelColor(accent: string) {
+  const mutedMatch = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(colors.textMuted);
+  const accentMatch = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(accent);
+  if (!mutedMatch || !accentMatch) return colors.textMuted;
+
+  const semanticAmount = 0.28;
+  const channels = mutedMatch.slice(1).map((channel, index) => {
+    const mutedValue = Number.parseInt(channel, 16);
+    const accentValue = Number.parseInt(accentMatch[index + 1], 16);
+    return Math.round(mutedValue + (accentValue - mutedValue) * semanticAmount)
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
+}
+
 function TypeLabel({ item }: { item: FeedItem }) {
   const { t } = useAppTranslation();
   const label = communityFeedItemLabel(item, t);
+  const labelColor = softSemanticLabelColor(toneColors(toneForItem(item)).accent);
   return (
-    <Text
+    <View
       accessibilityLabel={label}
       accessibilityRole="text"
-      style={[
-        typography.navLabel,
-        {
-          color: colors.textMuted,
-          flexShrink: 1,
-          textAlign: "right",
-        },
-      ]}
+      accessible
+      style={{
+        alignItems: "center",
+        flexDirection: "row",
+        flexShrink: 1,
+        gap: 5,
+        justifyContent: "flex-end",
+        minWidth: 0,
+      }}
     >
-      {label}
-    </Text>
+      <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+        <Feather name={kindIcon(item)} size={13} color={labelColor} />
+      </View>
+      <Text
+        style={[
+          typography.navLabel,
+          {
+            color: labelColor,
+            flexShrink: 1,
+            textAlign: "right",
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -114,6 +152,7 @@ function HeaderMeta({
         style={{
           alignItems: "center",
           flexDirection: "row",
+          gap: 4,
           justifyContent: "flex-end",
           minWidth: 0,
         }}

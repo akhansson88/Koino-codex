@@ -154,16 +154,22 @@ function uniqueCommunityFeedItems(items: FeedItem[]) {
 }
 
 function filterCommunityFeedItems(items: FeedItem[], detailTab: RoomDetailTab) {
+  // Prayer moments are stored activity/history records, not shared Community content.
+  // Keep them in feedItems for dedicated prayer flows, counts, and completed state.
+  const communityContentItems = items.filter(
+    (item) => item.type !== "post" || !isPrayerMomentKind(item.kind),
+  );
+
   if (detailTab === "prayer") {
-    return items.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
+    return communityContentItems.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
   }
   if (detailTab === "checkins") {
-    return items.filter((item) => item.type === "check_in");
+    return communityContentItems.filter((item) => item.type === "check_in");
   }
   if (detailTab === "reflections") {
-    return items.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
+    return communityContentItems.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
   }
-  return items;
+  return communityContentItems;
 }
 
 function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
