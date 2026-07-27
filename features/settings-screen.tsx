@@ -2703,7 +2703,6 @@ function PrayerRequestCard({
         )
       }
       status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
-      title={displayCopy.title || communityDefaultFeedTitle(item, t)}
     />
   );
 }
@@ -2749,7 +2748,7 @@ function CheckInCard({
       authorImage={authorImage}
       authorName={authorName}
       body={item.body}
-      bodyContent={
+      bodyContent={item.body.trim() ? (
         <LinkPreviewContent text={item.body}>
           {({ hiddenUrl, preview }) => (
             <>
@@ -2758,7 +2757,7 @@ function CheckInCard({
             </>
           )}
         </LinkPreviewContent>
-      }
+      ) : undefined}
       item={item}
       onOpen={onOpen}
       responseSummary={
@@ -2770,7 +2769,6 @@ function CheckInCard({
           />
         ) : undefined
       }
-      title={communityDefaultFeedTitle(item, t)}
     />
   );
 }

@@ -127,6 +127,11 @@ export function CommunityFeedCard({
 }: CommunityFeedCardProps) {
   const { language } = useAppTranslation();
   const visibleBody = body || bodyFallback;
+  const mainContent = bodyContent ?? (visibleBody ? (
+    <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES}>
+      {visibleBody}
+    </ExpandableBodyText>
+  ) : null);
   return (
     <Card style={[{ overflow: "visible", padding: 16, position: "relative" }, style]}>
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
@@ -156,9 +161,26 @@ export function CommunityFeedCard({
         {status}
       </View>
 
-      <View style={{ gap: 8 }}>
-        {title ? (
-          onOpen ? (
+      {title || mainContent ? (
+        <View style={{ gap: 8 }}>
+          {title ? (
+            onOpen ? (
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={6}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onOpen();
+                }}
+                style={{ justifyContent: "center", minHeight: 44 }}
+              >
+                <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
+              </Pressable>
+            ) : (
+              <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
+            )
+          ) : null}
+          {mainContent ? (!title && onOpen ? (
             <Pressable
               accessibilityRole="button"
               hitSlop={6}
@@ -166,22 +188,31 @@ export function CommunityFeedCard({
                 event.stopPropagation();
                 onOpen();
               }}
-              style={{ justifyContent: "center", minHeight: 44 }}
+              style={{ gap: 8 }}
             >
-              <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
+              {mainContent}
             </Pressable>
           ) : (
-            <Text style={[typography.title, { color: colors.ink }]}>{title}</Text>
-          )
-        ) : null}
-        {bodyContent ?? (visibleBody ? (
-          <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES}>
-            {visibleBody}
-          </ExpandableBodyText>
-        ) : null)}
-      </View>
+            mainContent
+          )) : null}
+        </View>
+      ) : null}
 
-      {attachment}
+      {attachment ? (!title && !mainContent && onOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          style={{ gap: 14 }}
+        >
+          {attachment}
+        </Pressable>
+      ) : (
+        attachment
+      )) : null}
       {actions ? <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{actions}</View> : null}
       {responseSummary}
     </Card>
@@ -538,7 +569,7 @@ export function PostCard({
         ) : undefined
       }
       style={{ zIndex: menuOpen ? 10 : 1 }}
-      title={displayCopy.title || communityDefaultFeedTitle(item, t)}
+      title={itemKind === "scripture" || itemKind === "update" ? displayCopy.title || communityDefaultFeedTitle(item, t) : undefined}
     />
   );
 }
