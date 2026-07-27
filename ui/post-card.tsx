@@ -5,7 +5,6 @@ import { Pressable, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import {
-  entryKindIcon,
   feedItemKind,
   moodOptionForValue,
 } from "@/state/product";
@@ -55,11 +54,6 @@ type CommunityFeedCardProps = {
   title?: string;
 };
 
-function kindIcon(item: FeedItem) {
-  if (item.type === "check_in") return "check-circle" as const;
-  return entryKindIcon(item.kind);
-}
-
 function toneForItem(item: FeedItem): CommunityCardTone {
   if (item.type === "check_in") return "check_in";
   const itemKind = feedItemKind(item);
@@ -78,32 +72,56 @@ function toneColors(tone: CommunityCardTone) {
 
 function TypeLabel({ item }: { item: FeedItem }) {
   const { t } = useAppTranslation();
-  const palette = toneColors(toneForItem(item));
   const label = communityFeedItemLabel(item, t);
   return (
-    <View
+    <Text
       accessibilityLabel={label}
       accessibilityRole="text"
-      accessible
+      style={[
+        typography.navLabel,
+        {
+          color: colors.textMuted,
+          flexShrink: 1,
+          textAlign: "right",
+        },
+      ]}
+    >
+      {label}
+    </Text>
+  );
+}
+
+function HeaderMeta({
+  accessory,
+  item,
+  status,
+}: {
+  accessory?: ReactNode;
+  item: FeedItem;
+  status?: ReactNode;
+}) {
+  return (
+    <View
       style={{
-        alignItems: "center",
-        alignSelf: "flex-start",
-        backgroundColor: palette.soft,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        flexDirection: "row",
+        alignItems: "flex-end",
         flexShrink: 1,
-        gap: 6,
-        minHeight: 28,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+        gap: 4,
+        maxWidth: "52%",
+        minWidth: 0,
       }}
     >
-      <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-        <Feather name={kindIcon(item)} size={13} color={palette.accent} />
+      <View
+        style={{
+          alignItems: "center",
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          minWidth: 0,
+        }}
+      >
+        <TypeLabel item={item} />
+        {accessory}
       </View>
-      <Text style={[typography.caption, { color: colors.textMuted, flexShrink: 1 }]}>{label}</Text>
+      {status}
     </View>
   );
 }
@@ -142,24 +160,10 @@ export function CommunityFeedCard({
           </Text>
           <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
-        {headerAccessory}
+        <HeaderMeta accessory={headerAccessory} item={item} status={status} />
       </View>
 
       {overlay}
-
-      <View
-        style={{
-          alignItems: "flex-start",
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 10,
-          justifyContent: "space-between",
-          minWidth: 0,
-        }}
-      >
-        <TypeLabel item={item} />
-        {status}
-      </View>
 
       {title || mainContent ? (
         <View style={{ gap: 8 }}>
@@ -418,7 +422,7 @@ export function PostCard({
         event.stopPropagation();
         setMenuOpen((current) => !current);
       }}
-      style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
+      style={{ alignItems: "center", flexShrink: 0, height: 44, justifyContent: "center", width: 44 }}
     >
       <Feather name="more-horizontal" size={19} color={colors.ink} />
     </Pressable>
