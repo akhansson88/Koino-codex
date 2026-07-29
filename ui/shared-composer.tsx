@@ -7,7 +7,7 @@ import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-picker";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 const MAX_BODY_LENGTH = 500;
 
@@ -46,6 +46,72 @@ const composerTypeKeys = {
   update: "community.composer.type.update",
   scripture: "community.composer.type.scripture",
 } as const;
+
+function CommunityTypeSelector({
+  onChange,
+  options,
+  value,
+}: {
+  onChange: (value: EntryKind) => void;
+  options: { label: string; value: EntryKind }[];
+  value: EntryKind;
+}) {
+  const rows = [options.slice(0, 2), options.slice(2, 4)];
+
+  return (
+    <View style={{ gap: 8 }}>
+      {rows.map((row) => (
+        <View key={row.map((option) => option.value).join("-")} style={{ flexDirection: "row", gap: 8 }}>
+          {row.map((option) => {
+            const selected = option.value === value;
+            return (
+              <Pressable
+                accessibilityLabel={option.label}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={option.value}
+                onPress={() => onChange(option.value)}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: selected ? colors.accentSubtle : colors.paper,
+                  borderColor: selected ? colors.gold : colors.line,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  flex: 1,
+                  flexDirection: "row",
+                  gap: 6,
+                  justifyContent: "center",
+                  minHeight: 44,
+                  minWidth: 0,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}
+              >
+                {selected ? (
+                  <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+                    <Feather name="check" size={14} color={colors.olive} />
+                  </View>
+                ) : null}
+                <Text
+                  style={[
+                    typography.label,
+                    {
+                      color: selected ? colors.olive : colors.muted,
+                      flexShrink: 1,
+                      textAlign: "center",
+                    },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export function SharedComposer({
   body,
@@ -133,13 +199,20 @@ export function SharedComposer({
 
         <View style={{ gap: 10 }}>
           <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing))}</Text>
-          <FilterChips
-            minHeight={context === "room" ? 44 : undefined}
-            showSelectionIndicator
-            value={kind}
-            onChange={changeKind}
-            options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
-          />
+          {isCommunityShare ? (
+            <CommunityTypeSelector
+              value={kind}
+              onChange={changeKind}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
+            />
+          ) : (
+            <FilterChips
+              showSelectionIndicator
+              value={kind}
+              onChange={changeKind}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
+            />
+          )}
         </View>
 
         {showTitle ? (
