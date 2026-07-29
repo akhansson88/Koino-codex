@@ -448,7 +448,7 @@ export function PostCard({
   const reactionTone = toneForItem(item);
   const reactionIcon: CommunityCardActionIcon =
     itemKind === "praise" ? "star" : itemKind === "scripture" ? "book-open" : itemKind === "update" ? "message-circle" : "heart";
-  const hasPrayerActivity = Boolean(prayedBy?.length);
+  const hasPrayerActivity = itemKind !== "praise" && Boolean(prayedBy?.length);
   const hasReactionActivity = !isPrayerPost && Boolean(reactedBy?.length);
 
   const menuButton = ownsItem && (onEdit || onDelete) ? (
@@ -543,7 +543,7 @@ export function PostCard({
               tone="prayer"
             />
           )}
-          {!isPrayerPost && onReact ? (
+          {!isPrayerPost && itemKind !== "praise" && onReact ? (
             <CommunityCardAction
               active={prayed}
               icon="pray"

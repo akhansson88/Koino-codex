@@ -170,6 +170,7 @@ export function FeedDetailScreen() {
   const itemKind = feedItemKind(item);
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
+  const isPraise = item.type === "post" && itemKind === "praise";
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
@@ -254,9 +255,7 @@ export function FeedDetailScreen() {
         placeholder={
           itemKind === "update"
             ? t("community.reply.responsePlaceholder")
-            : itemKind === "praise"
-              ? t("community.reply.amenPlaceholder")
-              : t("community.reply.encouragementPlaceholder")
+            : t("community.reply.encouragementPlaceholder")
         }
         returnKeyType="send"
         style={{ flex: 1 }}
@@ -358,6 +357,8 @@ export function FeedDetailScreen() {
               </Text>
             </View>
           </Card>
+        ) : isPraise ? (
+          <DetailPraiseButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
         ) : !isPrayerMoment && isExpandedFeedCard && canReact ? (
           <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <CommunityCardAction
@@ -387,7 +388,7 @@ export function FeedDetailScreen() {
         {ownsItem && isPrayerRequest && !prayerAnswered ? (
           <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
-        {!isPrayerMoment && !isExpandedFeedCard ? (
+        {!isPrayerMoment && !isExpandedFeedCard && !isPraise ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
@@ -397,7 +398,7 @@ export function FeedDetailScreen() {
             {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
           </View>
         ) : null}
-        {canReact && !isExpandedFeedCard ? (
+        {canReact && !isExpandedFeedCard && (!isPraise || (reaction?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {
@@ -410,7 +411,9 @@ export function FeedDetailScreen() {
         ) : null}
         {!isExpandedFeedCard && replies.length > 0 ? (
           <View style={{ gap: 12 }}>
-            <SectionHeading>{t("community.reply.heading")}</SectionHeading>
+            <SectionHeading>
+              {isPraise ? t("community.detail.encouragementsHeading", { count: replies.length }) : t("community.reply.heading")}
+            </SectionHeading>
             {replyList}
           </View>
         ) : null}
@@ -424,7 +427,7 @@ export function FeedDetailScreen() {
             {encouragementInput}
           </View>
         ) : encouragementInput}
-        <PrayerActivity activity={prayer?.activity ?? []} />
+        {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
       <PrayerMoment
         target={prayerTarget}
@@ -444,6 +447,32 @@ export function FeedDetailScreen() {
         }}
       />
     </KeyboardAvoidingView>
+  );
+}
+
+function DetailPraiseButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: active ? colors.warmSoft : colors.accentWarm,
+        borderColor: colors.accentWarm,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 10,
+        justifyContent: "center",
+        minHeight: 58,
+        paddingHorizontal: 18,
+      }}
+    >
+      <Ionicons name={active ? "star" : "star-outline"} size={21} color={active ? colors.textMuted : colors.onAccent} />
+      <Text style={{ color: active ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+    </Pressable>
   );
 }
 
