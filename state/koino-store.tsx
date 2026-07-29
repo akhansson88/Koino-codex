@@ -199,6 +199,14 @@ function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[] }) {
   return action.verse ? [action.verse] : [];
 }
 
+function postSupportsTitle(kind: CreatePostKind) {
+  return kind === "prayer_request" || kind === "prayer_moment" || kind === "update";
+}
+
+function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse[]) {
+  return kind === "scripture" ? verses.length > 0 : Boolean(body.trim());
+}
+
 function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
   return `${verse.reference}_${verse.translation ?? "default"}`
     .trim()
@@ -1274,14 +1282,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                return;
              }
              case "createPost": {
-               if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
                const verses = actionVerses(action);
+               if (!firebaseUser || !profile?.currentGroupId || !validPostContent(action.kind, action.body, verses)) return;
                const post: Post = {
                  id: id("post"),
                  userId: firebaseUser.uid,
                  groupId: profile.currentGroupId,
                  kind: action.kind,
-                 ...(action.title?.trim() ? { title: action.title.trim() } : {}),
+                 ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                  body: action.body.trim(),
                  ...(verses[0] ? { verse: verses[0], verses } : {}),
                  createdAt: now(),
@@ -1293,13 +1301,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                if (!firebaseUser || !profile?.currentGroupId) return;
                const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
                if (!post || post.userId !== firebaseUser.uid) return;
-               if (!action.body.trim()) return;
+               const verses = actionVerses(action);
+               if (!validPostContent(action.kind, action.body, verses)) return;
                await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                  body: action.body.trim(),
                  kind: action.kind,
-                 title: action.title?.trim() || null,
-                 verse: actionVerses(action)[0] ?? null,
-                 verses: actionVerses(action).length ? actionVerses(action) : null,
+                 ...(postSupportsTitle(action.kind) && action.title !== undefined ? { title: action.title.trim() || null } : {}),
+                 verse: verses[0] ?? null,
+                 verses: verses.length ? verses : null,
                  // Note: We don't update createdAt to preserve the original timestamp
                  // We also don't update answeredAt or answeredMarkedAt for prayer requests
                });
@@ -1588,12 +1597,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 updatedAt: timestamp,
               };
               if (postId && profile?.currentGroupId) {
+                const postKind = action.entryKind ?? "reflection";
                 const post: Post = {
                   id: postId,
                   userId: firebaseUser.uid,
                   groupId: profile.currentGroupId,
-                  kind: action.entryKind ?? "reflection",
-                  ...(action.title?.trim() ? { title: action.title.trim() } : {}),
+                  kind: postKind,
+                  ...(postSupportsTitle(postKind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                   body: action.body.trim(),
                   ...(verses[0] ? { verse: verses[0], verses } : {}),
                   createdAt: timestamp,

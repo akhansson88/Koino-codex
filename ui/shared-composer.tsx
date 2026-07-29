@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Platform, Pressable, Text, View } from "react-native";
 
@@ -15,6 +16,8 @@ function primaryActionKey(context: "journal" | "today" | "room", entryVisibility
   if (context === "room" || entryVisibility === visibility.room) {
     if (kind === "prayer_request") return "community.composer.action.sharePrayer" as const;
     if (kind === "reflection") return "community.composer.action.shareReflection" as const;
+    if (kind === "praise") return "community.composer.action.sharePraise" as const;
+    if (kind === "scripture") return "community.composer.action.shareScripture" as const;
     return "community.composer.action.share" as const;
   }
   if (context === "journal" && kind === "prayer_request") return "community.composer.action.savePrayer" as const;
@@ -82,11 +85,36 @@ export function SharedComposer({
   visible: boolean;
 }) {
   const { t } = useAppTranslation();
+  const [submissionAttempted, setSubmissionAttempted] = useState(false);
+  const isCommunityShare = context === "room";
   const showVisibility = context !== "room";
+  const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
+  const showTitle = !isCommunityShare || !titleFreeCommunityKind;
+  const scriptureRequired = isCommunityShare && kind === "scripture";
+  const canSubmit = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
   const typeOptions = context === "journal" ? postTypes : composerPostTypes;
+
+  useEffect(() => {
+    setSubmissionAttempted(false);
+  }, [kind, visible]);
+
+  function changeKind(nextKind: EntryKind) {
+    if (nextKind === kind) return;
+    if (isCommunityShare) {
+      onTitle("");
+      onVerses([]);
+    }
+    onKind(nextKind);
+  }
+
+  function submit() {
+    setSubmissionAttempted(true);
+    if (!canSubmit) return;
+    onSubmit();
+  }
 
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
@@ -109,24 +137,26 @@ export function SharedComposer({
             minHeight={context === "room" ? 44 : undefined}
             showSelectionIndicator
             value={kind}
-            onChange={onKind}
+            onChange={changeKind}
             options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
           />
         </View>
 
-        <TextInputField
-          value={title}
-          onChangeText={onTitle}
-          onSubmitEditing={onSubmit}
-          placeholder={kind === "prayer_request"
-            ? t("community.composer.placeholder.prayerTitle")
-            : kind === "praise"
-              ? t("community.composer.placeholder.praiseTitle")
-              : kind === "scripture"
-                ? t("community.composer.placeholder.scriptureTitle")
-                : t("community.composer.placeholder.title")}
-          returnKeyType="send"
-        />
+        {showTitle ? (
+          <TextInputField
+            value={title}
+            onChangeText={onTitle}
+            onSubmitEditing={submit}
+            placeholder={kind === "prayer_request"
+              ? t("community.composer.placeholder.prayerTitle")
+              : kind === "praise"
+                ? t("community.composer.placeholder.praiseTitle")
+                : kind === "scripture"
+                  ? t("community.composer.placeholder.scriptureTitle")
+                  : t("community.composer.placeholder.title")}
+            returnKeyType="send"
+          />
+        ) : null}
 
         <View style={{ gap: 8 }}>
           <TextInputField
@@ -134,13 +164,13 @@ export function SharedComposer({
             maxLength={MAX_BODY_LENGTH}
             value={body}
             onChangeText={(value) => onBody(value.slice(0, MAX_BODY_LENGTH))}
-            onSubmitEditing={onSubmit}
+            onSubmitEditing={submit}
             placeholder={kind === "prayer_request"
               ? t("community.composer.placeholder.prayerBody")
               : kind === "praise"
                 ? t("community.composer.placeholder.praiseBody")
                 : kind === "scripture"
-                  ? t("community.composer.placeholder.scriptureBody")
+                  ? t(isCommunityShare ? "community.composer.placeholder.scriptureNote" : "community.composer.placeholder.scriptureBody")
                   : t("community.composer.placeholder.body")}
             returnKeyType="send"
             style={{ minHeight: 170 }}
@@ -149,9 +179,21 @@ export function SharedComposer({
           <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>
             {body.length}/{MAX_BODY_LENGTH}
           </Text>
+          {submissionAttempted && !scriptureRequired && !canSubmit ? (
+            <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.composer.validation.bodyRequired")}</Text>
+          ) : null}
         </View>
 
-        <BibleVerseField label={t("community.composer.scriptureOptional")} verses={verses} onChange={onVerses} />
+        <View style={{ gap: 8 }}>
+          <BibleVerseField
+            label={t(scriptureRequired ? "community.composer.scriptureRequired" : "community.composer.scriptureOptional")}
+            verses={verses}
+            onChange={onVerses}
+          />
+          {submissionAttempted && scriptureRequired && !canSubmit ? (
+            <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.composer.validation.scriptureRequired")}</Text>
+          ) : null}
+        </View>
 
         <View style={{ gap: 8 }}>
           <SectionHeading>{t("community.composer.shareWith")}</SectionHeading>
@@ -185,7 +227,7 @@ export function SharedComposer({
           </Pressable>
         </View>
 
-        <PrimaryButton disabled={!body.trim()} icon="send" onPress={onSubmit}>
+        <PrimaryButton disabled={!canSubmit} icon="send" onPress={submit}>
           {actionLabel}
         </PrimaryButton>
       </AppScreen>

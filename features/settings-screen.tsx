@@ -501,14 +501,17 @@ export function SettingsScreen() {
   }
 
   async function submitComposer() {
-    if (!composerBody.trim()) return;
+    const canSubmit = composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
+    if (!canSubmit) return;
     if (!editingPost && composerKind === "update") return;
+    const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
+    const title = titleFreeKind ? {} : { title: composerTitle };
     if (editingPost) {
-      await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+      await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     } else if (composerVisibility === visibility.private) {
-      await dispatch({ type: "createJournalEntry", entryKind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
+      await dispatch({ type: "createJournalEntry", entryKind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
     } else {
-      await dispatch({ type: "createPost", kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+      await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
     setComposerVisible(false);
     setComposerBody("");

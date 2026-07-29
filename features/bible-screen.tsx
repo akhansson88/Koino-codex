@@ -1510,7 +1510,7 @@ export function BibleScreen() {
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
     setScriptureComposerVisibility(context === "room" ? visibility.room : visibility.private);
-    setScriptureComposerTitle(verse.reference);
+    setScriptureComposerTitle(context === "room" ? "" : verse.reference);
     setScriptureComposerBody(body);
     setScriptureComposerVerses([verse]);
     setScriptureComposerVisible(true);
@@ -1572,7 +1572,7 @@ export function BibleScreen() {
       openScriptureComposer("journal", "scripture", verse);
     }
     if (action === "share") {
-      openScriptureComposer("room", "scripture", verse, "A Scripture for today.");
+      openScriptureComposer("room", "scripture", verse);
     }
     if (action === "pray") {
       openScriptureComposer("journal", "prayer_request", verse, "Praying with this Scripture.");
@@ -1580,14 +1580,17 @@ export function BibleScreen() {
   }, [openScriptureComposer, pendingVerseComposerAction]);
 
   async function submitScriptureComposer() {
-    if (!scriptureComposerBody.trim()) return;
+    const canSubmit = scriptureComposerContext === "room" && scriptureComposerKind === "scripture"
+      ? scriptureComposerVerses.length > 0
+      : Boolean(scriptureComposerBody.trim());
+    if (!canSubmit) return;
     const verse = scriptureComposerVerses[0];
     if (scriptureComposerVisibility === visibility.room) {
       await dispatch({
         type: "createPost",
         body: scriptureComposerBody,
         kind: scriptureComposerKind,
-        title: scriptureComposerTitle,
+        ...(scriptureComposerKind === "prayer_request" ? { title: scriptureComposerTitle } : {}),
         verse,
         verses: scriptureComposerVerses,
       });
