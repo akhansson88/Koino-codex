@@ -28,7 +28,7 @@ export const postTypes: { value: Exclude<EntryKind, "prayer_moment">; label: str
   { value: "scripture", label: "Scripture", composerLabel: "Scripture" },
 ];
 
-export const composerPostTypes = postTypes;
+export const composerPostTypes = postTypes.filter((type) => type.value !== "update");
 
 export const journalEntryTypes: { value: JournalEntryType; label: string; icon: "edit-3" | "heart" | "check-circle" | "sun" | "book-open" }[] = [
   { value: "reflection", label: "Reflection", icon: "edit-3" },

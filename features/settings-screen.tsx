@@ -502,6 +502,7 @@ export function SettingsScreen() {
 
   async function submitComposer() {
     if (!composerBody.trim()) return;
+    if (!editingPost && composerKind === "update") return;
     if (editingPost) {
       await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, title: composerTitle, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     } else if (composerVisibility === visibility.private) {
