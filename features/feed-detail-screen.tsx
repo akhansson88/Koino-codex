@@ -189,6 +189,7 @@ export function FeedDetailScreen() {
   const actionPastLabel = communityActionLabel(itemKind, true, t);
   const canReact = !isPrayerRequest && !isPrayerMoment;
   const isExpandedFeedCard = item.type === "check_in" || itemKind === "reflection";
+  const usesAlignedDetailFrame = isExpandedFeedCard || isPraise || isScripture;
   const group = state.groups.find((candidate) => candidate.id === state.currentGroupId);
 
   async function sendReply() {
@@ -332,7 +333,7 @@ export function FeedDetailScreen() {
             <Feather name="more-horizontal" size={22} color={colors.ink} />
           </View>
         </View>
-        {isExpandedFeedCard ? (
+        {usesAlignedDetailFrame ? (
           <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
             <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={42} tone="green" />
             <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
@@ -362,7 +363,7 @@ export function FeedDetailScreen() {
         )}
         {!isScripture || hasPersonalNote ? (
           <View style={{ gap: 12 }}>
-            {!isExpandedFeedCard && !isScripture ? (
+            {!isExpandedFeedCard && !isScripture && !isPraise ? (
               <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
                 {displayCopy.title || communityDefaultFeedTitle(item, t)}
               </Text>
@@ -370,7 +371,7 @@ export function FeedDetailScreen() {
             <LinkPreviewContent text={displayCopy.body}>
               {({ hiddenUrl, preview }) => (
                 <>
-                  <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: isExpandedFeedCard ? 16 : 17, lineHeight: isExpandedFeedCard ? 24 : 25 }}>
+                  <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: usesAlignedDetailFrame ? 16 : 17, lineHeight: usesAlignedDetailFrame ? 24 : 25 }}>
                     {displayCopy.body || t("community.card.noWords")}
                   </BodyText>
                   {preview}
@@ -405,7 +406,15 @@ export function FeedDetailScreen() {
             </View>
           </Card>
         ) : isPraise ? (
-          <DetailPraiseButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
+          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <CommunityCardAction
+              active={Boolean(reaction?.reacted)}
+              icon="star"
+              label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)}
+              onPress={toggleReaction}
+              tone="praise"
+            />
+          </View>
         ) : isScripture ? (
           <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <CommunityCardAction
@@ -529,32 +538,6 @@ export function FeedDetailScreen() {
         }}
       />
     </KeyboardAvoidingView>
-  );
-}
-
-function DetailPraiseButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={{
-        alignItems: "center",
-        backgroundColor: active ? colors.warmSoft : colors.accentWarm,
-        borderColor: colors.accentWarm,
-        borderRadius: 999,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 10,
-        justifyContent: "center",
-        minHeight: 58,
-        paddingHorizontal: 18,
-      }}
-    >
-      <Ionicons name={active ? "star" : "star-outline"} size={21} color={active ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: active ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>{label}</Text>
-    </Pressable>
   );
 }
 
