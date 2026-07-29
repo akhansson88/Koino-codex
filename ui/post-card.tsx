@@ -92,7 +92,7 @@ function softSemanticLabelColor(accent: string) {
   return `#${channels.join("")}`;
 }
 
-function TypeLabel({ item }: { item: FeedItem }) {
+export function CommunityContentTypeLabel({ item }: { item: FeedItem }) {
   const { t } = useAppTranslation();
   const label = communityFeedItemLabel(item, t);
   const labelColor = softSemanticLabelColor(toneColors(toneForItem(item)).accent);
@@ -157,7 +157,7 @@ function HeaderMeta({
           minWidth: 0,
         }}
       >
-        <TypeLabel item={item} />
+        <CommunityContentTypeLabel item={item} />
         {accessory}
       </View>
       {status}

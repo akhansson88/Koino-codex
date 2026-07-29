@@ -32,10 +32,11 @@ import {
   communityPrayerNoun,
 } from "@/ui/community-copy";
 import { LinkPreviewContent } from "@/ui/link-preview";
+import { CommunityCardAction, CommunityCheckInMood, CommunityContentTypeLabel } from "@/ui/post-card";
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 const MAX_REPLY_LENGTH = 500;
 
@@ -174,6 +175,7 @@ export function FeedDetailScreen() {
   const ownsItem = item.userId === state.currentUserId;
   const actionPastLabel = communityActionLabel(itemKind, true, t);
   const canReact = !isPrayerRequest && !isPrayerMoment;
+  const isExpandedFeedCard = item.type === "check_in" || itemKind === "reflection";
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -199,32 +201,131 @@ export function FeedDetailScreen() {
     dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: reaction.kind });
   }
 
+  const replyList = replies.length > 0 ? (
+    <Card style={{ gap: 0, padding: 0 }}>
+      {replies.map((reply, index) => (
+        <View
+          key={reply.id}
+          style={{
+            borderBottomColor: colors.line,
+            borderBottomWidth: index === replies.length - 1 ? 0 : 1,
+            gap: 8,
+            padding: 14,
+          }}
+        >
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+            <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                {userById.get(reply.userId) ?? t("common.someone")}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
+            </View>
+            {reply.userId === state.currentUserId ? (
+              <Pressable
+                accessibilityLabel={t("community.reply.delete")}
+                accessibilityRole="button"
+                onPress={() => dispatch({ type: "deleteReply", id: reply.id })}
+                style={{ padding: 6 }}
+              >
+                <Feather name="trash-2" size={16} color={colors.danger} />
+              </Pressable>
+            ) : null}
+          </View>
+          <LinkPreviewContent text={reply.body}>
+            {({ hiddenUrl, preview }) => (
+              <>
+                <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                {preview}
+              </>
+            )}
+          </LinkPreviewContent>
+        </View>
+      ))}
+    </Card>
+  ) : null;
+
+  const encouragementInput = (
+    <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+      <TextInputField
+        value={replyDraft}
+        onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
+        onSubmitEditing={sendReply}
+        placeholder={
+          itemKind === "update"
+            ? t("community.reply.responsePlaceholder")
+            : itemKind === "praise"
+              ? t("community.reply.amenPlaceholder")
+              : t("community.reply.encouragementPlaceholder")
+        }
+        returnKeyType="send"
+        style={{ flex: 1 }}
+      />
+      <Pressable
+        accessibilityLabel={t("community.reply.send")}
+        accessibilityRole="button"
+        disabled={!replyDraft.trim()}
+        onPress={sendReply}
+        style={{
+          alignItems: "center",
+          height: 48,
+          justifyContent: "center",
+          opacity: replyDraft.trim() ? 1 : 0.4,
+          width: 48,
+        }}
+      >
+        <Feather name="send" size={22} color={colors.gold} />
+      </Pressable>
+    </View>
+  );
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
-          <Feather name="more-horizontal" size={22} color={colors.ink} />
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-          <Feather name={kindIcon(item)} size={18} color={colors.gold} />
-          <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{communityFeedItemLabel(item, t)}</Text>
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-          <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
-          <View>
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
+          <View style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
+            <Feather name="more-horizontal" size={22} color={colors.ink} />
           </View>
         </View>
+        {isExpandedFeedCard ? (
+          <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
+            <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={42} tone="green" />
+            <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+              <Text numberOfLines={2} style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
+                {authorName}
+              </Text>
+              <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end", flexShrink: 1, maxWidth: "46%", minWidth: 0 }}>
+              <CommunityContentTypeLabel item={item} />
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+              <Feather name={kindIcon(item)} size={18} color={colors.gold} />
+              <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{communityFeedItemLabel(item, t)}</Text>
+            </View>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+              <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
+              <View>
+                <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
+                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
+              </View>
+            </View>
+          </>
+        )}
         <View style={{ gap: 12 }}>
-          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
-            {displayCopy.title || communityDefaultFeedTitle(item, t)}
-          </Text>
+          {!isExpandedFeedCard ? (
+            <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
+              {displayCopy.title || communityDefaultFeedTitle(item, t)}
+            </Text>
+          ) : null}
           <LinkPreviewContent text={displayCopy.body}>
             {({ hiddenUrl, preview }) => (
               <>
-                <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 17, lineHeight: 25 }}>
+                <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: isExpandedFeedCard ? 16 : 17, lineHeight: isExpandedFeedCard ? 24 : 25 }}>
                   {displayCopy.body || t("community.card.noWords")}
                 </BodyText>
                 {preview}
@@ -232,7 +333,8 @@ export function FeedDetailScreen() {
             )}
           </LinkPreviewContent>
         </View>
-        <VerseList verse={item.verse} verses={item.verses} />
+        {item.type === "check_in" ? <CommunityCheckInMood mood={item.mood} /> : null}
+        <VerseList compact={isExpandedFeedCard} verse={item.verse} verses={item.verses} />
         {isPrayerRequest ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
@@ -256,6 +358,24 @@ export function FeedDetailScreen() {
               </Text>
             </View>
           </Card>
+        ) : !isPrayerMoment && isExpandedFeedCard && canReact ? (
+          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <CommunityCardAction
+              active={Boolean(reaction?.reacted)}
+              icon="heart"
+              label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)}
+              onPress={toggleReaction}
+              tone={item.type === "check_in" ? "check_in" : "reflection"}
+            />
+            <CommunityCardAction
+              active={Boolean(prayer?.prayed)}
+              icon="pray"
+              label={t(prayer?.prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+              onPress={startPrayer}
+              tone="prayer"
+              variant="secondary"
+            />
+          </View>
         ) : !isPrayerMoment ? (
           <View style={{ gap: 10 }}>
             <DetailPrayerButton onPress={startPrayer} prayed={Boolean(prayer?.prayed)} />
@@ -267,7 +387,7 @@ export function FeedDetailScreen() {
         {ownsItem && isPrayerRequest && !prayerAnswered ? (
           <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
-        {!isPrayerMoment ? (
+        {!isPrayerMoment && !isExpandedFeedCard ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
@@ -277,7 +397,7 @@ export function FeedDetailScreen() {
             {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
           </View>
         ) : null}
-        {canReact ? (
+        {canReact && !isExpandedFeedCard ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {
@@ -288,81 +408,22 @@ export function FeedDetailScreen() {
             {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
           </View>
         ) : null}
-        {replies.length > 0 ? (
+        {!isExpandedFeedCard && replies.length > 0 ? (
           <View style={{ gap: 12 }}>
             <SectionHeading>{t("community.reply.heading")}</SectionHeading>
-            <Card style={{ gap: 0, padding: 0 }}>
-              {replies.map((reply, index) => (
-                <View
-                  key={reply.id}
-                  style={{
-                    borderBottomColor: colors.line,
-                    borderBottomWidth: index === replies.length - 1 ? 0 : 1,
-                    gap: 8,
-                    padding: 14,
-                  }}
-                >
-                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                    <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? t("common.someone")}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
-                    </View>
-                    {reply.userId === state.currentUserId ? (
-                      <Pressable
-                        accessibilityLabel={t("community.reply.delete")}
-                        accessibilityRole="button"
-                        onPress={() => dispatch({ type: "deleteReply", id: reply.id })}
-                        style={{ padding: 6 }}
-                      >
-                        <Feather name="trash-2" size={16} color={colors.danger} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  <LinkPreviewContent text={reply.body}>
-                    {({ hiddenUrl, preview }) => (
-                      <>
-                        <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
-                        {preview}
-                      </>
-                    )}
-                  </LinkPreviewContent>
-                </View>
-              ))}
-            </Card>
+            {replyList}
           </View>
         ) : null}
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          <TextInputField
-            value={replyDraft}
-            onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
-            onSubmitEditing={sendReply}
-            placeholder={
-              itemKind === "update"
-                ? t("community.reply.responsePlaceholder")
-                : itemKind === "praise"
-                  ? t("community.reply.amenPlaceholder")
-                  : t("community.reply.encouragementPlaceholder")
-            }
-            returnKeyType="send"
-            style={{ flex: 1 }}
-          />
-          <Pressable
-            accessibilityLabel={t("community.reply.send")}
-            accessibilityRole="button"
-            disabled={!replyDraft.trim()}
-            onPress={sendReply}
-            style={{
-              alignItems: "center",
-              height: 48,
-              justifyContent: "center",
-              opacity: replyDraft.trim() ? 1 : 0.4,
-              width: 48,
-            }}
-          >
-            <Feather name="send" size={22} color={colors.gold} />
-          </Pressable>
-        </View>
+        {isExpandedFeedCard && canReact ? (
+          <View style={{ gap: 12 }}>
+            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+              {t("community.detail.encouragementsHeading", { count: reaction?.count ?? 0 })}
+            </Text>
+            {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
+            {replyList}
+            {encouragementInput}
+          </View>
+        ) : encouragementInput}
         <PrayerActivity activity={prayer?.activity ?? []} />
       </AppScreen>
       <PrayerMoment
