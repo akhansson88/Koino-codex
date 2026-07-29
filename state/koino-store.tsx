@@ -111,8 +111,8 @@ type Action =
   | { type: "unmarkPrayerAnswered"; id: Id }
   | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string; recipientUserId?: Id }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
-  | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind }
-  | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string }
+  | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }
+  | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; replyId?: Id }
   | { type: "deleteReply"; id: Id }
 
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
@@ -1532,6 +1532,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}_${action.kind}`;
               const reactionRef = ref(database, `postReactions/${profile.currentGroupId}/${reactionId}`);
               if (postReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid)) {
+                if (action.mode === "ensure") return;
                 await remove(reactionRef);
                 return;
               }
@@ -1550,7 +1551,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "createReply": {
               if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
               const reply: Reply = {
-                id: id("reply"),
+                id: action.replyId ?? id("reply"),
                 userId: firebaseUser.uid,
                 targetType: action.targetType,
                 targetId: action.targetId,
@@ -1989,7 +1990,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "uploadGroupImage" ||
           action.type === "deleteGroupImage" ||
           action.type === "uploadUserAvatar" ||
-          action.type === "deleteUserAvatar"
+          action.type === "deleteUserAvatar" ||
+          (action.type === "togglePostReaction" && action.mode === "ensure") ||
+          (action.type === "createReply" && Boolean(action.replyId))
         ) {
           throw error;
         }

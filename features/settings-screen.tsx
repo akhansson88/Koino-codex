@@ -71,6 +71,7 @@ import {
 } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
+import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
 type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "members";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
@@ -230,6 +231,14 @@ export function SettingsScreen() {
   const [pendingPrayerPost, setPendingPrayerPost] = useState<PendingPrayerPost>();
   const [prayerPostNote, setPrayerPostNote] = useState("");
   const [encouragementDraft, setEncouragementDraft] = useState("");
+  const [feedEncouragementTarget, setFeedEncouragementTarget] = useState<FeedItem>();
+  const [feedEncouragementDraft, setFeedEncouragementDraft] = useState("");
+  const [feedEncouragementReduceMotion, setFeedEncouragementReduceMotion] = useState<boolean | undefined>(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    return undefined;
+  });
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
   const [heartMood, setHeartMood] = useState<HeartMood>();
@@ -357,6 +366,18 @@ export function SettingsScreen() {
       setCommunityFeedClock(Date.now());
     }, []),
   );
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setFeedEncouragementReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setFeedEncouragementReduceMotion);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const currentTime = Date.now();
@@ -754,7 +775,24 @@ export function SettingsScreen() {
       return;
     }
     const reaction = itemReactionState(item);
-    dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
+    const supportsOptionalMessage =
+      item.type === "check_in" ||
+      (item.type === "post" && (normalizeEntryKind(item.kind) === "reflection" || normalizeEntryKind(item.kind) === "praise"));
+
+    if (!supportsOptionalMessage) {
+      dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
+      return;
+    }
+
+    void dispatch({
+      type: "togglePostReaction",
+      targetType: reaction.targetType,
+      targetId: item.id,
+      kind: reaction.kind,
+      mode: "ensure",
+    }).catch(() => undefined);
+    setFeedEncouragementDraft("");
+    setFeedEncouragementTarget(item);
   }
 
   function deletePost(item: Extract<FeedItem, { type: "post" }>) {
@@ -769,11 +807,44 @@ export function SettingsScreen() {
     });
   }
 
-  async function sendEncouragement(item: FeedItem) {
-    const body = encouragementDraft.trim();
-    if (!body) return;
-    await dispatch({ type: "createReply", targetType: item.type === "post" ? "post" : "check_in", targetId: item.id, body });
+  async function sendEncouragement(item: FeedItem, body = encouragementDraft, replyId?: string) {
+    const trimmedBody = body.trim();
+    if (!trimmedBody) return;
+    await dispatch({
+      type: "createReply",
+      targetType: item.type === "post" ? "post" : "check_in",
+      targetId: item.id,
+      body: trimmedBody,
+      ...(replyId ? { replyId } : {}),
+    });
     setEncouragementDraft("");
+  }
+
+  function closeFeedEncouragement() {
+    setFeedEncouragementTarget(undefined);
+    setFeedEncouragementDraft("");
+  }
+
+  async function sendFeedEncouragement(body: string, replyId: string) {
+    const item = feedEncouragementTarget;
+    if (!item) return;
+
+    const reaction = itemReactionState(item);
+    await dispatch({
+      type: "togglePostReaction",
+      targetType: reaction.targetType,
+      targetId: item.id,
+      kind: reaction.kind,
+      mode: "ensure",
+    });
+    await dispatch({
+      type: "createReply",
+      targetType: reaction.targetType,
+      targetId: item.id,
+      body,
+      replyId,
+    });
+    closeFeedEncouragement();
   }
 
   function resetCommunityCheckIn() {
@@ -1096,6 +1167,25 @@ export function SettingsScreen() {
     />
   );
 
+  const feedEncouragementSheet = feedEncouragementTarget ? (
+    <BottomSheet
+      title={t("community.encouragement.addMessageTitle")}
+      visible
+      onClose={closeFeedEncouragement}
+      reducedMotion={feedEncouragementReduceMotion !== false}
+    >
+      <BodyText muted>{t("community.encouragement.supportingCopy")}</BodyText>
+      <WrittenEncouragementComposer
+        autoFocus
+        onChangeText={setFeedEncouragementDraft}
+        onDismiss={closeFeedEncouragement}
+        onSend={sendFeedEncouragement}
+        value={feedEncouragementDraft}
+        variant="sheet"
+      />
+    </BottomSheet>
+  ) : null;
+
   if (roomView === "prayer" && group) {
     return (
       <>
@@ -1176,7 +1266,7 @@ export function SettingsScreen() {
             onChangeEncouragement={setEncouragementDraft}
             onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: selectedPrayer.id })}
             onPray={() => prayForItem(selectedPrayer)}
-            onSendEncouragement={() => sendEncouragement(selectedPrayer)}
+            onSendEncouragement={(body, replyId) => sendEncouragement(selectedPrayer, body, replyId)}
             ownsItem={selectedPrayer.userId === state.currentUserId}
             prayer={prayer}
             replies={itemReplies(selectedPrayer)}
@@ -1214,6 +1304,7 @@ export function SettingsScreen() {
           />
         </CommunityTransitionFrame>
         {communityCheckInModal}
+        {feedEncouragementSheet}
       </>
     );
   }
@@ -1401,6 +1492,7 @@ export function SettingsScreen() {
         {communityCheckInModal}
         {communityPrayerMemberModal}
         {communityPrayerPostSheet}
+        {feedEncouragementSheet}
         <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
             <View style={{ paddingHorizontal: 14 }}>
@@ -2409,7 +2501,7 @@ function CommunityPrayerDetailScreen({
   onChangeEncouragement: (value: string) => void;
   onMarkAnswered: () => void;
   onPray: () => void;
-  onSendEncouragement: () => void;
+  onSendEncouragement: (body?: string, replyId?: string) => Promise<void>;
   ownsItem: boolean;
   prayer: { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
   replies: Reply[];
@@ -2523,25 +2615,34 @@ function CommunityPrayerDetailScreen({
           </Card>
         </View>
       ) : null}
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <TextInputField
-          value={encouragementDraft}
-          onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
-          onSubmitEditing={onSendEncouragement}
+      {prayerMoment ? (
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+          <TextInputField
+            value={encouragementDraft}
+            onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
+            onSubmitEditing={() => onSendEncouragement()}
+            placeholder={t("community.reply.encouragementPlaceholder")}
+            returnKeyType="send"
+            style={{ flex: 1 }}
+          />
+          <Pressable
+            accessibilityLabel={t("community.reply.send")}
+            accessibilityRole="button"
+            disabled={!encouragementDraft.trim()}
+            onPress={() => onSendEncouragement()}
+            style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
+          >
+            <Feather name="send" size={22} color={colors.gold} />
+          </Pressable>
+        </View>
+      ) : (
+        <WrittenEncouragementComposer
+          onChangeText={onChangeEncouragement}
+          onSend={onSendEncouragement}
           placeholder={t("community.reply.encouragementPlaceholder")}
-          returnKeyType="send"
-          style={{ flex: 1 }}
+          value={encouragementDraft}
         />
-        <Pressable
-          accessibilityLabel={t("community.reply.send")}
-          accessibilityRole="button"
-          disabled={!encouragementDraft.trim()}
-          onPress={onSendEncouragement}
-          style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
-        >
-          <Feather name="send" size={22} color={colors.gold} />
-        </Pressable>
-      </View>
+      )}
       <PrayerActivity activity={activity} />
     </AppScreen>
   );

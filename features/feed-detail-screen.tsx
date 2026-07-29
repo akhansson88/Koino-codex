@@ -41,6 +41,7 @@ import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
+import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
 const MAX_REPLY_LENGTH = 500;
 
@@ -182,6 +183,7 @@ export function FeedDetailScreen() {
   const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
   const isPraise = item.type === "post" && itemKind === "praise";
   const isScripture = item.type === "post" && itemKind === "scripture";
+  const isWrittenEncouragement = itemKind === "reflection" || itemKind === "praise" || itemKind === "prayer_request";
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   const hasPersonalNote = Boolean(displayCopy.body.trim());
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
@@ -199,6 +201,21 @@ export function FeedDetailScreen() {
     setReplyDraft("");
   }
 
+  async function sendWrittenEncouragement(body: string, replyId: string) {
+    if (!item || !targetType) return;
+    if (reaction) {
+      await dispatch({
+        type: "togglePostReaction",
+        targetType,
+        targetId: item.id,
+        kind: reaction.kind,
+        mode: "ensure",
+      });
+    }
+    await dispatch({ type: "createReply", targetType, targetId: item.id, body, replyId });
+    setReplyDraft("");
+  }
+
   function startPrayer() {
     if (!item || !targetType) return;
     setPrayerTarget({
@@ -213,7 +230,13 @@ export function FeedDetailScreen() {
 
   function toggleReaction() {
     if (!item || !targetType || !canReact || !reaction) return;
-    dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: reaction.kind });
+    void dispatch({
+      type: "togglePostReaction",
+      targetType,
+      targetId: item.id,
+      kind: reaction.kind,
+      mode: isWrittenEncouragement ? "ensure" : "toggle",
+    }).catch(() => undefined);
   }
 
   function openScriptureReflection() {
@@ -292,7 +315,14 @@ export function FeedDetailScreen() {
     </Card>
   ) : null;
 
-  const encouragementInput = (
+  const encouragementInput = isWrittenEncouragement ? (
+    <WrittenEncouragementComposer
+      onChangeText={setReplyDraft}
+      onSend={sendWrittenEncouragement}
+      placeholder={t("community.reply.encouragementPlaceholder")}
+      value={replyDraft}
+    />
+  ) : (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
       <TextInputField
         value={replyDraft}

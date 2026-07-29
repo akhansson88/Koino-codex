@@ -1051,13 +1051,14 @@ export function Row({
 export function BottomSheet({
   children,
   onClose,
+  reducedMotion = false,
   title,
   visible,
-}: PropsWithChildren<{ onClose: () => void; title: string; visible: boolean }>) {
+}: PropsWithChildren<{ onClose: () => void; reducedMotion?: boolean; title: string; visible: boolean }>) {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
   return (
-    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType={reducedMotion ? "none" : "fade"} transparent visible={visible} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <View style={{ backgroundColor: "rgba(11, 18, 32, 0.45)", flex: 1, justifyContent: "flex-end" }}>
           <Pressable accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
