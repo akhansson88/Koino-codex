@@ -76,6 +76,7 @@ type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "m
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
+type ComposerContext = "journal" | "room";
 const COMMUNITY_CHECK_INS_HISTORY_KEY = "__koinoCommunityCheckIns";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
@@ -214,6 +215,7 @@ export function SettingsScreen() {
   const [cropSource, setCropSource] = useState<RoomImageCropSource>();
   const [roomImagePickerRequested, setRoomImagePickerRequested] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
+  const [composerContext, setComposerContext] = useState<ComposerContext>("room");
   const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
   const [composerVisibility, setComposerVisibility] = useState<EntryVisibility>(visibility.room);
   const [composerTitle, setComposerTitle] = useState("");
@@ -477,6 +479,7 @@ export function SettingsScreen() {
 
   function openComposer(kind: EntryKind = "reflection") {
     setEditingPost(undefined);
+    setComposerContext("room");
     setComposerKind(kind);
     setComposerVisibility(visibility.room);
     setComposerTitle("");
@@ -485,7 +488,20 @@ export function SettingsScreen() {
     setComposerVisible(true);
   }
 
+  function openScriptureReflection(item: Extract<FeedItem, { type: "post" }>) {
+    const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
+    setEditingPost(undefined);
+    setComposerContext("journal");
+    setComposerKind("reflection");
+    setComposerVisibility(visibility.private);
+    setComposerTitle(attachedVerses[0]?.reference ?? "");
+    setComposerBody("");
+    setComposerVerses(attachedVerses);
+    setComposerVisible(true);
+  }
+
   function editPost(item: Extract<FeedItem, { type: "post" }>) {
+    setComposerContext("room");
     setEditingPost(item);
     setComposerKind(normalizeEntryKind(item.kind));
     setComposerVisibility(visibility.room);
@@ -501,13 +517,23 @@ export function SettingsScreen() {
   }
 
   async function submitComposer() {
-    const canSubmit = composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
+    const canSubmit = composerContext === "room" && composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
     if (!canSubmit) return;
-    if (!editingPost && composerKind === "update") return;
+    if (composerContext === "room" && !editingPost && composerKind === "update") return;
     const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
     const title = titleFreeKind ? {} : { title: composerTitle };
     if (editingPost) {
       await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+    } else if (composerContext === "journal") {
+      await dispatch({
+        type: "createJournalEntry",
+        entryKind: composerKind,
+        title: composerTitle,
+        body: composerBody,
+        verse: primaryBibleVerse(composerVerses),
+        verses: composerVerses,
+        shareWithGroup: composerVisibility === visibility.room,
+      });
     } else if (composerVisibility === visibility.private) {
       await dispatch({ type: "createJournalEntry", entryKind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
     } else {
@@ -723,6 +749,10 @@ export function SettingsScreen() {
   }
 
   function togglePostAction(item: FeedItem) {
+    if (item.type === "post" && normalizeEntryKind(item.kind) === "scripture") {
+      openScriptureReflection(item);
+      return;
+    }
     const reaction = itemReactionState(item);
     dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
   }
@@ -1090,7 +1120,7 @@ export function SettingsScreen() {
         </CommunityTransitionFrame>
         <SharedComposer
           visible={composerVisible}
-          context="room"
+          context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}
@@ -1351,7 +1381,7 @@ export function SettingsScreen() {
         </CommunityTransitionFrame>
         <SharedComposer
           visible={composerVisible}
-          context="room"
+          context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}

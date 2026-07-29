@@ -7,10 +7,12 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "re
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
+  EntryVisibility,
   entryKindIcon,
   feedItemKind,
+  visibility,
 } from "@/state/product";
-import type { FeedItem, GroupImage, PostReactionKind } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, GroupImage, PostReactionKind } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -24,6 +26,7 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import {
   communityActionLabel,
   communityDefaultFeedTitle,
@@ -36,6 +39,7 @@ import { CommunityCardAction, CommunityCheckInMood, CommunityContentTypeLabel } 
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
+import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
 
 const MAX_REPLY_LENGTH = 500;
@@ -63,6 +67,12 @@ export function FeedDetailScreen() {
   const [replyDraft, setReplyDraft] = useState("");
   const [allowRemove, setAllowRemove] = useState(false);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [reflectionComposerVisible, setReflectionComposerVisible] = useState(false);
+  const [reflectionKind, setReflectionKind] = useState<EntryKind>("reflection");
+  const [reflectionVisibility, setReflectionVisibility] = useState<EntryVisibility>(visibility.private);
+  const [reflectionTitle, setReflectionTitle] = useState("");
+  const [reflectionBody, setReflectionBody] = useState("");
+  const [reflectionVerses, setReflectionVerses] = useState<BibleVerse[]>([]);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const item = useMemo<FeedItem | undefined>(() => {
@@ -179,6 +189,7 @@ export function FeedDetailScreen() {
   const actionPastLabel = communityActionLabel(itemKind, true, t);
   const canReact = !isPrayerRequest && !isPrayerMoment;
   const isExpandedFeedCard = item.type === "check_in" || itemKind === "reflection";
+  const group = state.groups.find((candidate) => candidate.id === state.currentGroupId);
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -202,6 +213,38 @@ export function FeedDetailScreen() {
   function toggleReaction() {
     if (!item || !targetType || !canReact || !reaction) return;
     dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: reaction.kind });
+  }
+
+  function openScriptureReflection() {
+    if (!item) return;
+    const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
+    setReflectionKind("reflection");
+    setReflectionVisibility(visibility.private);
+    setReflectionTitle(attachedVerses[0]?.reference ?? "");
+    setReflectionBody("");
+    setReflectionVerses(attachedVerses);
+    setReflectionComposerVisible(true);
+  }
+
+  function closeScriptureReflection() {
+    setReflectionComposerVisible(false);
+  }
+
+  async function submitScriptureReflection() {
+    if (!reflectionBody.trim()) return;
+    await dispatch({
+      type: "createJournalEntry",
+      entryKind: reflectionKind,
+      title: reflectionTitle,
+      body: reflectionBody,
+      verse: primaryBibleVerse(reflectionVerses),
+      verses: reflectionVerses,
+      shareWithGroup: reflectionVisibility === visibility.room,
+    });
+    setReflectionComposerVisible(false);
+    setReflectionTitle("");
+    setReflectionBody("");
+    setReflectionVerses([]);
   }
 
   const replyList = replies.length > 0 ? (
@@ -368,7 +411,7 @@ export function FeedDetailScreen() {
             <CommunityCardAction
               icon="book-open"
               label={communityActionLabel(itemKind, false, t)}
-              onPress={toggleReaction}
+              onPress={openScriptureReflection}
               tone="scripture"
             />
             <CommunityCardAction
@@ -450,6 +493,24 @@ export function FeedDetailScreen() {
         ) : encouragementInput}
         {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
+      <SharedComposer
+        visible={reflectionComposerVisible}
+        context="journal"
+        kind={reflectionKind}
+        entryVisibility={reflectionVisibility}
+        title={reflectionTitle}
+        body={reflectionBody}
+        verses={reflectionVerses}
+        onKind={setReflectionKind}
+        onVisibility={setReflectionVisibility}
+        onTitle={setReflectionTitle}
+        onBody={setReflectionBody}
+        onVerses={setReflectionVerses}
+        onClose={closeScriptureReflection}
+        onSubmit={submitScriptureReflection}
+        roomName={group?.name}
+        roomImage={group?.image}
+      />
       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
