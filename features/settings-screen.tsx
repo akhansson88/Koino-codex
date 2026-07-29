@@ -109,6 +109,10 @@ function isPrayerMomentKind(kind: EntryKind | "post" | undefined) {
   return normalizeEntryKind(kind) === "prayer_moment";
 }
 
+function isPrayerRequestListItem(item: FeedItem): item is Extract<FeedItem, { type: "post" }> {
+  return item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request" && item.body.trim().length > 0;
+}
+
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
   return counts[roomId] || fallback;
@@ -316,15 +320,11 @@ export function SettingsScreen() {
   const communityFeedOffline = Boolean(communityFeedStatusMatchesGroup && state.communityFeedOffline);
   const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
   const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
-  const prayerPosts = feedItems.filter(
-    (item): item is Extract<FeedItem, { type: "post" }> => item.type === "post" && isPrayerFeedKind(item.kind),
-  );
+  const prayerPosts = feedItems.filter(isPrayerRequestListItem);
   const selectedPrayer = prayerPosts.find((item) => item.id === selectedPrayerId);
   const visiblePrayerPosts = prayerPosts.filter((item) => {
-    if (item.type !== "post") return false;
-    const prayerMoment = isPrayerMomentKind(item.kind);
-    if (prayerFilter === "open") return prayerMoment || !item.answeredAt;
-    if (prayerFilter === "answered") return !prayerMoment && Boolean(item.answeredAt);
+    if (prayerFilter === "open") return !item.answeredAt;
+    if (prayerFilter === "answered") return Boolean(item.answeredAt);
     return true;
   });
   const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
