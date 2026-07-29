@@ -106,15 +106,8 @@ export function CheckInModal({
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
         <AppScreen topInset>
           {step !== "thanks" ? (
-            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={{ alignItems: "center", flexDirection: "row" }}>
               <IconButton accessibilityLabel={t("community.checkIn.back")} icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
-              {step === "details" ? (
-                <Pressable accessibilityRole="button" onPress={onSubmit} style={{ padding: 8 }}>
-                  <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t("community.checkIn.save")}</Text>
-                </Pressable>
-              ) : (
-                <View style={{ width: 38 }} />
-              )}
             </View>
           ) : null}
 
@@ -179,7 +172,7 @@ export function CheckInModal({
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                        {share ? t("community.checkIn.sharedWithRoom") : t("community.checkIn.privateOnly")}
+                        {share ? t("community.checkIn.sharedWithCommunity", { name: roomName }) : t("community.checkIn.privateOnly")}
                       </Text>
                     </View>
                     <Feather name="chevron-down" size={18} color={colors.muted} />
@@ -192,7 +185,7 @@ export function CheckInModal({
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
                 <Feather name="lock" size={13} color={colors.muted} />
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {share ? t("community.checkIn.sharedNotice") : t("community.checkIn.privateNotice")}
+                  {share ? t("community.checkIn.sharedNotice", { name: roomName }) : t("community.checkIn.privateNotice")}
                 </Text>
               </View>
             </>
