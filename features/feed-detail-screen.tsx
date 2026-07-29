@@ -171,7 +171,9 @@ export function FeedDetailScreen() {
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
   const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
   const isPraise = item.type === "post" && itemKind === "praise";
+  const isScripture = item.type === "post" && itemKind === "scripture";
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
+  const hasPersonalNote = Boolean(displayCopy.body.trim());
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
   const actionPastLabel = communityActionLabel(itemKind, true, t);
@@ -315,23 +317,25 @@ export function FeedDetailScreen() {
             </View>
           </>
         )}
-        <View style={{ gap: 12 }}>
-          {!isExpandedFeedCard ? (
-            <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
-              {displayCopy.title || communityDefaultFeedTitle(item, t)}
-            </Text>
-          ) : null}
-          <LinkPreviewContent text={displayCopy.body}>
-            {({ hiddenUrl, preview }) => (
-              <>
-                <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: isExpandedFeedCard ? 16 : 17, lineHeight: isExpandedFeedCard ? 24 : 25 }}>
-                  {displayCopy.body || t("community.card.noWords")}
-                </BodyText>
-                {preview}
-              </>
-            )}
-          </LinkPreviewContent>
-        </View>
+        {!isScripture || hasPersonalNote ? (
+          <View style={{ gap: 12 }}>
+            {!isExpandedFeedCard && !isScripture ? (
+              <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
+                {displayCopy.title || communityDefaultFeedTitle(item, t)}
+              </Text>
+            ) : null}
+            <LinkPreviewContent text={displayCopy.body}>
+              {({ hiddenUrl, preview }) => (
+                <>
+                  <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: isExpandedFeedCard ? 16 : 17, lineHeight: isExpandedFeedCard ? 24 : 25 }}>
+                    {displayCopy.body || t("community.card.noWords")}
+                  </BodyText>
+                  {preview}
+                </>
+              )}
+            </LinkPreviewContent>
+          </View>
+        ) : null}
         {item.type === "check_in" ? <CommunityCheckInMood mood={item.mood} /> : null}
         <VerseList compact={isExpandedFeedCard} verse={item.verse} verses={item.verses} />
         {isPrayerRequest ? (
@@ -359,6 +363,23 @@ export function FeedDetailScreen() {
           </Card>
         ) : isPraise ? (
           <DetailPraiseButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
+        ) : isScripture ? (
+          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <CommunityCardAction
+              icon="book-open"
+              label={communityActionLabel(itemKind, false, t)}
+              onPress={toggleReaction}
+              tone="scripture"
+            />
+            <CommunityCardAction
+              active={Boolean(prayer?.prayed)}
+              icon="pray"
+              label={t(prayer?.prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+              onPress={startPrayer}
+              tone="prayer"
+              variant="secondary"
+            />
+          </View>
         ) : !isPrayerMoment && isExpandedFeedCard && canReact ? (
           <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <CommunityCardAction
@@ -388,7 +409,7 @@ export function FeedDetailScreen() {
         {ownsItem && isPrayerRequest && !prayerAnswered ? (
           <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
-        {!isPrayerMoment && !isExpandedFeedCard && !isPraise ? (
+        {!isPrayerMoment && !isExpandedFeedCard && !isPraise && (!isScripture || (prayer?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
@@ -398,7 +419,7 @@ export function FeedDetailScreen() {
             {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
           </View>
         ) : null}
-        {canReact && !isExpandedFeedCard && (!isPraise || (reaction?.count ?? 0) > 0) ? (
+        {canReact && !isScripture && !isExpandedFeedCard && (!isPraise || (reaction?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
               {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {

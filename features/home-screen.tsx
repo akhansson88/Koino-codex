@@ -17,6 +17,7 @@ import {
   Card,
   FullScreenModal,
   IconButton,
+  VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
@@ -372,6 +373,8 @@ function CommunityPreviewCard({
 
   const authorName = userById.get(item.userId) ?? t("common.someone");
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
+  const isScripture = item.type === "post" && normalizeEntryKind(item.kind) === "scripture";
+  const hasPersonalNote = Boolean(displayCopy.body.trim());
   return (
     <Pressable accessibilityRole="button" onPress={() => onOpen(item)}>
       <Card style={{ gap: 12, padding: 14 }}>
@@ -391,14 +394,19 @@ function CommunityPreviewCard({
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
           </View>
         </View>
-        <View style={{ gap: 5 }}>
-          <Text numberOfLines={item.type === "check_in" ? undefined : 2} style={{ color: colors.ink, flexShrink: 1, fontSize: 15, fontWeight: "900" }}>
-            {displayCopy.title || communityDefaultFeedTitle(item, t)}
-          </Text>
-          <BodyText muted numberOfLines={2}>
-            {displayCopy.body || t("community.card.noWords")}
-          </BodyText>
-        </View>
+        {!isScripture || hasPersonalNote ? (
+          <View style={{ gap: 5 }}>
+            {!isScripture ? (
+              <Text numberOfLines={item.type === "check_in" ? undefined : 2} style={{ color: colors.ink, flexShrink: 1, fontSize: 15, fontWeight: "900" }}>
+                {displayCopy.title || communityDefaultFeedTitle(item, t)}
+              </Text>
+            ) : null}
+            <BodyText muted numberOfLines={2}>
+              {displayCopy.body || t("community.card.noWords")}
+            </BodyText>
+          </View>
+        ) : null}
+        {isScripture ? <VerseList compact verse={item.verse} verses={item.verses} /> : null}
         {prayerCount > 0 ? (
           <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
             <Feather name="heart" size={14} color={colors.muted} />

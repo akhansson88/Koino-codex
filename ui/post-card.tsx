@@ -448,8 +448,10 @@ export function PostCard({
   const reactionTone = toneForItem(item);
   const reactionIcon: CommunityCardActionIcon =
     itemKind === "praise" ? "star" : itemKind === "scripture" ? "book-open" : itemKind === "update" ? "message-circle" : "heart";
+  const hasPersonalNote = Boolean(displayCopy.body.trim());
+  const reactionPresentedAsCompleted = itemKind !== "scripture" && Boolean(reacted);
   const hasPrayerActivity = itemKind !== "praise" && Boolean(prayedBy?.length);
-  const hasReactionActivity = !isPrayerPost && Boolean(reactedBy?.length);
+  const hasReactionActivity = itemKind !== "scripture" && !isPrayerPost && Boolean(reactedBy?.length);
 
   const menuButton = ownsItem && (onEdit || onDelete) ? (
     <Pressable
@@ -528,9 +530,9 @@ export function PostCard({
         <>
           {!isPrayerPost && onReact ? (
             <CommunityCardAction
-              active={Boolean(reacted)}
+              active={reactionPresentedAsCompleted}
               icon={reactionIcon}
-              label={communityActionLabel(itemKind, Boolean(reacted), t)}
+              label={communityActionLabel(itemKind, reactionPresentedAsCompleted, t)}
               onPress={onReact}
               tone={reactionTone}
             />
@@ -573,7 +575,7 @@ export function PostCard({
       }
       authorImage={authorImage}
       authorName={authorName}
-      bodyContent={
+      bodyContent={itemKind !== "scripture" || hasPersonalNote ? (
         <LinkPreviewContent text={displayCopy.body}>
           {({ hiddenUrl, preview }) => (
             <>
@@ -584,7 +586,7 @@ export function PostCard({
             </>
           )}
         </LinkPreviewContent>
-      }
+      ) : undefined}
       headerAccessory={menuButton}
       item={item}
       onOpen={() => {
@@ -612,7 +614,7 @@ export function PostCard({
         ) : undefined
       }
       style={{ zIndex: menuOpen ? 10 : 1 }}
-      title={itemKind === "scripture" || itemKind === "update" ? displayCopy.title || communityDefaultFeedTitle(item, t) : undefined}
+      title={itemKind === "update" ? displayCopy.title || communityDefaultFeedTitle(item, t) : undefined}
     />
   );
 }
