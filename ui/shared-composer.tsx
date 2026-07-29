@@ -34,8 +34,8 @@ function headerActionKey(context: "journal" | "today" | "room", entryVisibility:
 }
 
 function titleKey(context: "journal" | "today" | "room", editing: boolean) {
-  if (editing) return "community.composer.title.edit" as const;
   if (context === "room") return "community.composer.title.shareCommunity" as const;
+  if (editing) return "community.composer.title.edit" as const;
   return "community.composer.title.write" as const;
 }
 
@@ -194,7 +194,9 @@ export function SharedComposer({
           }}
         >
           <IconButton accessibilityLabel={t("community.composer.close")} icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
+          {!isCommunityShare ? (
+            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
+          ) : null}
         </View>
 
         <View style={{ gap: 10 }}>
@@ -269,7 +271,7 @@ export function SharedComposer({
         </View>
 
         <View style={{ gap: 8 }}>
-          <SectionHeading>{t("community.composer.shareWith")}</SectionHeading>
+          {!isCommunityShare ? <SectionHeading>{t("community.composer.shareWith")}</SectionHeading> : null}
           {showVisibility ? (
             <FilterChips
               value={entryVisibility}
@@ -292,7 +294,9 @@ export function SharedComposer({
                   {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {entryVisibility === visibility.room ? t("community.composer.sharedWithCommunity") : t("community.composer.privateOnly")}
+                  {entryVisibility === visibility.room
+                    ? t(isCommunityShare ? "community.composer.privateCommunity" : "community.composer.sharedWithCommunity")
+                    : t("community.composer.privateOnly")}
                 </Text>
               </View>
               {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}
