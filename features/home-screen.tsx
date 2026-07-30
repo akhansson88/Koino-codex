@@ -10,6 +10,7 @@ import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
   selectCommunityContent,
+  selectHomePrayerQueueIds,
   selectLatestHomeCommunityItem,
   selectOpenPrayerRequests,
 } from "@/state/selectors/community-content";
@@ -86,7 +87,15 @@ export function HomeScreen() {
     () => selectLatestHomeCommunityItem(communityContent, state.currentUserId),
     [communityContent, state.currentUserId],
   );
-  const openPrayer = useMemo(() => selectOpenPrayerRequests(communityContent)[0], [communityContent]);
+  const openPrayerRequests = useMemo(() => selectOpenPrayerRequests(communityContent), [communityContent]);
+  const homePrayerQueueIds = useMemo(
+    () => selectHomePrayerQueueIds(communityContent, state.currentUserId, state.prayerReactions),
+    [communityContent, state.currentUserId, state.prayerReactions],
+  );
+  const openPrayer = useMemo(
+    () => openPrayerRequests.find((item) => item.id === homePrayerQueueIds[0]),
+    [homePrayerQueueIds, openPrayerRequests],
+  );
   const greeting = firstName(user?.name);
 
   function resetCheckIn() {
@@ -109,10 +118,10 @@ export function HomeScreen() {
   }, [params.checkIn]);
 
   function openPrayerSurface() {
-    if (openPrayer) {
+    if (openPrayer && state.currentGroupId) {
       router.push({
-        pathname: "/community/[groupId]/prayers/[prayerRequestId]",
-        params: { groupId: openPrayer.groupId, prayerRequestId: openPrayer.id },
+        pathname: "/home/[groupId]/prayer",
+        params: { groupId: state.currentGroupId },
       } as never);
       return;
     }

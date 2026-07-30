@@ -109,7 +109,15 @@ type Action =
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id }
   | { type: "unmarkPrayerAnswered"; id: Id }
-  | { type: "finishPrayer"; targetType: PrayerSession["targetType"]; targetId: Id; status: PrayerSession["status"]; startedAt: string; recipientUserId?: Id }
+  | {
+      type: "finishPrayer";
+      targetType: PrayerSession["targetType"];
+      targetId: Id;
+      status: PrayerSession["status"];
+      startedAt: string;
+      recipientUserId?: Id;
+      throwOnError?: boolean;
+    }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; replyId?: Id }
@@ -1992,7 +2000,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "uploadUserAvatar" ||
           action.type === "deleteUserAvatar" ||
           (action.type === "togglePostReaction" && action.mode === "ensure") ||
-          (action.type === "createReply" && Boolean(action.replyId))
+          (action.type === "createReply" && Boolean(action.replyId)) ||
+          (action.type === "finishPrayer" && action.throwOnError)
         ) {
           throw error;
         }

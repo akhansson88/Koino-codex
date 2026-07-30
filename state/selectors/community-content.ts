@@ -1,5 +1,5 @@
 import { normalizeEntryKind } from "@/state/product";
-import type { BibleVerse, CheckIn, EntryKind, FeedItem, Id, Post } from "@/state/types";
+import type { BibleVerse, CheckIn, EntryKind, FeedItem, Id, Post, PrayerReaction } from "@/state/types";
 
 type CommunityPostItem = Extract<FeedItem, { type: "post" }>;
 type CommunityCheckInItem = Extract<FeedItem, { type: "check_in" }>;
@@ -157,6 +157,45 @@ export function selectPrayerRequests(items: readonly FeedItem[]): CommunityPostI
 
 export function selectOpenPrayerRequests(items: readonly FeedItem[]): CommunityPostItem[] {
   return selectPrayerRequests(items).filter((item) => !item.answeredAt);
+}
+
+function compareOldestCommunityContent(left: FeedItem, right: FeedItem) {
+  const timestampDifference = Date.parse(left.createdAt) - Date.parse(right.createdAt);
+  return timestampDifference || communityContentKey(left).localeCompare(communityContentKey(right));
+}
+
+export function selectHomePrayerQueueIds(
+  items: readonly FeedItem[],
+  currentUserId: Id | undefined,
+  prayerReactions: readonly PrayerReaction[],
+): Id[] {
+  if (!currentUserId) return [];
+
+  const prayedRequestIds = new Set(
+    prayerReactions
+      .filter((reaction) => reaction.targetType === "post" && reaction.userId === currentUserId)
+      .map((reaction) => reaction.targetId),
+  );
+  const eligibleRequests = selectOpenPrayerRequests(items).filter((item) => item.userId !== currentUserId);
+  const unprayedRequests = eligibleRequests
+    .filter((item) => !prayedRequestIds.has(item.id))
+    .sort(compareOldestCommunityContent);
+  const prayedRequests = eligibleRequests
+    .filter((item) => prayedRequestIds.has(item.id))
+    .sort(compareOldestCommunityContent);
+
+  return [...unprayedRequests, ...prayedRequests].map((item) => item.id);
+}
+
+export function findNextHomePrayerQueueIndex(
+  queueIds: readonly Id[],
+  validRequestIds: ReadonlySet<Id>,
+  startIndex: number,
+) {
+  for (let index = Math.max(0, startIndex); index < queueIds.length; index += 1) {
+    if (validRequestIds.has(queueIds[index])) return index;
+  }
+  return queueIds.length;
 }
 
 export function selectLatestHomeCommunityItem(
