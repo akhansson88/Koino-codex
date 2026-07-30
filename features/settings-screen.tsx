@@ -51,7 +51,6 @@ import {
   communityDefaultFeedTitle,
   communityMemberCount,
   communityMoodScaleLabel,
-  communityPrayerMomentCanonicalCopy,
   communityPrayerMomentDisplayCopy,
   communityPrayerFilterLabel,
   communityPrayerNoun,
@@ -60,6 +59,7 @@ import {
   communitySystemError,
 } from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
+import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import type { TranslationFunction } from "@/ui/localization";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
@@ -87,15 +87,7 @@ const COMMUNITY_CHECK_INS_HISTORY_KEY = "__koinoCommunityCheckIns";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>>>;
-type CommunityPrayerIntent = {
-  recipientImage?: GroupImage;
-  recipientName?: string;
-  recipientUserId?: Id;
-  type: "pray_for_someone" | "pray_now";
-};
-type PendingPrayerPost = CommunityPrayerIntent & { completedAt: string };
 
-const PRAYER_POST_NOTE_LIMIT = 280;
 const COMMUNITY_RECENT_DAYS = 30;
 const COMMUNITY_RECENT_ITEM_LIMIT = 20;
 const COMMUNITY_EARLIER_PAGE_SIZE = 20;
@@ -204,10 +196,9 @@ export function SettingsScreen() {
   const [prayerMomentDetailReturnView, setPrayerMomentDetailReturnView] = useState<"detail" | "prayer">("prayer");
   const [prayerMomentEncouragementDraft, setPrayerMomentEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
-  const [communityPrayerIntent, setCommunityPrayerIntent] = useState<CommunityPrayerIntent>();
+  const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
-  const [pendingPrayerPost, setPendingPrayerPost] = useState<PendingPrayerPost>();
-  const [prayerPostNote, setPrayerPostNote] = useState("");
+  const directPrayerPersistencePendingRef = useRef(false);
   const [feedEncouragementTarget, setFeedEncouragementTarget] = useState<FeedItem>();
   const [feedEncouragementDraft, setFeedEncouragementDraft] = useState("");
   const [feedEncouragementReduceMotion, setFeedEncouragementReduceMotion] = useState<boolean | undefined>(() => {
@@ -360,8 +351,7 @@ export function SettingsScreen() {
       }
       setRoomView("detail");
       setMemberSelectVisible(false);
-      setPendingPrayerPost(undefined);
-      setPrayerPostNote("");
+      setDirectPrayerResult(undefined);
     }, []),
   );
 
@@ -642,7 +632,6 @@ export function SettingsScreen() {
   function prayForItem(item: FeedItem) {
     const prayer = itemPrayerState(item);
     const displayBody = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t).body : item.body;
-    setCommunityPrayerIntent(undefined);
     setPrayerTarget({
       targetType: prayer.targetType,
       targetId: item.id,
@@ -653,34 +642,58 @@ export function SettingsScreen() {
     });
   }
 
-  function startCommunityPrayer(intent: CommunityPrayerIntent) {
-    const targetId = intent.recipientUserId ?? state.currentUserId;
-    if (!targetId) return;
+  function startCommunityPrayer(member: Pick<CommunityMember, "id" | "image" | "name">) {
+    if (!member.id.trim()) return;
 
-    setCommunityPrayerIntent(intent);
+    setDirectPrayerResult(undefined);
     setPrayerTarget({
       targetType: "user",
-      targetId,
+      targetId: member.id,
       body: "",
-      recipientUserId: targetId,
-      recipientName: userById.get(targetId),
-      recipientImage: userImageById.get(targetId),
+      recipientUserId: member.id,
+      recipientName: member.name,
+      recipientImage: member.image,
     });
   }
 
   function closePrayerMoment() {
     setPrayerTarget(undefined);
-    setCommunityPrayerIntent(undefined);
   }
 
-  async function finishPrayerMoment(status: "completed" | "skipped", startedAt: string, completedAt: string) {
+  async function finishPrayerMoment(status: "completed" | "skipped", startedAt: string) {
     const target = prayerTarget;
-    const intent = communityPrayerIntent;
-
     setPrayerTarget(undefined);
-    setCommunityPrayerIntent(undefined);
+    if (!target) return;
 
-    if (target) {
+    const directPrayer = target.targetType === "user";
+    const recipientName =
+      target.recipientName?.trim() ||
+      (target.recipientUserId ? userById.get(target.recipientUserId) : undefined) ||
+      t("common.someone");
+    const resultPerson = { recipientImage: target.recipientImage, recipientName };
+
+    if (directPrayer) {
+      if (directPrayerPersistencePendingRef.current) return;
+      const recipientIsAvailable =
+        Boolean(target.recipientUserId) &&
+        (target.recipientUserId === state.currentUserId || state.users.some((member) => member.id === target.recipientUserId));
+      if (
+        !state.currentUserId ||
+        !target.targetId.trim() ||
+        !target.recipientUserId?.trim() ||
+        target.targetId !== target.recipientUserId ||
+        !recipientIsAvailable
+      ) {
+        setDirectPrayerResult({ ...resultPerson, status: "failed" });
+        return;
+      }
+      directPrayerPersistencePendingRef.current = true;
+      if (status === "completed") {
+        setDirectPrayerResult({ ...resultPerson, status: "saving" });
+      }
+    }
+
+    try {
       await dispatch({
         type: "finishPrayer",
         targetType: target.targetType,
@@ -688,31 +701,20 @@ export function SettingsScreen() {
         status,
         startedAt,
         recipientUserId: target.recipientUserId,
+        throwOnError: directPrayer,
       });
+      if (directPrayer) {
+        setDirectPrayerResult(status === "completed" ? { ...resultPerson, status: "completed" } : undefined);
+      }
+    } catch {
+      if (directPrayer) {
+        setDirectPrayerResult({ ...resultPerson, status: "failed" });
+      }
+    } finally {
+      if (directPrayer) {
+        directPrayerPersistencePendingRef.current = false;
+      }
     }
-
-    if (status === "completed" && intent) {
-      setPrayerPostNote("");
-      setPendingPrayerPost({ ...intent, completedAt });
-    }
-  }
-
-  async function publishPendingPrayerPost(noteOverride = prayerPostNote) {
-    const pending = pendingPrayerPost;
-    if (!pending) return;
-
-    setPendingPrayerPost(undefined);
-    setPrayerPostNote("");
-
-    const copy = communityPrayerMomentCanonicalCopy(pending.recipientName, noteOverride);
-    await dispatch({
-      type: "createPost",
-      kind: "prayer_moment",
-      title: copy.title,
-      body: copy.body,
-    });
-    setPrayerFilter("open");
-    navigateToRoomView("prayer");
   }
 
   function togglePostAction(item: FeedItem) {
@@ -1110,25 +1112,14 @@ export function SettingsScreen() {
       onClose={() => setMemberSelectVisible(false)}
       onSelect={(member) => {
         setMemberSelectVisible(false);
-        startCommunityPrayer({
-          recipientImage: member.image,
-          recipientName: member.name,
-          recipientUserId: member.id,
-          type: "pray_for_someone",
-        });
+        startCommunityPrayer(member);
       }}
       visible={memberSelectVisible}
     />
   ) : null;
 
-  const communityPrayerPostSheet = (
-    <PrayerPostSheet
-      note={prayerPostNote}
-      onChangeNote={(value) => setPrayerPostNote(value.slice(0, PRAYER_POST_NOTE_LIMIT))}
-      onPublish={() => publishPendingPrayerPost()}
-      onSkip={() => publishPendingPrayerPost("")}
-      pending={pendingPrayerPost}
-    />
+  const directPrayerResultSheet = (
+    <DirectPrayerResultSheet onDone={() => setDirectPrayerResult(undefined)} result={directPrayerResult} />
   );
 
   const feedEncouragementSheet = feedEncouragementTarget ? (
@@ -1233,7 +1224,7 @@ export function SettingsScreen() {
           onFinish={finishPrayerMoment}
         />
         {communityPrayerMemberModal}
-        {communityPrayerPostSheet}
+        {directPrayerResultSheet}
       </>
     );
   }
@@ -1341,12 +1332,7 @@ export function SettingsScreen() {
                     return;
                   }
 
-                  startCommunityPrayer({
-                    recipientImage: assignedMember.image,
-                    recipientName: assignedMember.name,
-                    recipientUserId: assignedMember.id,
-                    type: "pray_for_someone",
-                  });
+                  startCommunityPrayer(assignedMember);
                 }}
                 onPrayForRequests={() => {
                   setPrayerFilter("open");
@@ -1446,7 +1432,7 @@ export function SettingsScreen() {
         />
         {communityCheckInModal}
         {communityPrayerMemberModal}
-        {communityPrayerPostSheet}
+        {directPrayerResultSheet}
         {feedEncouragementSheet}
         <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
           <Card style={{ gap: 0, padding: 0 }}>
@@ -2272,53 +2258,6 @@ function CommunityPrayerMemberModal({
         </ScrollView>
       </AppScreen>
     </FullScreenModal>
-  );
-}
-
-function PrayerPostSheet({
-  note,
-  onChangeNote,
-  onPublish,
-  onSkip,
-  pending,
-}: {
-  note: string;
-  onChangeNote: (value: string) => void;
-  onPublish: () => void;
-  onSkip: () => void;
-  pending?: PendingPrayerPost;
-}) {
-  const { t } = useAppTranslation();
-  const recipientName = pending?.recipientName?.trim();
-
-  return (
-    <BottomSheet title={t("community.prayer.share")} visible={Boolean(pending)} onClose={onSkip}>
-      {recipientName ? (
-        <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-          <Avatar image={pending?.recipientImage} name={recipientName} size={38} tone="green" />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{recipientName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.prayer.postForPerson")}</Text>
-          </View>
-        </Card>
-      ) : null}
-      <View style={{ gap: 6 }}>
-        <TextInputField
-          maxLength={PRAYER_POST_NOTE_LIMIT}
-          multiline
-          onChangeText={onChangeNote}
-          placeholder={t("community.prayer.notePlaceholder")}
-          returnKeyType="done"
-          style={{ minHeight: 120 }}
-          value={note}
-        />
-        <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/{PRAYER_POST_NOTE_LIMIT}</Text>
-      </View>
-      <PrimaryButton icon="send" onPress={onPublish}>
-        {t("community.prayer.post")}
-      </PrimaryButton>
-      <SecondaryButton onPress={onSkip}>{t("community.prayer.skipNote")}</SecondaryButton>
-    </BottomSheet>
   );
 }
 

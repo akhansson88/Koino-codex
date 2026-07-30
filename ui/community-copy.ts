@@ -18,21 +18,6 @@ function templateParts(template: string) {
       };
 }
 
-export function communityPrayerMomentCanonicalCopy(recipientNameValue?: string, noteValue = "") {
-  const recipientName = recipientNameValue?.trim();
-  const note = noteValue.trim();
-  const body = recipientName
-    ? englishPrayerMomentCopy("community.prayer.generated.bodyForPerson", { name: recipientName })
-    : englishPrayerMomentCopy("community.prayer.generated.body");
-
-  return {
-    body: note ? `${body}\n\n${englishPrayerMomentCopy("community.prayer.generated.about", { note })}` : body,
-    title: recipientName
-      ? englishPrayerMomentCopy("community.prayer.generated.titleForPerson", { name: recipientName })
-      : englishPrayerMomentCopy("community.defaultTitle.prayerMoment"),
-  };
-}
-
 export function communityPrayerMomentDisplayCopy(
   item: Pick<Extract<FeedItem, { type: "post" }>, "body" | "kind" | "title">,
   t: TranslationFunction,

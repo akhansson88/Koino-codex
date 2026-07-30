@@ -28,6 +28,7 @@ import {
 import { useAppTranslation } from "@/ui/app-language";
 import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communityPrayerNoun, communitySystemError } from "@/ui/community-copy";
+import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { QuietActionCard } from "@/ui/rhythm-cards";
@@ -54,8 +55,10 @@ export function HomeScreen() {
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
   const [shareCheckIn, setShareCheckIn] = useState(true);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
   const lastCheckInParamRef = useRef<string | undefined>(undefined);
+  const directPrayerPersistencePendingRef = useRef(false);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
@@ -148,6 +151,54 @@ export function HomeScreen() {
     };
   }
 
+  async function finishDirectPrayer(status: "completed" | "skipped", startedAt: string) {
+    const target = prayerTarget;
+    setPrayerTarget(undefined);
+    if (!target || directPrayerPersistencePendingRef.current) return;
+
+    const recipientName =
+      target.recipientName?.trim() ||
+      (target.recipientUserId ? userById.get(target.recipientUserId) : undefined) ||
+      t("common.someone");
+    const resultPerson = { recipientImage: target.recipientImage, recipientName };
+    const recipientIsAvailable =
+      Boolean(target.recipientUserId) &&
+      (target.recipientUserId === state.currentUserId || state.users.some((member) => member.id === target.recipientUserId));
+    if (
+      !state.currentUserId ||
+      target.targetType !== "user" ||
+      !target.targetId.trim() ||
+      !target.recipientUserId?.trim() ||
+      target.targetId !== target.recipientUserId ||
+      !recipientIsAvailable
+    ) {
+      setDirectPrayerResult({ ...resultPerson, status: "failed" });
+      return;
+    }
+
+    directPrayerPersistencePendingRef.current = true;
+    if (status === "completed") {
+      setDirectPrayerResult({ ...resultPerson, status: "saving" });
+    }
+
+    try {
+      await dispatch({
+        type: "finishPrayer",
+        targetType: target.targetType,
+        targetId: target.targetId,
+        status,
+        startedAt,
+        recipientUserId: target.recipientUserId,
+        throwOnError: true,
+      });
+      setDirectPrayerResult(status === "completed" ? { ...resultPerson, status: "completed" } : undefined);
+    } catch {
+      setDirectPrayerResult({ ...resultPerson, status: "failed" });
+    } finally {
+      directPrayerPersistencePendingRef.current = false;
+    }
+  }
+
   return (
     <AppScreen scroll={false} topInset={false}>
       <ScrollView
@@ -228,20 +279,12 @@ export function HomeScreen() {
       <PrayerMoment
         target={prayerTarget}
         onClose={() => setPrayerTarget(undefined)}
-        onFinish={(status, startedAt, completedAt) => {
-          if (prayerTarget) {
-            dispatch({
-              type: "finishPrayer",
-              targetType: prayerTarget.targetType,
-              targetId: prayerTarget.targetId,
-              status,
-              startedAt,
-              recipientUserId: prayerTarget.recipientUserId,
-            });
-          }
-          setPrayerTarget(undefined);
+        onFinish={(status, startedAt) => {
+          void finishDirectPrayer(status, startedAt);
         }}
       />
+
+      <DirectPrayerResultSheet onDone={() => setDirectPrayerResult(undefined)} result={directPrayerResult} />
 
       <FullScreenModal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
         <AppScreen>
@@ -264,6 +307,7 @@ export function HomeScreen() {
                   key={member.id}
                   onPress={() => {
                     setMemberSelectVisible(false);
+                    setDirectPrayerResult(undefined);
                     setPrayerTarget({
                       targetType: "user",
                       targetId: member.id,
