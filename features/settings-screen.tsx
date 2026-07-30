@@ -18,6 +18,11 @@ import {
 } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
+import {
+  selectCommunityContent,
+  selectCommunityPostById,
+  selectPrayerRequests,
+} from "@/state/selectors/community-content";
 import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Membership, PostReactionKind, Reply } from "@/state/types";
 import {
   AppScreen,
@@ -111,10 +116,6 @@ function isPrayerMomentKind(kind: EntryKind | "post" | undefined) {
   return normalizeEntryKind(kind) === "prayer_moment";
 }
 
-function isPrayerRequestListItem(item: FeedItem): item is Extract<FeedItem, { type: "post" }> {
-  return item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request" && item.body.trim().length > 0;
-}
-
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
   return counts[roomId] || fallback;
@@ -140,42 +141,17 @@ function communityFeedItemKey(item: FeedItem) {
   return `${item.type}:${item.id}`;
 }
 
-function compareCommunityFeedItems(left: FeedItem, right: FeedItem) {
-  const leftTime = Date.parse(left.createdAt);
-  const rightTime = Date.parse(right.createdAt);
-  const leftIsValid = Number.isFinite(leftTime);
-  const rightIsValid = Number.isFinite(rightTime);
-
-  if (leftIsValid && rightIsValid && leftTime !== rightTime) return rightTime - leftTime;
-  if (leftIsValid !== rightIsValid) return leftIsValid ? -1 : 1;
-  return communityFeedItemKey(left).localeCompare(communityFeedItemKey(right));
-}
-
-function uniqueCommunityFeedItems(items: FeedItem[]) {
-  const uniqueItems = new Map<string, FeedItem>();
-  for (const item of items) {
-    uniqueItems.set(communityFeedItemKey(item), item);
-  }
-  return [...uniqueItems.values()];
-}
-
 function filterCommunityFeedItems(items: FeedItem[], detailTab: RoomDetailTab) {
-  // Prayer moments are stored activity/history records, not shared Community content.
-  // Keep them in feedItems for dedicated prayer flows, counts, and completed state.
-  const communityContentItems = items.filter(
-    (item) => item.type !== "post" || !isPrayerMomentKind(item.kind),
-  );
-
   if (detailTab === "prayer") {
-    return communityContentItems.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
+    return items.filter((item) => item.type === "post" && isPrayerFeedKind(item.kind));
   }
   if (detailTab === "checkins") {
-    return communityContentItems.filter((item) => item.type === "check_in");
+    return items.filter((item) => item.type === "check_in");
   }
   if (detailTab === "reflections") {
-    return communityContentItems.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
+    return items.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
   }
-  return communityContentItems;
+  return items;
 }
 
 function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
@@ -284,39 +260,12 @@ export function SettingsScreen() {
     () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
     [state.currentUserId, state.memberships],
   );
-  const feedItems = useMemo<FeedItem[]>(() => {
-    const checkIns: FeedItem[] = state.checkIns
-      .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
-      .map((item) => ({
-        type: "check_in",
-        id: item.id,
-        userId: item.userId,
-        groupId: item.groupId,
-        body: item.reflectionText,
-        mood: item.mood,
-        readToday: item.readToday,
-        verse: item.verse,
-        verses: item.verses,
-        createdAt: item.createdAt,
-      }));
-    const posts: FeedItem[] = state.posts
-      .filter((item) => item.groupId === state.currentGroupId)
-      .map((item) => ({
-        type: "post",
-        id: item.id,
-        userId: item.userId,
-        groupId: item.groupId,
-        kind: item.kind,
-        title: item.title,
-        body: item.body,
-        verse: item.verse,
-        verses: item.verses,
-        images: item.images,
-        answeredAt: item.answeredAt,
-        answeredMarkedAt: item.answeredMarkedAt,
-        createdAt: item.createdAt,
-      }));
-    return uniqueCommunityFeedItems([...checkIns, ...posts]).sort(compareCommunityFeedItems);
+  const feedItems = useMemo(() => {
+    return selectCommunityContent({
+      checkIns: state.checkIns,
+      groupId: state.currentGroupId,
+      posts: state.posts,
+    });
   }, [state.checkIns, state.currentGroupId, state.posts]);
   const visibleFeedItems = useMemo(() => filterCommunityFeedItems(feedItems, detailTab), [detailTab, feedItems]);
   const { earlier: earlierFeedItems, recent: recentFeedItems } = partitionCommunityFeed(
@@ -332,16 +281,15 @@ export function SettingsScreen() {
   const communityFeedOffline = Boolean(communityFeedStatusMatchesGroup && state.communityFeedOffline);
   const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
   const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
-  const prayerPosts = feedItems.filter(isPrayerRequestListItem);
+  const prayerPosts = selectPrayerRequests(feedItems);
   const visiblePrayerPosts = prayerPosts.filter((item) => {
     if (prayerFilter === "open") return !item.answeredAt;
     if (prayerFilter === "answered") return Boolean(item.answeredAt);
     return true;
   });
-  const selectedPrayerMoment = feedItems.find(
-    (item): item is Extract<FeedItem, { type: "post" }> =>
-      item.type === "post" && item.id === selectedPrayerMomentId && isPrayerMomentKind(item.kind),
-  );
+  const selectedPrayerMomentItem = selectCommunityPostById(state.posts, state.currentGroupId, selectedPrayerMomentId);
+  const selectedPrayerMoment =
+    selectedPrayerMomentItem && isPrayerMomentKind(selectedPrayerMomentItem.kind) ? selectedPrayerMomentItem : undefined;
   const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
   const latestCheckInByUser = useMemo(() => {
     const latest = new Map<Id, Extract<FeedItem, { type: "check_in" }>>();

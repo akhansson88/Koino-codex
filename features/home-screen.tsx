@@ -8,6 +8,11 @@ import { activePrivateCheckIns } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
+import {
+  selectCommunityContent,
+  selectLatestHomeCommunityItem,
+  selectOpenPrayerRequests,
+} from "@/state/selectors/community-content";
 import type { BibleVerse, FeedItem, GroupImage, HeartMood } from "@/state/types";
 import {
   AppScreen,
@@ -70,42 +75,18 @@ export function HomeScreen() {
       }),
     [state.memberships, state.users],
   );
-  const feedItems = useMemo<FeedItem[]>(() => {
-    const checkIns: FeedItem[] = state.checkIns
-      .filter((item) => item.groupId === state.currentGroupId && item.visibility === "group")
-      .map((item) => ({
-        type: "check_in",
-        id: item.id,
-        userId: item.userId,
-        groupId: item.groupId,
-        body: item.reflectionText,
-        mood: item.mood,
-        readToday: item.readToday,
-        verse: item.verse,
-        verses: item.verses,
-        createdAt: item.createdAt,
-      }));
-    const posts: FeedItem[] = state.posts
-      .filter((item) => item.groupId === state.currentGroupId)
-      .map((item) => ({
-        type: "post",
-        id: item.id,
-        userId: item.userId,
-        groupId: item.groupId,
-        kind: item.kind,
-        title: item.title,
-        body: item.body,
-        verse: item.verse,
-        verses: item.verses,
-        images: item.images,
-        answeredAt: item.answeredAt,
-        answeredMarkedAt: item.answeredMarkedAt,
-        createdAt: item.createdAt,
-      }));
-    return [...checkIns, ...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const communityContent = useMemo(() => {
+    return selectCommunityContent({
+      checkIns: state.checkIns,
+      groupId: state.currentGroupId,
+      posts: state.posts,
+    });
   }, [state.checkIns, state.currentGroupId, state.posts]);
-  const latestCommunityItem = feedItems[0];
-  const openPrayer = feedItems.find((item) => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request" && !item.answeredAt);
+  const latestCommunityItem = useMemo(
+    () => selectLatestHomeCommunityItem(communityContent, state.currentUserId),
+    [communityContent, state.currentUserId],
+  );
+  const openPrayer = useMemo(() => selectOpenPrayerRequests(communityContent)[0], [communityContent]);
   const greeting = firstName(user?.name);
 
   function resetCheckIn() {
@@ -136,6 +117,17 @@ export function HomeScreen() {
       return;
     }
     setMemberSelectVisible(true);
+  }
+
+  function openCommunityItem(item: FeedItem) {
+    if (item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request") {
+      router.push({
+        pathname: "/community/[groupId]/prayers/[prayerRequestId]",
+        params: { groupId: item.groupId, prayerRequestId: item.id },
+      } as never);
+      return;
+    }
+    router.push(`/feed/${item.type}/${item.id}` as never);
   }
 
   function itemPrayerState(item: FeedItem) {
@@ -174,7 +166,7 @@ export function HomeScreen() {
 
         <CommunityPreviewCard
           item={latestCommunityItem}
-          onOpen={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
+          onOpen={openCommunityItem}
           prayerCount={latestCommunityItem ? itemPrayerState(latestCommunityItem).count : 0}
           userById={userById}
           userImageById={userImageById}
