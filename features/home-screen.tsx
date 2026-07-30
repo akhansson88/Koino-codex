@@ -129,7 +129,10 @@ export function HomeScreen() {
 
   function openPrayerSurface() {
     if (openPrayer) {
-      router.push(`/feed/post/${openPrayer.id}` as never);
+      router.push({
+        pathname: "/community/[groupId]/prayers/[prayerRequestId]",
+        params: { groupId: openPrayer.groupId, prayerRequestId: openPrayer.id },
+      } as never);
       return;
     }
     setMemberSelectVisible(true);

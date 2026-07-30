@@ -73,7 +73,7 @@ import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
-type RoomView = "rooms" | "detail" | "prayer" | "prayerDetail" | "checkins" | "members";
+type RoomView = "rooms" | "detail" | "prayer" | "prayerMomentDetail" | "checkins" | "members";
 type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
@@ -203,6 +203,7 @@ export function SettingsScreen() {
   const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("forward");
   const roomViewRef = useRef<RoomView>("detail");
   const checkInsHistoryBackPendingRef = useRef(false);
+  const preserveRoomViewOnNextFocusRef = useRef(false);
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
@@ -223,14 +224,14 @@ export function SettingsScreen() {
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
-  const [selectedPrayerId, setSelectedPrayerId] = useState<Id>();
-  const [prayerDetailReturnView, setPrayerDetailReturnView] = useState<"detail" | "prayer">("prayer");
+  const [selectedPrayerMomentId, setSelectedPrayerMomentId] = useState<Id>();
+  const [prayerMomentDetailReturnView, setPrayerMomentDetailReturnView] = useState<"detail" | "prayer">("prayer");
+  const [prayerMomentEncouragementDraft, setPrayerMomentEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [communityPrayerIntent, setCommunityPrayerIntent] = useState<CommunityPrayerIntent>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
   const [pendingPrayerPost, setPendingPrayerPost] = useState<PendingPrayerPost>();
   const [prayerPostNote, setPrayerPostNote] = useState("");
-  const [encouragementDraft, setEncouragementDraft] = useState("");
   const [feedEncouragementTarget, setFeedEncouragementTarget] = useState<FeedItem>();
   const [feedEncouragementDraft, setFeedEncouragementDraft] = useState("");
   const [feedEncouragementReduceMotion, setFeedEncouragementReduceMotion] = useState<boolean | undefined>(() => {
@@ -332,12 +333,15 @@ export function SettingsScreen() {
   const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
   const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
   const prayerPosts = feedItems.filter(isPrayerRequestListItem);
-  const selectedPrayer = prayerPosts.find((item) => item.id === selectedPrayerId);
   const visiblePrayerPosts = prayerPosts.filter((item) => {
     if (prayerFilter === "open") return !item.answeredAt;
     if (prayerFilter === "answered") return Boolean(item.answeredAt);
     return true;
   });
+  const selectedPrayerMoment = feedItems.find(
+    (item): item is Extract<FeedItem, { type: "post" }> =>
+      item.type === "post" && item.id === selectedPrayerMomentId && isPrayerMomentKind(item.kind),
+  );
   const sharedCheckIns = feedItems.filter((item): item is Extract<FeedItem, { type: "check_in" }> => item.type === "check_in");
   const latestCheckInByUser = useMemo(() => {
     const latest = new Map<Id, Extract<FeedItem, { type: "check_in" }>>();
@@ -399,13 +403,14 @@ export function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (preserveRoomViewOnNextFocusRef.current) {
+        preserveRoomViewOnNextFocusRef.current = false;
+        return;
+      }
       if (roomViewRef.current !== "detail") {
         setTransitionDirection("back");
       }
       setRoomView("detail");
-      setSelectedPrayerId(undefined);
-      setPrayerDetailReturnView("prayer");
-      setEncouragementDraft("");
       setMemberSelectVisible(false);
       setPendingPrayerPost(undefined);
       setPrayerPostNote("");
@@ -470,8 +475,8 @@ export function SettingsScreen() {
   }, []);
 
   const goBackFromRoomView = useCallback(() => {
-    if (roomView === "prayerDetail") {
-      navigateToRoomView(prayerDetailReturnView, "back");
+    if (roomView === "prayerMomentDetail") {
+      navigateToRoomView(prayerMomentDetailReturnView, "back");
       return true;
     }
     if (roomView === "checkins") {
@@ -490,7 +495,7 @@ export function SettingsScreen() {
       return true;
     }
     return false;
-  }, [navigateToRoomView, prayerDetailReturnView, roomView]);
+  }, [navigateToRoomView, prayerMomentDetailReturnView, roomView]);
 
   useEffect(() => {
     if (Platform.OS === "web") return undefined;
@@ -638,10 +643,18 @@ export function SettingsScreen() {
   }
 
   function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
-    setSelectedPrayerId(item.id);
-    setPrayerDetailReturnView(returnView);
-    setEncouragementDraft("");
-    navigateToRoomView("prayerDetail");
+    if (isPrayerMomentKind(item.kind)) {
+      setSelectedPrayerMomentId(item.id);
+      setPrayerMomentDetailReturnView(returnView);
+      setPrayerMomentEncouragementDraft("");
+      navigateToRoomView("prayerMomentDetail");
+      return;
+    }
+    preserveRoomViewOnNextFocusRef.current = true;
+    router.push({
+      pathname: "/community/[groupId]/prayers/[prayerRequestId]",
+      params: { groupId: item.groupId, prayerRequestId: item.id },
+    } as never);
   }
 
   function itemPrayerState(item: FeedItem) {
@@ -676,21 +689,6 @@ export function SettingsScreen() {
   function itemReplies(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     return state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
-  }
-
-  function itemPrayerActivity(item: FeedItem) {
-    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    return prayerReactionsForTarget(state.prayerReactions, targetType, item.id)
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      .map((reaction) => ({
-        id: reaction.id,
-        createdAt: reaction.createdAt,
-        durationSeconds:
-          reaction.durationSeconds ??
-          (reaction.startedAt && reaction.completedAt ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000)) : undefined),
-        name: reaction.userId === state.currentUserId ? t("common.you") : userById.get(reaction.userId) ?? t("common.someone"),
-        image: userImageById.get(reaction.userId),
-      }));
   }
 
   function prayForItem(item: FeedItem) {
@@ -795,6 +793,23 @@ export function SettingsScreen() {
     setFeedEncouragementTarget(item);
   }
 
+  function itemPrayerActivity(item: FeedItem) {
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    return prayerReactionsForTarget(state.prayerReactions, targetType, item.id)
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+      .map((reaction) => ({
+        id: reaction.id,
+        createdAt: reaction.createdAt,
+        durationSeconds:
+          reaction.durationSeconds ??
+          (reaction.startedAt && reaction.completedAt
+            ? Math.max(0, Math.floor((Date.parse(reaction.completedAt) - Date.parse(reaction.startedAt)) / 1000))
+            : undefined),
+        name: reaction.userId === state.currentUserId ? t("common.you") : userById.get(reaction.userId) ?? t("common.someone"),
+        image: userImageById.get(reaction.userId),
+      }));
+  }
+
   function deletePost(item: Extract<FeedItem, { type: "post" }>) {
     confirmAction({
       title: t("community.card.deleteTitle"),
@@ -805,19 +820,6 @@ export function SettingsScreen() {
         dispatch({ type: "deletePost", id: item.id });
       },
     });
-  }
-
-  async function sendEncouragement(item: FeedItem, body = encouragementDraft, replyId?: string) {
-    const trimmedBody = body.trim();
-    if (!trimmedBody) return;
-    await dispatch({
-      type: "createReply",
-      targetType: item.type === "post" ? "post" : "check_in",
-      targetId: item.id,
-      body: trimmedBody,
-      ...(replyId ? { replyId } : {}),
-    });
-    setEncouragementDraft("");
   }
 
   function closeFeedEncouragement() {
@@ -845,6 +847,20 @@ export function SettingsScreen() {
       replyId,
     });
     closeFeedEncouragement();
+  }
+
+  async function sendPrayerMomentEncouragement(body = prayerMomentEncouragementDraft, replyId?: string) {
+    if (!selectedPrayerMoment) return;
+    const trimmedBody = body.trim();
+    if (!trimmedBody) return;
+    await dispatch({
+      type: "createReply",
+      targetType: "post",
+      targetId: selectedPrayerMoment.id,
+      body: trimmedBody,
+      ...(replyId ? { replyId } : {}),
+    });
+    setPrayerMomentEncouragementDraft("");
   }
 
   function resetCommunityCheckIn() {
@@ -1186,6 +1202,42 @@ export function SettingsScreen() {
     </BottomSheet>
   ) : null;
 
+  if (roomView === "prayerMomentDetail" && group) {
+    if (!selectedPrayerMoment) {
+      return (
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+          <AppScreen topInset={false}>
+            <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.page.prayer")} />
+            <Card>
+              <BodyText muted>{t("community.prayer.unavailable")}</BodyText>
+            </Card>
+          </AppScreen>
+        </CommunityTransitionFrame>
+      );
+    }
+
+    return (
+      <>
+        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+          <CommunityPrayerMomentDetailScreen
+            activity={itemPrayerActivity(selectedPrayerMoment)}
+            authorImage={userImageById.get(selectedPrayerMoment.userId)}
+            authorName={userById.get(selectedPrayerMoment.userId) ?? t("common.someone")}
+            encouragementDraft={prayerMomentEncouragementDraft}
+            item={selectedPrayerMoment}
+            onBack={goBackFromRoomView}
+            onChangeEncouragement={setPrayerMomentEncouragementDraft}
+            onSendEncouragement={sendPrayerMomentEncouragement}
+            replies={itemReplies(selectedPrayerMoment)}
+            userById={userById}
+            userImageById={userImageById}
+          />
+        </CommunityTransitionFrame>
+        <PrayerMoment target={prayerTarget} onClose={closePrayerMoment} onFinish={finishPrayerMoment} />
+      </>
+    );
+  }
+
   if (roomView === "prayer" && group) {
     return (
       <>
@@ -1234,51 +1286,6 @@ export function SettingsScreen() {
         />
         {communityPrayerMemberModal}
         {communityPrayerPostSheet}
-      </>
-    );
-  }
-
-  if (roomView === "prayerDetail" && group) {
-    if (!selectedPrayer) {
-      return (
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
-          <AppScreen topInset={false}>
-            <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.page.prayer")} />
-            <Card>
-              <BodyText muted>{t("community.prayer.unavailable")}</BodyText>
-            </Card>
-          </AppScreen>
-        </CommunityTransitionFrame>
-      );
-    }
-
-    const prayer = itemPrayerState(selectedPrayer);
-    return (
-      <>
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
-          <CommunityPrayerDetailScreen
-            activity={itemPrayerActivity(selectedPrayer)}
-            authorImage={userImageById.get(selectedPrayer.userId)}
-            authorName={userById.get(selectedPrayer.userId) ?? t("common.someone")}
-            encouragementDraft={encouragementDraft}
-            item={selectedPrayer}
-            onBack={goBackFromRoomView}
-            onChangeEncouragement={setEncouragementDraft}
-            onMarkAnswered={() => dispatch({ type: "markPrayerAnswered", id: selectedPrayer.id })}
-            onPray={() => prayForItem(selectedPrayer)}
-            onSendEncouragement={(body, replyId) => sendEncouragement(selectedPrayer, body, replyId)}
-            ownsItem={selectedPrayer.userId === state.currentUserId}
-            prayer={prayer}
-            replies={itemReplies(selectedPrayer)}
-            userById={userById}
-            userImageById={userImageById}
-          />
-        </CommunityTransitionFrame>
-        <PrayerMoment
-          target={prayerTarget}
-          onClose={closePrayerMoment}
-          onFinish={finishPrayerMoment}
-        />
       </>
     );
   }
@@ -2475,7 +2482,7 @@ function CommunityPrayerScreen({
   );
 }
 
-function CommunityPrayerDetailScreen({
+function CommunityPrayerMomentDetailScreen({
   activity,
   authorImage,
   authorName,
@@ -2483,11 +2490,7 @@ function CommunityPrayerDetailScreen({
   item,
   onBack,
   onChangeEncouragement,
-  onMarkAnswered,
-  onPray,
   onSendEncouragement,
-  ownsItem,
-  prayer,
   replies,
   userById,
   userImageById,
@@ -2499,18 +2502,12 @@ function CommunityPrayerDetailScreen({
   item: Extract<FeedItem, { type: "post" }>;
   onBack: () => void;
   onChangeEncouragement: (value: string) => void;
-  onMarkAnswered: () => void;
-  onPray: () => void;
   onSendEncouragement: (body?: string, replyId?: string) => Promise<void>;
-  ownsItem: boolean;
-  prayer: { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
   replies: Reply[];
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
   const { language, t } = useAppTranslation();
-  const answered = Boolean(item.answeredAt);
-  const prayerMoment = isPrayerMomentKind(item.kind);
   const displayCopy = communityPrayerMomentDisplayCopy(item, t);
 
   return (
@@ -2538,49 +2535,16 @@ function CommunityPrayerDetailScreen({
           )}
         </LinkPreviewContent>
       </View>
-      {prayerMoment ? (
-        <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
-          <MaterialCommunityIcons name="hands-pray" size={20} color={colors.gold} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.made")}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-              {t("community.prayer.sharedTime", { time: formatRelativeTime(item.createdAt, language) })}
-            </Text>
-          </View>
-          <PrayerMomentPill />
-        </Card>
-      ) : (
-        <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
-          <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-            <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{communityPrayerNoun(prayer.count, t)}</Text>
-          </View>
-          <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
-          <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-            <StatusPill status={answered ? "answered" : "open"} />
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.prayer.status.label")}</Text>
-          </View>
-        </Card>
-      )}
-      {answered ? (
-        <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Feather name="check-circle" size={20} color={colors.olive} />
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
-          </View>
-          <BodyText muted>
-            {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
-          </BodyText>
-        </Card>
-      ) : null}
-      {!answered && !prayerMoment ? (
-        <PrayerActionButton onPress={onPray} prayed={prayer.prayed} />
-      ) : null}
-      {ownsItem && !answered && !prayerMoment ? (
-        <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
-          {t("community.prayer.markAnswered")}
-        </SecondaryButton>
-      ) : null}
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
+        <MaterialCommunityIcons name="hands-pray" size={20} color={colors.gold} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.made")}</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+            {t("community.prayer.sharedTime", { time: formatRelativeTime(item.createdAt, language) })}
+          </Text>
+        </View>
+        <PrayerMomentPill />
+      </Card>
       {replies.length > 0 ? (
         <View style={{ gap: 12 }}>
           <SectionHeading>{t("community.reply.heading")}</SectionHeading>
@@ -2598,8 +2562,12 @@ function CommunityPrayerDetailScreen({
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                   <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
                   <View>
-                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{userById.get(reply.userId) ?? t("common.someone")}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
+                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                      {userById.get(reply.userId) ?? t("common.someone")}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                      {formatRelativeTime(reply.createdAt, language)}
+                    </Text>
                   </View>
                 </View>
                 <LinkPreviewContent text={reply.body}>
@@ -2615,63 +2583,27 @@ function CommunityPrayerDetailScreen({
           </Card>
         </View>
       ) : null}
-      {prayerMoment ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-          <TextInputField
-            value={encouragementDraft}
-            onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
-            onSubmitEditing={() => onSendEncouragement()}
-            placeholder={t("community.reply.encouragementPlaceholder")}
-            returnKeyType="send"
-            style={{ flex: 1 }}
-          />
-          <Pressable
-            accessibilityLabel={t("community.reply.send")}
-            accessibilityRole="button"
-            disabled={!encouragementDraft.trim()}
-            onPress={() => onSendEncouragement()}
-            style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
-          >
-            <Feather name="send" size={22} color={colors.gold} />
-          </Pressable>
-        </View>
-      ) : (
-        <WrittenEncouragementComposer
-          onChangeText={onChangeEncouragement}
-          onSend={onSendEncouragement}
-          placeholder={t("community.reply.encouragementPlaceholder")}
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+        <TextInputField
           value={encouragementDraft}
+          onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
+          onSubmitEditing={() => onSendEncouragement()}
+          placeholder={t("community.reply.encouragementPlaceholder")}
+          returnKeyType="send"
+          style={{ flex: 1 }}
         />
-      )}
+        <Pressable
+          accessibilityLabel={t("community.reply.send")}
+          accessibilityRole="button"
+          disabled={!encouragementDraft.trim()}
+          onPress={() => onSendEncouragement()}
+          style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
+        >
+          <Feather name="send" size={22} color={colors.gold} />
+        </Pressable>
+      </View>
       <PrayerActivity activity={activity} />
     </AppScreen>
-  );
-}
-
-function PrayerActionButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
-  const { t } = useAppTranslation();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        alignItems: "center",
-        backgroundColor: prayed ? colors.prayerSoft : colors.gold,
-        borderColor: prayed ? colors.accentPrayer : colors.gold,
-        borderRadius: 999,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 10,
-        justifyContent: "center",
-        minHeight: 54,
-        paddingHorizontal: 18,
-      }}
-    >
-      <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>
-        {communityActionLabel("prayer_request", prayed, t)}
-      </Text>
-    </Pressable>
   );
 }
 
