@@ -781,12 +781,20 @@ export function bibleVerses(verse?: BibleVerse, verses?: BibleVerse[]) {
 
 export function VerseList({
   compact = false,
+  maxLines,
   onAddToJournal,
   onOpenInBible,
   onShareToRoom,
+  showFullText = false,
   verse,
   verses,
-}: VerseActionHandlers & { verse?: BibleVerse; verses?: BibleVerse[]; compact?: boolean }) {
+}: VerseActionHandlers & {
+  verse?: BibleVerse;
+  verses?: BibleVerse[];
+  compact?: boolean;
+  maxLines?: number;
+  showFullText?: boolean;
+}) {
   const visibleVerses = bibleVerses(verse, verses);
   if (visibleVerses.length === 0) return null;
   return (
@@ -795,9 +803,11 @@ export function VerseList({
         <VersePreviewCard
           key={`${item.reference}-${item.text}`}
           compact={compact}
+          maxLines={maxLines}
           onAddToJournal={onAddToJournal}
           onOpenInBible={onOpenInBible}
           onShareToRoom={onShareToRoom}
+          showFullText={showFullText}
           verse={item}
         />
       ))}

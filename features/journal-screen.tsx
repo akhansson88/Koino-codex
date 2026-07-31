@@ -1,30 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { EntryVisibility, heartMoods, journalEntryTypeFor, journalEntryTypeLabel, moodOptionForValue, visibility } from "@/state/product";
+import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
-import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, ProfileImage } from "@/state/types";
+import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import {
   AppScreen,
-  Avatar,
   BodyText,
   Card,
-  ExpandableBodyText,
   FullScreenModal,
   IconButton,
   PrimaryButton,
-  SecondaryButton,
-  SectionHeading,
-  VerseList,
 } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { useAppTranslation } from "@/ui/app-language";
-import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
-import { confirmAction } from "@/ui/confirm";
-import { LinkPreview } from "@/ui/link-preview";
+import { journalEntryPresentation } from "@/ui/journal-presentation";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { QuietActionCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
@@ -32,8 +25,8 @@ import { colors, typography } from "@/ui/theme";
 
 const JOURNAL_BODY_PREVIEW_LINES = 3;
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
+function formatDate(value: string, language: AppLanguage) {
+  return new Intl.DateTimeFormat(language, { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
 }
 
 function formatRecentEntryDate(value: string, language: AppLanguage) {
@@ -51,9 +44,9 @@ function recentEntrySummary(entry: JournalEntry | undefined, language: AppLangua
     prayer: "me.journey.lastPrayer",
     answered_prayer: "me.journey.lastAnsweredPrayer",
     heart_checkin: "me.journey.lastCheckIn",
-    scripture_note: "me.journey.lastScriptureNote",
+    scripture_note: "me.journey.lastReflection",
   };
-  const context = t(typeLabelKey[journalEntryTypeFor(entry)]);
+  const context = t(typeLabelKey[journalEntryPresentation(entry, t).journalType]);
   const date = formatRecentEntryDate(entry.createdAt, language);
 
   return date ? `${context} · ${date}` : context;
@@ -73,8 +66,6 @@ function journalTypeForKind(kind: EntryKind): JournalEntryType {
   return "reflection";
 }
 
-type DisplayEntry = JournalEntry & { displaySource: string };
-
 export function JournalScreen() {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
@@ -91,16 +82,14 @@ export function JournalScreen() {
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const user = state.users.find((item) => item.id === state.currentUserId);
-  const entries = useMemo<DisplayEntry[]>(() => {
+  const entries = useMemo<JournalEntry[]>(() => {
     return state.journalEntries
       .filter((entry) => entry.userId === state.currentUserId)
-      .map((entry) => ({ ...entry, displaySource: journalEntryTypeLabel(entry) }))
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   }, [state.currentUserId, state.journalEntries]);
   const mostRecentEntry = useMemo(
     () =>
-      entries.reduce<DisplayEntry | undefined>(
+      entries.reduce<JournalEntry | undefined>(
         (latest, entry) => (!latest || Date.parse(entry.createdAt) > Date.parse(latest.createdAt) ? entry : latest),
         undefined,
       ),
@@ -222,22 +211,15 @@ export function JournalScreen() {
 
       <JournalHistoryModal
         entries={entries}
-        onAddToJournal={(verse) => beginEntry("scripture_note", visibility.private, verse)}
         onClose={() => setHistoryVisible(false)}
-        onDelete={(entry) =>
-          confirmAction({
-            title: "Delete entry?",
-            message: "This journal entry will be removed.",
-            confirmText: "Delete",
-            destructive: true,
-            onConfirm: () => dispatch({ type: "deleteJournalEntry", id: entry.id }),
-          })
-        }
-        onEdit={editEntry}
-        onOpen={(entry) => router.push(`/me/${entry.id}` as never)}
-        onShareToRoom={(verse) => beginEntry("scripture_note", visibility.room, verse, "A Scripture for today.")}
-        userImage={user?.image}
-        userName={user?.name ?? "You"}
+        onOpen={(entry) => {
+          setHistoryVisible(false);
+          setTimeout(() => router.push(`/me/${entry.id}` as never), 220);
+        }}
+        onWriteEntry={() => {
+          setHistoryVisible(false);
+          beginEntry("reflection", visibility.private);
+        }}
         visible={historyVisible}
       />
     </AppScreen>
@@ -300,56 +282,51 @@ function JourneySummaryCard({ entry, onPress }: { entry?: JournalEntry; onPress:
 
 function JournalHistoryModal({
   entries,
-  onAddToJournal,
   onClose,
-  onDelete,
-  onEdit,
   onOpen,
-  onShareToRoom,
-  userImage,
-  userName,
+  onWriteEntry,
   visible,
 }: {
-  entries: DisplayEntry[];
-  onAddToJournal: (verse: BibleVerse) => void;
+  entries: JournalEntry[];
   onClose: () => void;
-  onDelete: (entry: DisplayEntry) => void;
-  onEdit: (entry: JournalEntry) => void;
-  onOpen: (entry: DisplayEntry) => void;
-  onShareToRoom: (verse: BibleVerse) => void;
-  userImage?: ProfileImage;
-  userName: string;
+  onOpen: (entry: JournalEntry) => void;
+  onWriteEntry: () => void;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
+  const historyScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    historyScrollRef.current?.scrollTo({ animated: false, y: 0 });
+  }, [visible]);
+
   return (
     <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <AppScreen>
+      <AppScreen scrollRef={historyScrollRef}>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={onClose} />
-          <Text style={[typography.label, { color: colors.olive }]}>Private journal</Text>
+          <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onClose} />
+          <Text style={[typography.label, { color: colors.olive }]}>{t("me.journey.privateJournal")}</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ gap: 6 }}>
-          <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Your journey</Text>
-          <BodyText muted>Spiritual memory</BodyText>
+          <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("me.journey.title")}</Text>
+          <BodyText muted>{t("me.journey.subtitle")}</BodyText>
         </View>
         {entries.length === 0 ? (
-          <Card>
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Your first reflection can be simple.</Text>
-            <BodyText muted>Write a few honest lines with God.</BodyText>
+          <Card style={{ gap: 12 }}>
+            <Text style={[typography.title, { color: colors.ink }]}>{t("me.journey.emptyState.title")}</Text>
+            <BodyText muted>{t("me.journey.emptyState.body")}</BodyText>
+            <PrimaryButton icon="edit-3" onPress={onWriteEntry}>
+              {t("me.journey.emptyState.action")}
+            </PrimaryButton>
           </Card>
         ) : null}
         {entries.map((entry) => (
           <JournalEntryCard
             key={`${entry.id}-${entry.createdAt}`}
             entry={entry}
-            userName={userName}
-            userImage={userImage}
             onOpen={() => onOpen(entry)}
-            onEdit={() => onEdit(entry)}
-            onAddToJournal={onAddToJournal}
-            onShareToRoom={onShareToRoom}
-            onDelete={() => onDelete(entry)}
           />
         ))}
       </AppScreen>
@@ -359,84 +336,63 @@ function JournalHistoryModal({
 
 function JournalEntryCard({
   entry,
-  onDelete,
-  onEdit,
-  onAddToJournal,
   onOpen,
-  onShareToRoom,
-  userImage,
-  userName,
 }: {
-  entry: DisplayEntry;
-  onDelete: () => void;
-  onEdit: () => void;
-  onAddToJournal: (verse: BibleVerse) => void;
+  entry: JournalEntry;
   onOpen: () => void;
-  onShareToRoom: (verse: BibleVerse) => void;
-  userImage?: ProfileImage;
-  userName: string;
 }) {
-  const { t } = useAppTranslation();
-  const type = journalEntryTypeFor(entry);
-  const typeLabel = type === "heart_checkin" ? t("community.contentType.checkIn") : journalEntryTypeLabel(entry);
-  const exactMood = entry.heartMood ? heartMoods.find((item) => item.value === entry.heartMood) : undefined;
-  const numericMood = typeof entry.mood === "number" ? moodOptionForValue(entry.mood) : undefined;
-  const mood = entry.heartMood
-    ? communityHeartMoodCopy(entry.heartMood, t).label
-    : typeof entry.mood === "number"
-      ? communityMoodScaleLabel(entry.mood, t)
-      : undefined;
-  const checkInIcon = exactMood?.icon ?? numericMood?.icon ?? "circle";
+  const { language, t } = useAppTranslation();
+  const presentation = journalEntryPresentation(entry, t);
+  const references = normalizeBibleVerses(entry.verse, entry.verses).map((verse) => verse.reference);
+  const date = formatDate(entry.createdAt, language);
 
   return (
-    <Card>
-      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
-        <Avatar image={userImage} name={userName} size={38} tone={type === "answered_prayer" ? "orange" : "green"} />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[typography.label, { color: colors.ink, fontSize: 14 }]}>{userName}</Text>
-          <Text style={[typography.caption, { color: colors.muted }]}>{formatDate(entry.createdAt)}</Text>
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 5 }}>
-          <Feather
-            name={
-              type === "heart_checkin"
-                ? checkInIcon
-                : type === "scripture_note"
-                  ? "book-open"
-                  : type === "answered_prayer"
-                    ? "check-circle"
-                    : type === "prayer"
-                      ? "heart"
-                      : "edit-3"
-            }
-            size={13}
-            color={colors.accentReflection}
-            accessible={false}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
-          <Text style={[typography.caption, { color: colors.textMuted }]}>{typeLabel}</Text>
-        </View>
-      </View>
-      <View style={{ gap: 8 }}>
-        <Pressable accessibilityRole="button" onPress={onOpen}>
-          <Text numberOfLines={type === "heart_checkin" && !entry.title ? undefined : 2} style={[typography.title, { color: colors.ink }]}>
-            {entry.title || (type === "heart_checkin" && mood ? mood : typeLabel)}
-          </Text>
-        </Pressable>
-        <ExpandableBodyText collapsedLines={JOURNAL_BODY_PREVIEW_LINES}>{entry.body}</ExpandableBodyText>
-        {mood ? <BodyText muted>{mood}</BodyText> : null}
-        <VerseList verse={entry.verse} verses={entry.verses} compact onAddToJournal={onAddToJournal} onShareToRoom={onShareToRoom} />
-      </View>
-      <LinkPreview text={entry.body} />
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        <SecondaryButton icon="edit-2" onPress={onEdit} style={{ flex: 1 }}>
-          Edit
-        </SecondaryButton>
-        <Pressable accessibilityRole="button" onPress={onDelete} style={{ padding: 8 }}>
-          <Feather name="trash-2" size={19} color={colors.danger} />
-        </Pressable>
-      </View>
-    </Card>
+    <Pressable
+      accessibilityHint={t("me.journey.preview.openHint")}
+      accessibilityLabel={t("me.journey.preview.openLabel", { date, type: presentation.typeLabel })}
+      accessibilityRole="button"
+      onPress={onOpen}
+    >
+      {({ pressed }) => (
+        <Card style={{ gap: 10, opacity: pressed ? 0.88 : 1, padding: 14 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", flex: 1, gap: 6 }}>
+              <Feather name={presentation.typeIcon} size={14} color={colors.accentReflection} />
+              <Text style={[typography.label, { color: colors.textMuted }]}>{presentation.typeLabel}</Text>
+            </View>
+            <Text style={[typography.caption, { color: colors.muted }]}>{date}</Text>
+          </View>
+          {presentation.moodLabel ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+              <Feather name={presentation.moodIcon} size={15} color={colors.olive} />
+              <Text style={[typography.label, { color: colors.olive }]}>{presentation.moodLabel}</Text>
+            </View>
+          ) : null}
+          {presentation.title ? (
+            <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
+              {presentation.title}
+            </Text>
+          ) : null}
+          {presentation.body ? (
+            <Text numberOfLines={JOURNAL_BODY_PREVIEW_LINES} style={[typography.body, { color: colors.muted }]}>
+              {presentation.body}
+            </Text>
+          ) : null}
+          {references.length > 0 ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+              <Feather name="book-open" size={14} color={colors.olive} />
+              <Text numberOfLines={2} style={[typography.caption, { color: colors.olive, flex: 1 }]}>
+                {references.join(" · ")}
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.muted} />
+            </View>
+          ) : (
+            <View style={{ alignItems: "flex-end" }}>
+              <Feather name="chevron-right" size={16} color={colors.muted} />
+            </View>
+          )}
+        </Card>
+      )}
+    </Pressable>
   );
 }
