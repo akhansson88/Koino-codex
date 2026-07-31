@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { bibleVersionFor, buildBibleVerse, kjvBooks, type BibleVersionId, versesForChapter } from "@/features/bible-kjv";
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
-import { AppScreen, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
+import { AppScreen, FullScreenModal, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 
@@ -144,7 +144,7 @@ export function BibleVersePicker({
   }
 
   return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onBack}>
+    <FullScreenModal animationType="slide" visible={visible} onRequestClose={onBack}>
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -181,7 +181,7 @@ export function BibleVersePicker({
           {t("shared.scripturePicker.addReference", { reference: preview?.reference ?? t("shared.scripturePicker.verseFallback") })}
         </PrimaryButton>
       </AppScreen>
-    </Modal>
+    </FullScreenModal>
   );
 }
 
