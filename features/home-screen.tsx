@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
@@ -39,6 +39,23 @@ function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
 }
 
+type HomeGreetingPeriod = "morning" | "afternoon" | "evening" | "fallback";
+
+const homeGreetingKeys = {
+  morning: { default: "home.greeting.morning.default", named: "home.greeting.morning.named" },
+  afternoon: { default: "home.greeting.afternoon.default", named: "home.greeting.afternoon.named" },
+  evening: { default: "home.greeting.evening.default", named: "home.greeting.evening.named" },
+  fallback: { default: "home.greeting.default", named: "home.greeting.named" },
+} as const;
+
+function homeGreetingPeriodAt(date: Date): HomeGreetingPeriod {
+  const hour = date.getHours();
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return "fallback";
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
+
 function localDayKey(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -59,6 +76,7 @@ export function HomeScreen() {
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
+  const [greetingPeriod, setGreetingPeriod] = useState<HomeGreetingPeriod>(() => homeGreetingPeriodAt(new Date()));
   const lastCheckInParamRef = useRef<string | undefined>(undefined);
   const directPrayerPersistencePendingRef = useRef(false);
 
@@ -110,7 +128,21 @@ export function HomeScreen() {
     () => openPrayerRequests.find((item) => item.id === homePrayerQueueIds[0]),
     [homePrayerQueueIds, openPrayerRequests],
   );
-  const greeting = firstName(user?.name);
+  const greetingName = firstName(user?.name);
+  const greetingKey = homeGreetingKeys[greetingPeriod][greetingName ? "named" : "default"];
+
+  const refreshGreetingPeriod = useCallback(() => {
+    setGreetingPeriod(homeGreetingPeriodAt(new Date()));
+  }, []);
+
+  useFocusEffect(refreshGreetingPeriod);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") refreshGreetingPeriod();
+    });
+    return () => subscription.remove();
+  }, [refreshGreetingPeriod]);
 
   function resetCheckIn() {
     setCheckInStep("choose");
@@ -221,7 +253,7 @@ export function HomeScreen() {
       >
         <View style={{ gap: 5 }}>
           <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
-            {t(greeting ? "home.greeting.named" : "home.greeting.default", greeting ? { name: greeting } : undefined)}
+            {t(greetingKey, greetingName ? { name: greetingName } : undefined)}
           </Text>
           <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
         </View>

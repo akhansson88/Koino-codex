@@ -179,6 +179,8 @@ export function PrayerMoment({
   const startedAtRef = useRef(new Date().toISOString());
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
+  const [cardContentHeight, setCardContentHeight] = useState(0);
+  const [cardViewportHeight, setCardViewportHeight] = useState(0);
   const [{ known: motionPreferenceKnown, reduced: reduceMotion }, setMotionPreference] = useState(initialMotionPreference);
 
   const recipient = useMemo(
@@ -207,6 +209,7 @@ export function PrayerMoment({
   const cardLeft = (width - cardWidth) / 2;
   const buttonWidth = Math.min(width - 112, 360);
   const buttonLeft = (width - buttonWidth) / 2;
+  const prayerContentOverflows = cardContentHeight > cardViewportHeight + 1;
 
   useEffect(() => {
     let active = true;
@@ -231,6 +234,8 @@ export function PrayerMoment({
       contentTranslateY.setValue(12);
       amenOpacity.setValue(0);
       wavesTranslateY.setValue(0);
+      setCardContentHeight(0);
+      setCardViewportHeight(0);
       closingRef.current = false;
       setClosing(false);
       return undefined;
@@ -415,16 +420,20 @@ export function PrayerMoment({
         </View>
 
         <ScrollView
-          bounces={false}
+          bounces={prayerContentOverflows}
           contentContainerStyle={{
             alignItems: "center",
             flexGrow: 1,
-            justifyContent: "center",
+            justifyContent: prayerContentOverflows ? "flex-start" : "center",
+            paddingBottom: prayerContentOverflows ? (compactHeight ? 26 : 34) : compactHeight ? 14 : 24,
             paddingHorizontal: compactHeight ? 18 : 28,
-            paddingVertical: compactHeight ? 14 : 24,
+            paddingTop: compactHeight ? 14 : 24,
           }}
-          fadingEdgeLength={12}
+          fadingEdgeLength={prayerContentOverflows ? 12 : 0}
           nestedScrollEnabled
+          onContentSizeChange={(_contentWidth, contentHeight) => setCardContentHeight(contentHeight)}
+          onLayout={(event) => setCardViewportHeight(event.nativeEvent.layout.height)}
+          scrollEnabled={prayerContentOverflows}
           showsVerticalScrollIndicator={false}
           style={{
             alignSelf: "center",
