@@ -12,6 +12,7 @@ import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount } from "@/ui/community-copy";
+import { FullScreenModalHost } from "@/ui/full-screen-modal-host";
 import { useOpenExternalLink } from "@/ui/in-app-browser";
 import { hasVisibleLinkText, visibleLinkParts } from "@/ui/link-utils";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
@@ -70,8 +71,6 @@ export function AppScreen({
   );
 }
 
-const webFixedPosition = "fixed" as unknown as ViewStyle["position"];
-
 export function FullScreenModal({
   animationType = "slide",
   children,
@@ -79,30 +78,15 @@ export function FullScreenModal({
   presentationStyle,
   visible,
 }: PropsWithChildren<Pick<ModalProps, "animationType" | "onRequestClose" | "presentationStyle" | "visible">>) {
-  if (Platform.OS === "web") {
-    if (!visible) return null;
-
-    return (
-      <View
-        style={{
-          backgroundColor: colors.cream,
-          bottom: 0,
-          left: 0,
-          position: webFixedPosition,
-          right: 0,
-          top: 0,
-          zIndex: 9999,
-        }}
-      >
-        {children}
-      </View>
-    );
-  }
-
   return (
-    <Modal animationType={animationType} presentationStyle={presentationStyle} visible={visible} onRequestClose={onRequestClose}>
+    <FullScreenModalHost
+      animationType={animationType}
+      presentationStyle={presentationStyle}
+      visible={visible}
+      onRequestClose={onRequestClose}
+    >
       {children}
-    </Modal>
+    </FullScreenModalHost>
   );
 }
 
@@ -302,15 +286,25 @@ export function HeartPromptCard({
 }
 
 export function PrimaryButton({
+  accessibilityHint,
+  accessibilityLabel,
   children,
   disabled = false,
   icon,
   onPress,
   style,
-}: PropsWithChildren<{ disabled?: boolean; icon?: FeatherName; onPress: () => void; style?: StyleProp<ViewStyle> }>) {
+}: PropsWithChildren<{
+  accessibilityHint?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
+  icon?: FeatherName;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}>) {
   return (
     <Pressable
-      accessibilityLabel={typeof children === "string" ? children : undefined}
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel ?? (typeof children === "string" ? children : undefined)}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -344,6 +338,8 @@ export function PrimaryButton({
 }
 
 export function SecondaryButton({
+  accessibilityHint,
+  accessibilityLabel,
   children,
   disabled = false,
   icon,
@@ -351,6 +347,8 @@ export function SecondaryButton({
   style,
   tone = "default",
 }: PropsWithChildren<{
+  accessibilityHint?: string;
+  accessibilityLabel?: string;
   disabled?: boolean;
   icon?: FeatherName;
   onPress: () => void;
@@ -360,7 +358,8 @@ export function SecondaryButton({
   const color = tone === "danger" ? colors.danger : colors.olive;
   return (
     <Pressable
-      accessibilityLabel={typeof children === "string" ? children : undefined}
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel ?? (typeof children === "string" ? children : undefined)}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -646,6 +645,8 @@ function verseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
 
 export function VersePreviewCard({
   compact = false,
+  interactive = true,
+  maxLines,
   onAddToJournal,
   onOpenInBible,
   onShareToRoom,
@@ -654,6 +655,8 @@ export function VersePreviewCard({
   verse,
 }: VerseActionHandlers & {
   compact?: boolean;
+  interactive?: boolean;
+  maxLines?: number;
   showFullText?: boolean;
   showOpenIndicator?: boolean;
   verse?: BibleVerse;
@@ -664,6 +667,7 @@ export function VersePreviewCard({
   const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
+  const previewLines = maxLines ?? (compact ? 3 : 5);
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
   const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
   const previewCardStyle: ViewStyle = {
@@ -701,7 +705,7 @@ export function VersePreviewCard({
             >
               {header}
             </Pressable>
-            <ExpandableBodyText collapsedLines={compact ? 3 : 5} style={verseTextStyle}>
+            <ExpandableBodyText collapsedLines={previewLines} style={verseTextStyle}>
               {displayVerse.text}
             </ExpandableBodyText>
             {showOpenIndicator ? (
@@ -719,7 +723,7 @@ export function VersePreviewCard({
             ) : null}
           </View>
         </View>
-      ) : (
+      ) : interactive ? (
         <Pressable
           accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
           accessibilityRole="button"
@@ -732,22 +736,36 @@ export function VersePreviewCard({
           <Ionicons name="sunny-outline" size={20} color={colors.olive} />
           <View style={{ flex: 1, gap: 4 }}>
             {header}
-            <Text numberOfLines={compact ? 3 : 5} style={verseTextStyle}>
+            <Text numberOfLines={previewLines} style={verseTextStyle}>
               {displayVerse.text}
             </Text>
             {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t("shared.scripture.open")}</Text> : null}
           </View>
         </Pressable>
+      ) : (
+        <View style={previewCardStyle}>
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <Ionicons name="sunny-outline" size={20} color={colors.olive} />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            {header}
+            <Text numberOfLines={previewLines} style={verseTextStyle}>
+              {displayVerse.text}
+            </Text>
+          </View>
+        </View>
       )}
-      <VerseDetailSheet
-        onAddToJournal={onAddToJournal}
-        onClose={() => setDetailVisible(false)}
-        onOpenInBible={onOpenInBible}
-        onShareToRoom={onShareToRoom}
-        saved={saved}
-        verse={displayVerse}
-        visible={detailVisible}
-      />
+      {interactive ? (
+        <VerseDetailSheet
+          onAddToJournal={onAddToJournal}
+          onClose={() => setDetailVisible(false)}
+          onOpenInBible={onOpenInBible}
+          onShareToRoom={onShareToRoom}
+          saved={saved}
+          verse={displayVerse}
+          visible={detailVisible}
+        />
+      ) : null}
     </>
   );
 }

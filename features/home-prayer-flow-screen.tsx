@@ -26,7 +26,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
 type PrayerRequestItem = Extract<FeedItem, { type: "post" }>;
@@ -62,8 +62,19 @@ function HomePrayerFlowRouteState({
   return (
     <AppScreen>
       <HomePrayerFlowHeader onBack={onDone} />
-      <Card style={{ alignItems: loading ? "center" : undefined }}>
-        {loading ? <ActivityIndicator color={colors.olive} /> : <BodyText muted>{message}</BodyText>}
+      <Card style={{ alignItems: "center", justifyContent: "center", minHeight: 92 }}>
+        <View
+          accessibilityLabel={message}
+          accessibilityLiveRegion="polite"
+          accessibilityRole={loading ? "progressbar" : undefined}
+          accessibilityState={loading ? { busy: true } : undefined}
+          style={{ alignItems: "center", gap: 10 }}
+        >
+          {loading ? <ActivityIndicator color={colors.olive} /> : null}
+          <BodyText muted style={{ textAlign: "center" }}>
+            {message}
+          </BodyText>
+        </View>
       </Card>
       {!loading ? <SecondaryButton onPress={onDone}>{t("common.done")}</SecondaryButton> : null}
     </AppScreen>
@@ -94,7 +105,9 @@ function PrayerRequestStep({
     <AppScreen>
       <HomePrayerFlowHeader onBack={onBack} />
       <View style={{ alignItems: "center", gap: 8 }}>
-        <Avatar image={authorImage} name={authorName} size={64} tone="green" />
+        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+          <Avatar image={authorImage} name={authorName} size={64} tone="green" />
+        </View>
         <View style={{ alignItems: "center", gap: 4 }}>
           <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
@@ -105,14 +118,14 @@ function PrayerRequestStep({
       </View>
       <View style={{ gap: 12 }}>
         {item.title?.trim() ? (
-          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
+          <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink }]}>
             {item.title}
           </Text>
         ) : null}
         <LinkPreviewContent text={item.body}>
           {({ hiddenUrl, preview }) => (
             <>
-              <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 17, lineHeight: 26, textAlign: "center" }}>
+              <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 17, lineHeight: 26 }}>
                 {item.body}
               </BodyText>
               {preview}
@@ -123,13 +136,25 @@ function PrayerRequestStep({
       <VerseList verse={item.verse} verses={item.verses} />
       {persistenceError ? (
         <Card style={{ backgroundColor: colors.warmSoft }}>
-          <BodyText muted>{t("home.prayerFlow.prayerSaveError")}</BodyText>
+          <BodyText accessibilityLiveRegion="assertive" accessibilityRole="alert" muted>
+            {t("home.prayerFlow.prayerSaveError")}
+          </BodyText>
         </Card>
       ) : null}
-      <PrimaryButton disabled={persisting} icon="heart" onPress={onPray}>
+      <PrimaryButton
+        accessibilityHint={t("home.prayerFlow.prayHint", { name: authorName })}
+        disabled={persisting}
+        icon="heart"
+        onPress={onPray}
+      >
         {t(persisting ? "home.prayerFlow.savingPrayer" : "community.action.prayer.default")}
       </PrimaryButton>
-      <SecondaryButton disabled={persisting} icon="external-link" onPress={onOpenDetail}>
+      <SecondaryButton
+        accessibilityHint={t("home.prayerFlow.openDetailHint")}
+        disabled={persisting}
+        icon="external-link"
+        onPress={onOpenDetail}
+      >
         {t("home.prayerFlow.openDetail")}
       </SecondaryButton>
     </AppScreen>
@@ -158,8 +183,14 @@ function PrayerCompletionStep({
     <AppScreen>
       <HomePrayerFlowHeader onBack={onBack} />
       <View style={{ alignItems: "center", gap: 14, paddingVertical: 18 }}>
-        <Avatar image={authorImage} name={authorName} size={68} tone="green" />
-        <Text style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 33, textAlign: "center" }}>
+        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+          <Avatar image={authorImage} name={authorName} size={68} tone="green" />
+        </View>
+        <Text
+          accessibilityLiveRegion="polite"
+          accessibilityRole="header"
+          style={{ color: colors.ink, fontSize: 25, fontWeight: "900", lineHeight: 33, textAlign: "center" }}
+        >
           {t("home.prayerFlow.completed", { name: authorName })}
         </Text>
       </View>
@@ -168,15 +199,20 @@ function PrayerCompletionStep({
           <BodyText>{t("home.prayerFlow.messageSent")}</BodyText>
         </Card>
       ) : (
-        <PrimaryButton icon="message-circle" onPress={onAddMessage}>
-          {t("home.prayerFlow.addMessage")}
-        </PrimaryButton>
+        <View style={{ gap: 8 }}>
+          <BodyText muted style={{ textAlign: "center" }}>
+            {t("home.prayerFlow.addMessageOptional")}
+          </BodyText>
+          <PrimaryButton accessibilityHint={t("home.prayerFlow.addMessageHint")} icon="message-circle" onPress={onAddMessage}>
+            {t("home.prayerFlow.addMessage")}
+          </PrimaryButton>
+        </View>
       )}
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <SecondaryButton onPress={onNext} style={{ flex: 1 }}>
+      <View style={{ gap: 10 }}>
+        <SecondaryButton onPress={onNext}>
           {t("home.prayerFlow.next")}
         </SecondaryButton>
-        <SecondaryButton onPress={onDone} style={{ flex: 1 }}>
+        <SecondaryButton onPress={onDone}>
           {t("common.done")}
         </SecondaryButton>
       </View>
@@ -331,7 +367,7 @@ export function HomePrayerFlowScreen() {
   }
 
   if (feedLoading) {
-    return <HomePrayerFlowRouteState loading message="" onDone={returnHome} />;
+    return <HomePrayerFlowRouteState loading message={t("home.prayerFlow.loading")} onDone={returnHome} />;
   }
 
   if (!hasRouteAccess || state.communityFeedError) {
@@ -339,7 +375,7 @@ export function HomePrayerFlowScreen() {
   }
 
   if (!activeQueueSession) {
-    return <HomePrayerFlowRouteState loading message="" onDone={returnHome} />;
+    return <HomePrayerFlowRouteState loading message={t("home.prayerFlow.loading")} onDone={returnHome} />;
   }
 
   if (activeQueueSession.requestIds.length === 0) {

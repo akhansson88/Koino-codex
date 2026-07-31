@@ -8,13 +8,19 @@ import { colors, radius, typography } from "@/ui/theme";
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
 export function QuietActionCard({
+  accessibilityHint,
+  accessibilityLabel,
   children,
+  disabled = false,
   icon,
   onPress,
   subtitle,
   title,
   tone = "default",
 }: PropsWithChildren<{
+  accessibilityHint?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
   icon?: FeatherName;
   onPress?: () => void;
   subtitle: string;
@@ -32,6 +38,9 @@ export function QuietActionCard({
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
         {icon ? (
           <View
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
             style={{
               alignItems: "center",
               backgroundColor: colors.accentSubtle,
@@ -50,7 +59,16 @@ export function QuietActionCard({
             {subtitle}
           </BodyText>
         </View>
-        {onPress ? <Feather name="chevron-right" size={19} color={colors.muted} /> : null}
+        {onPress ? (
+          <View
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            style={{ width: 19 }}
+          >
+            {!disabled ? <Feather name="chevron-right" size={19} color={colors.muted} /> : null}
+          </View>
+        ) : null}
       </View>
       {children}
     </Card>
@@ -59,7 +77,15 @@ export function QuietActionCard({
   if (!onPress) return content;
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
+    <Pressable
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+    >
       {content}
     </Pressable>
   );

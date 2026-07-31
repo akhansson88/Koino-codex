@@ -30,20 +30,32 @@ export function DirectPrayerResultSheet({
       visible={Boolean(result)}
     >
       {saving ? (
-        <View style={{ alignItems: "center", gap: 12, paddingVertical: 18 }}>
+        <View
+          accessibilityLabel={t("community.prayer.directSaving")}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="progressbar"
+          accessibilityState={{ busy: true }}
+          style={{ alignItems: "center", gap: 12, paddingVertical: 18 }}
+        >
           <ActivityIndicator color={colors.olive} />
           <BodyText muted>{t("community.prayer.directSaving")}</BodyText>
         </View>
       ) : result ? (
         <>
           <View style={{ alignItems: "center", gap: 14, paddingVertical: 12 }}>
-            <Avatar image={result.recipientImage} name={result.recipientName} size={64} tone="green" />
+            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+              <Avatar image={result.recipientImage} name={result.recipientName} size={64} tone="green" />
+            </View>
             {result.status === "completed" ? (
-              <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 32, textAlign: "center" }}>
+              <Text
+                accessibilityLiveRegion="polite"
+                accessibilityRole="header"
+                style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 32, textAlign: "center" }}
+              >
                 {t("community.prayer.directCompleted", { name: result.recipientName })}
               </Text>
             ) : (
-              <BodyText muted style={{ textAlign: "center" }}>
+              <BodyText accessibilityLiveRegion="assertive" accessibilityRole="alert" muted style={{ textAlign: "center" }}>
                 {t("community.prayer.directSaveError")}
               </BodyText>
             )}
