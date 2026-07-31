@@ -25,6 +25,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
 import { LinkPreview } from "@/ui/link-preview";
+import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { QuietActionCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
@@ -33,6 +34,29 @@ const JOURNAL_BODY_PREVIEW_LINES = 3;
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function formatRecentEntryDate(value: string, language: AppLanguage) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+
+  return new Intl.DateTimeFormat(language, { month: "short", day: "numeric" }).format(date);
+}
+
+function recentEntrySummary(entry: JournalEntry | undefined, language: AppLanguage, t: TranslationFunction) {
+  if (!entry) return t("me.journey.empty");
+
+  const typeLabelKey: Record<JournalEntryType, TranslationKey> = {
+    reflection: "me.journey.lastReflection",
+    prayer: "me.journey.lastPrayer",
+    answered_prayer: "me.journey.lastAnsweredPrayer",
+    heart_checkin: "me.journey.lastCheckIn",
+    scripture_note: "me.journey.lastScriptureNote",
+  };
+  const context = t(typeLabelKey[journalEntryTypeFor(entry)]);
+  const date = formatRecentEntryDate(entry.createdAt, language);
+
+  return date ? `${context} · ${date}` : context;
 }
 
 function composerKindForJournalType(type: JournalEntryType): EntryKind {
@@ -53,6 +77,7 @@ type DisplayEntry = JournalEntry & { displaySource: string };
 
 export function JournalScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();
   const [composerVisible, setComposerVisible] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
@@ -73,6 +98,14 @@ export function JournalScreen() {
       .map((entry) => ({ ...entry, displaySource: journalEntryTypeLabel(entry) }))
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   }, [state.currentUserId, state.journalEntries]);
+  const mostRecentEntry = useMemo(
+    () =>
+      entries.reduce<DisplayEntry | undefined>(
+        (latest, entry) => (!latest || Date.parse(entry.createdAt) > Date.parse(latest.createdAt) ? entry : latest),
+        undefined,
+      ),
+    [entries],
+  );
 
   function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
     const kind = composerKindForJournalType(type);
@@ -141,20 +174,20 @@ export function JournalScreen() {
   return (
     <AppScreen topInset={false}>
       <View style={{ gap: 6 }}>
-        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Journal</Text>
-        <BodyText muted>A space for reflection, growth and spiritual memory.</BodyText>
+        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("tabs.me")}</Text>
+        <BodyText muted>{t("me.description")}</BodyText>
       </View>
 
       <ReflectTodayCard onPress={() => beginEntry("reflection", visibility.private)} />
 
-      <BiblePlansCard count={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length} />
+      <JourneySummaryCard entry={mostRecentEntry} onPress={() => setHistoryVisible(true)} />
 
-      <JourneySummaryCard count={entries.length} onPress={() => setHistoryVisible(true)} />
+      <BiblePlansCard count={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length} />
 
       {entries.length === 0 ? (
         <Card>
-          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Your first reflection can be simple.</Text>
-          <BodyText muted>Write a few honest lines with God.</BodyText>
+          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("me.empty.title")}</Text>
+          <BodyText muted>{t("me.empty.body")}</BodyText>
         </Card>
       ) : null}
 
@@ -212,13 +245,15 @@ export function JournalScreen() {
 }
 
 function BiblePlansCard({ count }: { count: number }) {
+  const { t } = useAppTranslation();
+
   return (
-    <QuietActionCard icon="calendar" onPress={() => router.push("/bible-plans" as never)} subtitle="Custom reading rhythms" title="Bible plans">
+    <QuietActionCard icon="calendar" onPress={() => router.push("/bible-plans" as never)} subtitle={t("me.biblePlans.subtitle")} title={t("me.biblePlans.title")}>
       <View style={{ backgroundColor: colors.line, height: 1 }} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
         <Feather name="book-open" size={15} color={colors.muted} />
         <Text style={[typography.caption, { color: colors.muted }]}>
-          {count} {count === 1 ? "plan" : "plans"}
+          {count === 0 ? t("me.biblePlans.empty") : count === 1 ? t("me.biblePlans.single") : t("me.biblePlans.count", { count })}
         </Text>
       </View>
     </QuietActionCard>
@@ -226,6 +261,8 @@ function BiblePlansCard({ count }: { count: number }) {
 }
 
 function ReflectTodayCard({ onPress }: { onPress: () => void }) {
+  const { t } = useAppTranslation();
+
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
       <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, minHeight: 150, overflow: "hidden", padding: 16 }}>
@@ -237,8 +274,8 @@ function ReflectTodayCard({ onPress }: { onPress: () => void }) {
         />
         <View style={{ alignItems: "center", flexDirection: "row", gap: 12, zIndex: 1 }}>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={[typography.cardTitle, { color: colors.ink }]}>Reflect on today</Text>
-            <BodyText muted>Go deeper in your journal</BodyText>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("me.reflect.title")}</Text>
+            <BodyText muted>{t("me.reflect.subtitle")}</BodyText>
           </View>
           <Feather name="chevron-right" size={19} color={colors.muted} />
         </View>
@@ -247,15 +284,15 @@ function ReflectTodayCard({ onPress }: { onPress: () => void }) {
   );
 }
 
-function JourneySummaryCard({ count, onPress }: { count: number; onPress: () => void }) {
-  const label = `${count} ${count === 1 ? "entry" : "entries"}`;
+function JourneySummaryCard({ entry, onPress }: { entry?: JournalEntry; onPress: () => void }) {
+  const { language, t } = useAppTranslation();
 
   return (
-    <QuietActionCard icon="book-open" onPress={onPress} subtitle="Spiritual memory" title="Your journey">
+    <QuietActionCard icon="book-open" onPress={onPress} subtitle={t("me.journey.subtitle")} title={t("me.journey.title")} tone="accent">
       <View style={{ backgroundColor: colors.line, height: 1 }} />
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
         <Feather name="book-open" size={15} color={colors.muted} />
-        <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{recentEntrySummary(entry, language, t)}</Text>
       </View>
     </QuietActionCard>
   );
