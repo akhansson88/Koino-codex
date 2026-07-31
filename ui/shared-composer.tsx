@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
@@ -13,6 +13,13 @@ const MAX_BODY_LENGTH = 500;
 
 function primaryActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
   if (editing) return "community.composer.action.updateEntry" as const;
+  if (context === "journal") {
+    if (kind === "prayer_request") return "community.composer.action.savePrayer" as const;
+    if (kind === "praise") return "community.composer.journal.action.savePraise" as const;
+    if (kind === "update") return "community.composer.journal.action.saveCheckIn" as const;
+    if (kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
+    return "community.composer.action.saveReflection" as const;
+  }
   if (context === "room" || entryVisibility === visibility.room) {
     if (kind === "prayer_request") return "community.composer.action.sharePrayer" as const;
     if (kind === "reflection") return "community.composer.action.shareReflection" as const;
@@ -20,10 +27,6 @@ function primaryActionKey(context: "journal" | "today" | "room", entryVisibility
     if (kind === "scripture") return "community.composer.action.shareScripture" as const;
     return "community.composer.action.share" as const;
   }
-  if (context === "journal" && kind === "prayer_request") return "community.composer.action.savePrayer" as const;
-  if (context === "journal" && kind === "praise") return "community.composer.action.saveAnsweredPrayer" as const;
-  if (context === "journal" && kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
-  if (context === "journal") return "community.composer.action.saveReflection" as const;
   return "community.composer.action.saveEntry" as const;
 }
 
@@ -46,6 +49,16 @@ const composerTypeKeys = {
   update: "community.composer.type.update",
   scripture: "community.composer.type.scripture",
 } as const;
+
+const journalPostTypes = postTypes.filter((type) => type.value !== "scripture");
+const journalScripturePostTypes = postTypes.filter((type) => type.value !== "update");
+
+function composerTypeKey(context: "journal" | "today" | "room", kind: EntryKind) {
+  if (context === "journal" && kind === "update") return "community.contentType.checkIn" as const;
+  if (context === "journal" && kind === "praise") return "community.composer.journal.type.praise" as const;
+  if (kind === "prayer_moment") return "community.composer.type.prayer" as const;
+  return composerTypeKeys[kind];
+}
 
 function CommunityTypeSelector({
   onChange,
@@ -151,6 +164,7 @@ export function SharedComposer({
   visible: boolean;
 }) {
   const { t } = useAppTranslation();
+  const { width: viewportWidth } = useWindowDimensions();
   const [submissionAttempted, setSubmissionAttempted] = useState(false);
   const isCommunityShare = context === "room";
   const showVisibility = context !== "room";
@@ -161,7 +175,13 @@ export function SharedComposer({
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
-  const typeOptions = context === "journal" ? postTypes : composerPostTypes;
+  const journalUsesGrid = context === "journal" && viewportWidth < 360;
+  const typeOptions =
+    context === "journal"
+      ? kind === "scripture"
+        ? journalScripturePostTypes
+        : journalPostTypes
+      : composerPostTypes;
 
   useEffect(() => {
     setSubmissionAttempted(false);
@@ -194,7 +214,7 @@ export function SharedComposer({
           }}
         >
           <IconButton accessibilityLabel={t("community.composer.close")} icon="arrow-left" onPress={onClose} />
-          {!isCommunityShare ? (
+          {!isCommunityShare && context !== "journal" ? (
             <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
           ) : null}
         </View>
@@ -205,14 +225,28 @@ export function SharedComposer({
             <CommunityTypeSelector
               value={kind}
               onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
+            />
+          ) : context === "journal" && journalUsesGrid ? (
+            <CommunityTypeSelector
+              value={kind}
+              onChange={changeKind}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
+            />
+          ) : context === "journal" ? (
+            <FilterChips
+              fit
+              minHeight={40}
+              value={kind}
+              onChange={changeKind}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
             />
           ) : (
             <FilterChips
               showSelectionIndicator
               value={kind}
               onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
             />
           )}
         </View>
@@ -271,40 +305,69 @@ export function SharedComposer({
         </View>
 
         <View style={{ gap: 8 }}>
-          {!isCommunityShare ? <SectionHeading>{t("community.composer.shareWith")}</SectionHeading> : null}
+          {!isCommunityShare ? (
+            <SectionHeading>
+              {t(context === "journal" ? "community.composer.journal.privacy" : "community.composer.shareWith")}
+            </SectionHeading>
+          ) : null}
           {showVisibility ? (
             <FilterChips
+              fit={context === "journal"}
+              minHeight={context === "journal" ? 40 : undefined}
               value={entryVisibility}
               onChange={onVisibility}
               options={[
-                { label: t("community.composer.visibility.private"), value: visibility.private },
-                { label: t("community.composer.visibility.community"), value: visibility.room },
+                {
+                  label: t(
+                    context === "journal"
+                      ? "community.composer.journal.visibility.private"
+                      : "community.composer.visibility.private"
+                  ),
+                  value: visibility.private,
+                },
+                {
+                  label: t(
+                    context === "journal"
+                      ? "community.composer.journal.visibility.community"
+                      : "community.composer.visibility.community"
+                  ),
+                  value: visibility.room,
+                },
               ]}
             />
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            disabled={!showVisibility}
-            onPress={() => onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private)}
-          >
-            <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-              <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")} size={34} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                  {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
-                </Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {entryVisibility === visibility.room
-                    ? t(isCommunityShare ? "community.composer.privateCommunity" : "community.composer.sharedWithCommunity")
-                    : t("community.composer.privateOnly")}
-                </Text>
-              </View>
-              {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}
-            </Card>
-          </Pressable>
+          {context === "journal" && entryVisibility === visibility.private ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
+              <Feather name="lock" size={14} color={colors.muted} />
+              <Text style={[typography.caption, { color: colors.muted }]}>
+                {t("community.composer.journal.privateOnly")}
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              disabled={!showVisibility}
+              onPress={() => onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private)}
+            >
+              <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+                <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")} size={34} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                    {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
+                  </Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                    {entryVisibility === visibility.room
+                      ? t(isCommunityShare ? "community.composer.privateCommunity" : "community.composer.sharedWithCommunity")
+                      : t("community.composer.privateOnly")}
+                  </Text>
+                </View>
+                {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}
+              </Card>
+            </Pressable>
+          )}
         </View>
 
-        <PrimaryButton disabled={!canSubmit} icon="send" onPress={submit}>
+        <PrimaryButton disabled={!canSubmit} icon={context === "journal" ? "check" : "send"} onPress={submit}>
           {actionLabel}
         </PrimaryButton>
       </AppScreen>
