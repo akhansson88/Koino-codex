@@ -564,10 +564,23 @@ function bibleVersionShortLabel(versionId: BibleVersionId) {
   return "KJV";
 }
 
-function bibleVersionDescription(versionId: BibleVersionId) {
-  if (versionId === "reformationsbibeln2026") return "Modern Swedish translation";
-  if (versionId === "sv1917") return "Classic Swedish";
-  return "English";
+function bibleVersionDescription(versionId: BibleVersionId, t: TranslationFunction) {
+  if (versionId === "reformationsbibeln2026") return t("bible.version.description.reformationsbibeln2026");
+  if (versionId === "sv1917") return t("bible.version.description.sv1917");
+  return t("bible.version.description.kjv");
+}
+
+function readerFontLabel(fontId: BibleReaderFontId, t: TranslationFunction) {
+  if (fontId === "classic") return t("bible.settings.font.classic");
+  if (fontId === "humanist") return t("bible.settings.font.humanist");
+  if (fontId === "system") return t("bible.settings.font.system");
+  return t("bible.settings.font.serif");
+}
+
+function readerThemeLabel(themeId: BibleReaderThemeId, t: TranslationFunction) {
+  if (themeId === "dark") return t("bible.settings.theme.dark");
+  if (themeId === "sepia") return t("bible.settings.theme.sepia");
+  return t("bible.settings.theme.light");
 }
 
 const productionBibleTopicApiOrigin = "https://spontaneous-jalebi-46756a.netlify.app";
@@ -720,6 +733,7 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 
 export function BibleScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -1676,13 +1690,15 @@ export function BibleScreen() {
     }
     setSelectedVersePosition(undefined);
     if (action === "save") {
-      const savedAlready = state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse));
-      if (savedAlready) {
-        setReaderToast({ message: "Verse already saved", tone: "error" });
+      const savedVerse = state.savedVerses.find((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse));
+      if (savedVerse) {
+        void dispatch({ type: "removeSavedVerse", id: savedVerse.id }).then(() => {
+          setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
+        });
         return;
       }
       void dispatch({ type: "saveVerse", verse: selectedVerse }).then(() => {
-        setReaderToast({ message: "Saved to your verses", tone: "success" });
+        setReaderToast({ message: t("bible.actions.savedToast"), tone: "success" });
       });
       return;
     }
@@ -1701,7 +1717,7 @@ export function BibleScreen() {
     }
 
     setPendingVerseComposerAction({ action, verse: selectedVerse });
-  }, [bibleVersion.translation, dispatch, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, verseForPosition]);
+  }, [bibleVersion.translation, dispatch, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
 
   const handleVerseActionSheetClosed = useCallback(() => {
     if (!pendingVerseComposerAction) return;
@@ -1940,6 +1956,11 @@ export function BibleScreen() {
     setFontSize((current) => normalizeFontSize(current + delta));
   }
 
+  const selectedVerseIsSaved = useMemo(() => {
+    const selectedVerse = verseForPosition(selectedVersePosition);
+    return Boolean(selectedVerse && state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse)));
+  }, [selectedVersePosition, state.savedVerses, verseForPosition]);
+
   const readerTextStyle: TextStyle = {
     color: readerPalette.text,
     fontFamily: readerFontFamily,
@@ -2113,6 +2134,7 @@ export function BibleScreen() {
         palette={readerPalette}
         position={selectedVersePosition}
         readerTextStyle={readerTextStyle}
+        saved={selectedVerseIsSaved}
         visible={Boolean(selectedVersePosition)}
       />
       <ReadingSettingsSheet
@@ -3786,6 +3808,7 @@ function VerseActionSheet({
   palette,
   position,
   readerTextStyle,
+  saved,
   visible,
 }: {
   onAction: (action: VerseQuickAction) => void;
@@ -3796,6 +3819,7 @@ function VerseActionSheet({
   palette: ReaderPalette;
   position?: BiblePosition;
   readerTextStyle: TextStyle;
+  saved: boolean;
   visible: boolean;
 }) {
   const { t } = useAppTranslation();
@@ -3893,7 +3917,13 @@ function VerseActionSheet({
           {view === "actions" ? (
             <ScrollView showsVerticalScrollIndicator={false}>
               <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
-              <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle={t("bible.actions.saveSubtitle")} title={t("bible.actions.save")} />
+              <VerseSheetAction
+                icon="bookmark"
+                onPress={() => onAction("save")}
+                palette={palette}
+                subtitle={saved ? t("bible.actions.unsaveSubtitle") : t("bible.actions.saveSubtitle")}
+                title={saved ? t("bible.actions.unsave") : t("bible.actions.save")}
+              />
               <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
               <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
               <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
@@ -4041,11 +4071,12 @@ function ReadingSettingsSheet({
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation();
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close reading settings" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+        <Pressable accessibilityLabel={t("bible.settings.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
         <View
           style={{
             backgroundColor: palette.sheet,
@@ -4059,17 +4090,17 @@ function ReadingSettingsSheet({
         >
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 24 }}>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
-              <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>Reading settings</Text>
-              <ReaderCircleButton accessibilityLabel="Close reading settings" icon="x" onPress={onClose} palette={palette} />
+              <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
+              <ReaderCircleButton accessibilityLabel={t("bible.settings.close")} icon="x" onPress={onClose} palette={palette} />
             </View>
 
-            <SettingsGroup palette={palette} title="Font family">
+            <SettingsGroup palette={palette} title={t("bible.settings.fontFamily")}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {readerFonts.map((font) => (
                   <SettingChip
                     fontFamily={fontFamilyFor(font.id)}
                     key={font.id}
-                    label={font.label}
+                    label={readerFontLabel(font.id, t)}
                     onPress={() => onChangeFont(font.id)}
                     palette={palette}
                     selected={font.id === fontId}
@@ -4078,7 +4109,7 @@ function ReadingSettingsSheet({
               </View>
             </SettingsGroup>
 
-            <SettingsGroup palette={palette} title="Text size">
+            <SettingsGroup palette={palette} title={t("bible.settings.textSize")}>
               <View
                 style={{
                   alignItems: "center",
@@ -4092,21 +4123,21 @@ function ReadingSettingsSheet({
                   padding: 5,
                 }}
               >
-                <SettingsStepperButton disabled={fontSize <= minFontSize} icon="minus" label="Decrease text size" onPress={() => onFontSizeChange(-fontSizeStep)} palette={palette} />
+                <SettingsStepperButton disabled={fontSize <= minFontSize} icon="minus" label={t("bible.settings.decreaseTextSize")} onPress={() => onFontSizeChange(-fontSizeStep)} palette={palette} />
                 <Text style={{ color: palette.text, fontSize: 15, fontVariant: ["tabular-nums"], fontWeight: "900", minWidth: 30, textAlign: "center" }}>
                   {fontSize}
                 </Text>
-                <SettingsStepperButton disabled={fontSize >= maxFontSize} icon="plus" label="Increase text size" onPress={() => onFontSizeChange(fontSizeStep)} palette={palette} />
+                <SettingsStepperButton disabled={fontSize >= maxFontSize} icon="plus" label={t("bible.settings.increaseTextSize")} onPress={() => onFontSizeChange(fontSizeStep)} palette={palette} />
               </View>
             </SettingsGroup>
 
-            <SettingsGroup palette={palette} title="Theme">
+            <SettingsGroup palette={palette} title={t("bible.settings.theme")}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {readerThemes.map((theme) => (
                   <SettingChip
                     icon={theme.id === "dark" ? "moon" : theme.id === "sepia" ? "circle" : "sun"}
                     key={theme.id}
-                    label={theme.label}
+                    label={readerThemeLabel(theme.id, t)}
                     onPress={() => onChangeReaderTheme(theme.id)}
                     palette={palette}
                     selected={theme.id === readerTheme}
@@ -4115,12 +4146,12 @@ function ReadingSettingsSheet({
               </View>
             </SettingsGroup>
 
-            <SettingsGroup palette={palette} title="Reading settings">
+            <SettingsGroup palette={palette} title={t("bible.settings.options")}>
               <View style={{ gap: 2 }}>
-                <SettingsToggle label="Show verse numbers" onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
-                <SettingsToggle label="Show cross references" onChange={onChangeShowCrossReferences} palette={palette} value={showCrossReferences} />
-                <SettingsToggle label="Show footnotes" onChange={onChangeShowFootnotes} palette={palette} value={showFootnotes} />
-                <SettingsToggle label="Compact mode" onChange={onCompactModeChange} palette={palette} value={compactMode} />
+                <SettingsToggle label={t("bible.settings.showVerseNumbers")} onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
+                <SettingsToggle label={t("bible.settings.showCrossReferences")} onChange={onChangeShowCrossReferences} palette={palette} value={showCrossReferences} />
+                <SettingsToggle label={t("bible.settings.showFootnotes")} onChange={onChangeShowFootnotes} palette={palette} value={showFootnotes} />
+                <SettingsToggle label={t("bible.settings.compactMode")} onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
             </SettingsGroup>
           </ScrollView>
@@ -4144,6 +4175,7 @@ function BibleVersionSheet({
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation();
 
   function chooseVersion(versionId: BibleVersionId) {
     onChangeBibleVersion(versionId);
@@ -4153,7 +4185,7 @@ function BibleVersionSheet({
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close Bible version selector" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+        <Pressable accessibilityLabel={t("bible.version.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
         <View
           style={{
             backgroundColor: palette.sheet,
@@ -4177,16 +4209,16 @@ function BibleVersionSheet({
           </View>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
             <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Choose Bible version</Text>
-              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>Select the translation for the reader.</Text>
+              <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.version.title")}</Text>
+              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>{t("bible.version.description")}</Text>
             </View>
-            <ReaderCircleButton accessibilityLabel="Close Bible version selector" icon="x" onPress={onClose} palette={palette} />
+            <ReaderCircleButton accessibilityLabel={t("bible.version.close")} icon="x" onPress={onClose} palette={palette} />
           </View>
 
           <View style={{ gap: 10 }}>
             {bibleVersions.map((version) => (
               <BibleVersionRow
-                description={bibleVersionDescription(version.id)}
+                description={bibleVersionDescription(version.id, t)}
                 key={version.id}
                 label={version.label}
                 onPress={() => chooseVersion(version.id)}

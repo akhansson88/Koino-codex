@@ -181,7 +181,9 @@ export function SharedComposer({
   const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
   const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
   const scriptureRequired = isCommunityShare && kind === "scripture";
-  const canSubmit = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
+  const roomAvailable = Boolean(roomName);
+  const hasRequiredContent = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
+  const canSubmit = hasRequiredContent && (!isCommunityShare || roomAvailable);
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
@@ -378,7 +380,11 @@ export function SharedComposer({
                   </Text>
                   <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
                     {entryVisibility === visibility.room
-                      ? t(isCommunityShare ? "community.composer.privateCommunity" : "community.composer.sharedWithCommunity")
+                      ? t(isCommunityShare
+                        ? roomAvailable
+                          ? "community.composer.privateCommunity"
+                          : "community.rooms.noneSelected"
+                        : "community.composer.sharedWithCommunity")
                       : t("community.composer.privateOnly")}
                   </Text>
                 </View>
