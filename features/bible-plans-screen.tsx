@@ -14,7 +14,9 @@ import { kjvBooks, normalizeBiblePosition, versesForChapter, type BiblePosition 
 import { useKoino } from "@/state/koino-store";
 import type { BiblePlan, BiblePlanRange, GroupBiblePlanAnnouncement } from "@/state/types";
 import { AppScreen, BodyText, Card, FilterChips, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
 import { confirmAction } from "@/ui/confirm";
+import type { AppLanguage, TranslationFunction } from "@/ui/localization";
 import { colors, radius, typography } from "@/ui/theme";
 
 type PlanTab = "active" | "saved" | "completed" | "group";
@@ -24,17 +26,91 @@ type RangeDraft = {
   start: BiblePosition;
 };
 
-const tabs: { label: string; value: PlanTab }[] = [
-  { label: "Active", value: "active" },
-  { label: "Saved", value: "saved" },
-  { label: "Completed", value: "completed" },
-  { label: "Group", value: "group" },
-];
+const swedishBibleBookNames: Record<string, string> = {
+  Genesis: "Första Moseboken",
+  Exodus: "Andra Moseboken",
+  Leviticus: "Tredje Moseboken",
+  Numbers: "Fjärde Moseboken",
+  Deuteronomy: "Femte Moseboken",
+  Joshua: "Josua",
+  Judges: "Domarboken",
+  Ruth: "Rut",
+  "1 Samuel": "Första Samuelsboken",
+  "2 Samuel": "Andra Samuelsboken",
+  "1 Kings": "Första Kungaboken",
+  "2 Kings": "Andra Kungaboken",
+  "1 Chronicles": "Första Krönikeboken",
+  "2 Chronicles": "Andra Krönikeboken",
+  Ezra: "Esra",
+  Nehemiah: "Nehemja",
+  Esther: "Ester",
+  Job: "Job",
+  Psalms: "Psaltaren",
+  Proverbs: "Ordspråksboken",
+  Ecclesiastes: "Predikaren",
+  "Solomon's Song": "Höga Visan",
+  Isaiah: "Jesaja",
+  Jeremiah: "Jeremia",
+  Lamentations: "Klagovisorna",
+  Ezekiel: "Hesekiel",
+  Daniel: "Daniel",
+  Hosea: "Hosea",
+  Joel: "Joel",
+  Amos: "Amos",
+  Obadiah: "Obadja",
+  Jonah: "Jona",
+  Micah: "Mika",
+  Nahum: "Nahum",
+  Habakkuk: "Habackuk",
+  Zephaniah: "Sefanja",
+  Haggai: "Haggai",
+  Zechariah: "Sakarja",
+  Malachi: "Malaki",
+  Matthew: "Matteusevangeliet",
+  Mark: "Markusevangeliet",
+  Luke: "Lukasevangeliet",
+  John: "Johannesevangeliet",
+  Acts: "Apostlagärningarna",
+  Romans: "Romarbrevet",
+  "1 Corinthians": "Första Korinthierbrevet",
+  "2 Corinthians": "Andra Korinthierbrevet",
+  Galatians: "Galaterbrevet",
+  Ephesians: "Efesierbrevet",
+  Philippians: "Filipperbrevet",
+  Colossians: "Kolosserbrevet",
+  "1 Thessalonians": "Första Thessalonikerbrevet",
+  "2 Thessalonians": "Andra Thessalonikerbrevet",
+  "1 Timothy": "Första Timotheosbrevet",
+  "2 Timothy": "Andra Timotheosbrevet",
+  Titus: "Titusbrevet",
+  Philemon: "Filemonbrevet",
+  Hebrews: "Hebreerbrevet",
+  James: "Jakobsbrevet",
+  "1 Peter": "Första Petrusbrevet",
+  "2 Peter": "Andra Petrusbrevet",
+  "1 John": "Första Johannesbrevet",
+  "2 John": "Andra Johannesbrevet",
+  "3 John": "Tredje Johannesbrevet",
+  Jude: "Judasbrevet",
+  Revelation: "Uppenbarelseboken",
+};
 
-function formatPlanDate(value: string) {
+function displayBibleBookName(bookName: string, language: AppLanguage) {
+  return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
+}
+
+function formatPlanDate(value: string, language: AppLanguage) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function dayCountLabel(count: number, t: TranslationFunction) {
+  return count === 1 ? t("bible.plans.day.single") : t("bible.plans.day.count", { count });
+}
+
+function participantCountLabel(count: number, t: TranslationFunction) {
+  return count === 1 ? t("bible.plans.participant.single") : t("bible.plans.participant.count", { count });
 }
 
 function firstRangeDraft(): RangeDraft {
@@ -60,11 +136,21 @@ function announcementJoined(plan: GroupBiblePlanAnnouncement, plans: BiblePlan[]
 
 export function BiblePlansScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const [tab, setTab] = useState<PlanTab>("active");
   const [title, setTitle] = useState("");
   const [dayCount, setDayCount] = useState("7");
   const [startDate, setStartDate] = useState(todayDateKey());
   const [rangeDrafts, setRangeDrafts] = useState<RangeDraft[]>([firstRangeDraft()]);
+  const tabs = useMemo<{ label: string; value: PlanTab }[]>(
+    () => [
+      { label: t("bible.plans.tab.active"), value: "active" },
+      { label: t("bible.plans.tab.saved"), value: "saved" },
+      { label: t("bible.plans.tab.completed"), value: "completed" },
+      { label: t("bible.plans.tab.group"), value: "group" },
+    ],
+    [t],
+  );
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const plans = useMemo(() => state.biblePlans.filter((plan) => plan.userId === state.currentUserId), [state.biblePlans, state.currentUserId]);
@@ -107,14 +193,14 @@ export function BiblePlansScreen() {
   return (
     <AppScreen>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <IconButton accessibilityLabel="Back" icon="arrow-left" onPress={() => router.back()} />
-        <Text style={[typography.label, { color: colors.olive }]}>Bible Plans</Text>
+        <IconButton accessibilityLabel={t("bible.plans.back")} icon="arrow-left" onPress={() => router.back()} />
+        <Text style={[typography.label, { color: colors.olive }]}>{t("bible.plans.title")}</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <View style={{ gap: 6 }}>
-        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>Bible Plans</Text>
-        <BodyText muted>Create a plan, follow today’s reading, and keep your community in rhythm.</BodyText>
+        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("bible.plans.title")}</Text>
+        <BodyText muted>{t("bible.plans.description")}</BodyText>
       </View>
 
       <CreatePlanCard
@@ -136,10 +222,10 @@ export function BiblePlansScreen() {
 
       {tab === "group" ? (
         <View style={{ gap: 12 }}>
-          <SectionHeading>Announced plans</SectionHeading>
+          <SectionHeading>{t("bible.plans.section.group")}</SectionHeading>
           {state.groupBiblePlanAnnouncements.length === 0 ? (
             <Card>
-              <BodyText muted>No Bible plans have been announced in this community yet.</BodyText>
+              <BodyText muted>{t("bible.plans.empty.group")}</BodyText>
             </Card>
           ) : null}
           {state.groupBiblePlanAnnouncements.map((announcement) => (
@@ -152,9 +238,10 @@ export function BiblePlansScreen() {
                 ownsGroup
                   ? () =>
                       confirmAction({
-                        title: "Unannounce plan?",
-                        message: "The plan will no longer be shown to the community.",
-                        confirmText: "Unannounce",
+                        title: t("bible.plans.group.removeTitle"),
+                        message: t("bible.plans.group.removeMessage"),
+                        confirmText: t("bible.plans.group.removeConfirm"),
+                        cancelText: t("bible.plans.confirm.cancel"),
                         destructive: true,
                         onConfirm: () => dispatch({ type: "unannounceBiblePlan", announcementId: announcement.id }),
                       })
@@ -166,10 +253,12 @@ export function BiblePlansScreen() {
         </View>
       ) : (
         <View style={{ gap: 12 }}>
-          <SectionHeading>{tab === "active" ? "Active plans" : tab === "saved" ? "Saved plans" : "Completed plans"}</SectionHeading>
+          <SectionHeading>
+            {tab === "active" ? t("bible.plans.section.active") : tab === "saved" ? t("bible.plans.section.saved") : t("bible.plans.section.completed")}
+          </SectionHeading>
           {filteredPlans.length === 0 ? (
             <Card>
-              <BodyText muted>{tab === "completed" ? "Completed Bible plans will appear here." : "Create a Bible plan to begin."}</BodyText>
+              <BodyText muted>{tab === "completed" ? t("bible.plans.empty.completed") : t("bible.plans.empty.start")}</BodyText>
             </Card>
           ) : null}
           {filteredPlans.map((plan) => (
@@ -179,9 +268,10 @@ export function BiblePlansScreen() {
               onAnnounce={() => dispatch({ type: "announceBiblePlan", planId: plan.id })}
               onDelete={() =>
                 confirmAction({
-                  title: "Delete Bible plan?",
-                  message: "This removes the plan from your saved plans.",
-                  confirmText: "Delete",
+                  title: t("bible.plans.plan.deleteTitle"),
+                  message: t("bible.plans.plan.deleteMessage"),
+                  confirmText: t("bible.plans.plan.deleteConfirm"),
+                  cancelText: t("bible.plans.confirm.cancel"),
                   destructive: true,
                   onConfirm: () => dispatch({ type: "deleteBiblePlan", id: plan.id }),
                 })
@@ -226,29 +316,31 @@ function CreatePlanCard({
   startDate: string;
   title: string;
 }) {
+  const { t } = useAppTranslation();
+
   return (
     <Card>
       <View style={{ gap: 4 }}>
-        <Text style={[typography.cardTitle, { color: colors.ink }]}>Create custom plan</Text>
-        <BodyText muted>Choose passages, days, and a start date.</BodyText>
+        <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("bible.plans.create.title")}</Text>
+        <BodyText muted>{t("bible.plans.create.description")}</BodyText>
       </View>
-      <TextInputField placeholder="Plan title" value={title} onChangeText={onTitle} />
+      <TextInputField placeholder={t("bible.plans.create.titlePlaceholder")} value={title} onChangeText={onTitle} />
       <View style={{ flexDirection: "row", gap: 10 }}>
         <TextInputField
           keyboardType="number-pad"
           onChangeText={(value) => onDayCount(value.replace(/[^0-9]/g, ""))}
-          placeholder="Days"
-          style={{ flex: 1 }}
+          placeholder={t("bible.plans.create.daysPlaceholder")}
+          style={{ flex: 1, minWidth: 0 }}
           value={dayCount}
         />
-        <TextInputField placeholder="YYYY-MM-DD" style={{ flex: 1.4 }} value={startDate} onChangeText={onStartDate} />
+        <TextInputField placeholder={t("bible.plans.create.datePlaceholder")} style={{ flex: 1.4, minWidth: 0 }} value={startDate} onChangeText={onStartDate} />
       </View>
       <View style={{ gap: 10 }}>
-        <SectionHeading muted>Ranges</SectionHeading>
+        <SectionHeading muted>{t("bible.plans.create.passages")}</SectionHeading>
         {rangeDrafts.map((range, index) => (
           <RangeEditor
             key={range.id}
-            label={`Range ${index + 1}`}
+            label={t("bible.plans.create.passage", { number: index + 1 })}
             onRemove={rangeDrafts.length > 1 ? () => onRemoveRange(range.id) : undefined}
             onUpdate={(side, next) => onUpdateRange(range.id, side, next)}
             range={range}
@@ -256,10 +348,10 @@ function CreatePlanCard({
         ))}
       </View>
       <SecondaryButton icon="plus" onPress={onAddRange}>
-        Add range
+        {t("bible.plans.create.addPassage")}
       </SecondaryButton>
       <PrimaryButton disabled={!canCreate} icon="calendar" onPress={onCreate}>
-        Create plan
+        {t("bible.plans.create.action")}
       </PrimaryButton>
     </Card>
   );
@@ -276,23 +368,26 @@ function RangeEditor({
   onUpdate: (side: "start" | "end", next: BiblePosition) => void;
   range: RangeDraft;
 }) {
+  const { t } = useAppTranslation();
+
   return (
     <View style={{ backgroundColor: colors.input, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 10, padding: 12 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "space-between" }}>
         <Text style={[typography.label, { color: colors.ink }]}>{label}</Text>
         {onRemove ? (
-          <Pressable accessibilityLabel={`Remove ${label}`} accessibilityRole="button" onPress={onRemove} style={{ padding: 6 }}>
+          <Pressable accessibilityLabel={t("bible.plans.create.removePassage", { passage: label })} accessibilityRole="button" onPress={onRemove} style={{ padding: 6 }}>
             <Feather name="x" size={17} color={colors.olive} />
           </Pressable>
         ) : null}
       </View>
-      <PositionEditor label="Start" position={range.start} onChange={(next) => onUpdate("start", next)} />
-      <PositionEditor label="Finish" position={range.end} onChange={(next) => onUpdate("end", next)} />
+      <PositionEditor label={t("bible.plans.create.start")} position={range.start} onChange={(next) => onUpdate("start", next)} />
+      <PositionEditor label={t("bible.plans.create.finish")} position={range.end} onChange={(next) => onUpdate("end", next)} />
     </View>
   );
 }
 
 function PositionEditor({ label, onChange, position }: { label: string; onChange: (position: BiblePosition) => void; position: BiblePosition }) {
+  const { language } = useAppTranslation();
   const book = kjvBooks.find((item) => item.name === position.book) ?? kjvBooks[0];
   const verses = versesForChapter(position.book, position.chapter);
 
@@ -309,20 +404,37 @@ function PositionEditor({ label, onChange, position }: { label: string; onChange
   return (
     <View style={{ gap: 8 }}>
       <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
-      <PickerRow values={kjvBooks.map((item) => item.name)} selected={position.book} onSelect={setBook} />
+      <PickerRow
+        displayValue={(value) => displayBibleBookName(value, language)}
+        values={kjvBooks.map((item) => item.name)}
+        selected={position.book}
+        onSelect={setBook}
+      />
       <PickerRow values={(book?.chapters ?? []).map(String)} selected={String(position.chapter)} onSelect={(value) => setChapter(Number(value))} />
       <PickerRow values={verses.map(String)} selected={String(position.verse)} onSelect={(value) => onChange(normalizeBiblePosition({ ...position, verse: Number(value) }))} />
     </View>
   );
 }
 
-function PickerRow({ onSelect, selected, values }: { onSelect: (value: string) => void; selected: string; values: string[] }) {
+function PickerRow({
+  displayValue = (value) => value,
+  onSelect,
+  selected,
+  values,
+}: {
+  displayValue?: (value: string) => string;
+  onSelect: (value: string) => void;
+  selected: string;
+  values: string[];
+}) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
       {values.map((value) => {
         const isSelected = value === selected;
+        const label = displayValue(value);
         return (
           <Pressable
+            accessibilityLabel={label}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             key={value}
@@ -338,7 +450,7 @@ function PickerRow({ onSelect, selected, values }: { onSelect: (value: string) =
               paddingHorizontal: 12,
             }}
           >
-            <Text style={{ color: isSelected ? colors.olive : colors.muted, fontSize: 13, fontWeight: "800" }}>{value}</Text>
+            <Text style={{ color: isSelected ? colors.olive : colors.muted, fontSize: 13, fontWeight: "800" }}>{label}</Text>
           </Pressable>
         );
       })}
@@ -359,6 +471,7 @@ function PlanCard({
   onJump: () => void;
   plan: BiblePlan;
 }) {
+  const { language, t } = useAppTranslation();
   const completed = completedCount(plan);
   const percent = completionPercent(completed, plan.days.length);
   const current = currentPlanDay(plan);
@@ -369,24 +482,28 @@ function PlanCard({
         <View style={{ flex: 1, gap: 5 }}>
           <Text style={[typography.cardTitle, { color: colors.ink }]}>{plan.title}</Text>
           <BodyText muted>
-            {formatPlanDate(plan.startDate)} · {plan.dayCount} days · {percent}% complete
+            {t("bible.plans.plan.metadata", {
+              date: formatPlanDate(plan.startDate, language),
+              days: dayCountLabel(plan.dayCount, t),
+              progress: t("bible.plans.progress", { percent }),
+            })}
           </BodyText>
         </View>
-        <Pressable accessibilityLabel={`Delete ${plan.title}`} accessibilityRole="button" onPress={onDelete} style={{ padding: 8 }}>
+        <Pressable accessibilityLabel={t("bible.plans.plan.deleteAccessibility", { title: plan.title })} accessibilityRole="button" onPress={onDelete} style={{ padding: 8 }}>
           <Feather name="trash-2" size={18} color={colors.danger} />
         </Pressable>
       </View>
       <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 8, overflow: "hidden" }}>
         <View style={{ backgroundColor: colors.gold, height: 8, width: `${percent}%` }} />
       </View>
-      <BodyText muted>{current?.day ? `Today: day ${current.day.dayNumber}` : "No reading scheduled."}</BodyText>
+      <BodyText muted>{current?.day ? t("bible.plans.plan.today", { day: current.day.dayNumber }) : t("bible.plans.plan.noReading")}</BodyText>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <SecondaryButton icon="book-open" onPress={onJump} style={{ flex: 1 }}>
-          Read
+          {t("bible.plans.plan.read")}
         </SecondaryButton>
         {canAnnounce ? (
           <PrimaryButton icon="users" onPress={onAnnounce} style={{ flex: 1 }}>
-            Announce
+            {t("bible.plans.plan.share")}
           </PrimaryButton>
         ) : null}
       </View>
@@ -407,6 +524,7 @@ function GroupAnnouncementCard({
   onUnannounce?: () => void;
   participations: { completedDayNumbers: Record<string, true>; totalDays: number }[];
 }) {
+  const { language, t } = useAppTranslation();
   const joinedCount = participations.length;
   const totalSlots = Math.max(1, joinedCount * announcement.dayCount);
   const completedSlots = participations.reduce((sum, item) => sum + Object.keys(item.completedDayNumbers ?? {}).length, 0);
@@ -418,11 +536,15 @@ function GroupAnnouncementCard({
         <View style={{ flex: 1, gap: 5 }}>
           <Text style={[typography.cardTitle, { color: colors.ink }]}>{announcement.title}</Text>
           <BodyText muted>
-            Starts {formatPlanDate(announcement.startDate)} · {joinedCount} joined · {percent}% complete
+            {t("bible.plans.group.metadata", {
+              date: formatPlanDate(announcement.startDate, language),
+              participants: participantCountLabel(joinedCount, t),
+              progress: t("bible.plans.progress", { percent }),
+            })}
           </BodyText>
         </View>
         {onUnannounce ? (
-          <Pressable accessibilityLabel={`Unannounce ${announcement.title}`} accessibilityRole="button" onPress={onUnannounce} style={{ padding: 8 }}>
+          <Pressable accessibilityLabel={t("bible.plans.group.removeAccessibility", { title: announcement.title })} accessibilityRole="button" onPress={onUnannounce} style={{ padding: 8 }}>
             <Feather name="x-circle" size={18} color={colors.danger} />
           </Pressable>
         ) : null}
@@ -431,7 +553,7 @@ function GroupAnnouncementCard({
         <View style={{ backgroundColor: colors.olive, height: 8, width: `${percent}%` }} />
       </View>
       <PrimaryButton disabled={joined} icon={joined ? "check" : "plus"} onPress={onJoin}>
-        {joined ? "Joined" : "Join plan"}
+        {joined ? t("bible.plans.group.joined") : t("bible.plans.group.join")}
       </PrimaryButton>
     </Card>
   );
