@@ -298,7 +298,7 @@ export function PrimaryButton({
   accessibilityLabel?: string;
   disabled?: boolean;
   icon?: FeatherName;
-  onPress: () => void;
+  onPress: ComponentProps<typeof Pressable>["onPress"];
   style?: StyleProp<ViewStyle>;
 }>) {
   return (
@@ -351,7 +351,7 @@ export function SecondaryButton({
   accessibilityLabel?: string;
   disabled?: boolean;
   icon?: FeatherName;
-  onPress: () => void;
+  onPress: ComponentProps<typeof Pressable>["onPress"];
   style?: StyleProp<ViewStyle>;
   tone?: "default" | "danger";
 }>) {
@@ -645,18 +645,26 @@ function verseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
 
 export function VersePreviewCard({
   compact = false,
+  inlineDetail = false,
   interactive = true,
   maxLines,
   onAddToJournal,
+  onDetailVisibilityChange,
   onOpenInBible,
   onShareToRoom,
+  openAccessibilityLabel,
+  openLabel,
   showFullText = false,
   showOpenIndicator = true,
   verse,
 }: VerseActionHandlers & {
   compact?: boolean;
+  inlineDetail?: boolean;
   interactive?: boolean;
   maxLines?: number;
+  onDetailVisibilityChange?: (visible: boolean) => void;
+  openAccessibilityLabel?: string;
+  openLabel?: string;
   showFullText?: boolean;
   showOpenIndicator?: boolean;
   verse?: BibleVerse;
@@ -668,6 +676,16 @@ export function VersePreviewCard({
   if (!verse) return null;
   const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
   const previewLines = maxLines ?? (compact ? 3 : 5);
+  const cardOpenLabel = openAccessibilityLabel ?? t("shared.scripture.openReference", { reference: displayVerse.reference });
+  const cardOpenText = openLabel ?? t("shared.scripture.open");
+  const openDetail = () => {
+    setDetailVisible(true);
+    onDetailVisibilityChange?.(true);
+  };
+  const closeDetail = () => {
+    setDetailVisible(false);
+    onDetailVisibilityChange?.(false);
+  };
   const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
   const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
   const previewCardStyle: ViewStyle = {
@@ -696,11 +714,11 @@ export function VersePreviewCard({
           <Ionicons name="sunny-outline" size={20} color={colors.olive} />
           <View style={{ flex: 1, gap: 4 }}>
             <Pressable
-              accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
+              accessibilityLabel={cardOpenLabel}
               accessibilityRole="button"
               onPress={(event) => {
                 event.stopPropagation();
-                setDetailVisible(true);
+                openDetail();
               }}
             >
               {header}
@@ -710,26 +728,26 @@ export function VersePreviewCard({
             </ExpandableBodyText>
             {showOpenIndicator ? (
               <Pressable
-                accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
+                accessibilityLabel={cardOpenLabel}
                 accessibilityRole="button"
                 onPress={(event) => {
                   event.stopPropagation();
-                  setDetailVisible(true);
+                  openDetail();
                 }}
                 style={{ alignSelf: "flex-start" }}
               >
-                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t("shared.scripture.open")}</Text>
+                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{cardOpenText}</Text>
               </Pressable>
             ) : null}
           </View>
         </View>
       ) : interactive ? (
         <Pressable
-          accessibilityLabel={t("shared.scripture.openReference", { reference: displayVerse.reference })}
+          accessibilityLabel={cardOpenLabel}
           accessibilityRole="button"
           onPress={(event) => {
             event.stopPropagation();
-            setDetailVisible(true);
+            openDetail();
           }}
           style={previewCardStyle}
         >
@@ -739,7 +757,7 @@ export function VersePreviewCard({
             <Text numberOfLines={previewLines} style={verseTextStyle}>
               {displayVerse.text}
             </Text>
-            {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{t("shared.scripture.open")}</Text> : null}
+            {showOpenIndicator ? <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>{cardOpenText}</Text> : null}
           </View>
         </Pressable>
       ) : (
@@ -755,10 +773,33 @@ export function VersePreviewCard({
           </View>
         </View>
       )}
-      {interactive ? (
+      {interactive && inlineDetail && detailVisible ? (
+        <Card style={{ gap: 12, marginTop: 8 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+            <IconButton accessibilityLabel={t("shared.scripture.closeDetail")} icon="arrow-left" onPress={closeDetail} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[typography.label, { color: colors.ink }]}>{displayVerse.reference}</Text>
+              <Text style={[typography.caption, { color: colors.muted }]}>{displayVerse.translation ?? t("shared.scripture.bible")}</Text>
+            </View>
+          </View>
+          <Text selectable style={[typography.bodyMedium, { color: colors.ink, fontSize: 15, lineHeight: 23 }]}>
+            {displayVerse.text}
+          </Text>
+          {onOpenInBible ? (
+            <SecondaryButton icon="corner-up-right" onPress={(event) => {
+              event.stopPropagation();
+              closeDetail();
+              setTimeout(() => onOpenInBible(displayVerse), 0);
+            }}>
+              {t("shared.scripture.openInBible")}
+            </SecondaryButton>
+          ) : null}
+        </Card>
+      ) : null}
+      {interactive && !inlineDetail ? (
         <VerseDetailSheet
           onAddToJournal={onAddToJournal}
-          onClose={() => setDetailVisible(false)}
+          onClose={closeDetail}
           onOpenInBible={onOpenInBible}
           onShareToRoom={onShareToRoom}
           saved={saved}
@@ -881,7 +922,7 @@ export function VerseDetailSheet({
   function openInBible() {
     onClose();
     if (onOpenInBible) {
-      onOpenInBible(currentVerse);
+      setTimeout(() => onOpenInBible(currentVerse), 220);
       return;
     }
     router.push("/(tabs)/bible" as never);
@@ -901,16 +942,28 @@ export function VerseDetailSheet({
           {verse.contextAfter ? <BodyText muted>{verse.contextAfter}</BodyText> : null}
         </Card>
       ) : null}
-      <PrimaryButton disabled={busy || saved} icon="bookmark" onPress={saveVerse}>
+      <PrimaryButton disabled={busy || saved} icon="bookmark" onPress={(event) => {
+        event.stopPropagation();
+        saveVerse();
+      }}>
         {t(saved ? "shared.scripture.savedVerse" : "shared.scripture.saveVerse")}
       </PrimaryButton>
-      <SecondaryButton icon="book-open" onPress={addToJournal}>
+      <SecondaryButton icon="book-open" onPress={(event) => {
+        event.stopPropagation();
+        addToJournal();
+      }}>
         {t("shared.scripture.addToJournal")}
       </SecondaryButton>
-      <SecondaryButton icon="users" onPress={shareToRoom}>
+      <SecondaryButton icon="users" onPress={(event) => {
+        event.stopPropagation();
+        shareToRoom();
+      }}>
         {t("shared.scripture.shareToCommunity")}
       </SecondaryButton>
-      <SecondaryButton icon="corner-up-right" onPress={openInBible}>
+      <SecondaryButton icon="corner-up-right" onPress={(event) => {
+        event.stopPropagation();
+        openInBible();
+      }}>
         {t("shared.scripture.openInBible")}
       </SecondaryButton>
     </BottomSheet>

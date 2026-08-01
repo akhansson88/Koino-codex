@@ -11,21 +11,23 @@ import { colors, typography } from "@/ui/theme";
 
 const MAX_BODY_LENGTH = 500;
 
+export type BibleComposerIntent = "reflect" | "pray" | "share";
+
 function primaryActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
   if (editing) return "community.composer.action.updateEntry" as const;
-  if (context === "journal") {
-    if (kind === "prayer_request") return "community.composer.action.savePrayer" as const;
-    if (kind === "praise") return "community.composer.journal.action.savePraise" as const;
-    if (kind === "update") return "community.composer.journal.action.saveCheckIn" as const;
-    if (kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
-    return "community.composer.action.saveReflection" as const;
-  }
   if (context === "room" || entryVisibility === visibility.room) {
     if (kind === "prayer_request") return "community.composer.action.sharePrayer" as const;
     if (kind === "reflection") return "community.composer.action.shareReflection" as const;
     if (kind === "praise") return "community.composer.action.sharePraise" as const;
     if (kind === "scripture") return "community.composer.action.shareScripture" as const;
     return "community.composer.action.share" as const;
+  }
+  if (context === "journal") {
+    if (kind === "prayer_request") return "community.composer.action.savePrayer" as const;
+    if (kind === "praise") return "community.composer.journal.action.savePraise" as const;
+    if (kind === "update") return "community.composer.journal.action.saveCheckIn" as const;
+    if (kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
+    return "community.composer.action.saveReflection" as const;
   }
   return "community.composer.action.saveEntry" as const;
 }
@@ -36,9 +38,12 @@ function headerActionKey(context: "journal" | "today" | "room", entryVisibility:
   return actionKey === "community.composer.action.saveEntry" ? "community.composer.action.saveShort" as const : actionKey;
 }
 
-function titleKey(context: "journal" | "today" | "room", editing: boolean) {
-  if (context === "room") return "community.composer.title.shareCommunity" as const;
+function titleKey(context: "journal" | "today" | "room", editing: boolean, bibleIntent?: BibleComposerIntent) {
   if (editing) return "community.composer.title.edit" as const;
+  if (bibleIntent === "reflect") return "community.composer.title.bibleReflect" as const;
+  if (bibleIntent === "pray") return "community.composer.title.biblePray" as const;
+  if (bibleIntent === "share") return "community.composer.title.bibleShare" as const;
+  if (context === "room") return "community.composer.title.shareCommunity" as const;
   return "community.composer.title.write" as const;
 }
 
@@ -127,6 +132,7 @@ function CommunityTypeSelector({
 }
 
 export function SharedComposer({
+  bibleIntent,
   body,
   context,
   editing = false,
@@ -135,6 +141,7 @@ export function SharedComposer({
   onBody,
   onClose,
   onKind,
+  onOpenVerseInBible,
   onSubmit,
   onTitle,
   onVerses,
@@ -145,6 +152,7 @@ export function SharedComposer({
   verses,
   visible,
 }: {
+  bibleIntent?: BibleComposerIntent;
   body: string;
   context: "journal" | "today" | "room";
   editing?: boolean;
@@ -153,6 +161,7 @@ export function SharedComposer({
   onBody: (value: string) => void;
   onClose: () => void;
   onKind: (kind: EntryKind) => void;
+  onOpenVerseInBible?: (verse: BibleVerse) => void;
   onSubmit: () => void;
   onTitle: (value: string) => void;
   onVerses: (verses: BibleVerse[]) => void;
@@ -166,19 +175,21 @@ export function SharedComposer({
   const { t } = useAppTranslation();
   const { width: viewportWidth } = useWindowDimensions();
   const [submissionAttempted, setSubmissionAttempted] = useState(false);
+  const bibleOrigin = Boolean(bibleIntent);
   const isCommunityShare = context === "room";
   const showVisibility = context !== "room";
   const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
-  const showTitle = !isCommunityShare || !titleFreeCommunityKind;
+  const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
   const scriptureRequired = isCommunityShare && kind === "scripture";
   const canSubmit = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
   const journalUsesGrid = context === "journal" && viewportWidth < 360;
+  const journalUsesCompactPrivacy = context === "journal" && viewportWidth < 360;
   const typeOptions =
     context === "journal"
-      ? kind === "scripture"
+      ? bibleOrigin || kind === "scripture"
         ? journalScripturePostTypes
         : journalPostTypes
       : composerPostTypes;
@@ -189,7 +200,7 @@ export function SharedComposer({
 
   function changeKind(nextKind: EntryKind) {
     if (nextKind === kind) return;
-    if (isCommunityShare) {
+    if (isCommunityShare && !bibleOrigin) {
       onTitle("");
       onVerses([]);
     }
@@ -220,7 +231,7 @@ export function SharedComposer({
         </View>
 
         <View style={{ gap: 10 }}>
-          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing))}</Text>
+          <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing, bibleIntent))}</Text>
           {isCommunityShare ? (
             <CommunityTypeSelector
               value={kind}
@@ -280,7 +291,7 @@ export function SharedComposer({
                 ? t("community.composer.placeholder.praiseBody")
                 : kind === "scripture"
                   ? t(isCommunityShare ? "community.composer.placeholder.scriptureNote" : "community.composer.placeholder.scriptureBody")
-                  : t("community.composer.placeholder.body")}
+                  : t(bibleOrigin ? "community.composer.placeholder.scriptureBody" : "community.composer.placeholder.body")}
             returnKeyType="send"
             style={{ minHeight: 170 }}
             submitBehavior="submit"
@@ -295,9 +306,15 @@ export function SharedComposer({
 
         <View style={{ gap: 8 }}>
           <BibleVerseField
-            label={t(scriptureRequired ? "community.composer.scriptureRequired" : "community.composer.scriptureOptional")}
+            attachedFromBible={bibleOrigin}
+            label={t(bibleOrigin && verses.length > 0
+              ? "community.composer.scriptureAttached"
+              : scriptureRequired
+                ? "community.composer.scriptureRequired"
+                : "community.composer.scriptureOptional")}
             verses={verses}
             onChange={onVerses}
+            onOpenInBible={onOpenVerseInBible}
           />
           {submissionAttempted && scriptureRequired && !canSubmit ? (
             <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.composer.validation.scriptureRequired")}</Text>
@@ -320,7 +337,9 @@ export function SharedComposer({
                 {
                   label: t(
                     context === "journal"
-                      ? "community.composer.journal.visibility.private"
+                      ? journalUsesCompactPrivacy
+                        ? "community.composer.journal.visibility.privateCompact"
+                        : "community.composer.journal.visibility.private"
                       : "community.composer.visibility.private"
                   ),
                   value: visibility.private,
@@ -328,7 +347,9 @@ export function SharedComposer({
                 {
                   label: t(
                     context === "journal"
-                      ? "community.composer.journal.visibility.community"
+                      ? journalUsesCompactPrivacy
+                        ? "community.composer.journal.visibility.communityCompact"
+                        : "community.composer.journal.visibility.community"
                       : "community.composer.visibility.community"
                   ),
                   value: visibility.room,

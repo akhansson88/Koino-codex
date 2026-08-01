@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
@@ -11,22 +11,47 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 
 export function BibleVerseField({
+  attachedFromBible = false,
   label,
   onChange,
+  onOpenInBible,
   verses,
 }: {
+  attachedFromBible?: boolean;
   label?: string;
   onChange: (verses: BibleVerse[]) => void;
+  onOpenInBible?: (verse: BibleVerse) => void;
   verses: BibleVerse[];
 }) {
   const { state } = useKoino();
   const { t } = useAppTranslation();
   const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const detailOpenRef = useRef(false);
+  const detailCloseTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const selectedVerses = verses.slice(0, 5);
   const canAddVerse = selectedVerses.length < 5;
 
+  useEffect(() => () => {
+    if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
+  }, []);
+
+  function handleDetailVisibilityChange(visible: boolean) {
+    if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
+    if (visible) {
+      detailOpenRef.current = true;
+      setDetailOpen(true);
+      return;
+    }
+    detailCloseTimerRef.current = setTimeout(() => {
+      detailOpenRef.current = false;
+      setDetailOpen(false);
+    }, 750);
+  }
+
   function removeVerse(reference: string) {
+    if (detailOpenRef.current) return;
     onChange(selectedVerses.filter((item) => item.reference !== reference));
   }
 
@@ -46,13 +71,23 @@ export function BibleVerseField({
           {selectedVerses.map((verse) => (
             <View key={`${verse.reference}-${verse.text}`} style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <VersePreviewCard verse={verse} compact />
+                <VersePreviewCard
+                  compact
+                  inlineDetail={attachedFromBible}
+                  onDetailVisibilityChange={handleDetailVisibilityChange}
+                  onOpenInBible={onOpenInBible}
+                  openAccessibilityLabel={attachedFromBible ? t("shared.scripture.viewReference", { reference: verse.reference }) : undefined}
+                  openLabel={attachedFromBible ? t("shared.scripture.openInBible") : undefined}
+                  verse={verse}
+                />
               </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t("shared.scripturePicker.removeReference", { reference: verse.reference })}
+                accessibilityState={{ disabled: detailOpen }}
+                disabled={detailOpen}
                 onPress={() => removeVerse(verse.reference)}
-                style={{ padding: 8 }}
+                style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
               >
                 <Feather name="x" size={18} color={colors.olive} />
               </Pressable>

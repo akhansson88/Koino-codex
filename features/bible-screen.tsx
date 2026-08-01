@@ -67,7 +67,7 @@ import { confirmAction } from "@/ui/confirm";
 import { useAppTranslation } from "@/ui/app-language";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { openLinkInApp } from "@/ui/open-link";
-import { SharedComposer } from "@/ui/shared-composer";
+import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
@@ -783,6 +783,7 @@ export function BibleScreen() {
   const [topicError, setTopicError] = useState<string | undefined>();
   const [topicLoading, setTopicLoading] = useState(false);
   const [scriptureComposerVisible, setScriptureComposerVisible] = useState(false);
+  const [scriptureComposerIntent, setScriptureComposerIntent] = useState<BibleComposerIntent>("reflect");
   const [scriptureComposerContext, setScriptureComposerContext] = useState<"journal" | "room">("journal");
   const [scriptureComposerKind, setScriptureComposerKind] = useState<EntryKind>("scripture");
   const [scriptureComposerVisibility, setScriptureComposerVisibility] = useState<EntryVisibility>(visibility.private);
@@ -1642,12 +1643,13 @@ export function BibleScreen() {
     }
   }, [dispatch, selectedHighlightIds, selectionSaving]);
 
-  const openScriptureComposer = useCallback((context: "journal" | "room", kind: EntryKind, verse: BibleVerse, body = "") => {
+  const openScriptureComposer = useCallback((intent: BibleComposerIntent, context: "journal" | "room", kind: EntryKind, verse: BibleVerse) => {
+    setScriptureComposerIntent(intent);
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
     setScriptureComposerVisibility(context === "room" ? visibility.room : visibility.private);
     setScriptureComposerTitle(context === "room" ? "" : verse.reference);
-    setScriptureComposerBody(body);
+    setScriptureComposerBody("");
     setScriptureComposerVerses([verse]);
     setScriptureComposerVisible(true);
   }, []);
@@ -1705,13 +1707,13 @@ export function BibleScreen() {
     setPendingVerseComposerAction(undefined);
 
     if (action === "journal") {
-      openScriptureComposer("journal", "scripture", verse);
+      openScriptureComposer("reflect", "journal", "reflection", verse);
     }
     if (action === "share") {
-      openScriptureComposer("room", "scripture", verse);
+      openScriptureComposer("share", "room", "scripture", verse);
     }
     if (action === "pray") {
-      openScriptureComposer("journal", "prayer_request", verse, "Praying with this Scripture.");
+      openScriptureComposer("pray", "journal", "prayer_request", verse);
     }
   }, [openScriptureComposer, pendingVerseComposerAction]);
 
@@ -2202,6 +2204,7 @@ export function BibleScreen() {
         visible={topicsVisible}
       />
       <SharedComposer
+        bibleIntent={scriptureComposerIntent}
         visible={scriptureComposerVisible}
         context={scriptureComposerContext}
         kind={scriptureComposerKind}
@@ -2210,6 +2213,10 @@ export function BibleScreen() {
         body={scriptureComposerBody}
         verses={scriptureComposerVerses}
         onKind={setScriptureComposerKind}
+        onOpenVerseInBible={(verse) => {
+          setScriptureComposerVisible(false);
+          requestAnimationFrame(() => openVerseInReader(verse));
+        }}
         onVisibility={setScriptureComposerVisibility}
         onTitle={setScriptureComposerTitle}
         onBody={setScriptureComposerBody}
@@ -2918,6 +2925,14 @@ function BibleText({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             delayLongPress={1000}
+            {...(Platform.OS === "web"
+              ? {
+                  onContextMenu: (event: { preventDefault: () => void }) => {
+                    event.preventDefault();
+                    onVerseLongPress(item.verse);
+                  },
+                }
+              : {})}
             onLongPress={() => onVerseLongPress(item.verse)}
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
@@ -3781,6 +3796,7 @@ function VerseActionSheet({
   readerTextStyle: TextStyle;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const slideProgress = useRef(new Animated.Value(0)).current;
@@ -3846,7 +3862,7 @@ function VerseActionSheet({
             top: 0,
           }}
         />
-        <Pressable accessibilityLabel="Close verse actions" accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+        <Pressable accessibilityLabel={t("bible.actions.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
         <Animated.View
           style={{
             backgroundColor: palette.sheet,
@@ -3874,20 +3890,20 @@ function VerseActionSheet({
           </View>
           {view === "actions" ? (
             <ScrollView showsVerticalScrollIndicator={false}>
-              <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle="See related verses" title="Cross references" />
-              <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle="Add it to saved verses" title="Save verse" />
-              <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle="Write a reflection connected to this verse" title="Reflect" />
-              <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle="Begin a prayer connected to this verse" title="Pray" />
-              <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle="Share with your community room" title="Share verse" />
-              <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle="Copy verse text and reference" title="Copy verse" />
-              <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle="Mark it with a warm highlight" title="Highlight / mark text" />
+              <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
+              <VerseSheetAction icon="bookmark" onPress={() => onAction("save")} palette={palette} subtitle={t("bible.actions.saveSubtitle")} title={t("bible.actions.save")} />
+              <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
+              <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
+              <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
+              <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
+              <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
             </ScrollView>
           ) : (
             <View style={{ gap: 14 }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <ReaderCircleButton accessibilityLabel="Back to verse actions" icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
+                <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Cross references</Text>
+                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
                   <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition)}</Text>
                 </View>
               </View>
@@ -3925,7 +3941,7 @@ function VerseActionSheet({
                   ))
                 ) : (
                   <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
-                    <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>No cross references for this verse yet.</Text>
+                    <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
                   </View>
                 )}
               </ScrollView>
