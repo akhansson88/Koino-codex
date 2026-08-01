@@ -64,6 +64,8 @@ import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
+import { useAppTranslation } from "@/ui/app-language";
+import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius } from "@/ui/theme";
@@ -86,7 +88,7 @@ const readerThemes = [
 
 type BibleReaderFontId = (typeof readerFonts)[number]["id"];
 type BibleReaderThemeId = (typeof readerThemes)[number]["id"];
-type PickerStage = "home" | "book" | "chapter" | "verse" | "saved" | "highlights" | "reflections";
+type PickerStage = "home" | "search" | "book" | "chapter" | "saved" | "highlights" | "reflections";
 type TestamentFilter = "all" | "old" | "new";
 type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save" | "share";
 
@@ -147,21 +149,91 @@ type BibleTopicReference = {
 };
 
 type SuggestedTopic = {
+  apiTopic: string;
   icon: FeatherName;
-  title: string;
-  subtitle: string;
+  subtitleKey: TranslationKey;
+  titleKey: TranslationKey;
   tone: "peach" | "green" | "rose" | "blue";
 };
 
 const suggestedTopics: SuggestedTopic[] = [
-  { icon: "cloud-rain", title: "Anxiety", subtitle: "God's peace in the middle of worry", tone: "peach" },
-  { icon: "sunrise", title: "Hope", subtitle: "God's promises for your future", tone: "green" },
-  { icon: "heart", title: "Forgiveness", subtitle: "Freedom through God's grace", tone: "rose" },
-  { icon: "user", title: "Identity", subtitle: "Who you are in Christ", tone: "peach" },
-  { icon: "users", title: "Loneliness", subtitle: "God is with you", tone: "green" },
-  { icon: "compass", title: "Purpose", subtitle: "Living with meaning", tone: "rose" },
-  { icon: "message-circle", title: "Prayer", subtitle: "How to talk with God", tone: "peach" },
+  { apiTopic: "Anxiety", icon: "cloud-rain", subtitleKey: "bible.topic.anxiety.subtitle", titleKey: "bible.topic.anxiety.title", tone: "peach" },
+  { apiTopic: "Hope", icon: "sunrise", subtitleKey: "bible.topic.hope.subtitle", titleKey: "bible.topic.hope.title", tone: "green" },
+  { apiTopic: "Forgiveness", icon: "heart", subtitleKey: "bible.topic.forgiveness.subtitle", titleKey: "bible.topic.forgiveness.title", tone: "rose" },
+  { apiTopic: "Identity", icon: "user", subtitleKey: "bible.topic.identity.subtitle", titleKey: "bible.topic.identity.title", tone: "peach" },
+  { apiTopic: "Loneliness", icon: "users", subtitleKey: "bible.topic.loneliness.subtitle", titleKey: "bible.topic.loneliness.title", tone: "green" },
+  { apiTopic: "Purpose", icon: "compass", subtitleKey: "bible.topic.purpose.subtitle", titleKey: "bible.topic.purpose.title", tone: "rose" },
+  { apiTopic: "Prayer", icon: "message-circle", subtitleKey: "bible.topic.prayer.subtitle", titleKey: "bible.topic.prayer.title", tone: "peach" },
 ];
+
+const swedishBibleBookNames: Record<string, string> = {
+  Genesis: "Första Moseboken",
+  Exodus: "Andra Moseboken",
+  Leviticus: "Tredje Moseboken",
+  Numbers: "Fjärde Moseboken",
+  Deuteronomy: "Femte Moseboken",
+  Joshua: "Josua",
+  Judges: "Domarboken",
+  Ruth: "Rut",
+  "1 Samuel": "Första Samuelsboken",
+  "2 Samuel": "Andra Samuelsboken",
+  "1 Kings": "Första Kungaboken",
+  "2 Kings": "Andra Kungaboken",
+  "1 Chronicles": "Första Krönikeboken",
+  "2 Chronicles": "Andra Krönikeboken",
+  Ezra: "Esra",
+  Nehemiah: "Nehemja",
+  Esther: "Ester",
+  Job: "Job",
+  Psalms: "Psaltaren",
+  Proverbs: "Ordspråksboken",
+  Ecclesiastes: "Predikaren",
+  "Solomon's Song": "Höga Visan",
+  Isaiah: "Jesaja",
+  Jeremiah: "Jeremia",
+  Lamentations: "Klagovisorna",
+  Ezekiel: "Hesekiel",
+  Daniel: "Daniel",
+  Hosea: "Hosea",
+  Joel: "Joel",
+  Amos: "Amos",
+  Obadiah: "Obadja",
+  Jonah: "Jona",
+  Micah: "Mika",
+  Nahum: "Nahum",
+  Habakkuk: "Habackuk",
+  Zephaniah: "Sefanja",
+  Haggai: "Haggai",
+  Zechariah: "Sakarja",
+  Malachi: "Malaki",
+  Matthew: "Matteusevangeliet",
+  Mark: "Markusevangeliet",
+  Luke: "Lukasevangeliet",
+  John: "Johannesevangeliet",
+  Acts: "Apostlagärningarna",
+  Romans: "Romarbrevet",
+  "1 Corinthians": "Första Korinthierbrevet",
+  "2 Corinthians": "Andra Korinthierbrevet",
+  Galatians: "Galaterbrevet",
+  Ephesians: "Efesierbrevet",
+  Philippians: "Filipperbrevet",
+  Colossians: "Kolosserbrevet",
+  "1 Thessalonians": "Första Thessalonikerbrevet",
+  "2 Thessalonians": "Andra Thessalonikerbrevet",
+  "1 Timothy": "Första Timotheosbrevet",
+  "2 Timothy": "Andra Timotheosbrevet",
+  Titus: "Titusbrevet",
+  Philemon: "Filemonbrevet",
+  Hebrews: "Hebreerbrevet",
+  James: "Jakobsbrevet",
+  "1 Peter": "Första Petrusbrevet",
+  "2 Peter": "Andra Petrusbrevet",
+  "1 John": "Första Johannesbrevet",
+  "2 John": "Andra Johannesbrevet",
+  "3 John": "Tredje Johannesbrevet",
+  Jude: "Judasbrevet",
+  Revelation: "Uppenbarelseboken",
+};
 
 const defaultPosition = normalizeBiblePosition({ book: "Philippians", chapter: 4, verse: 4 });
 const defaultFontId: BibleReaderFontId = "serif";
@@ -446,13 +518,34 @@ function biblePositionFromReference(reference?: string) {
   return biblePositionFromVerse(bibleVerseFromReference(reference));
 }
 
-function biblePositionFromSearchQuery(query: string) {
+function displayBibleBookName(bookName: string, language: AppLanguage) {
+  return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
+}
+
+function canonicalizeBibleSearchQuery(query: string, language: AppLanguage) {
+  const trimmed = query.trim();
+  if (language !== "sv") return trimmed;
+
+  const localizedBooks = Object.entries(swedishBibleBookNames).sort((a, b) => b[1].length - a[1].length);
+  const normalizedQuery = trimmed.toLocaleLowerCase("sv");
+  const match = localizedBooks.find(([, localizedName]) => {
+    const normalizedName = localizedName.toLocaleLowerCase("sv");
+    return normalizedQuery === normalizedName || normalizedQuery.startsWith(`${normalizedName} `);
+  });
+  if (!match) return trimmed;
+
+  const [canonicalName, localizedName] = match;
+  return `${canonicalName}${trimmed.slice(localizedName.length)}`;
+}
+
+function biblePositionFromSearchQuery(query: string, language: AppLanguage) {
   const trimmed = query.trim();
   if (!trimmed) return undefined;
-  const versePosition = biblePositionFromReference(trimmed);
+  const canonicalQuery = canonicalizeBibleSearchQuery(trimmed, language);
+  const versePosition = biblePositionFromReference(canonicalQuery);
   if (versePosition) return versePosition;
 
-  const chapterMatch = trimmed.match(/^(.+?)\s+(\d+)$/);
+  const chapterMatch = canonicalQuery.match(/^(.+?)\s+(\d+)$/);
   if (!chapterMatch) return undefined;
   return normalizeBiblePosition({ book: chapterMatch[1], chapter: Number(chapterMatch[2]), verse: 1 });
 }
@@ -461,12 +554,6 @@ function testamentForBook(bookName: string): TestamentFilter {
   const index = kjvBooks.findIndex((book) => book.name === bookName);
   if (index < 0) return "all";
   return index < oldTestamentBookCount ? "old" : "new";
-}
-
-function testamentLabel(testament: TestamentFilter) {
-  if (testament === "old") return "Old Testament";
-  if (testament === "new") return "New Testament";
-  return "All books";
 }
 
 function bibleVersionShortLabel(versionId: BibleVersionId) {
@@ -538,6 +625,11 @@ function topicTitle(value: string) {
     .split(/\s+/)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`)
     .join(" ");
+}
+
+function localizedTopicTitle(value: string, t: TranslationFunction) {
+  const suggestedTopic = suggestedTopics.find((topic) => topic.apiTopic.toLowerCase() === value.trim().toLowerCase());
+  return suggestedTopic ? t(suggestedTopic.titleKey) : topicTitle(value);
 }
 
 function isChapterSwipeGesture(dx: number, dy: number) {
@@ -667,6 +759,7 @@ export function BibleScreen() {
   const [compactMode, setCompactMode] = useState(defaultCompactMode);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerInitialStage, setPickerInitialStage] = useState<"home" | "search">("home");
   const [versionPickerVisible, setVersionPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
@@ -1859,9 +1952,15 @@ export function BibleScreen() {
         canGoBack={readerCanGoBack}
         onAudioPress={handleAudioToggle}
         onBack={handleReaderBack}
-        onOpenPicker={() => setPickerVisible(true)}
+        onOpenPicker={() => {
+          setPickerInitialStage("home");
+          setPickerVisible(true);
+        }}
+        onOpenSearch={() => {
+          setPickerInitialStage("search");
+          setPickerVisible(true);
+        }}
         onOpenSettings={() => setSettingsVisible(true)}
-        onOpenTopics={() => setTopicsVisible(true)}
         onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}
         title={chapterLabel(position)}
@@ -2048,13 +2147,28 @@ export function BibleScreen() {
         visible={Boolean(crossReferencePosition)}
       />
       <BibleDrawer
+        biblePlanCount={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length}
+        bibleVersionId={bibleVersionId}
         highlights={state.bibleHighlights}
+        initialStage={pickerInitialStage}
         initialPosition={position}
         journalEntries={state.journalEntries.filter((entry) => entry.userId === state.currentUserId)}
         onClose={() => setPickerVisible(false)}
-        onOpenJournal={() => {
+        onOpenPlans={() => {
           setPickerVisible(false);
-          router.push("/(tabs)/me" as never);
+          router.push("/bible-plans" as never);
+        }}
+        onOpenReflection={(entryId) => {
+          setPickerVisible(false);
+          router.push(`/me/${entryId}` as never);
+        }}
+        onOpenTopic={(topic) => {
+          setPickerVisible(false);
+          if (topic) {
+            openTopic(topic);
+            return;
+          }
+          setTopicsVisible(true);
         }}
         onSelect={(nextPosition) => {
           setPickerVisible(false);
@@ -2076,6 +2190,12 @@ export function BibleScreen() {
         }}
         onClose={closeTopics}
         onSelectTopic={openTopic}
+        onSelectReference={(reference) => {
+          const nextPosition = biblePositionFromReference(reference);
+          if (!nextPosition) return;
+          closeTopics();
+          jumpToPosition(nextPosition);
+        }}
         palette={readerPalette}
         references={topicResult?.references ?? []}
         topic={selectedTopic}
@@ -2174,8 +2294,8 @@ function BibleReaderHeader({
   onAudioPress,
   onBack,
   onOpenPicker,
+  onOpenSearch,
   onOpenSettings,
-  onOpenTopics,
   onOpenVersionPicker,
   palette,
   title,
@@ -2188,43 +2308,44 @@ function BibleReaderHeader({
   onAudioPress: () => void;
   onBack: () => void;
   onOpenPicker: () => void;
+  onOpenSearch: () => void;
   onOpenSettings: () => void;
-  onOpenTopics: () => void;
   onOpenVersionPicker: () => void;
   palette: ReaderPalette;
   title: string;
   translationLabel: string;
   topInset: number;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View
       style={{
         backgroundColor: palette.background,
         paddingBottom: 10,
-        paddingHorizontal: 18,
+        paddingHorizontal: 12,
         paddingTop: topInset + 10,
         position: "relative",
         zIndex: 20,
       }}
     >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 52 }}>
-        {canGoBack ? <ReaderCircleButton accessibilityLabel="Go back" icon="arrow-left" onPress={onBack} palette={palette} /> : null}
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 5, minHeight: 52 }}>
+        {canGoBack ? <ReaderCircleButton accessibilityLabel={t("bible.accessibility.back")} icon="arrow-left" onPress={onBack} palette={palette} /> : null}
 
         <Pressable
-          accessibilityLabel="Choose Bible chapter"
+          accessibilityLabel={t("bible.accessibility.chooseChapter")}
           accessibilityRole="button"
           hitSlop={10}
           onPress={onOpenPicker}
-          style={{ alignItems: "center", flexDirection: "row", flex: 1, gap: 4, minWidth: 0, paddingHorizontal: 4 }}
+          style={{ alignItems: "center", flexDirection: "row", flex: 1, gap: 3, minWidth: 0 }}
         >
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
             {title}
           </Text>
           <Feather name="chevron-down" size={14} color={palette.muted} />
         </Pressable>
 
         <Pressable
-          accessibilityLabel="Choose Bible translation"
+          accessibilityLabel={t("bible.accessibility.chooseTranslation")}
           accessibilityRole="button"
           hitSlop={8}
           onPress={onOpenVersionPicker}
@@ -2248,15 +2369,15 @@ function BibleReaderHeader({
         </Pressable>
 
         <View style={{ flexDirection: "row", gap: 6 }}>
-          <ReaderCircleButton accessibilityLabel="Search Scripture" icon="search" onPress={onOpenTopics} palette={palette} />
+          <ReaderCircleButton accessibilityLabel={t("bible.accessibility.search")} icon="search" onPress={onOpenSearch} palette={palette} />
           <ReaderCircleButton
-            accessibilityLabel={audioActive ? "Pause audio Bible" : "Play audio Bible"}
+            accessibilityLabel={audioActive ? t("bible.accessibility.pauseAudio") : t("bible.accessibility.playAudio")}
             disabled={audioDisabled}
             icon="volume-2"
             onPress={onAudioPress}
             palette={palette}
           />
-          <ReaderCircleButton accessibilityLabel="Open reading settings" onPress={onOpenSettings} palette={palette} text="Aa" />
+          <ReaderCircleButton accessibilityLabel={t("bible.accessibility.readingSettings")} onPress={onOpenSettings} palette={palette} text="Aa" />
         </View>
       </View>
     </View>
@@ -2271,6 +2392,7 @@ function BibleTopicsModal({
   loading,
   onBack,
   onClose,
+  onSelectReference,
   onSelectTopic,
   palette,
   references,
@@ -2284,12 +2406,14 @@ function BibleTopicsModal({
   loading: boolean;
   onBack: () => void;
   onClose: () => void;
+  onSelectReference: (reference: string) => void;
   onSelectTopic: (topic: string) => void;
   palette: ReaderPalette;
   references: BibleTopicReference[];
   topic: string;
   visible: boolean;
 }) {
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const slideX = useRef(new Animated.Value(0)).current;
@@ -2313,9 +2437,13 @@ function BibleTopicsModal({
   }, [detailVisible, slideX, visible, width]);
 
   function submitSearch() {
-    const topic = query.trim();
-    if (topic) {
-      onSelectTopic(topic);
+    const nextQuery = query.trim();
+    if (nextQuery) {
+      const suggestedTopic = suggestedTopics.find((item) => {
+        const normalizedQuery = nextQuery.toLocaleLowerCase();
+        return item.apiTopic.toLocaleLowerCase() === normalizedQuery || t(item.titleKey).toLocaleLowerCase() === normalizedQuery;
+      });
+      onSelectTopic(suggestedTopic?.apiTopic ?? nextQuery);
     }
   }
 
@@ -2330,7 +2458,12 @@ function BibleTopicsModal({
             width: width * 2,
           }}
         >
-          <View style={{ backgroundColor: palette.background, flex: 1, width }}>
+          <View
+            accessibilityElementsHidden={detailVisible}
+            aria-hidden={detailVisible}
+            importantForAccessibility={detailVisible ? "no-hide-descendants" : "auto"}
+            style={{ backgroundColor: palette.background, flex: 1, width }}
+          >
         <ScrollView
           contentInsetAdjustmentBehavior="never"
           keyboardShouldPersistTaps="handled"
@@ -2345,14 +2478,14 @@ function BibleTopicsModal({
         >
           <View style={{ alignItems: "center", maxWidth: 430, minHeight: 56, width: "100%" }}>
             <View style={{ position: "absolute", right: 0, top: 0 }}>
-              <ReaderCircleButton accessibilityLabel="Close Bible topics" icon="x" onPress={onClose} palette={palette} />
+              <ReaderCircleButton accessibilityLabel={t("bible.topics.close")} icon="x" onPress={onClose} palette={palette} />
             </View>
           </View>
 
           <View style={{ alignItems: "center", gap: 8, maxWidth: 430, width: "100%" }}>
-            <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900", textAlign: "center" }}>Explore Scripture by topic</Text>
+            <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900", textAlign: "center" }}>{t("bible.topics.title")}</Text>
             <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19, maxWidth: 240, textAlign: "center" }}>
-              Find verses for what you are walking through.
+              {t("bible.topics.description")}
             </Text>
           </View>
 
@@ -2385,7 +2518,7 @@ function BibleTopicsModal({
               autoCorrect
               onChangeText={setQuery}
               onSubmitEditing={submitSearch}
-              placeholder="Search topics..."
+              placeholder={t("bible.topics.searchPlaceholder")}
               placeholderTextColor={palette.muted}
               returnKeyType="search"
               style={{ color: palette.text, flex: 1, fontSize: 14, fontWeight: "700", minHeight: 48, paddingVertical: 0 }}
@@ -2394,7 +2527,7 @@ function BibleTopicsModal({
           </View>
 
           <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
-            <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>Suggested topics</Text>
+            <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.topics.suggested")}</Text>
             <View
               style={{
                 backgroundColor: palette.surface,
@@ -2413,8 +2546,8 @@ function BibleTopicsModal({
             >
               {suggestedTopics.map((topic, index) => (
                 <SuggestedTopicRow
-                  key={topic.title}
-                  onPress={() => onSelectTopic(topic.title)}
+                  key={topic.apiTopic}
+                  onPress={() => onSelectTopic(topic.apiTopic)}
                   palette={palette}
                   showDivider={index < suggestedTopics.length - 1}
                   topic={topic}
@@ -2424,14 +2557,19 @@ function BibleTopicsModal({
           </View>
         </ScrollView>
           </View>
-          <View style={{ backgroundColor: palette.background, flex: 1, width }}>
+          <View
+            accessibilityElementsHidden={!detailVisible}
+            aria-hidden={!detailVisible}
+            importantForAccessibility={!detailVisible ? "no-hide-descendants" : "auto"}
+            style={{ backgroundColor: palette.background, flex: 1, width }}
+          >
             <BibleTopicDetailPane
               bibleVersionId={bibleVersionId}
               bibleVersionLabel={bibleVersionLabel}
               error={error}
               loading={loading}
               onBack={onBack}
-              onClose={onClose}
+              onSelectReference={onSelectReference}
               palette={palette}
               references={references}
               topic={topic}
@@ -2454,6 +2592,7 @@ function SuggestedTopicRow({
   showDivider: boolean;
   topic: SuggestedTopic;
 }) {
+  const { t } = useAppTranslation();
   const tone = {
     blue: { background: colors.reflectionSoft, color: colors.textMuted },
     green: { background: colors.rhythmSoft, color: colors.textMuted },
@@ -2490,10 +2629,10 @@ function SuggestedTopicRow({
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "900" }}>
-          {topic.title}
+          {t(topic.titleKey)}
         </Text>
         <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "700" }}>
-          {topic.subtitle}
+          {t(topic.subtitleKey)}
         </Text>
       </View>
       <Feather name="chevron-right" size={17} color={palette.muted} />
@@ -2507,7 +2646,7 @@ function BibleTopicDetailPane({
   error,
   loading,
   onBack,
-  onClose,
+  onSelectReference,
   palette,
   references,
   topic,
@@ -2517,11 +2656,12 @@ function BibleTopicDetailPane({
   error?: string;
   loading: boolean;
   onBack: () => void;
-  onClose: () => void;
+  onSelectReference: (reference: string) => void;
   palette: ReaderPalette;
   references: BibleTopicReference[];
   topic: string;
 }) {
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const resolvedVerses = useMemo(
     () =>
@@ -2532,7 +2672,7 @@ function BibleTopicDetailPane({
       })),
     [bibleVersionId, references],
   );
-  const title = topicTitle(topic || "Topic");
+  const title = localizedTopicTitle(topic, t);
 
   return (
     <View style={{ backgroundColor: palette.background, flex: 1 }}>
@@ -2548,16 +2688,20 @@ function BibleTopicDetailPane({
             paddingTop: insets.top + 12,
           }}
         >
-          <ReaderCircleButton accessibilityLabel="Back to Bible topics" icon="arrow-left" onPress={onBack} palette={palette} />
+          <ReaderCircleButton accessibilityLabel={t("bible.topics.back")} icon="arrow-left" onPress={onBack} palette={palette} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text numberOfLines={1} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>
               {title}
             </Text>
             <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>
-              {loading ? "Searching OpenBible..." : `${references.length} references - ${bibleVersionLabel}`}
+              {loading
+                ? t("bible.topics.searchingSource")
+                : references.length === 1
+                  ? t("bible.topics.reference.single", { translation: bibleVersionLabel })
+                  : t("bible.topics.reference.count", { count: references.length, translation: bibleVersionLabel })}
             </Text>
           </View>
-          <ReaderCircleButton accessibilityLabel="Close Bible topics" icon="x" onPress={onClose} palette={palette} />
+          <View style={{ height: 46, width: 46 }} />
         </View>
 
         <ScrollView
@@ -2586,20 +2730,28 @@ function BibleTopicDetailPane({
               }}
             >
               <ActivityIndicator color={palette.accent} />
-              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "800" }}>Searching for {title.toLowerCase()} verses...</Text>
+              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "800" }}>{t("bible.topics.searching", { topic: title.toLocaleLowerCase() })}</Text>
             </View>
           ) : error ? (
             <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, gap: 8, padding: 16 }}>
-              <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>Could not load this topic</Text>
+              <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{t("bible.topics.errorTitle")}</Text>
               <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
-                {error}
+                {t("bible.topics.errorBody")}
               </Text>
             </View>
           ) : resolvedVerses.length > 0 ? (
-            resolvedVerses.map((item, index) => <TopicVerseCard key={`${item.reference}-${index}`} bibleVersionLabel={bibleVersionLabel} item={item} palette={palette} />)
+            resolvedVerses.map((item, index) => (
+              <TopicVerseCard
+                key={`${item.reference}-${index}`}
+                bibleVersionLabel={bibleVersionLabel}
+                item={item}
+                onPress={item.verse ? () => onSelectReference(item.reference) : undefined}
+                palette={palette}
+              />
+            ))
           ) : (
             <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
-              <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "800", lineHeight: 20 }}>No Bible references were found for this topic.</Text>
+              <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "800", lineHeight: 20 }}>{t("bible.topics.empty")}</Text>
             </View>
           )}
         </ScrollView>
@@ -2610,14 +2762,21 @@ function BibleTopicDetailPane({
 function TopicVerseCard({
   bibleVersionLabel,
   item,
+  onPress,
   palette,
 }: {
   bibleVersionLabel: string;
   item: { reference: string; verse?: BibleVerse; votes: number };
+  onPress?: () => void;
   palette: ReaderPalette;
 }) {
+  const { t } = useAppTranslation();
   return (
-    <View
+    <Pressable
+      accessibilityLabel={onPress ? t("bible.navigator.openPassage", { reference: item.reference }) : undefined}
+      accessibilityRole={onPress ? "button" : undefined}
+      disabled={!onPress}
+      onPress={onPress}
       style={{
         backgroundColor: palette.surface,
         borderColor: palette.line,
@@ -2651,10 +2810,10 @@ function TopicVerseCard({
         </>
       ) : (
         <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
-          This reference is not available in {bibleVersionLabel} yet.
+          {t("bible.topics.unavailable", { translation: bibleVersionLabel })}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -4307,6 +4466,7 @@ function BibleBottomReadingControls({
   palette: ReaderPalette;
   previousChapter?: BiblePosition;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 22, position: "absolute", right: 0, zIndex: 18 }}>
       <View
@@ -4320,14 +4480,14 @@ function BibleBottomReadingControls({
         }}
       >
         <ReaderControlButton
-          accessibilityLabel="Previous chapter"
+          accessibilityLabel={t("bible.accessibility.previousChapter")}
           disabled={!previousChapter}
           icon="chevron-left"
           onPress={onPrevious}
           palette={palette}
         />
         <ReaderControlButton
-          accessibilityLabel="Next chapter"
+          accessibilityLabel={t("bible.accessibility.nextChapter")}
           disabled={!nextChapter}
           icon="chevron-right"
           onPress={onNext}
@@ -5231,36 +5391,48 @@ const PuterAudioBridge = forwardRef<WebView, { onClose: () => void; onMessage: (
 });
 
 function BibleDrawer({
+  biblePlanCount,
+  bibleVersionId,
   highlights,
+  initialStage,
   initialPosition,
   journalEntries,
   onClose,
-  onOpenJournal,
+  onOpenPlans,
+  onOpenReflection,
+  onOpenTopic,
   onSelect,
   palette,
   savedVerses,
   versionLabel,
   visible,
 }: {
+  biblePlanCount: number;
+  bibleVersionId: BibleVersionId;
   highlights: BibleHighlight[];
+  initialStage: "home" | "search";
   initialPosition: BiblePosition;
   journalEntries: JournalEntry[];
   onClose: () => void;
-  onOpenJournal: () => void;
+  onOpenPlans: () => void;
+  onOpenReflection: (entryId: string) => void;
+  onOpenTopic: (topic?: string) => void;
   onSelect: (position: BiblePosition) => void;
   palette: ReaderPalette;
   savedVerses: SavedVerse[];
   versionLabel: string;
   visible: boolean;
 }) {
+  const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
   const translateY = useRef(new Animated.Value(sheetHeight)).current;
-  const [stage, setStage] = useState<PickerStage>("home");
+  const drawerScrollRef = useRef<ScrollView>(null);
+  const [stage, setStage] = useState<PickerStage>(initialStage);
   const [bookQuery, setBookQuery] = useState("");
+  const [bookParentStage, setBookParentStage] = useState<"book" | "search">("book");
   const [selectedBook, setSelectedBook] = useState(initialPosition.book);
-  const [selectedChapter, setSelectedChapter] = useState(initialPosition.chapter);
   const [testament, setTestament] = useState<TestamentFilter>("all");
   const drawerCornerRadius = 44;
 
@@ -5324,12 +5496,12 @@ function BibleDrawer({
   useEffect(() => {
     if (!visible) return;
     const normalized = normalizeBiblePosition(initialPosition);
-    setStage("home");
+    setStage(initialStage);
     setBookQuery("");
+    setBookParentStage(initialStage === "search" ? "search" : "book");
     setSelectedBook(normalized.book);
-    setSelectedChapter(normalized.chapter);
     setTestament("all");
-  }, [initialPosition, visible]);
+  }, [initialPosition, initialStage, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -5342,15 +5514,27 @@ function BibleDrawer({
     }).start();
   }, [sheetHeight, translateY, visible]);
 
+  useEffect(() => {
+    if (!visible) return;
+    requestAnimationFrame(() => drawerScrollRef.current?.scrollTo({ animated: false, y: 0 }));
+  }, [stage, visible]);
+
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
-  const normalizedQuery = bookQuery.trim().toLowerCase();
-  const searchPosition = biblePositionFromSearchQuery(bookQuery);
+  const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
+  const searchPosition = biblePositionFromSearchQuery(bookQuery, language);
   const selectableBooks = kjvBooks.filter((item) => {
-    const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery);
+    const displayName = displayBibleBookName(item.name, language).toLocaleLowerCase(language);
+    const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
     const matchesTestament = testament === "all" || testamentForBook(item.name) === testament;
     return matchesQuery && matchesTestament;
   });
-  const selectableVerses = versesForChapter(selectedBook, selectedChapter);
+  const matchingTopics = normalizedQuery
+    ? suggestedTopics.filter((topic) => {
+        const title = t(topic.titleKey).toLocaleLowerCase(language);
+        const subtitle = t(topic.subtitleKey).toLocaleLowerCase(language);
+        return title.includes(normalizedQuery) || subtitle.includes(normalizedQuery) || topic.apiTopic.toLowerCase().includes(normalizedQuery);
+      })
+    : [];
   const recentHighlights = useMemo(() => [...highlights].sort((a, b) => highlightTime(b) - highlightTime(a)).slice(0, 12), [highlights]);
   const bibleReflections = useMemo(
     () =>
@@ -5362,26 +5546,24 @@ function BibleDrawer({
   );
   const title =
     stage === "home"
-      ? "Bible"
+      ? t("bible.navigator.title")
+      : stage === "search"
+        ? t("bible.navigator.search")
       : stage === "book"
-        ? testamentLabel(testament)
+        ? testament === "old"
+          ? t("bible.navigator.oldTestament")
+          : t("bible.navigator.newTestament")
         : stage === "chapter"
-          ? selectedBook
-          : stage === "verse"
-            ? `${selectedBook} ${selectedChapter}`
+          ? displayBibleBookName(selectedBook, language)
             : stage === "saved"
-              ? "Saved verses"
+              ? t("bible.navigator.saved")
               : stage === "highlights"
-                ? "Recently highlighted"
-                : "My Bible reflections";
+                ? t("bible.navigator.highlights")
+                : t("bible.navigator.reflections");
 
   function goBack() {
-    if (stage === "verse") {
-      setStage("chapter");
-      return;
-    }
     if (stage === "chapter") {
-      setStage("book");
+      setStage(bookParentStage);
       return;
     }
     if (stage !== "home") {
@@ -5398,23 +5580,35 @@ function BibleDrawer({
     setStage("book");
   }
 
+  function openSearch() {
+    setTestament("all");
+    setBookQuery("");
+    setStage("search");
+  }
+
   function chooseBook(bookName: string) {
     const nextBook = kjvBooks.find((item) => item.name === bookName);
-    const nextChapter = nextBook?.chapters[0] ?? 1;
+    if (!nextBook) return;
+    setBookParentStage(stage === "search" ? "search" : "book");
     setSelectedBook(bookName);
-    setSelectedChapter(nextChapter);
     setStage("chapter");
   }
 
   function chooseChapter(chapter: number) {
-    setSelectedChapter(chapter);
-    setStage("verse");
+    onSelect(normalizeBiblePosition({ book: selectedBook, chapter, verse: 1 }));
   }
 
   return (
     <Modal transparent visible={visible} onRequestClose={goBack}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close Bible drawer" accessibilityRole="button" onPress={closeWithAnimation} style={{ backgroundColor: palette.dim, flex: 1 }} />
+        <Pressable
+          accessible={false}
+          accessibilityElementsHidden
+          accessibilityRole="none"
+          importantForAccessibility="no"
+          onPress={closeWithAnimation}
+          style={{ backgroundColor: palette.dim, flex: 1 }}
+        />
         <Animated.View
           style={{
             backgroundColor: palette.sheet,
@@ -5438,15 +5632,21 @@ function BibleDrawer({
               <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 58 }} />
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
-              <ReaderCircleButton accessibilityLabel={stage === "home" ? "Close Bible drawer" : "Back"} icon={stage === "home" ? "x" : "chevron-left"} onPress={goBack} palette={palette} />
+              <ReaderCircleButton
+                accessibilityLabel={stage === "home" ? t("bible.navigator.close") : t("bible.navigator.back")}
+                icon={stage === "home" ? "x" : "chevron-left"}
+                onPress={goBack}
+                palette={palette}
+              />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{title}</Text>
+                <Text numberOfLines={2} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{title}</Text>
                 <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition)} - ${versionLabel}` : versionLabel}</Text>
               </View>
             </View>
           </View>
 
           <ScrollView
+            ref={drawerScrollRef}
             contentInsetAdjustmentBehavior="never"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -5454,108 +5654,191 @@ function BibleDrawer({
           >
             {stage === "home" ? (
               <>
-                <DrawerSearchBox onChangeText={setBookQuery} onSubmit={() => searchPosition && onSelect(searchPosition)} palette={palette} value={bookQuery} />
-                {searchPosition ? (
+                <DrawerSection title={t("bible.navigator.goTo")} palette={palette}>
+                  <DrawerRow
+                    icon="book-open"
+                    onPress={() => openBookList("old")}
+                    palette={palette}
+                    subtitle={t("bible.navigator.oldTestamentRange")}
+                    title={t("bible.navigator.oldTestament")}
+                  />
+                  <DrawerRow
+                    icon="book"
+                    onPress={() => openBookList("new")}
+                    palette={palette}
+                    subtitle={t("bible.navigator.newTestamentRange")}
+                    title={t("bible.navigator.newTestament")}
+                  />
                   <DrawerRow
                     icon="search"
-                    onPress={() => onSelect(searchPosition)}
+                    onPress={openSearch}
                     palette={palette}
-                    subtitle="Open this passage in the reader"
-                    title={`Open ${referenceLabel(searchPosition)}`}
+                    subtitle={t("bible.navigator.searchSubtitle")}
+                    title={t("bible.navigator.search")}
                   />
-                ) : null}
-                {normalizedQuery && !searchPosition ? (
-                  <View style={{ gap: 8 }}>
-                    {selectableBooks.slice(0, 6).map((item) => (
-                      <DrawerBookRow key={item.name} book={item} onPress={() => chooseBook(item.name)} palette={palette} selected={item.name === selectedBook} />
-                    ))}
-                    {selectableBooks.length === 0 ? <DrawerEmptyState palette={palette} text="No books match that search." /> : null}
-                  </View>
-                ) : null}
-
-                <DrawerSection title="Go to book" palette={palette}>
-                  <DrawerRow icon="book-open" onPress={() => openBookList("old")} palette={palette} subtitle="Genesis through Malachi" title="Old Testament" />
-                  <DrawerRow icon="book" onPress={() => openBookList("new")} palette={palette} subtitle="Matthew through Revelation" title="New Testament" />
-                  <DrawerRow icon="search" onPress={() => openBookList("all")} palette={palette} subtitle="Search book, chapter, or verse" title="Search book or verse" />
                 </DrawerSection>
 
-                <DrawerSection title="My places" palette={palette}>
-                  <DrawerRow icon="play-circle" onPress={() => onSelect(initialPosition)} palette={palette} subtitle={referenceLabel(initialPosition)} title="Continue where you were" />
+                <DrawerSection title={t("bible.navigator.myPlaces")} palette={palette}>
                   <DrawerRow
-                    disabled={savedVerses.length === 0}
+                    icon="play-circle"
+                    onPress={() => onSelect(initialPosition)}
+                    palette={palette}
+                    subtitle={referenceLabel(initialPosition)}
+                    title={t("bible.navigator.continue")}
+                  />
+                  <DrawerRow
                     icon="bookmark"
                     onPress={() => setStage("saved")}
                     palette={palette}
-                    subtitle={savedVerses.length ? `${savedVerses.length} saved` : "No saved verses yet"}
-                    title="Saved verses"
+                    subtitle={savedVerses.length === 0
+                      ? t("bible.navigator.saved.emptyCount")
+                      : savedVerses.length === 1
+                        ? t("bible.navigator.saved.single")
+                        : t("bible.navigator.saved.count", { count: savedVerses.length })}
+                    title={t("bible.navigator.saved")}
                   />
                   <DrawerRow
-                    disabled={recentHighlights.length === 0}
                     icon="edit-2"
                     onPress={() => setStage("highlights")}
                     palette={palette}
-                    subtitle={recentHighlights.length ? `${recentHighlights.length} recent` : "No highlights yet"}
-                    title="Recently highlighted"
+                    subtitle={recentHighlights.length === 0
+                      ? t("bible.navigator.highlights.emptyCount")
+                      : recentHighlights.length === 1
+                        ? t("bible.navigator.highlights.single")
+                        : t("bible.navigator.highlights.count", { count: recentHighlights.length })}
+                    title={t("bible.navigator.highlights")}
                   />
                   <DrawerRow
-                    disabled={bibleReflections.length === 0}
                     icon="edit-3"
                     onPress={() => setStage("reflections")}
                     palette={palette}
-                    subtitle={bibleReflections.length ? `${bibleReflections.length} linked notes` : "Create one from a verse"}
-                    title="My Bible reflections"
+                    subtitle={bibleReflections.length === 0
+                      ? t("bible.navigator.reflections.emptyCount")
+                      : bibleReflections.length === 1
+                        ? t("bible.navigator.reflections.single")
+                        : t("bible.navigator.reflections.count", { count: bibleReflections.length })}
+                    title={t("bible.navigator.reflections")}
+                  />
+                  <DrawerRow
+                    icon="calendar"
+                    onPress={onOpenPlans}
+                    palette={palette}
+                    subtitle={biblePlanCount === 0
+                      ? t("bible.navigator.plans.empty")
+                      : biblePlanCount === 1
+                        ? t("bible.navigator.plans.single")
+                        : t("bible.navigator.plans.count", { count: biblePlanCount })}
+                    title={t("bible.navigator.plans")}
                   />
                 </DrawerSection>
               </>
             ) : null}
 
-            {stage === "book" ? (
-            <>
-              <DrawerSearchBox onChangeText={setBookQuery} onSubmit={() => searchPosition && onSelect(searchPosition)} palette={palette} value={bookQuery} />
-              {searchPosition ? (
-                <DrawerRow
-                  icon="search"
-                  onPress={() => onSelect(searchPosition)}
+            {stage === "search" ? (
+              <>
+                <DrawerSearchBox
+                  onChangeText={setBookQuery}
+                  onSubmit={() => searchPosition && onSelect(searchPosition)}
                   palette={palette}
-                  subtitle="Open this passage in the reader"
-                  title={`Open ${referenceLabel(searchPosition)}`}
+                  placeholder={t("bible.navigator.searchPlaceholder")}
+                  value={bookQuery}
                 />
-              ) : null}
-              <View style={{ gap: 8 }}>
-                {selectableBooks.length > 0 ? (
-                  selectableBooks.map((item) => (
-                    <DrawerBookRow key={item.name} book={item} onPress={() => chooseBook(item.name)} palette={palette} selected={item.name === selectedBook} />
-                  ))
-                ) : (
-                  <DrawerEmptyState palette={palette} text="No books match that search." />
-                )}
+                {!normalizedQuery ? (
+                  <>
+                    <DrawerRow
+                      icon="compass"
+                      onPress={() => onOpenTopic()}
+                      palette={palette}
+                      subtitle={t("bible.topics.exploreSubtitle")}
+                      title={t("bible.topics.explore")}
+                    />
+                    <DrawerEmptyState palette={palette} text={t("bible.navigator.searchIntro")} />
+                  </>
+                ) : null}
+                {searchPosition ? (
+                  <DrawerRow
+                    icon="search"
+                    onPress={() => onSelect(searchPosition)}
+                    palette={palette}
+                    subtitle={t("bible.navigator.openPassageSubtitle")}
+                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition) })}
+                  />
+                ) : null}
+                {normalizedQuery && !searchPosition && selectableBooks.length ? (
+                  <View style={{ gap: 8 }}>
+                    {selectableBooks.slice(0, 12).map((item) => (
+                      <DrawerBookRow
+                        key={item.name}
+                        book={item}
+                        language={language}
+                        onPress={() => chooseBook(item.name)}
+                        palette={palette}
+                        selected={item.name === initialPosition.book}
+                        t={t}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {matchingTopics.length ? (
+                  <DrawerSection title={t("bible.topics.suggested")} palette={palette}>
+                    {matchingTopics.map((topic) => (
+                      <DrawerRow
+                        icon="compass"
+                        key={topic.apiTopic}
+                        onPress={() => onOpenTopic(topic.apiTopic)}
+                        palette={palette}
+                        subtitle={t(topic.subtitleKey)}
+                        title={t(topic.titleKey)}
+                      />
+                    ))}
+                  </DrawerSection>
+                ) : null}
+                {normalizedQuery && !searchPosition && selectableBooks.length === 0 && matchingTopics.length === 0 ? (
+                  <DrawerEmptyState palette={palette} text={t("bible.navigator.searchNoResults")} />
+                ) : null}
+              </>
+            ) : null}
+
+            {stage === "book" ? (
+              <>
+                <DrawerSearchBox
+                  onChangeText={setBookQuery}
+                  onSubmit={() => undefined}
+                  palette={palette}
+                  placeholder={t("bible.navigator.filterBooks")}
+                  value={bookQuery}
+                />
+                <View style={{ gap: 8 }}>
+                  {selectableBooks.length > 0 ? (
+                    selectableBooks.map((item) => (
+                      <DrawerBookRow
+                        key={item.name}
+                        book={item}
+                        language={language}
+                        onPress={() => chooseBook(item.name)}
+                        palette={palette}
+                        selected={item.name === initialPosition.book}
+                        t={t}
+                      />
+                    ))
+                  ) : (
+                    <DrawerEmptyState palette={palette} text={t("bible.navigator.noBooks")} />
+                  )}
+                </View>
+              </>
+            ) : null}
+
+            {stage === "chapter" ? (
+              <View style={{ gap: 10 }}>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>{t("bible.navigator.chapter")}</Text>
+                <PickerGrid
+                  palette={palette}
+                  selected={initialPosition.book === selectedBook ? initialPosition.chapter : undefined}
+                  values={book?.chapters ?? []}
+                  onSelect={chooseChapter}
+                />
               </View>
-            </>
-          ) : null}
-
-          {stage === "chapter" ? (
-            <View style={{ gap: 10 }}>
-              <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>Chapter</Text>
-              <PickerGrid
-                palette={palette}
-                selected={selectedChapter}
-                values={book?.chapters ?? []}
-                onSelect={chooseChapter}
-              />
-            </View>
-          ) : null}
-
-          {stage === "verse" ? (
-            <View style={{ gap: 10 }}>
-              <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>Verse</Text>
-              <PickerGrid
-                palette={palette}
-                selected={initialPosition.book === selectedBook && initialPosition.chapter === selectedChapter ? initialPosition.verse : undefined}
-                values={selectableVerses}
-                onSelect={(verse) => onSelect(normalizeBiblePosition({ book: selectedBook, chapter: selectedChapter, verse }))}
-              />
-            </View>
-          ) : null}
+            ) : null}
 
             {stage === "saved" ? (
               <View style={{ gap: 8 }}>
@@ -5569,11 +5852,12 @@ function BibleDrawer({
                       }}
                       palette={palette}
                       reference={verse.reference}
+                      meta={verse.translation && verse.translation !== versionLabel ? verse.translation : undefined}
                       text={verse.text}
                     />
                   ))
                 ) : (
-                  <DrawerEmptyState palette={palette} text="Saved verses will appear here." />
+                  <DrawerEmptyState palette={palette} text={t("bible.navigator.saved.empty")} />
                 )}
               </View>
             ) : null}
@@ -5581,17 +5865,22 @@ function BibleDrawer({
             {stage === "highlights" ? (
               <View style={{ gap: 8 }}>
                 {recentHighlights.length ? (
-                  recentHighlights.map((highlight) => (
-                    <DrawerVerseRow
-                      accentColor={highlight.color}
-                      key={highlight.id}
-                      onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
-                      palette={palette}
-                      reference={highlight.reference}
-                    />
-                  ))
+                  recentHighlights.map((highlight) => {
+                    const preview = buildBibleVerse(highlight.book, highlight.chapter, highlight.startVerse, highlight.endVerse, bibleVersionId)?.text;
+                    return (
+                      <DrawerVerseRow
+                        accentColor={highlight.color}
+                        key={highlight.id}
+                        onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
+                        palette={palette}
+                        reference={highlight.reference}
+                        meta={highlight.translation && highlight.translation !== versionLabel ? highlight.translation : undefined}
+                        text={preview}
+                      />
+                    );
+                  })
                 ) : (
-                  <DrawerEmptyState palette={palette} text="Highlighted verses will appear here." />
+                  <DrawerEmptyState palette={palette} text={t("bible.navigator.highlights.empty")} />
                 )}
               </View>
             ) : null}
@@ -5601,25 +5890,18 @@ function BibleDrawer({
                 {bibleReflections.length ? (
                   bibleReflections.map((entry) => {
                     const verse = entry.verses?.[0] ?? entry.verse;
-                    const nextPosition = biblePositionFromVerse(verse) ?? biblePositionFromReference(entry.passage?.reference);
                     return (
                       <DrawerVerseRow
                         key={entry.id}
-                        onPress={() => {
-                          if (nextPosition) {
-                            onSelect(nextPosition);
-                            return;
-                          }
-                          onOpenJournal();
-                        }}
+                        onPress={() => onOpenReflection(entry.id)}
                         palette={palette}
-                        reference={verse?.reference ?? entry.passage?.reference ?? entry.title ?? "Bible reflection"}
+                        reference={verse?.reference ?? entry.passage?.reference ?? entry.title ?? t("bible.navigator.reflectionFallback")}
                         text={entry.body}
                       />
                     );
                   })
                 ) : (
-                  <DrawerEmptyState palette={palette} text="Reflections connected to Bible verses will appear here." />
+                  <DrawerEmptyState palette={palette} text={t("bible.navigator.reflections.empty")} />
                 )}
               </View>
             ) : null}
@@ -5634,11 +5916,13 @@ function DrawerSearchBox({
   onChangeText,
   onSubmit,
   palette,
+  placeholder,
   value,
 }: {
   onChangeText: (value: string) => void;
   onSubmit: () => void;
   palette: ReaderPalette;
+  placeholder: string;
   value: string;
 }) {
   return (
@@ -5661,7 +5945,7 @@ function DrawerSearchBox({
         autoCorrect={false}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
-        placeholder="Search book or verse"
+        placeholder={placeholder}
         placeholderTextColor={palette.muted}
         returnKeyType="search"
         style={{ color: palette.text, flex: 1, fontSize: 15, fontWeight: "700", minHeight: 48 }}
@@ -5739,7 +6023,7 @@ function DrawerRow({
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>{title}</Text>
-        <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
+        <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 12, fontWeight: "700", lineHeight: 16 }}>
           {subtitle}
         </Text>
       </View>
@@ -5750,15 +6034,20 @@ function DrawerRow({
 
 function DrawerBookRow({
   book,
+  language,
   onPress,
   palette,
   selected,
+  t,
 }: {
   book: (typeof kjvBooks)[number];
+  language: AppLanguage;
   onPress: () => void;
   palette: ReaderPalette;
   selected: boolean;
+  t: TranslationFunction;
 }) {
+  const chapterCount = book.chapters.length;
   return (
     <Pressable
       accessibilityRole="button"
@@ -5777,9 +6066,13 @@ function DrawerBookRow({
       }}
     >
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{book.name}</Text>
+        <Text numberOfLines={2} style={{ color: palette.text, fontSize: 16, fontWeight: "900", lineHeight: 21 }}>
+          {displayBibleBookName(book.name, language)}
+        </Text>
         <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
-          {book.chapters.length} {book.chapters.length === 1 ? "chapter" : "chapters"}
+          {chapterCount === 1
+            ? t("bible.navigator.chapter.single")
+            : t("bible.navigator.chapter.count", { count: chapterCount })}
         </Text>
       </View>
       <Feather name="chevron-right" size={18} color={palette.muted} />
@@ -5789,20 +6082,23 @@ function DrawerBookRow({
 
 function DrawerVerseRow({
   accentColor,
+  meta,
   onPress,
   palette,
   reference,
   text,
 }: {
   accentColor?: BibleHighlightColor;
+  meta?: string;
   onPress: () => void;
   palette: ReaderPalette;
   reference: string;
   text?: string;
 }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
-      accessibilityLabel={accentColor ? `Open ${reference}` : undefined}
+      accessibilityLabel={t("bible.navigator.openPassage", { reference })}
       accessibilityRole="button"
       onPress={onPress}
       style={{
@@ -5839,6 +6135,11 @@ function DrawerVerseRow({
       {text ? (
         <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
           {text}
+        </Text>
+      ) : null}
+      {meta ? (
+        <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "800" }}>
+          {meta}
         </Text>
       ) : null}
     </Pressable>
