@@ -57,6 +57,8 @@ import {
   nextBibleChapter,
   normalizeBiblePosition,
   previousBibleChapter,
+  searchBibleText,
+  type BibleTextSearchResult,
   versesForChapter,
 } from "@/features/bible-kjv";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
@@ -5445,11 +5447,14 @@ function BibleDrawer({
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
   const translateY = useRef(new Animated.Value(sheetHeight)).current;
   const drawerScrollRef = useRef<ScrollView>(null);
+  const phraseSearchRequestRef = useRef(0);
   const [stage, setStage] = useState<PickerStage>(initialStage);
   const [bookQuery, setBookQuery] = useState("");
   const [bookParentStage, setBookParentStage] = useState<"book" | "search">("book");
   const [selectedBook, setSelectedBook] = useState(initialPosition.book);
   const [testament, setTestament] = useState<TestamentFilter>("all");
+  const [phraseSearchLoading, setPhraseSearchLoading] = useState(false);
+  const [phraseSearchResults, setPhraseSearchResults] = useState<BibleTextSearchResult[]>([]);
   const drawerCornerRadius = 44;
 
   const closeWithAnimation = useCallback(() => {
@@ -5551,6 +5556,45 @@ function BibleDrawer({
         return title.includes(normalizedQuery) || subtitle.includes(normalizedQuery) || topic.apiTopic.toLowerCase().includes(normalizedQuery);
       })
     : [];
+  const phraseSearchEligible = Boolean(
+    stage === "search" &&
+    normalizedQuery &&
+    !searchPosition &&
+    selectableBooks.length === 0 &&
+    matchingTopics.length === 0,
+  );
+
+  useEffect(() => {
+    const requestId = phraseSearchRequestRef.current + 1;
+    phraseSearchRequestRef.current = requestId;
+    if (!visible || !phraseSearchEligible) {
+      setPhraseSearchLoading(false);
+      setPhraseSearchResults([]);
+      return;
+    }
+
+    setPhraseSearchLoading(true);
+    setPhraseSearchResults([]);
+    const timeout = setTimeout(() => {
+      void searchBibleText(bookQuery, bibleVersionId)
+        .then((results) => {
+          if (phraseSearchRequestRef.current !== requestId) return;
+          setPhraseSearchResults(results);
+        })
+        .catch(() => {
+          if (phraseSearchRequestRef.current !== requestId) return;
+          setPhraseSearchResults([]);
+        })
+        .finally(() => {
+          if (phraseSearchRequestRef.current === requestId) {
+            setPhraseSearchLoading(false);
+          }
+        });
+    }, 180);
+
+    return () => clearTimeout(timeout);
+  }, [bibleVersionId, bookQuery, phraseSearchEligible, visible]);
+
   const recentHighlights = useMemo(() => [...highlights].sort((a, b) => highlightTime(b) - highlightTime(a)).slice(0, 12), [highlights]);
   const bibleReflections = useMemo(
     () =>
@@ -5809,8 +5853,30 @@ function BibleDrawer({
                     ))}
                   </DrawerSection>
                 ) : null}
-                {normalizedQuery && !searchPosition && selectableBooks.length === 0 && matchingTopics.length === 0 ? (
-                  <DrawerEmptyState palette={palette} text={t("bible.navigator.searchNoResults")} />
+                {phraseSearchEligible && phraseSearchLoading ? (
+                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 8 }}>
+                    <ActivityIndicator color={palette.accent} size="small" />
+                    <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>
+                      {t("bible.navigator.searchingText", { translation: versionLabel })}
+                    </Text>
+                  </View>
+                ) : null}
+                {phraseSearchEligible && !phraseSearchLoading && phraseSearchResults.length > 0 ? (
+                  <View style={{ gap: 8 }}>
+                    {phraseSearchResults.map((result) => (
+                      <DrawerVerseRow
+                        key={`${bibleVersionId}-${result.reference}`}
+                        meta={versionLabel}
+                        onPress={() => onSelect(result.position)}
+                        palette={palette}
+                        reference={result.reference}
+                        text={result.text}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {phraseSearchEligible && !phraseSearchLoading && phraseSearchResults.length === 0 ? (
+                  <DrawerEmptyState palette={palette} text={t("bible.navigator.searchTextNoResults")} />
                 ) : null}
               </>
             ) : null}

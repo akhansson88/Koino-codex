@@ -36,6 +36,24 @@ export type BibleCrossReference = {
   votes: number;
 };
 
+export type BibleTextSearchResult = {
+  position: BiblePosition;
+  reference: string;
+  text: string;
+};
+
+type BibleTextSearchEntry = BibleTextSearchResult & {
+  canonicalOrder: number;
+  foldedText: string;
+  normalizedText: string;
+  tokenSet: Set<string>;
+};
+
+type BibleTextSearchIndex = {
+  entries: BibleTextSearchEntry[];
+  entriesByToken: Map<string, number[]>;
+};
+
 const versesByReference = kjvVerseMap as VerseMap;
 const crossReferencesBySource = (crossReferenceMap as CrossReferenceMap).references;
 const parsedReferences = Object.keys(versesByReference)
@@ -217,6 +235,133 @@ export function isBibleVersionId(value: unknown): value is BibleVersionId {
 
 export function bibleVersionFor(versionId?: BibleVersionId) {
   return bibleVersions.find((version) => version.id === versionId) ?? bibleVersions.find((version) => version.id === defaultBibleVersionId) ?? bibleVersions[0];
+}
+
+const bibleTextSearchIndexPromises = new Map<BibleVersionId, Promise<BibleTextSearchIndex>>();
+
+function bibleSearchLocale(versionId: BibleVersionId) {
+  return versionId === "kjv" ? "en" : "sv";
+}
+
+function foldBibleSearchText(value: string, versionId: BibleVersionId) {
+  return value
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase(bibleSearchLocale(versionId));
+}
+
+function normalizeBibleSearchText(value: string, versionId: BibleVersionId) {
+  return foldBibleSearchText(value, versionId)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function yieldBibleSearchWork() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+async function buildBibleTextSearchIndex(versionId: BibleVersionId): Promise<BibleTextSearchIndex> {
+  const verseMap = bibleVersionFor(versionId).verses as VerseMap;
+  const entries: BibleTextSearchEntry[] = [];
+  const entriesByToken = new Map<string, number[]>();
+
+  for (let index = 0; index < parsedReferences.length; index += 1) {
+    const item = parsedReferences[index];
+    const text = cleanVerseText(verseMap[item.reference] ?? "");
+    if (text) {
+      const normalizedText = normalizeBibleSearchText(text, versionId);
+      const tokenSet = new Set(normalizedText.split(" ").filter(Boolean));
+      const entryIndex = entries.length;
+      entries.push({
+        canonicalOrder: index,
+        foldedText: foldBibleSearchText(text, versionId),
+        normalizedText,
+        position: { book: item.book, chapter: item.chapter, verse: item.verse },
+        reference: item.reference,
+        text,
+        tokenSet,
+      });
+      tokenSet.forEach((token) => {
+        const matchingEntries = entriesByToken.get(token) ?? [];
+        matchingEntries.push(entryIndex);
+        entriesByToken.set(token, matchingEntries);
+      });
+    }
+
+    if (index > 0 && index % 750 === 0) {
+      await yieldBibleSearchWork();
+    }
+  }
+
+  return { entries, entriesByToken };
+}
+
+function bibleTextSearchIndex(versionId: BibleVersionId) {
+  const existing = bibleTextSearchIndexPromises.get(versionId);
+  if (existing) return existing;
+  const next = buildBibleTextSearchIndex(versionId);
+  bibleTextSearchIndexPromises.set(versionId, next);
+  return next;
+}
+
+function longestContiguousBibleSearchMatch(normalizedText: string, queryTokens: string[]) {
+  for (let length = queryTokens.length - 1; length >= 2; length -= 1) {
+    for (let start = 0; start <= queryTokens.length - length; start += 1) {
+      if (normalizedText.includes(queryTokens.slice(start, start + length).join(" "))) {
+        return length;
+      }
+    }
+  }
+  return 0;
+}
+
+export async function searchBibleText(query: string, versionId: BibleVersionId, limit = 20): Promise<BibleTextSearchResult[]> {
+  const foldedQuery = foldBibleSearchText(query, versionId);
+  const normalizedQuery = normalizeBibleSearchText(query, versionId);
+  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+  if (!foldedQuery || queryTokens.length === 0 || limit <= 0) return [];
+
+  const index = await bibleTextSearchIndex(versionId);
+  const candidateIndexes = new Set<number>();
+  queryTokens.forEach((token) => {
+    index.entriesByToken.get(token)?.forEach((entryIndex) => candidateIndexes.add(entryIndex));
+  });
+
+  const ranked: Array<{ contiguous: number; coverage: number; entry: BibleTextSearchEntry; tier: number }> = [];
+  let processed = 0;
+  for (const entryIndex of candidateIndexes) {
+    const entry = index.entries[entryIndex];
+    const exactPhrase = entry.foldedText.includes(foldedQuery);
+    const normalizedPhrase = entry.normalizedText.includes(normalizedQuery);
+    const contiguous = exactPhrase || normalizedPhrase ? queryTokens.length : longestContiguousBibleSearchMatch(entry.normalizedText, queryTokens);
+    const coverage = queryTokens.reduce((total, token) => total + (entry.tokenSet.has(token) ? 1 : 0), 0);
+    const enoughCoverage = queryTokens.length === 1 ? coverage === 1 : coverage >= 2 && coverage / queryTokens.length >= 0.5;
+    if (exactPhrase || normalizedPhrase || contiguous >= 2 || enoughCoverage) {
+      ranked.push({
+        contiguous,
+        coverage,
+        entry,
+        tier: exactPhrase ? 4 : normalizedPhrase ? 3 : contiguous >= 2 ? 2 : 1,
+      });
+    }
+
+    processed += 1;
+    if (processed % 750 === 0) {
+      await yieldBibleSearchWork();
+    }
+  }
+
+  return ranked
+    .sort((first, second) =>
+      second.tier - first.tier ||
+      second.contiguous - first.contiguous ||
+      second.coverage - first.coverage ||
+      first.entry.canonicalOrder - second.entry.canonicalOrder,
+    )
+    .slice(0, limit)
+    .map(({ entry }) => ({ position: entry.position, reference: entry.reference, text: entry.text }));
 }
 
 function cleanVerseText(value: string) {
