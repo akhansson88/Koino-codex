@@ -207,6 +207,10 @@ type SelectedVerseRange = {
   start: number;
 };
 
+type MeasurableView = {
+  measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void;
+};
+
 const colorWheelColors = [
   "#FF5252",
   "#FF7043",
@@ -274,6 +278,16 @@ function normalizeHexColor(value: string) {
 
 function isHexColor(value: string) {
   return /^#[0-9A-F]{6}$/.test(normalizeHexColor(value));
+}
+
+function highlightColorWithOpacity(value: BibleHighlightColor, opacity: number) {
+  const normalized = normalizeHexColor(value);
+  if (!isHexColor(normalized)) return value;
+
+  const red = Number.parseInt(normalized.slice(1, 3), 16);
+  const green = Number.parseInt(normalized.slice(3, 5), 16);
+  const blue = Number.parseInt(normalized.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }
 
 function highlightTime(highlight: BibleHighlight) {
@@ -614,7 +628,7 @@ export function BibleScreen() {
   const { state, dispatch } = useKoino();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const audioPlayer = useAudioPlayer(null, { keepAudioSessionActive: true, updateInterval: 250 });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const scrollRef = useRef<ScrollView>(null);
@@ -627,6 +641,8 @@ export function BibleScreen() {
   const pendingAudioTransfersRef = useRef<Record<string, PendingAudioTransfer>>({});
   const bridgeReadyRef = useRef(false);
   const verseOffsetsRef = useRef<Record<number, number>>({});
+  const verseRowsRef = useRef<Record<number, MeasurableView | null>>({});
+  const readerScrollOffsetRef = useRef(0);
   const pendingScrollVerseRef = useRef<number | undefined>(undefined);
   const positionRef = useRef<BiblePosition>(defaultPosition);
   const audioPositionRef = useRef<BiblePosition>(defaultPosition);
@@ -686,6 +702,9 @@ export function BibleScreen() {
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
+  const [audioControlsHeight, setAudioControlsHeight] = useState(58);
+  const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
+  const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
@@ -766,18 +785,18 @@ export function BibleScreen() {
   const contentWidth = width >= 780 ? 720 : undefined;
   const audioIsPreparing = audioPlaybackState === "preparing";
   const audioIsPlaying = audioPlaybackState === "playing";
-  const audioMiniPlayerVisible = audioPlaybackState === "playing" || audioPlaybackState === "paused";
+  const audioMiniPlayerVisible = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const bottomControlsBottom = Math.max(92, insets.bottom + 72);
-  const audioMiniPlayerBottom = bottomControlsBottom + 72;
-  const selectedVerseBarBottom = audioMiniPlayerVisible ? audioMiniPlayerBottom + 76 : bottomControlsBottom + 76;
-  const defaultReaderBottomPadding = audioMiniPlayerVisible ? Math.max(254, insets.bottom + 234) : Math.max(180, insets.bottom + 160);
-  const readerBottomPadding = selectedVerseBarVisible ? Math.max(defaultReaderBottomPadding, selectedVerseBarBottom + 158) : defaultReaderBottomPadding;
-  const readerToastBottom = selectedVerseBarVisible
-    ? selectedVerseBarBottom + 138
-    : audioMiniPlayerVisible
-      ? audioMiniPlayerBottom + 76
-      : bottomControlsBottom + 72;
+  const audioMiniPlayerRendered = audioMiniPlayerVisible && !selectedVerseBarVisible;
+  const chapterControlsVisible = !audioMiniPlayerVisible && !selectedVerseBarVisible;
+  const floatingControlsBottom = Math.max(92, insets.bottom + 72);
+  const activeFloatingControlsHeight = selectedVerseBarVisible
+    ? selectionControlsHeight
+    : audioMiniPlayerRendered
+      ? audioControlsHeight
+      : chapterControlsHeight;
+  const readerBottomPadding = Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
+  const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
   const audioHighlightActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const readerCanGoBack = navigation.canGoBack();
   const audioStatusLabel =
@@ -945,6 +964,28 @@ export function BibleScreen() {
     return true;
   }, []);
 
+  const ensureVerseVisibleAboveSelection = useCallback((verse: number) => {
+    const verseRow = verseRowsRef.current[verse];
+    if (!verseRow) return;
+
+    verseRow.measureInWindow((_x, y, _width, verseHeight) => {
+      const selectionTop = height - floatingControlsBottom - selectionControlsHeight;
+      const overlap = y + verseHeight - selectionTop + 36;
+      if (overlap <= 0) return;
+
+      scrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(0, readerScrollOffsetRef.current + overlap),
+      });
+    });
+  }, [floatingControlsBottom, height, selectionControlsHeight]);
+
+  useEffect(() => {
+    if (selectedVerseNumbers.length === 0) return;
+    const selectedVerse = selectedVerseNumbers[selectedVerseNumbers.length - 1];
+    requestAnimationFrame(() => ensureVerseVisibleAboveSelection(selectedVerse));
+  }, [ensureVerseVisibleAboveSelection, selectedVerseNumbers]);
+
   const jumpToPosition = useCallback(
     (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = false) => {
       const normalized = normalizeBiblePosition(nextPosition);
@@ -953,6 +994,7 @@ export function BibleScreen() {
 
       if (!sameChapter) {
         verseOffsetsRef.current = {};
+        verseRowsRef.current = {};
         setSelectedVerseNumbers([]);
       }
 
@@ -1344,6 +1386,7 @@ export function BibleScreen() {
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      readerScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
       if (pendingScrollVerseRef.current) return;
       const now = Date.now();
       if (now - lastScrollCommitRef.current < 140) return;
@@ -1874,6 +1917,9 @@ export function BibleScreen() {
               onVersePressIn={handleVersePressIn}
               onVerseLayout={handleVerseLayout}
               onVerseLongPress={handleVerseLongPress}
+              onVerseRef={(verse, node) => {
+                verseRowsRef.current[verse] = node;
+              }}
               palette={readerPalette}
               position={position}
               readerLineHeight={readerLineHeight}
@@ -1897,13 +1943,14 @@ export function BibleScreen() {
         progress={chapterSwipeX}
       />
 
-      {audioMiniPlayerVisible ? (
+      {audioMiniPlayerRendered ? (
         <CompactAudioPlayer
-          bottom={audioMiniPlayerBottom}
+          bottom={floatingControlsBottom}
           disabled={false}
           isActive={audioIsPlaying}
           label={`${chapterLabel(audioPosition)} · ${audioVoice.name}`}
           maxWidth={contentWidth}
+          onHeightChange={setAudioControlsHeight}
           onToggle={handleAudioToggle}
           onVoicePress={() => setVoicePickerVisible(true)}
           palette={readerPalette}
@@ -1911,27 +1958,28 @@ export function BibleScreen() {
         />
       ) : null}
 
-      <BibleBottomReadingControls
-        audioActive={audioIsPlaying}
-        audioPreparing={audioIsPreparing}
-        bottom={bottomControlsBottom}
-        maxWidth={contentWidth}
-        nextChapter={nextChapter}
-        onListen={handleAudioToggle}
-        onNext={() => nextChapter && jumpToPosition(nextChapter)}
-        onPrevious={() => previousChapter && jumpToPosition(previousChapter)}
-        palette={readerPalette}
-        previousChapter={previousChapter}
-      />
+      {chapterControlsVisible ? (
+        <BibleBottomReadingControls
+          bottom={floatingControlsBottom}
+          maxWidth={contentWidth}
+          nextChapter={nextChapter}
+          onHeightChange={setChapterControlsHeight}
+          onNext={() => nextChapter && jumpToPosition(nextChapter)}
+          onPrevious={() => previousChapter && jumpToPosition(previousChapter)}
+          palette={readerPalette}
+          previousChapter={previousChapter}
+        />
+      ) : null}
 
       {selectedVerseBarVisible ? (
         <SelectedVerseSuggestionBar
-          bottom={selectedVerseBarBottom}
+          bottom={floatingControlsBottom}
           canDeleteHighlight={selectedHighlightIds.length > 0}
           highlightColors={state.bibleHighlightColors}
           maxWidth={contentWidth}
           onClear={() => setSelectedVerseNumbers([])}
           onDeleteHighlight={handleDeleteSelectedHighlights}
+          onHeightChange={setSelectionControlsHeight}
           onHighlight={handleHighlightWithPaletteColor}
           onManageColors={() => setHighlightColorManagerVisible(true)}
           onSave={handleSaveSelectedVerses}
@@ -2568,8 +2616,6 @@ function TopicVerseCard({
   item: { reference: string; verse?: BibleVerse; votes: number };
   palette: ReaderPalette;
 }) {
-  const voteLabel = `${item.votes.toLocaleString()} ${item.votes === 1 ? "vote" : "votes"}`;
-
   return (
     <View
       style={{
@@ -2595,20 +2641,6 @@ function TopicVerseCard({
         <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
           {item.reference}
         </Text>
-        <View
-          style={{
-            alignItems: "center",
-            backgroundColor: palette.peach,
-            borderColor: palette.line,
-            borderRadius: 999,
-            borderWidth: 1,
-            justifyContent: "center",
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-          }}
-        >
-          <Text style={{ color: palette.accent, fontSize: 11, fontWeight: "900" }}>{voteLabel}</Text>
-        </View>
       </View>
       {item.verse ? (
         <>
@@ -2636,6 +2668,7 @@ function BibleText({
   onVersePressIn,
   onVerseLayout,
   onVerseLongPress,
+  onVerseRef,
   palette,
   planMarkers,
   position,
@@ -2656,6 +2689,7 @@ function BibleText({
   onVersePressIn: () => void;
   onVerseLayout: (verse: number, offset: number) => void;
   onVerseLongPress: (verse: number) => void;
+  onVerseRef: (verse: number, node: MeasurableView | null) => void;
   palette: ReaderPalette;
   planMarkers: BiblePlanMarker[];
   position: BiblePosition;
@@ -2667,6 +2701,7 @@ function BibleText({
   showVerseNumbers: boolean;
   verses: BibleChapterVerse[];
 }) {
+  const textOffsetRef = useRef(0);
   const verseFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.7);
   const verseNumberStyle: TextStyle = {
     color: palette.accent,
@@ -2677,15 +2712,13 @@ function BibleText({
     lineHeight: readerLineHeight,
     marginTop: -verseFontSize * 0.55,
   };
-  const selectedTextStyle: TextStyle & { textUnderlineOffset?: number } = {
-    textDecorationColor: palette.accent,
-    textDecorationLine: "underline",
-    textDecorationStyle: "dotted",
-    textUnderlineOffset: 3,
-  };
-
   return (
-    <View style={{ gap: compactMode ? 4 : 7 }}>
+    <View
+      onLayout={(event) => {
+        textOffsetRef.current = event.nativeEvent.layout.y;
+      }}
+      style={{ gap: compactMode ? 4 : 7 }}
+    >
       {verses.map((item, index) => {
         const markersBefore = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "start");
         const markersAfter = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "finish");
@@ -2706,10 +2739,18 @@ function BibleText({
         const surfaceSelected = highlighted || audioHighlighted || actionSelected;
         const tapSelected = selectedVerseNumbers.includes(item.verse);
         const selected = surfaceSelected || tapSelected || Boolean(persistedHighlightColor);
-        const verseTextStyle = [persistedHighlightColor ? { backgroundColor: persistedHighlightColor } : undefined, tapSelected ? selectedTextStyle : undefined];
+        const persistedHighlightStyle = persistedHighlightColor
+          ? { backgroundColor: highlightColorWithOpacity(persistedHighlightColor, 0.16) }
+          : undefined;
+        const temporarySelected = surfaceSelected || tapSelected;
         const isFirstVerse = index === 0;
         return (
-          <View key={item.reference} style={{ gap: 5 }}>
+          <View
+            key={item.reference}
+            onLayout={(event) => onVerseLayout(item.verse, textOffsetRef.current + event.nativeEvent.layout.y)}
+            ref={(node) => onVerseRef(item.verse, node)}
+            style={{ gap: 5 }}
+          >
           {markersBefore.map((marker) => (
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
@@ -2718,16 +2759,15 @@ function BibleText({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             delayLongPress={1000}
-            onLayout={(event) => onVerseLayout(item.verse, event.nativeEvent.layout.y)}
             onLongPress={() => onVerseLongPress(item.verse)}
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
             style={{
-              backgroundColor: surfaceSelected ? palette.peach : "transparent",
-              borderColor: surfaceSelected ? palette.line : "transparent",
+              backgroundColor: temporarySelected ? palette.peach : "transparent",
+              borderColor: "transparent",
               borderRadius: radius.md,
               borderWidth: 1,
-              paddingHorizontal: surfaceSelected ? 10 : 0,
+              paddingHorizontal: temporarySelected ? 10 : 0,
               paddingVertical: compactMode ? 5 : 8,
             }}
           >
@@ -2746,14 +2786,14 @@ function BibleText({
                   {position.chapter}
                 </Text>
                 <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
-                  {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                  <Text style={[readerTextStyle, { flex: 1 }]}><Text style={verseTextStyle}>{item.text}</Text></Text>
+                  {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                  <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
                 </View>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                {showVerseNumbers ? <Text style={verseNumberStyle}>{item.verse} </Text> : null}
-                <Text style={[readerTextStyle, { flex: 1 }]}><Text style={verseTextStyle}>{item.text}</Text></Text>
+                {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
               </View>
             )}
           </Pressable>
@@ -3001,6 +3041,7 @@ function SelectedVerseSuggestionBar({
   maxWidth,
   onClear,
   onDeleteHighlight,
+  onHeightChange,
   onHighlight,
   onManageColors,
   onSave,
@@ -3015,6 +3056,7 @@ function SelectedVerseSuggestionBar({
   maxWidth?: number;
   onClear: () => void;
   onDeleteHighlight: () => void;
+  onHeightChange: (height: number) => void;
   onHighlight: (color: BibleHighlightPaletteColor) => void;
   onManageColors: () => void;
   onSave: () => void;
@@ -3026,6 +3068,7 @@ function SelectedVerseSuggestionBar({
   return (
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, zIndex: 30 }}>
       <View
+        onLayout={(event) => onHeightChange(Math.ceil(event.nativeEvent.layout.height))}
         style={{
           alignItems: "stretch",
           backgroundColor: palette.surface,
@@ -3713,7 +3756,6 @@ function VerseActionSheet({
                       >
                         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                           <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
-                          <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
                           <Feather name="arrow-right" size={17} color={palette.accent} />
                         </View>
                         <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
@@ -4167,6 +4209,7 @@ function CompactAudioPlayer({
   isActive,
   label,
   maxWidth,
+  onHeightChange,
   onToggle,
   onVoicePress,
   palette,
@@ -4177,6 +4220,7 @@ function CompactAudioPlayer({
   isActive: boolean;
   label: string;
   maxWidth?: number;
+  onHeightChange: (height: number) => void;
   onToggle: () => void;
   onVoicePress: () => void;
   palette: ReaderPalette;
@@ -4185,6 +4229,7 @@ function CompactAudioPlayer({
   return (
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0 }}>
       <View
+        onLayout={(event) => onHeightChange(Math.ceil(event.nativeEvent.layout.height))}
         style={{
           alignItems: "center",
           backgroundColor: palette.surface,
@@ -4244,38 +4289,32 @@ function CompactAudioPlayer({
 }
 
 function BibleBottomReadingControls({
-  audioActive,
-  audioPreparing,
   bottom,
   maxWidth,
   nextChapter,
-  onListen,
+  onHeightChange,
   onNext,
   onPrevious,
   palette,
   previousChapter,
 }: {
-  audioActive: boolean;
-  audioPreparing: boolean;
   bottom: number;
   maxWidth?: number;
   nextChapter?: BiblePosition;
-  onListen: () => void;
+  onHeightChange: (height: number) => void;
   onNext: () => void;
   onPrevious: () => void;
   palette: ReaderPalette;
   previousChapter?: BiblePosition;
 }) {
-  const listenLabel = audioPreparing ? "Preparing" : audioActive ? "Pause" : "Listen";
-
   return (
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 22, position: "absolute", right: 0, zIndex: 18 }}>
       <View
+        onLayout={(event) => onHeightChange(Math.ceil(event.nativeEvent.layout.height))}
         style={{
           alignItems: "center",
           flexDirection: "row",
-          gap: 12,
-          justifyContent: "center",
+          justifyContent: "space-between",
           maxWidth,
           width: "100%",
         }}
@@ -4287,37 +4326,6 @@ function BibleBottomReadingControls({
           onPress={onPrevious}
           palette={palette}
         />
-        <Pressable
-          accessibilityLabel={audioActive ? "Pause audio Bible" : "Listen to this chapter"}
-          accessibilityRole="button"
-          accessibilityState={{ busy: audioPreparing }}
-          disabled={audioPreparing}
-          onPress={onListen}
-          style={{
-            alignItems: "center",
-            backgroundColor: palette.surface,
-            borderColor: palette.line,
-            borderRadius: 999,
-            borderWidth: 1,
-            flexDirection: "row",
-            gap: 9,
-            height: 46,
-            justifyContent: "center",
-            minWidth: 132,
-            opacity: audioPreparing ? 0.72 : 1,
-            paddingHorizontal: 18,
-            ...platformShadow({
-              boxShadow: "0 12px 28px rgba(11, 18, 32, 0.12)",
-              color: palette.shadow,
-              offset: { width: 0, height: 10 },
-              opacity: 0.1,
-              radius: 24,
-            }),
-          }}
-        >
-          {audioPreparing ? <ActivityIndicator color={palette.accent} size="small" /> : <Feather name={audioActive ? "pause" : "play"} size={17} color={palette.accent} />}
-          <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{listenLabel}</Text>
-        </Pressable>
         <ReaderControlButton
           accessibilityLabel="Next chapter"
           disabled={!nextChapter}
@@ -4716,7 +4724,6 @@ function CrossReferenceSheet({
                       <Text selectable style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>
                         {reference.reference}
                       </Text>
-                      <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"], fontWeight: "800" }}>{reference.votes} votes</Text>
                       <Feather name="arrow-right" size={17} color={palette.accent} />
                     </View>
                     <Text selectable numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
@@ -5576,11 +5583,11 @@ function BibleDrawer({
                 {recentHighlights.length ? (
                   recentHighlights.map((highlight) => (
                     <DrawerVerseRow
+                      accentColor={highlight.color}
                       key={highlight.id}
                       onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
                       palette={palette}
                       reference={highlight.reference}
-                      text={highlight.color}
                     />
                   ))
                 ) : (
@@ -5781,18 +5788,21 @@ function DrawerBookRow({
 }
 
 function DrawerVerseRow({
+  accentColor,
   onPress,
   palette,
   reference,
   text,
 }: {
+  accentColor?: BibleHighlightColor;
   onPress: () => void;
   palette: ReaderPalette;
   reference: string;
-  text: string;
+  text?: string;
 }) {
   return (
     <Pressable
+      accessibilityLabel={accentColor ? `Open ${reference}` : undefined}
       accessibilityRole="button"
       onPress={onPress}
       style={{
@@ -5809,11 +5819,28 @@ function DrawerVerseRow({
         <Text numberOfLines={1} style={{ color: palette.text, flex: 1, fontSize: 15, fontWeight: "900" }}>
           {reference}
         </Text>
+        {accentColor ? (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+            style={{
+              backgroundColor: accentColor,
+              borderColor: palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              height: 16,
+              opacity: 0.72,
+              width: 16,
+            }}
+          />
+        ) : null}
         <Feather name="arrow-right" size={16} color={palette.accent} />
       </View>
-      <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
-        {text}
-      </Text>
+      {text ? (
+        <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
+          {text}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
