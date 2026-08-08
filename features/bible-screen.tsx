@@ -493,12 +493,12 @@ function fontFamilyFor(fontId: BibleReaderFontId) {
   return "Georgia, serif";
 }
 
-function referenceLabel(position: BiblePosition) {
-  return `${position.book} ${position.chapter}:${position.verse}`;
+function referenceLabel(position: BiblePosition, language: AppLanguage = "en") {
+  return `${displayBibleBookName(position.book, language)} ${position.chapter}:${position.verse}`;
 }
 
-function chapterLabel(position: BiblePosition) {
-  return `${position.book} ${position.chapter}`;
+function chapterLabel(position: BiblePosition, language: AppLanguage = "en") {
+  return `${displayBibleBookName(position.book, language)} ${position.chapter}`;
 }
 
 function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "reference" | "startVerse">) {
@@ -522,6 +522,16 @@ function biblePositionFromReference(reference?: string) {
 
 function displayBibleBookName(bookName: string, language: AppLanguage) {
   return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
+}
+
+function displayBibleReference(reference: string, language: AppLanguage) {
+  if (language !== "sv") return reference;
+  const canonicalBook = Object.keys(swedishBibleBookNames)
+    .sort((a, b) => b.length - a.length)
+    .find((bookName) => reference === bookName || reference.startsWith(`${bookName} `));
+  return canonicalBook
+    ? `${displayBibleBookName(canonicalBook, language)}${reference.slice(canonicalBook.length)}`
+    : reference;
 }
 
 function canonicalizeBibleSearchQuery(query: string, language: AppLanguage) {
@@ -733,7 +743,7 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 
 export function BibleScreen() {
   const { state, dispatch } = useKoino();
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -915,9 +925,9 @@ export function BibleScreen() {
         ? "Complete the voice service prompt, then playback will continue."
         : "Preparing verse audio..."
       : audioPlaybackState === "playing"
-        ? `Listening to ${referenceLabel(audioPosition)}`
+        ? `Listening to ${referenceLabel(audioPosition, language)}`
         : audioPlaybackState === "paused"
-          ? `Paused at ${referenceLabel(audioPosition)}`
+          ? `Paused at ${referenceLabel(audioPosition, language)}`
           : audioPlaybackState === "error"
             ? audioError ?? "Audio could not be prepared."
             : !puterAuthToken
@@ -925,7 +935,7 @@ export function BibleScreen() {
             : bridgeOverlayVisible
               ? "Complete the voice service prompt, then playback will continue."
             : bridgeReady
-              ? `Ready to listen from ${referenceLabel(audioPosition)}`
+              ? `Ready to listen from ${referenceLabel(audioPosition, language)}`
             : "Loading voice service...";
   const group = state.groups.find((item) => item.id === state.currentGroupId);
 
@@ -1988,7 +1998,7 @@ export function BibleScreen() {
         onOpenSettings={() => setSettingsVisible(true)}
         onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}
-        title={chapterLabel(position)}
+        title={chapterLabel(position, language)}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={insets.top}
       />
@@ -2072,7 +2082,7 @@ export function BibleScreen() {
           bottom={floatingControlsBottom}
           disabled={false}
           isActive={audioIsPlaying}
-          label={`${chapterLabel(audioPosition)} · ${audioVoice.name}`}
+          label={`${chapterLabel(audioPosition, language)} · ${audioVoice.name}`}
           maxWidth={contentWidth}
           onHeightChange={setAudioControlsHeight}
           onToggle={handleAudioToggle}
@@ -2108,7 +2118,7 @@ export function BibleScreen() {
           onManageColors={() => setHighlightColorManagerVisible(true)}
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
-          reference={selectedVerseReference}
+          reference={displayBibleReference(selectedVerseReference, language)}
           saving={selectionSaving}
           verseCount={selectedVerseNumbers.length}
         />
@@ -2444,7 +2454,7 @@ function BibleTopicsModal({
   topic: string;
   visible: boolean;
 }) {
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const slideX = useRef(new Animated.Value(0)).current;
@@ -2801,10 +2811,11 @@ function TopicVerseCard({
   onPress?: () => void;
   palette: ReaderPalette;
 }) {
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
+  const displayedReference = displayBibleReference(item.reference, language);
   return (
     <Pressable
-      accessibilityLabel={onPress ? t("bible.navigator.openPassage", { reference: item.reference }) : undefined}
+      accessibilityLabel={onPress ? t("bible.navigator.openPassage", { reference: displayedReference }) : undefined}
       accessibilityRole={onPress ? "button" : undefined}
       disabled={!onPress}
       onPress={onPress}
@@ -2829,7 +2840,7 @@ function TopicVerseCard({
           <Feather name="book-open" size={14} color={palette.accent} />
         </View>
         <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
-          {item.reference}
+          {displayedReference}
         </Text>
       </View>
       {item.verse ? (
@@ -2891,6 +2902,7 @@ function BibleText({
   showVerseNumbers: boolean;
   verses: BibleChapterVerse[];
 }) {
+  const { language } = useAppTranslation();
   const textOffsetRef = useRef(0);
   const verseFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.7);
   const verseNumberStyle: TextStyle = {
@@ -2945,7 +2957,7 @@ function BibleText({
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
           <Pressable
-            accessibilityLabel={`${position.book} ${position.chapter}:${item.verse}`}
+            accessibilityLabel={referenceLabel({ ...position, verse: item.verse }, language)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             delayLongPress={1000}
@@ -3263,6 +3275,8 @@ function SelectedVerseSuggestionBar({
   saving: boolean;
   verseCount: number;
 }) {
+  const { t } = useAppTranslation();
+
   return (
     <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0, zIndex: 30 }}>
       <View
@@ -3292,11 +3306,11 @@ function SelectedVerseSuggestionBar({
               {reference}
             </Text>
             <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
-              {verseCount} {verseCount === 1 ? "verse" : "verses"} selected
+              {t(verseCount === 1 ? "bible.selection.single" : "bible.selection.multiple", { count: verseCount })}
             </Text>
           </View>
           <Pressable
-            accessibilityLabel="Clear selected verses"
+            accessibilityLabel={t("bible.selection.clear")}
             accessibilityRole="button"
             disabled={saving}
             onPress={onClear}
@@ -3315,7 +3329,7 @@ function SelectedVerseSuggestionBar({
             <Feather name="x" size={18} color={palette.accent} />
           </Pressable>
           <Pressable
-            accessibilityLabel={`Save selected verses ${reference}`}
+            accessibilityLabel={t("bible.selection.saveAccessibility", { reference })}
             accessibilityRole="button"
             accessibilityState={{ disabled: saving }}
             disabled={saving}
@@ -3336,12 +3350,12 @@ function SelectedVerseSuggestionBar({
           >
             <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
             <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
-              {saving ? "Saving..." : "Save selection"}
+              {t(saving ? "bible.selection.saving" : "bible.selection.save")}
             </Text>
           </Pressable>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center", minHeight: 38 }}>
-          <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>Highlight:</Text>
+          <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.selection.highlight")}</Text>
           {highlightColors.slice(0, 8).map((option) => (
             <Pressable
               accessibilityLabel={`${option.label} highlight ${reference}`}
@@ -3364,7 +3378,7 @@ function SelectedVerseSuggestionBar({
             />
           ))}
           <Pressable
-            accessibilityLabel="Manage highlight colors"
+            accessibilityLabel={t("bible.selection.manageColors")}
             accessibilityRole="button"
             disabled={saving}
             onPress={onManageColors}
@@ -3384,7 +3398,7 @@ function SelectedVerseSuggestionBar({
           </Pressable>
           {canDeleteHighlight ? (
             <Pressable
-              accessibilityLabel={`Delete highlight ${reference}`}
+              accessibilityLabel={t("bible.selection.deleteHighlight", { reference })}
               accessibilityRole="button"
               accessibilityState={{ disabled: saving }}
               disabled={saving}
@@ -3822,7 +3836,7 @@ function VerseActionSheet({
   saved: boolean;
   visible: boolean;
 }) {
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const slideProgress = useRef(new Animated.Value(0)).current;
@@ -3936,7 +3950,7 @@ function VerseActionSheet({
                 <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
-                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition)}</Text>
+                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
                 </View>
               </View>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
@@ -5732,7 +5746,7 @@ function BibleDrawer({
               />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text numberOfLines={2} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{title}</Text>
-                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition)} - ${versionLabel}` : versionLabel}</Text>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition, language)} - ${versionLabel}` : versionLabel}</Text>
               </View>
             </View>
           </View>
@@ -5775,7 +5789,7 @@ function BibleDrawer({
                     icon="play-circle"
                     onPress={() => onSelect(initialPosition)}
                     palette={palette}
-                    subtitle={referenceLabel(initialPosition)}
+                    subtitle={referenceLabel(initialPosition, language)}
                     title={t("bible.navigator.continue")}
                   />
                   <DrawerRow
@@ -5853,7 +5867,7 @@ function BibleDrawer({
                     onPress={() => onSelect(searchPosition)}
                     palette={palette}
                     subtitle={t("bible.navigator.openPassageSubtitle")}
-                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition) })}
+                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition, language) })}
                   />
                 ) : null}
                 {normalizedQuery && !searchPosition && selectableBooks.length ? (
@@ -5901,7 +5915,7 @@ function BibleDrawer({
                         meta={versionLabel}
                         onPress={() => onSelect(result.position)}
                         palette={palette}
-                        reference={result.reference}
+                        reference={displayBibleReference(result.reference, language)}
                         text={result.text}
                       />
                     ))}
@@ -5965,7 +5979,7 @@ function BibleDrawer({
                         if (nextPosition) onSelect(nextPosition);
                       }}
                       palette={palette}
-                      reference={verse.reference}
+                      reference={displayBibleReference(verse.reference, language)}
                       meta={verse.translation && verse.translation !== versionLabel ? verse.translation : undefined}
                       text={verse.text}
                     />
@@ -5987,7 +6001,7 @@ function BibleDrawer({
                         key={highlight.id}
                         onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
                         palette={palette}
-                        reference={highlight.reference}
+                        reference={displayBibleReference(highlight.reference, language)}
                         meta={highlight.translation && highlight.translation !== versionLabel ? highlight.translation : undefined}
                         text={preview}
                       />
@@ -6009,7 +6023,7 @@ function BibleDrawer({
                         key={entry.id}
                         onPress={() => onOpenReflection(entry.id)}
                         palette={palette}
-                        reference={verse?.reference ?? entry.passage?.reference ?? entry.title ?? t("bible.navigator.reflectionFallback")}
+                        reference={displayBibleReference(verse?.reference ?? entry.passage?.reference ?? entry.title ?? t("bible.navigator.reflectionFallback"), language)}
                         text={entry.body}
                       />
                     );
