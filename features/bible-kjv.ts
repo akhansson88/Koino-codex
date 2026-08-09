@@ -1,7 +1,4 @@
-import kjvVerseMap from "@/assets/bible/kjv-verses-1769.json";
-import reformationsbibelnVerseMap from "@/assets/bible/reformationsbibeln.json";
-import sv1917VerseMap from "@/assets/bible/sv1917-verses.json";
-import crossReferenceMap from "@/assets/bible/cross-references/cross_references.json";
+import { crossReferenceMap, kjvVerseMap, reformationsbibelnVerseMap, sv1917VerseMap } from "@/features/bible-data";
 import type { BibleVerse } from "@/state/types";
 
 type VerseMap = Record<string, string>;

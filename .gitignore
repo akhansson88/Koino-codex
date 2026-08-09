@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 expo-web*.log
 .npm-cache/
+.sites-runtime/
 .env
 .env.*
 
@@ -20,3 +21,4 @@ expo-env.d.ts
 
 # Local Codex/Expo navigation test logs
 community-nav-expo*.log
+features/.generated/

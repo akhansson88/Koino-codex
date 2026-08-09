@@ -141,6 +141,7 @@ type PendingAudioTransfer = {
 type BibleTopicResult = {
   count: number;
   references: BibleTopicReference[];
+  source: "openbible" | "text-search";
   sourceUrl: string;
   topic: string;
 };
@@ -148,7 +149,18 @@ type BibleTopicResult = {
 type BibleTopicReference = {
   reference: string;
   votes: number;
+  voteId?: string;
 };
+
+type BibleTopicIndexItem = {
+  letter: string;
+  name: string;
+  passageCount: number;
+  slug: string;
+  verseCount: number;
+};
+
+type BibleTopicVoteValue = -1 | 1;
 
 type SuggestedTopic = {
   apiTopic: string;
@@ -167,6 +179,8 @@ const suggestedTopics: SuggestedTopic[] = [
   { apiTopic: "Purpose", icon: "compass", subtitleKey: "bible.topic.purpose.subtitle", titleKey: "bible.topic.purpose.title", tone: "rose" },
   { apiTopic: "Prayer", icon: "message-circle", subtitleKey: "bible.topic.prayer.subtitle", titleKey: "bible.topic.prayer.title", tone: "peach" },
 ];
+
+const bibleTopicAlphabet = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"];
 
 const swedishBibleBookNames: Record<string, string> = {
   Genesis: "Första Moseboken",
@@ -593,11 +607,70 @@ function readerThemeLabel(themeId: BibleReaderThemeId, t: TranslationFunction) {
   return t("bible.settings.theme.light");
 }
 
-const productionBibleTopicApiOrigin = "https://spontaneous-jalebi-46756a.netlify.app";
+const productionBibleTopicApiOrigin = "https://koino-codex.akhansson.chatgpt.site";
+let bibleTopicIndexPromise: Promise<BibleTopicIndexItem[]> | undefined;
 
 function bibleTopicEndpoints(topic: string) {
   const path = `/api/bible-topic?topic=${encodeURIComponent(topic)}&v=votes`;
-  return [`${productionBibleTopicApiOrigin}${path}`];
+  return Platform.OS === "web" ? [path] : [`${productionBibleTopicApiOrigin}${path}`];
+}
+
+function bibleTopicIndexEndpoints() {
+  const path = "/data/topics-index.json";
+  return Platform.OS === "web" ? [path] : [`${productionBibleTopicApiOrigin}${path}`];
+}
+
+function bibleTopicKey(value: string) {
+  return value
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function bibleTopicVoteKey(topic: string, voteId: string) {
+  return `${bibleTopicKey(topic)}:${voteId}`;
+}
+
+async function fetchBibleTopicIndex() {
+  if (!bibleTopicIndexPromise) {
+    bibleTopicIndexPromise = (async () => {
+      let lastError: unknown;
+      for (const endpoint of bibleTopicIndexEndpoints()) {
+        try {
+          const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+          if (!response.ok) throw new Error(`Topic directory request failed with ${response.status}`);
+          const data = (await response.json()) as { topics?: unknown };
+          if (!Array.isArray(data.topics)) throw new Error("The topic directory is invalid.");
+          const topics = data.topics
+            .map((item): BibleTopicIndexItem | undefined => {
+              if (!item || typeof item !== "object") return undefined;
+              const candidate = item as Partial<BibleTopicIndexItem>;
+              if (typeof candidate.name !== "string" || typeof candidate.slug !== "string" || typeof candidate.letter !== "string") return undefined;
+              return {
+                letter: candidate.letter,
+                name: candidate.name,
+                passageCount: typeof candidate.passageCount === "number" ? candidate.passageCount : 0,
+                slug: candidate.slug,
+                verseCount: typeof candidate.verseCount === "number" ? candidate.verseCount : 0,
+              };
+            })
+            .filter((item): item is BibleTopicIndexItem => Boolean(item));
+          if (topics.length === 0) throw new Error("The topic directory is empty.");
+          return topics;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error("Could not load the topic directory.");
+    })().catch((error) => {
+      bibleTopicIndexPromise = undefined;
+      throw error;
+    });
+  }
+  return bibleTopicIndexPromise;
 }
 
 async function fetchBibleTopic(topic: string) {
@@ -620,12 +693,13 @@ async function fetchBibleTopic(topic: string) {
             return reference ? { reference, votes: 0 } : undefined;
           }
           if (!item || typeof item !== "object") return undefined;
-          const candidate = item as { reference?: unknown; votes?: unknown };
+          const candidate = item as { reference?: unknown; votes?: unknown; voteId?: unknown };
           const reference = typeof candidate.reference === "string" ? candidate.reference.trim() : "";
           if (!reference) return undefined;
           return {
             reference,
             votes: typeof candidate.votes === "number" && Number.isFinite(candidate.votes) ? candidate.votes : 0,
+            voteId: typeof candidate.voteId === "string" && candidate.voteId.trim() ? candidate.voteId.trim() : undefined,
           };
         })
         .filter((item): item is BibleTopicReference => Boolean(item))
@@ -633,6 +707,7 @@ async function fetchBibleTopic(topic: string) {
       return {
         count: typeof data.count === "number" ? data.count : references.length,
         references,
+        source: "openbible" as const,
         sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
         topic: typeof data.topic === "string" ? data.topic : topic,
       };
@@ -642,6 +717,50 @@ async function fetchBibleTopic(topic: string) {
   }
 
   throw lastError instanceof Error ? lastError : new Error("Could not load this topic.");
+}
+
+async function searchBibleTopicText(topic: string, bibleVersionId: BibleVersionId): Promise<BibleTopicReference[]> {
+  const directResults = await searchBibleText(topic, bibleVersionId, 20);
+  if (directResults.length > 0) return directResults.map((item) => ({ reference: item.reference, votes: 0 }));
+
+  const stopWords = new Set(["about", "after", "also", "and", "are", "att", "den", "det", "for", "från", "för", "how", "hur", "med", "och", "som", "that", "the", "this", "till", "using", "vad", "what", "with"]);
+  const tokens = topic
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length > 2 && !stopWords.has(token))
+    .slice(0, 6);
+  if (tokens.length === 0) return [];
+
+  const tokenResults = await Promise.all(tokens.map((token) => searchBibleText(token, bibleVersionId, 6)));
+  const seen = new Set<string>();
+  return tokenResults
+    .flat()
+    .filter((item) => {
+      if (seen.has(item.reference)) return false;
+      seen.add(item.reference);
+      return true;
+    })
+    .slice(0, 20)
+    .map((item) => ({ reference: item.reference, votes: 0 }));
+}
+
+async function submitBibleTopicVote(topic: string, voteId: string, value: BibleTopicVoteValue) {
+  let lastError: unknown;
+  for (const endpoint of bibleTopicEndpoints(topic)) {
+    try {
+      const response = await fetch(endpoint, {
+        body: JSON.stringify({ topic, value, voteId }),
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+      if (!response.ok || data.ok !== true) throw new Error(data.error || `Vote request failed with ${response.status}`);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Could not submit this vote.");
 }
 
 function topicTitle(value: string) {
@@ -808,6 +927,9 @@ export function BibleScreen() {
   const [topicResult, setTopicResult] = useState<BibleTopicResult | undefined>();
   const [topicError, setTopicError] = useState<string | undefined>();
   const [topicLoading, setTopicLoading] = useState(false);
+  const [topicUserVotes, setTopicUserVotes] = useState<Record<string, BibleTopicVoteValue>>({});
+  const [topicVotePending, setTopicVotePending] = useState("");
+  const [topicVoteError, setTopicVoteError] = useState<string | undefined>();
   const [scriptureComposerVisible, setScriptureComposerVisible] = useState(false);
   const [scriptureComposerIntent, setScriptureComposerIntent] = useState<BibleComposerIntent>("reflect");
   const [scriptureComposerContext, setScriptureComposerContext] = useState<"journal" | "room">("journal");
@@ -1938,14 +2060,26 @@ export function BibleScreen() {
     setTopicResult(undefined);
     setTopicError(undefined);
     setTopicLoading(true);
+    setTopicVoteError(undefined);
+    setTopicVotePending("");
 
     void fetchBibleTopic(nextTopic)
       .then((result) => {
         if (topicRequestRef.current !== requestId) return;
         setTopicResult(result);
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (topicRequestRef.current !== requestId) return;
+        try {
+          const references = await searchBibleTopicText(nextTopic, bibleVersionId);
+          if (topicRequestRef.current !== requestId) return;
+          if (references.length > 0) {
+            setTopicResult({ count: references.length, references, source: "text-search", sourceUrl: "", topic: nextTopic });
+            return;
+          }
+        } catch {
+          // Preserve the original OpenBible error below.
+        }
         setTopicError(error instanceof Error ? error.message : "Could not load this topic.");
       })
       .finally(() => {
@@ -1953,13 +2087,44 @@ export function BibleScreen() {
           setTopicLoading(false);
         }
       });
-  }, []);
+  }, [bibleVersionId]);
+
+  async function castTopicVote(reference: BibleTopicReference, value: BibleTopicVoteValue) {
+    if (!reference.voteId || topicVotePending) return;
+    const voteTopic = selectedTopic;
+    const voteKey = bibleTopicVoteKey(voteTopic, reference.voteId);
+    const topicSession = topicRequestRef.current;
+    if (topicUserVotes[voteKey]) return;
+
+    setTopicVotePending(voteKey);
+    setTopicVoteError(undefined);
+    try {
+      await submitBibleTopicVote(voteTopic, reference.voteId, value);
+      setTopicUserVotes((current) => ({ ...current, [voteKey]: value }));
+      setTopicResult((current) => {
+        if (!current || bibleTopicKey(current.topic) !== bibleTopicKey(voteTopic)) return current;
+        return {
+          ...current,
+          references: current.references.map((item) =>
+            item.voteId === reference.voteId ? { ...item, votes: Math.max(0, item.votes + value) } : item,
+          ),
+        };
+      });
+    } catch (error) {
+      if (topicRequestRef.current === topicSession) {
+        setTopicVoteError(error instanceof Error ? error.message : "Could not submit this vote.");
+      }
+    } finally {
+      if (topicRequestRef.current === topicSession) setTopicVotePending("");
+    }
+  }
 
   function closeTopics() {
     topicRequestRef.current += 1;
     setTopicsVisible(false);
     setTopicDetailVisible(false);
     setTopicLoading(false);
+    setTopicVotePending("");
   }
 
   function changeFontSize(delta: number) {
@@ -2232,10 +2397,15 @@ export function BibleScreen() {
           closeTopics();
           jumpToPosition(nextPosition);
         }}
+        onVote={(reference, value) => void castTopicVote(reference, value)}
         palette={readerPalette}
         references={topicResult?.references ?? []}
+        source={topicResult?.source ?? "openbible"}
         topic={selectedTopic}
+        userVotes={topicUserVotes}
         visible={topicsVisible}
+        voteError={topicVoteError}
+        votePending={topicVotePending}
       />
       <SharedComposer
         bibleIntent={scriptureComposerIntent}
@@ -2435,10 +2605,15 @@ function BibleTopicsModal({
   onClose,
   onSelectReference,
   onSelectTopic,
+  onVote,
   palette,
   references,
+  source,
   topic,
+  userVotes,
   visible,
+  voteError,
+  votePending,
 }: {
   bibleVersionId: BibleVersionId;
   bibleVersionLabel: string;
@@ -2449,23 +2624,53 @@ function BibleTopicsModal({
   onClose: () => void;
   onSelectReference: (reference: string) => void;
   onSelectTopic: (topic: string) => void;
+  onVote: (reference: BibleTopicReference, value: BibleTopicVoteValue) => void;
   palette: ReaderPalette;
   references: BibleTopicReference[];
+  source: BibleTopicResult["source"];
   topic: string;
+  userVotes: Record<string, BibleTopicVoteValue>;
   visible: boolean;
+  voteError?: string;
+  votePending: string;
 }) {
   const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const slideX = useRef(new Animated.Value(0)).current;
   const [query, setQuery] = useState("");
+  const [topicIndex, setTopicIndex] = useState<BibleTopicIndexItem[]>([]);
+  const [topicIndexError, setTopicIndexError] = useState(false);
+  const [topicIndexLoading, setTopicIndexLoading] = useState(false);
+  const [activeLetter, setActiveLetter] = useState("");
 
   useEffect(() => {
     if (!visible) {
       setQuery("");
+      setActiveLetter("");
       slideX.setValue(0);
     }
   }, [slideX, visible]);
+
+  useEffect(() => {
+    if (!visible || topicIndex.length > 0) return;
+    let active = true;
+    setTopicIndexLoading(true);
+    setTopicIndexError(false);
+    void fetchBibleTopicIndex()
+      .then((topics) => {
+        if (active) setTopicIndex(topics);
+      })
+      .catch(() => {
+        if (active) setTopicIndexError(true);
+      })
+      .finally(() => {
+        if (active) setTopicIndexLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [topicIndex.length, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -2477,14 +2682,32 @@ function BibleTopicsModal({
     }).start();
   }, [detailVisible, slideX, visible, width]);
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const searchMatches = useMemo(() => {
+    if (normalizedQuery.length < 2) return [];
+    return topicIndex
+      .filter((item) => item.name.toLowerCase().includes(normalizedQuery))
+      .sort((first, second) => {
+        const firstStarts = first.name.toLowerCase().startsWith(normalizedQuery) ? 0 : 1;
+        const secondStarts = second.name.toLowerCase().startsWith(normalizedQuery) ? 0 : 1;
+        return firstStarts - secondStarts || first.name.localeCompare(second.name, "en");
+      })
+      .slice(0, 8);
+  }, [normalizedQuery, topicIndex]);
+  const exactSearchMatch = topicIndex.find((item) => item.name.toLowerCase() === normalizedQuery);
+  const activeLetterTopics = useMemo(
+    () => (activeLetter ? topicIndex.filter((item) => item.letter === activeLetter) : []),
+    [activeLetter, topicIndex],
+  );
+
   function submitSearch() {
     const nextQuery = query.trim();
     if (nextQuery) {
-      const suggestedTopic = suggestedTopics.find((item) => {
+      const curatedTopic = suggestedTopics.find((item) => {
         const normalizedQuery = nextQuery.toLocaleLowerCase();
         return item.apiTopic.toLocaleLowerCase() === normalizedQuery || t(item.titleKey).toLocaleLowerCase() === normalizedQuery;
       });
-      onSelectTopic(suggestedTopic?.apiTopic ?? nextQuery);
+      onSelectTopic(exactSearchMatch?.name ?? curatedTopic?.apiTopic ?? nextQuery);
     }
   }
 
@@ -2555,9 +2778,13 @@ function BibleTopicsModal({
           >
             <Feather name="search" size={16} color={palette.muted} />
             <TextInput
-              autoCapitalize="words"
-              autoCorrect
-              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={(value) => {
+                setQuery(value);
+                if (value.trim()) setActiveLetter("");
+              }}
+              maxLength={100}
               onSubmitEditing={submitSearch}
               placeholder={t("bible.topics.searchPlaceholder")}
               placeholderTextColor={palette.muted}
@@ -2567,6 +2794,105 @@ function BibleTopicsModal({
             />
           </View>
 
+          {normalizedQuery.length >= 2 ? (
+            <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
+              <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.topics.searchSuggestions")}</Text>
+              <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" }}>
+                {searchMatches.map((item, index) => (
+                  <TopicIndexRow
+                    item={item}
+                    key={item.slug}
+                    onPress={() => onSelectTopic(item.name)}
+                    palette={palette}
+                    showDivider={index < searchMatches.length - 1 || !exactSearchMatch}
+                  />
+                ))}
+                {!exactSearchMatch ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onSelectTopic(query.trim())}
+                    style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 58, paddingHorizontal: 14, paddingVertical: 9 }}
+                  >
+                    <View style={{ alignItems: "center", backgroundColor: palette.peach, borderRadius: 999, height: 34, justifyContent: "center", width: 34 }}>
+                      <Feather name="search" size={15} color={palette.accent} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "800", textTransform: "none" }}>
+                        {t("bible.topics.searchOpenBible", { topic: query.trim().toLowerCase() })}
+                      </Text>
+                      <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "700" }}>
+                        {t("bible.topics.searchOpenBibleSubtitle")}
+                      </Text>
+                    </View>
+                    <Feather name="arrow-right" size={16} color={palette.muted} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {!normalizedQuery ? (
+            <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
+              <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.topics.browseAlphabet")}</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {bibleTopicAlphabet.map((letter) => {
+                  const available = topicIndex.some((item) => item.letter === letter);
+                  const selected = activeLetter === letter;
+                  return (
+                    <Pressable
+                      accessibilityLabel={t("bible.topics.openLetter", { letter })}
+                      accessibilityRole="button"
+                      disabled={!available}
+                      key={letter}
+                      onPress={() => setActiveLetter(letter)}
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: selected ? palette.peach : palette.surface,
+                        borderColor: selected ? palette.accent : palette.line,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        height: 34,
+                        justifyContent: "center",
+                        opacity: available ? 1 : 0.35,
+                        width: 34,
+                      }}
+                    >
+                      <Text style={{ color: selected ? palette.accent : palette.text, fontSize: 12, fontWeight: "900" }}>{letter}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {topicIndexLoading ? (
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 9, paddingVertical: 6 }}>
+                  <ActivityIndicator color={palette.accent} size="small" />
+                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>{t("bible.topics.directoryLoading")}</Text>
+                </View>
+              ) : topicIndexError ? (
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700", lineHeight: 18 }}>{t("bible.topics.directoryError")}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {!normalizedQuery && activeLetter ? (
+            <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
+              <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>
+                {t("bible.topics.letterTitle", { letter: activeLetter })}
+              </Text>
+              <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" }}>
+                {activeLetterTopics.map((item, index) => (
+                  <TopicIndexRow
+                    item={item}
+                    key={item.slug}
+                    onPress={() => onSelectTopic(item.name)}
+                    palette={palette}
+                    showDivider={index < activeLetterTopics.length - 1}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {!normalizedQuery && !activeLetter ? (
           <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
             <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.topics.suggested")}</Text>
             <View
@@ -2596,6 +2922,7 @@ function BibleTopicsModal({
               ))}
             </View>
           </View>
+          ) : null}
         </ScrollView>
           </View>
           <View
@@ -2611,9 +2938,14 @@ function BibleTopicsModal({
               loading={loading}
               onBack={onBack}
               onSelectReference={onSelectReference}
+              onVote={onVote}
               palette={palette}
               references={references}
+              source={source}
               topic={topic}
+              userVotes={userVotes}
+              voteError={voteError}
+              votePending={votePending}
             />
           </View>
         </Animated.View>
@@ -2681,6 +3013,46 @@ function SuggestedTopicRow({
   );
 }
 
+function TopicIndexRow({
+  item,
+  onPress,
+  palette,
+  showDivider,
+}: {
+  item: BibleTopicIndexItem;
+  onPress: () => void;
+  palette: ReaderPalette;
+  showDivider: boolean;
+}) {
+  const { t } = useAppTranslation();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        borderBottomColor: showDivider ? palette.line : "transparent",
+        borderBottomWidth: 1,
+        flexDirection: "row",
+        gap: 10,
+        minHeight: 54,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+      }}
+    >
+      <Text numberOfLines={2} style={{ color: palette.text, flex: 1, fontSize: 14, fontWeight: "800", lineHeight: 19, textTransform: "none" }}>
+        {item.name}
+      </Text>
+      <Text style={{ color: palette.muted, fontSize: 11, fontWeight: "700" }}>
+        {item.passageCount === 1
+          ? t("bible.topics.passage.single")
+          : t("bible.topics.passage.count", { count: item.passageCount })}
+      </Text>
+      <Feather name="chevron-right" size={16} color={palette.muted} />
+    </Pressable>
+  );
+}
+
 function BibleTopicDetailPane({
   bibleVersionId,
   bibleVersionLabel,
@@ -2688,9 +3060,14 @@ function BibleTopicDetailPane({
   loading,
   onBack,
   onSelectReference,
+  onVote,
   palette,
   references,
+  source,
   topic,
+  userVotes,
+  voteError,
+  votePending,
 }: {
   bibleVersionId: BibleVersionId;
   bibleVersionLabel: string;
@@ -2698,9 +3075,14 @@ function BibleTopicDetailPane({
   loading: boolean;
   onBack: () => void;
   onSelectReference: (reference: string) => void;
+  onVote: (reference: BibleTopicReference, value: BibleTopicVoteValue) => void;
   palette: ReaderPalette;
   references: BibleTopicReference[];
+  source: BibleTopicResult["source"];
   topic: string;
+  userVotes: Record<string, BibleTopicVoteValue>;
+  voteError?: string;
+  votePending: string;
 }) {
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
@@ -2710,6 +3092,7 @@ function BibleTopicDetailPane({
         reference: item.reference,
         verse: bibleVerseFromReference(item.reference, bibleVersionId),
         votes: item.votes,
+        voteId: item.voteId,
       })),
     [bibleVersionId, references],
   );
@@ -2781,15 +3164,26 @@ function BibleTopicDetailPane({
               </Text>
             </View>
           ) : resolvedVerses.length > 0 ? (
-            resolvedVerses.map((item, index) => (
+            <>
+              <View style={{ backgroundColor: palette.peach, borderRadius: radius.md, gap: 3, paddingHorizontal: 13, paddingVertical: 11 }}>
+                <Text style={{ color: palette.text, fontSize: 12, fontWeight: "800", lineHeight: 18 }}>
+                  {source === "openbible" ? t("bible.topics.voteSource") : t("bible.topics.textSearchSource", { translation: bibleVersionLabel })}
+                </Text>
+                {source === "openbible" && voteError ? <Text style={{ color: palette.danger, fontSize: 12, fontWeight: "800", lineHeight: 18 }}>{t("bible.topics.voteError")}</Text> : null}
+              </View>
+            {resolvedVerses.map((item, index) => (
               <TopicVerseCard
                 key={`${item.reference}-${index}`}
                 bibleVersionLabel={bibleVersionLabel}
                 item={item}
                 onPress={item.verse ? () => onSelectReference(item.reference) : undefined}
+                onVote={(value) => onVote(item, value)}
                 palette={palette}
+                userVote={item.voteId ? userVotes[bibleTopicVoteKey(topic, item.voteId)] : undefined}
+                voting={Boolean(item.voteId && votePending === bibleTopicVoteKey(topic, item.voteId))}
               />
-            ))
+            ))}
+            </>
           ) : (
             <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
               <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "800", lineHeight: 20 }}>{t("bible.topics.empty")}</Text>
@@ -2804,21 +3198,23 @@ function TopicVerseCard({
   bibleVersionLabel,
   item,
   onPress,
+  onVote,
   palette,
+  userVote,
+  voting,
 }: {
   bibleVersionLabel: string;
-  item: { reference: string; verse?: BibleVerse; votes: number };
+  item: BibleTopicReference & { verse?: BibleVerse };
   onPress?: () => void;
+  onVote: (value: BibleTopicVoteValue) => void;
   palette: ReaderPalette;
+  userVote?: BibleTopicVoteValue;
+  voting: boolean;
 }) {
   const { language, t } = useAppTranslation();
   const displayedReference = displayBibleReference(item.reference, language);
   return (
-    <Pressable
-      accessibilityLabel={onPress ? t("bible.navigator.openPassage", { reference: displayedReference }) : undefined}
-      accessibilityRole={onPress ? "button" : undefined}
-      disabled={!onPress}
-      onPress={onPress}
+    <View
       style={{
         backgroundColor: palette.surface,
         borderColor: palette.line,
@@ -2835,27 +3231,87 @@ function TopicVerseCard({
         }),
       }}
     >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <View style={{ alignItems: "center", backgroundColor: palette.peach, borderRadius: 999, height: 28, justifyContent: "center", width: 28 }}>
-          <Feather name="book-open" size={14} color={palette.accent} />
-        </View>
-        <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
-          {displayedReference}
-        </Text>
-      </View>
-      {item.verse ? (
-        <>
-          <Text selectable style={{ color: palette.text, fontSize: 16, fontWeight: "500", lineHeight: 25 }}>
-            {item.verse.text}
+      <Pressable
+        accessibilityLabel={onPress ? t("bible.navigator.openPassage", { reference: displayedReference }) : undefined}
+        accessibilityRole={onPress ? "button" : undefined}
+        disabled={!onPress}
+        onPress={onPress}
+        style={{ gap: 9 }}
+      >
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+          <View style={{ alignItems: "center", backgroundColor: palette.peach, borderRadius: 999, height: 28, justifyContent: "center", width: 28 }}>
+            <Feather name="book-open" size={14} color={palette.accent} />
+          </View>
+          <Text selectable style={{ color: palette.text, flex: 1, fontSize: 16, fontWeight: "900" }}>
+            {displayedReference}
           </Text>
-          <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{item.verse.translation ?? bibleVersionLabel}</Text>
-        </>
-      ) : (
-        <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
-          {t("bible.topics.unavailable", { translation: bibleVersionLabel })}
-        </Text>
-      )}
-    </Pressable>
+        </View>
+        {item.verse ? (
+          <>
+            <Text selectable style={{ color: palette.text, fontSize: 16, fontWeight: "500", lineHeight: 25 }}>
+              {item.verse.text}
+            </Text>
+            <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{item.verse.translation ?? bibleVersionLabel}</Text>
+          </>
+        ) : (
+          <Text selectable style={{ color: palette.muted, fontSize: 13, fontWeight: "700", lineHeight: 19 }}>
+            {t("bible.topics.unavailable", { translation: bibleVersionLabel })}
+          </Text>
+        )}
+      </Pressable>
+      {item.voteId ? <View style={{ alignItems: "center", borderTopColor: palette.line, borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between", paddingTop: 11 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          {voting ? <ActivityIndicator color={palette.muted} size="small" /> : <Feather name="thumbs-up" size={13} color={palette.muted} />}
+          <Text style={{ color: palette.muted, fontSize: 11, fontWeight: "800" }}>
+            {t("bible.topics.helpfulVotes", { count: item.votes.toLocaleString() })}
+          </Text>
+        </View>
+        <View accessibilityLabel={t("bible.topics.ratePassage", { reference: item.reference })} style={{ flexDirection: "row", gap: 7 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !item.voteId || Boolean(userVote) || voting, selected: userVote === 1 }}
+            disabled={!item.voteId || Boolean(userVote) || voting}
+            onPress={() => onVote(1)}
+            style={{
+              alignItems: "center",
+              backgroundColor: userVote === 1 ? palette.peach : palette.surface,
+              borderColor: userVote === 1 ? palette.accent : palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 5,
+              minHeight: 32,
+              opacity: !item.voteId || (Boolean(userVote) && userVote !== 1) ? 0.55 : 1,
+              paddingHorizontal: 10,
+            }}
+          >
+            <Feather name="thumbs-up" size={13} color={userVote === 1 ? palette.accent : palette.muted} />
+            <Text style={{ color: userVote === 1 ? palette.accent : palette.text, fontSize: 11, fontWeight: "800" }}>{t("bible.topics.helpful")}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !item.voteId || Boolean(userVote) || voting, selected: userVote === -1 }}
+            disabled={!item.voteId || Boolean(userVote) || voting}
+            onPress={() => onVote(-1)}
+            style={{
+              alignItems: "center",
+              backgroundColor: userVote === -1 ? colors.prayerSoft : palette.surface,
+              borderColor: userVote === -1 ? palette.danger : palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 5,
+              minHeight: 32,
+              opacity: !item.voteId || (Boolean(userVote) && userVote !== -1) ? 0.55 : 1,
+              paddingHorizontal: 10,
+            }}
+          >
+            <Feather name="thumbs-down" size={13} color={userVote === -1 ? palette.danger : palette.muted} />
+            <Text style={{ color: userVote === -1 ? palette.danger : palette.text, fontSize: 11, fontWeight: "800" }}>{t("bible.topics.notHelpful")}</Text>
+          </Pressable>
+        </View>
+      </View> : null}
+    </View>
   );
 }
 
@@ -4284,17 +4740,17 @@ function BibleVersionRow({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: selected ? palette.accent : palette.input,
+          backgroundColor: palette.input,
           borderColor: selected ? palette.accent : palette.line,
           borderRadius: 999,
-          borderWidth: 1,
+          borderWidth: selected ? 1.5 : 1,
           height: 40,
           justifyContent: "center",
           minWidth: 56,
           paddingHorizontal: 10,
         }}
       >
-        <Text style={{ color: selected ? palette.buttonText : palette.accent, fontSize: 12, fontWeight: "900" }}>{shortLabel}</Text>
+        <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "900" }}>{shortLabel}</Text>
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>{label}</Text>
