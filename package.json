@@ -27,6 +27,8 @@
     "deploy:netlify": "npm run build:web && netlify deploy --prod --dir dist --functions netlify/functions",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "typecheck": "tsc --noEmit",
+    "typecheck:functions": "npm --prefix functions run build",
+    "test:functions": "npm --prefix functions test",
     "video:studio": "remotion studio remotion/src/index.ts",
     "video:render": "remotion render remotion/src/index.ts KoinoLaunchTeaser out/koino-launch-teaser.mp4",
     "video:still": "remotion still remotion/src/index.ts KoinoLaunchTeaser --frame=90 --scale=0.25 out/koino-launch-teaser-frame.png"

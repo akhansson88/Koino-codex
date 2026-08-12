@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /supportPayments/{paymentId} {
+      allow read: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+
+      // Payment records and lifecycle state are authoritative backend data.
+      allow create, update, delete: if false;
+    }
+  }
+}
