@@ -861,13 +861,24 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
 }
 
 const bibleSheetHorizontalPadding = 20;
+const bibleSheetTopPadding = 10;
+const bibleSheetHandleHeight = 28;
+const bibleSheetHeaderBottomPadding = 14;
+const bibleSheetHeaderMinHeight = 42;
+const bibleVersionListTopPadding = 18;
+const bibleVersionRowGap = 10;
+const bibleVersionRowMinHeight = 68;
 
 function BibleSheetShell({
+  animatedStyle,
   children,
+  contentStyle,
   palette,
   style,
 }: {
+  animatedStyle?: ComponentProps<typeof Animated.View>["style"];
   children: ReactNode;
+  contentStyle?: ComponentProps<typeof View>["style"];
   palette: ReaderPalette;
   style?: ComponentProps<typeof Animated.View>["style"];
 }) {
@@ -875,10 +886,11 @@ function BibleSheetShell({
     <Animated.View
       style={[
         {
-          backgroundColor: palette.sheet,
+          backgroundColor: "transparent",
           borderTopLeftRadius: radius.xxl,
           borderTopRightRadius: radius.xxl,
-          overflow: "hidden",
+          flexShrink: 1,
+          zIndex: 1,
           ...platformShadow({
             boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
             color: palette.shadow,
@@ -888,10 +900,59 @@ function BibleSheetShell({
           }),
         },
         style,
+        animatedStyle,
       ]}
     >
-      {children}
+      <View
+        style={[
+          {
+            backgroundColor: palette.sheet,
+            borderTopLeftRadius: radius.xxl,
+            borderTopRightRadius: radius.xxl,
+            flex: 1,
+            overflow: "hidden",
+          },
+          contentStyle,
+        ]}
+      >
+        {children}
+      </View>
     </Animated.View>
+  );
+}
+
+function BibleSheetModalFrame({
+  accessibilityLabel,
+  children,
+  onBackdropPress,
+}: {
+  accessibilityLabel?: string;
+  children: ReactNode;
+  onBackdropPress: () => void;
+}) {
+  return (
+    <View style={{ backgroundColor: "transparent", bottom: 0, justifyContent: "flex-end", left: 0, position: "absolute", right: 0, top: 0 }}>
+      <Pressable
+        accessible={Boolean(accessibilityLabel)}
+        accessibilityElementsHidden={!accessibilityLabel}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={accessibilityLabel ? "button" : "none"}
+        importantForAccessibility={accessibilityLabel ? "auto" : "no"}
+        onPress={onBackdropPress}
+        style={{ backgroundColor: "transparent", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+      />
+      {children}
+    </View>
+  );
+}
+
+function BibleSheetBottomPositioner({ children }: { children: ReactNode }) {
+  return (
+    <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
+      <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0 }}>
+        {children}
+      </View>
+    </View>
   );
 }
 
@@ -916,7 +977,7 @@ function BibleSheetTop({
           borderBottomColor: bordered ? palette.line : "transparent",
           borderBottomWidth: bordered ? 1 : 0,
           paddingHorizontal: bibleSheetHorizontalPadding,
-          paddingTop: 10,
+          paddingTop: bibleSheetTopPadding,
         },
         topProps?.style,
       ]}
@@ -927,7 +988,7 @@ function BibleSheetTop({
           {
             alignItems: "center",
             alignSelf: "center",
-            height: 28,
+            height: bibleSheetHandleHeight,
             justifyContent: "center",
             width: 150,
           },
@@ -936,7 +997,7 @@ function BibleSheetTop({
       >
         <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
       </View>
-      {children ? <View style={{ paddingBottom: 14 }}>{children}</View> : null}
+      {children ? <View style={{ paddingBottom: bibleSheetHeaderBottomPadding }}>{children}</View> : null}
     </View>
   );
 }
@@ -4426,29 +4487,19 @@ function VerseActionSheet({
 
   return (
     <Modal transparent visible={mounted} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            backgroundColor: palette.dim,
-            bottom: 0,
-            left: 0,
-            opacity: slideProgress,
-            position: "absolute",
-            right: 0,
-            top: 0,
-          }}
-        />
-        <Pressable accessibilityLabel={t("bible.actions.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
+      <BibleSheetModalFrame accessibilityLabel={t("bible.actions.close")} onBackdropPress={onClose}>
         <BibleSheetShell
-          palette={palette}
-          style={{
-            gap: 2,
-            maxHeight: "78%",
-            paddingBottom: Math.max(28, insets.bottom + 20),
+          animatedStyle={{
             elevation: 2,
             transform: [{ translateY: sheetTranslateY }],
-            zIndex: 1,
+          }}
+          contentStyle={{
+            gap: 2,
+            paddingBottom: Math.max(28, insets.bottom + 20),
+          }}
+          palette={palette}
+          style={{
+            maxHeight: "78%",
           }}
         >
           <BibleSheetTop palette={palette} />
@@ -4518,7 +4569,7 @@ function VerseActionSheet({
             </View>
           )}
         </BibleSheetShell>
-      </View>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4610,29 +4661,30 @@ function ReadingSettingsSheet({
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
+  const { height } = useWindowDimensions();
+  const sheetHeight = height * 0.92;
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel={t("bible.settings.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <BibleSheetShell
-          palette={palette}
-          style={{
-            maxHeight: "92%",
-            paddingBottom: Math.max(26, insets.bottom + 18),
-          }}
-        >
-          <BibleSheetTop palette={palette}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
-              <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
-              <ReaderCircleButton accessibilityLabel={t("bible.settings.close")} icon="x" onPress={onClose} palette={palette} />
-            </View>
-          </BibleSheetTop>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 24, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 24 }}
+      <BibleSheetModalFrame accessibilityLabel={t("bible.settings.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            contentStyle={{ paddingBottom: Math.max(26, insets.bottom + 18) }}
+            palette={palette}
+            style={{ height: sheetHeight }}
           >
+            <BibleSheetTop palette={palette}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
+                <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
+                <ReaderCircleButton accessibilityLabel={t("bible.settings.close")} icon="x" onPress={onClose} palette={palette} />
+              </View>
+            </BibleSheetTop>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 24, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 24 }}
+              style={{ flex: 1 }}
+            >
 
             <SettingsGroup palette={palette} title={t("bible.settings.fontFamily")}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -4694,9 +4746,10 @@ function ReadingSettingsSheet({
                 <SettingsToggle label={t("bible.settings.compactMode")} onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
             </SettingsGroup>
-          </ScrollView>
-        </BibleSheetShell>
-      </View>
+            </ScrollView>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4716,6 +4769,18 @@ function BibleVersionSheet({
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
+  const { height } = useWindowDimensions();
+  const bottomPadding = Math.max(26, insets.bottom + 18);
+  const contentHeight =
+    bibleSheetTopPadding +
+    bibleSheetHandleHeight +
+    bibleSheetHeaderMinHeight +
+    bibleSheetHeaderBottomPadding +
+    bibleVersionListTopPadding +
+    bibleVersions.length * bibleVersionRowMinHeight +
+    Math.max(0, bibleVersions.length - 1) * bibleVersionRowGap +
+    bottomPadding;
+  const sheetHeight = Math.min(height * 0.92, contentHeight);
 
   function chooseVersion(versionId: BibleVersionId) {
     onChangeBibleVersion(versionId);
@@ -4724,43 +4789,39 @@ function BibleVersionSheet({
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel={t("bible.version.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <BibleSheetShell
-          palette={palette}
-          style={{
-            maxHeight: "92%",
-            paddingBottom: Math.max(26, insets.bottom + 18),
-          }}
-        >
-          <BibleSheetTop palette={palette}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.version.title")}</Text>
-                <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>{t("bible.version.description")}</Text>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.version.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell contentStyle={{ paddingBottom: bottomPadding }} palette={palette} style={{ height: sheetHeight }}>
+            <BibleSheetTop palette={palette}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.version.title")}</Text>
+                  <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>{t("bible.version.description")}</Text>
+                </View>
+                <ReaderCircleButton accessibilityLabel={t("bible.version.close")} icon="x" onPress={onClose} palette={palette} />
               </View>
-              <ReaderCircleButton accessibilityLabel={t("bible.version.close")} icon="x" onPress={onClose} palette={palette} />
-            </View>
-          </BibleSheetTop>
+            </BibleSheetTop>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 10, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 18 }}
-          >
-            {bibleVersions.map((version) => (
-              <BibleVersionRow
-                description={bibleVersionDescription(version.id, t)}
-                key={version.id}
-                label={version.label}
-                onPress={() => chooseVersion(version.id)}
-                palette={palette}
-                selected={version.id === bibleVersionId}
-                shortLabel={bibleVersionShortLabel(version.id)}
-              />
-            ))}
-          </ScrollView>
-        </BibleSheetShell>
-      </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: bibleVersionRowGap, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: bibleVersionListTopPadding }}
+              style={{ flex: 1 }}
+            >
+              {bibleVersions.map((version) => (
+                <BibleVersionRow
+                  description={bibleVersionDescription(version.id, t)}
+                  key={version.id}
+                  label={version.label}
+                  onPress={() => chooseVersion(version.id)}
+                  palette={palette}
+                  selected={version.id === bibleVersionId}
+                  shortLabel={bibleVersionShortLabel(version.id)}
+                />
+              ))}
+            </ScrollView>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4793,7 +4854,7 @@ function BibleVersionRow({
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
-        minHeight: 68,
+        minHeight: bibleVersionRowMinHeight,
         paddingHorizontal: 14,
         paddingVertical: 10,
       }}
@@ -5409,15 +5470,12 @@ function CrossReferenceSheet({
 
   return (
     <Modal transparent visible={visible} onRequestClose={() => closeWithAnimation()}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close cross references" style={{ backgroundColor: palette.dim, flex: 1 }} onPress={() => closeWithAnimation()} />
+      <BibleSheetModalFrame accessibilityLabel="Close cross references" onBackdropPress={() => closeWithAnimation()}>
         <BibleSheetShell
+          animatedStyle={{ transform: [{ translateY }] }}
+          contentStyle={{ paddingBottom: insets.bottom }}
           palette={palette}
-          style={{
-            height: sheetHeight,
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-          }}
+          style={{ height: sheetHeight }}
         >
           <BibleSheetTop bordered handleProps={panResponder.panHandlers} palette={palette}>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
@@ -5467,7 +5525,7 @@ function CrossReferenceSheet({
             )}
           </ScrollView>
         </BibleSheetShell>
-      </View>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -6208,22 +6266,12 @@ function BibleDrawer({
 
   return (
     <Modal transparent visible={visible} onRequestClose={goBack}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable
-          accessible={false}
-          accessibilityElementsHidden
-          accessibilityRole="none"
-          importantForAccessibility="no"
-          onPress={closeWithAnimation}
-          style={{ backgroundColor: palette.dim, flex: 1 }}
-        />
+      <BibleSheetModalFrame onBackdropPress={closeWithAnimation}>
         <BibleSheetShell
+          animatedStyle={{ transform: [{ translateY }] }}
+          contentStyle={{ paddingBottom: insets.bottom }}
           palette={palette}
-          style={{
-            height: sheetHeight,
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-          }}
+          style={{ height: sheetHeight }}
         >
           <BibleSheetTop
             bordered
@@ -6529,7 +6577,7 @@ function BibleDrawer({
             ) : null}
           </ScrollView>
         </BibleSheetShell>
-      </View>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
