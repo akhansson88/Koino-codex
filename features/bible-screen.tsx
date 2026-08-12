@@ -4401,7 +4401,7 @@ function VerseActionSheet({
               <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
             </ScrollView>
           ) : (
-            <View style={{ gap: 14 }}>
+            <View style={{ flexShrink: 1, gap: 14, minHeight: 0 }}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                 <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
                 <View style={{ flex: 1, gap: 2 }}>
@@ -4409,7 +4409,7 @@ function VerseActionSheet({
                   <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
                 </View>
               </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
                 {references.length > 0 ? (
                   references.map((reference, index) => (
                     <View
