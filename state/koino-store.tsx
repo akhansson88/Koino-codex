@@ -7,6 +7,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
+import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
@@ -68,6 +69,7 @@ const auth = authInstance;
 const database = getDatabase(app);
 const pendingCheckInKeys = new Set<string>();
 const pendingPrayerCompletionKeys = new Set<string>();
+const pendingSavedVerseDedupKeys = new Set<string>();
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
 const themeStorageKey = "koino.theme";
 
@@ -215,7 +217,7 @@ function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse
   return kind === "scripture" ? verses.length > 0 : Boolean(body.trim());
 }
 
-function savedVerseId(verse: Pick<BibleVerse, "reference" | "translation">) {
+function bibleReferenceStorageId(verse: Pick<BibleVerse, "reference" | "translation">) {
   return `${verse.reference}_${verse.translation ?? "default"}`
     .trim()
     .toLowerCase()
@@ -726,7 +728,30 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(prayerNotificationsRef, (snapshot) =>
         setPrayerNotifications(asArray<PrayerNotification>(snapshot.val()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))),
       ),
-      onValue(savedVersesRef, (snapshot) => setSavedVerses(asArray<SavedVerse>(snapshot.val()).sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt)))),
+      onValue(savedVersesRef, (snapshot) => {
+        const normalized = normalizeSavedVerseRecords(snapshot.val());
+        setSavedVerses(normalized.verses);
+
+        const duplicateStorageKeys = normalized.duplicateStorageKeys.filter((key) => {
+          const pendingKey = `${firebaseUser.uid}:${key}`;
+          if (pendingSavedVerseDedupKeys.has(pendingKey)) return false;
+          pendingSavedVerseDedupKeys.add(pendingKey);
+          return true;
+        });
+
+        if (duplicateStorageKeys.length > 0) {
+          void update(
+            ref(database),
+            Object.fromEntries(duplicateStorageKeys.map((key) => [`savedVerses/${firebaseUser.uid}/${key}`, null])),
+          )
+            .catch(() => {
+              // The normalized in-memory list remains safe; a later snapshot retries persistence.
+            })
+            .finally(() => {
+              duplicateStorageKeys.forEach((key) => pendingSavedVerseDedupKeys.delete(`${firebaseUser.uid}:${key}`));
+            });
+        }
+      }),
       onValue(bibleHighlightsRef, (snapshot) =>
         setBibleHighlights(
           asArray<BibleHighlight>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
@@ -1663,14 +1688,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "saveVerse": {
               if (!firebaseUser) return;
-              const key = savedVerseId(action.verse);
-              if (!key) return;
+              const identity = savedVerseIdentity(action.verse);
+              const key = savedVerseStorageId(action.verse);
+              if (!identity || !key) return;
               const savedVerse: SavedVerse = {
                 ...action.verse,
                 id: key,
                 referenceText: action.verse.referenceText ?? action.verse.reference,
                 savedAt: now(),
               };
+              const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
+              const existingSnapshot = await get(savedVersesRef);
+              const alreadySaved = normalizeSavedVerseRecords(existingSnapshot.val()).verses
+                .some((verse) => savedVerseIdentity(verse) === identity);
+              if (alreadySaved) return;
+
               await set(ref(database, `savedVerses/${firebaseUser.uid}/${key}`), savedVerse);
               return;
             }
@@ -1685,7 +1717,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const color = normalizeHighlightColor(action.color);
               const highlights = action.verses
                 .map((verse): BibleHighlight | undefined => {
-                  const key = savedVerseId(verse);
+                  const key = bibleReferenceStorageId(verse);
                   if (!key || !verse.book || typeof verse.chapter !== "number" || typeof verse.startVerse !== "number") return undefined;
                   const existing = bibleHighlights.find((highlight) => highlight.id === key);
                   return {

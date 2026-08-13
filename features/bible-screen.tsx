@@ -64,7 +64,8 @@ import {
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
-import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
+import { savedVerseIdentity } from "@/state/saved-verses";
+import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
 import { useAppTranslation } from "@/ui/app-language";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
@@ -325,10 +326,6 @@ const colorWheelColors = [
   "#80DEEA",
   "#CE93D8",
 ];
-
-function savedVerseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
-  return `${verse.reference}|${verse.translation ?? ""}`;
-}
 
 function selectedVerseRangesFor(verses: number[]): SelectedVerseRange[] {
   const sortedVerses = Array.from(new Set(verses)).sort((a, b) => a - b);
@@ -1110,6 +1107,18 @@ export function BibleScreen() {
   );
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
+  const selectedPassages = useMemo(
+    () => selectedVerseRanges
+      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
+      .filter((verse): verse is BibleVerse => Boolean(verse)),
+    [bibleVersionId, position.book, position.chapter, selectedVerseRanges],
+  );
+  const selectedPassagesAreSaved = useMemo(
+    () => selectedPassages.length > 0 && selectedPassages.length === selectedVerseRanges.length && selectedPassages.every((selectedVerse) =>
+      state.savedVerses.some((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)),
+    ),
+    [selectedPassages, selectedVerseRanges.length, state.savedVerses],
+  );
   const chapterHighlightByVerse = useMemo(() => {
     const highlights = state.bibleHighlights
       .filter(
@@ -1853,35 +1862,39 @@ export function BibleScreen() {
   const handleSaveSelectedVerses = useCallback(async () => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
 
-    const selectedVerses = selectedVerseRanges
-      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
-      .filter((verse): verse is BibleVerse => Boolean(verse));
-
-    if (selectedVerses.length === 0) {
-      setReaderToast({ detail: "Try selecting the verses again.", message: "Could not save selection", tone: "error" });
+    if (selectedPassages.length === 0) {
+      setReaderToast({ detail: t("bible.selection.errorDetail"), message: t("bible.selection.errorTitle"), tone: "error" });
       return;
     }
 
-    const unsavedVerses = selectedVerses.filter((selectedVerse) => !state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse)));
-
-    if (unsavedVerses.length === 0) {
-      setReaderToast({ detail: "Every selected reference is already saved.", message: "Selection already saved", tone: "error" });
-      return;
-    }
+    const matchingSavedVerses = selectedPassages
+      .map((selectedVerse) => state.savedVerses.find((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)))
+      .filter((verse): verse is SavedVerse => Boolean(verse));
+    const shouldRemove = matchingSavedVerses.length === selectedPassages.length;
+    const passagesToSave = selectedPassages.filter((selectedVerse) =>
+      !state.savedVerses.some((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)),
+    );
+    const isSingleVerse = selectedVerseNumbers.length === 1;
 
     setSelectionSaving(true);
     try {
-      await Promise.all(unsavedVerses.map((verse) => dispatch({ type: "saveVerse", verse })));
+      if (shouldRemove) {
+        await Promise.all(matchingSavedVerses.map((verse) => dispatch({ type: "removeSavedVerse", id: verse.id })));
+      } else {
+        await Promise.all(passagesToSave.map((verse) => dispatch({ type: "saveVerse", verse })));
+      }
       setSelectedVerseNumbers([]);
       setReaderToast({
-        detail: unsavedVerses.length === 1 ? "You can find it under saved verses." : "You can find them under saved verses.",
-        message: unsavedVerses.length === 1 ? "Selection saved" : `${unsavedVerses.length} selections saved`,
+        detail: t(shouldRemove ? "bible.selection.removedDetail" : "bible.selection.savedDetail"),
+        message: t(shouldRemove
+          ? isSingleVerse ? "bible.selection.removedVerse" : "bible.selection.removedPassage"
+          : isSingleVerse ? "bible.selection.savedVerse" : "bible.selection.savedPassage"),
         tone: "success",
       });
     } finally {
       setSelectionSaving(false);
     }
-  }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving, state.savedVerses]);
+  }, [dispatch, selectedPassages, selectedVerseNumbers.length, selectedVerseRanges.length, selectionSaving, state.savedVerses, t]);
 
   const handleHighlightSelectedVerses = useCallback(async (color: BibleHighlightColor, colorId?: string) => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
@@ -2426,6 +2439,7 @@ export function BibleScreen() {
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
           reference={displayBibleReference(selectedVerseReference, language)}
+          saved={selectedPassagesAreSaved}
           saving={selectionSaving}
           verseCount={selectedVerseNumbers.length}
         />
@@ -2512,6 +2526,10 @@ export function BibleScreen() {
             return;
           }
           setTopicsVisible(true);
+        }}
+        onRemoveSavedVerse={async (id) => {
+          await dispatch({ type: "removeSavedVerse", id });
+          setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
         }}
         onSelect={(nextPosition) => {
           setPickerVisible(false);
@@ -3855,6 +3873,7 @@ function SelectedVerseSuggestionBar({
   onSave,
   palette,
   reference,
+  saved,
   saving,
   verseCount,
 }: {
@@ -3870,6 +3889,7 @@ function SelectedVerseSuggestionBar({
   onSave: () => void;
   palette: ReaderPalette;
   reference: string;
+  saved: boolean;
   saving: boolean;
   verseCount: number;
 }) {
@@ -3927,7 +3947,7 @@ function SelectedVerseSuggestionBar({
             <Feather name="x" size={18} color={palette.accent} />
           </Pressable>
           <Pressable
-            accessibilityLabel={t("bible.selection.saveAccessibility", { reference })}
+            accessibilityLabel={t(saved ? "bible.selection.removeAccessibility" : "bible.selection.saveAccessibility", { reference })}
             accessibilityRole="button"
             accessibilityState={{ disabled: saving }}
             disabled={saving}
@@ -3948,7 +3968,11 @@ function SelectedVerseSuggestionBar({
           >
             <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
             <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
-              {t(saving ? "bible.selection.saving" : "bible.selection.save")}
+              {t(saving
+                ? saved ? "bible.selection.removing" : "bible.selection.saving"
+                : saved
+                  ? "bible.selection.remove"
+                  : verseCount === 1 ? "bible.selection.saveVerse" : "bible.selection.savePassage")}
             </Text>
           </Pressable>
         </View>
@@ -4580,13 +4604,16 @@ function VerseSheetAction({
   palette,
   subtitle,
   title,
+  tone = "default",
 }: {
-  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "users";
+  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
   onPress: () => void;
   palette: ReaderPalette;
   subtitle: string;
   title: string;
+  tone?: "danger" | "default";
 }) {
+  const destructive = tone === "danger";
   return (
     <Pressable
       accessibilityRole="button"
@@ -4612,13 +4639,64 @@ function VerseSheetAction({
           width: 46,
         }}
       >
-        <Feather name={icon} size={21} color={palette.accent} />
+        <Feather name={icon} size={21} color={destructive ? colors.danger : palette.accent} />
       </View>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
+        <Text style={{ color: destructive ? colors.danger : palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
         <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "600" }}>{subtitle}</Text>
       </View>
     </Pressable>
+  );
+}
+
+function SavedVerseActionSheet({
+  onClose,
+  onOpen,
+  onRemove,
+  palette,
+  verse,
+}: {
+  onClose: () => void;
+  onOpen: (verse: SavedVerse) => void;
+  onRemove: (verse: SavedVerse) => void;
+  palette: ReaderPalette;
+  verse?: SavedVerse;
+}) {
+  const { language, t } = useAppTranslation();
+  const insets = useSafeAreaInsets();
+  if (!verse) return null;
+
+  return (
+    <Modal transparent visible onRequestClose={onClose}>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.saved.actions.close")} onBackdropPress={onClose}>
+        <BibleSheetShell
+          contentStyle={{ gap: 2, paddingBottom: Math.max(28, insets.bottom + 20) }}
+          palette={palette}
+        >
+          <BibleSheetTop palette={palette} />
+          <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
+            <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", paddingBottom: 8 }}>
+              {displayBibleReference(verse.reference, language)}
+            </Text>
+            <VerseSheetAction
+              icon="book-open"
+              onPress={() => onOpen(verse)}
+              palette={palette}
+              subtitle={t("bible.saved.actions.openSubtitle")}
+              title={t("bible.saved.actions.open")}
+            />
+            <VerseSheetAction
+              icon="trash-2"
+              onPress={() => onRemove(verse)}
+              palette={palette}
+              subtitle={t("bible.saved.actions.removeSubtitle")}
+              title={t("bible.saved.actions.remove")}
+              tone="danger"
+            />
+          </View>
+        </BibleSheetShell>
+      </BibleSheetModalFrame>
+    </Modal>
   );
 }
 
@@ -5281,63 +5359,6 @@ function SmallPillButton({
         {label}
       </Text>
     </Pressable>
-  );
-}
-
-function SavedVersesSection({
-  onAddToJournal,
-  onOpenInBible,
-  onRemove,
-  onShareToRoom,
-  palette,
-  verses,
-}: {
-  onAddToJournal: (verse: BibleVerse) => void;
-  onOpenInBible: (verse: BibleVerse) => void;
-  onRemove: (id: string) => void;
-  onShareToRoom: (verse: BibleVerse) => void;
-  palette: ReaderPalette;
-  verses: SavedVerse[];
-}) {
-  return (
-    <View
-      style={{
-        backgroundColor: palette.surface,
-        borderColor: palette.line,
-        borderRadius: radius.xl,
-        borderWidth: 1,
-        gap: 12,
-        padding: 16,
-      }}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <Text style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>Saved verses</Text>
-        <Feather name="bookmark" size={18} color={palette.accent} />
-      </View>
-      {verses.length === 0 ? (
-        <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>
-          No saved verses yet. Save a verse to return to it later.
-        </Text>
-      ) : (
-        verses.slice(0, 5).map((verse) => (
-          <View key={verse.id} style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <VersePreviewCard
-                compact
-                onAddToJournal={onAddToJournal}
-                onOpenInBible={onOpenInBible}
-                onShareToRoom={onShareToRoom}
-                showFullText
-                verse={verse}
-              />
-            </View>
-            <Pressable accessibilityLabel={`Remove ${verse.reference}`} accessibilityRole="button" onPress={() => onRemove(verse.id)} style={{ padding: 8 }}>
-              <Feather name="trash-2" size={18} color={colors.danger} />
-            </Pressable>
-          </View>
-        ))
-      )}
-    </View>
   );
 }
 
@@ -6027,6 +6048,7 @@ function BibleDrawer({
   onOpenPlans,
   onOpenReflection,
   onOpenTopic,
+  onRemoveSavedVerse,
   onSelect,
   palette,
   savedVerses,
@@ -6043,6 +6065,7 @@ function BibleDrawer({
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
   onOpenTopic: (topic?: string) => void;
+  onRemoveSavedVerse: (id: string) => Promise<void>;
   onSelect: (position: BiblePosition) => void;
   palette: ReaderPalette;
   savedVerses: SavedVerse[];
@@ -6063,6 +6086,12 @@ function BibleDrawer({
   const [testament, setTestament] = useState<TestamentFilter>("all");
   const [phraseSearchLoading, setPhraseSearchLoading] = useState(false);
   const [phraseSearchResults, setPhraseSearchResults] = useState<BibleTextSearchResult[]>([]);
+  const [savedVerseMenu, setSavedVerseMenu] = useState<SavedVerse | undefined>();
+  const [hiddenSavedVerseIds, setHiddenSavedVerseIds] = useState<string[]>([]);
+  const visibleSavedVerses = useMemo(
+    () => savedVerses.filter((verse) => !hiddenSavedVerseIds.includes(verse.id)),
+    [hiddenSavedVerseIds, savedVerses],
+  );
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
       duration: 190,
@@ -6128,7 +6157,27 @@ function BibleDrawer({
     setBookParentStage(initialStage === "search" ? "search" : "book");
     setSelectedBook(normalized.book);
     setTestament("all");
+    setSavedVerseMenu(undefined);
   }, [initialPosition, initialStage, visible]);
+
+  useEffect(() => {
+    setHiddenSavedVerseIds((current) => current.filter((id) => savedVerses.some((verse) => verse.id === id)));
+  }, [savedVerses]);
+
+  const openSavedVerse = useCallback((verse: SavedVerse) => {
+    const nextPosition = biblePositionFromVerse(verse);
+    if (!nextPosition) return;
+    setSavedVerseMenu(undefined);
+    onSelect(nextPosition);
+  }, [onSelect]);
+
+  const removeSavedVerse = useCallback((verse: SavedVerse) => {
+    setSavedVerseMenu(undefined);
+    setHiddenSavedVerseIds((current) => current.includes(verse.id) ? current : [...current, verse.id]);
+    void onRemoveSavedVerse(verse.id).catch(() => {
+      setHiddenSavedVerseIds((current) => current.filter((id) => id !== verse.id));
+    });
+  }, [onRemoveSavedVerse]);
 
   useEffect(() => {
     if (!visible) return;
@@ -6512,16 +6561,33 @@ function BibleDrawer({
 
             {stage === "saved" ? (
               <View style={{ gap: 8 }}>
-                {savedVerses.length ? (
-                  savedVerses.map((verse) => (
+                {visibleSavedVerses.length ? (
+                  visibleSavedVerses.map((verse) => (
                     <DrawerVerseRow
+                      action={(
+                        <Pressable
+                          accessibilityLabel={t("bible.saved.actions.more", { reference: displayBibleReference(verse.reference, language) })}
+                          accessibilityRole="button"
+                          onPress={() => setSavedVerseMenu(verse)}
+                          style={{
+                            alignItems: "center",
+                            backgroundColor: palette.input,
+                            borderColor: palette.line,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            height: 40,
+                            justifyContent: "center",
+                            width: 40,
+                          }}
+                        >
+                          <Feather name="more-horizontal" size={18} color={palette.accent} />
+                        </Pressable>
+                      )}
                       key={verse.id}
-                      onPress={() => {
-                        const nextPosition = biblePositionFromVerse(verse);
-                        if (nextPosition) onSelect(nextPosition);
-                      }}
+                      onPress={() => openSavedVerse(verse)}
                       palette={palette}
                       reference={displayBibleReference(verse.reference, language)}
+                      showArrow={false}
                       meta={verse.translation && verse.translation !== versionLabel ? verse.translation : undefined}
                       text={verse.text}
                     />
@@ -6578,6 +6644,13 @@ function BibleDrawer({
           </ScrollView>
         </BibleSheetShell>
       </BibleSheetModalFrame>
+      <SavedVerseActionSheet
+        onClose={() => setSavedVerseMenu(undefined)}
+        onOpen={openSavedVerse}
+        onRemove={removeSavedVerse}
+        palette={palette}
+        verse={savedVerseMenu}
+      />
     </Modal>
   );
 }
@@ -6751,22 +6824,26 @@ function DrawerBookRow({
 }
 
 function DrawerVerseRow({
+  action,
   accentColor,
   meta,
   onPress,
   palette,
   reference,
+  showArrow = true,
   text,
 }: {
+  action?: ReactNode;
   accentColor?: BibleHighlightColor;
   meta?: string;
   onPress: () => void;
   palette: ReaderPalette;
   reference: string;
+  showArrow?: boolean;
   text?: string;
 }) {
   const { t } = useAppTranslation();
-  return (
+  const card = (
     <Pressable
       accessibilityLabel={t("bible.navigator.openPassage", { reference })}
       accessibilityRole="button"
@@ -6779,6 +6856,7 @@ function DrawerVerseRow({
         gap: 6,
         minHeight: 74,
         padding: 14,
+        paddingRight: action ? 66 : 14,
       }}
     >
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
@@ -6800,7 +6878,7 @@ function DrawerVerseRow({
             }}
           />
         ) : null}
-        <Feather name="arrow-right" size={16} color={palette.accent} />
+        {showArrow ? <Feather name="arrow-right" size={16} color={palette.accent} /> : null}
       </View>
       {text ? (
         <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
@@ -6813,6 +6891,15 @@ function DrawerVerseRow({
         </Text>
       ) : null}
     </Pressable>
+  );
+
+  if (!action) return card;
+
+  return (
+    <View style={{ position: "relative" }}>
+      {card}
+      <View style={{ position: "absolute", right: 10, top: 10, zIndex: 1 }}>{action}</View>
+    </View>
   );
 }
 
