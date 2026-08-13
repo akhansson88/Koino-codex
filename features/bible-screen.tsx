@@ -4664,37 +4664,53 @@ function SavedVerseActionSheet({
 }) {
   const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   if (!verse) return null;
+
+  const bottomPadding = Math.max(28, insets.bottom + 20);
+  const titleLineHeight = 24;
+  const contentHeight =
+    bibleSheetTopPadding +
+    bibleSheetHandleHeight +
+    2 +
+    titleLineHeight +
+    8 +
+    2 * 72 +
+    bottomPadding;
+  const sheetHeight = Math.min(height * 0.92, contentHeight);
 
   return (
     <Modal transparent visible onRequestClose={onClose}>
       <BibleSheetModalFrame accessibilityLabel={t("bible.saved.actions.close")} onBackdropPress={onClose}>
-        <BibleSheetShell
-          contentStyle={{ gap: 2, paddingBottom: Math.max(28, insets.bottom + 20) }}
-          palette={palette}
-        >
-          <BibleSheetTop palette={palette} />
-          <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
-            <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", paddingBottom: 8 }}>
-              {displayBibleReference(verse.reference, language)}
-            </Text>
-            <VerseSheetAction
-              icon="book-open"
-              onPress={() => onOpen(verse)}
-              palette={palette}
-              subtitle={t("bible.saved.actions.openSubtitle")}
-              title={t("bible.saved.actions.open")}
-            />
-            <VerseSheetAction
-              icon="trash-2"
-              onPress={() => onRemove(verse)}
-              palette={palette}
-              subtitle={t("bible.saved.actions.removeSubtitle")}
-              title={t("bible.saved.actions.remove")}
-              tone="danger"
-            />
-          </View>
-        </BibleSheetShell>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            contentStyle={{ gap: 2, paddingBottom: bottomPadding }}
+            palette={palette}
+            style={{ height: sheetHeight }}
+          >
+            <BibleSheetTop palette={palette} />
+            <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
+              <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", lineHeight: titleLineHeight, paddingBottom: 8 }}>
+                {displayBibleReference(verse.reference, language)}
+              </Text>
+              <VerseSheetAction
+                icon="book-open"
+                onPress={() => onOpen(verse)}
+                palette={palette}
+                subtitle={t("bible.saved.actions.openSubtitle")}
+                title={t("bible.saved.actions.open")}
+              />
+              <VerseSheetAction
+                icon="trash-2"
+                onPress={() => onRemove(verse)}
+                palette={palette}
+                subtitle={t("bible.saved.actions.removeSubtitle")}
+                title={t("bible.saved.actions.remove")}
+                tone="danger"
+              />
+            </View>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
       </BibleSheetModalFrame>
     </Modal>
   );
