@@ -26,6 +26,7 @@
     "deploy:preview": "npm run build:web && netlify deploy --dir dist --functions netlify/functions",
     "deploy:netlify": "npm run build:web && netlify deploy --prod --dir dist --functions netlify/functions",
     "validate:artifact": "bash scripts/validate-artifact.sh",
+    "validate:bible-search": "node scripts/validate-bible-search.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "npm --prefix functions run build",
     "test:functions": "npm --prefix functions test",

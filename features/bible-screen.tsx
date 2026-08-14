@@ -62,6 +62,7 @@ import {
   versesForChapter,
 } from "@/features/bible-kjv";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
+import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
@@ -182,75 +183,6 @@ const suggestedTopics: SuggestedTopic[] = [
 ];
 
 const bibleTopicAlphabet = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"];
-
-const swedishBibleBookNames: Record<string, string> = {
-  Genesis: "Första Moseboken",
-  Exodus: "Andra Moseboken",
-  Leviticus: "Tredje Moseboken",
-  Numbers: "Fjärde Moseboken",
-  Deuteronomy: "Femte Moseboken",
-  Joshua: "Josua",
-  Judges: "Domarboken",
-  Ruth: "Rut",
-  "1 Samuel": "Första Samuelsboken",
-  "2 Samuel": "Andra Samuelsboken",
-  "1 Kings": "Första Kungaboken",
-  "2 Kings": "Andra Kungaboken",
-  "1 Chronicles": "Första Krönikeboken",
-  "2 Chronicles": "Andra Krönikeboken",
-  Ezra: "Esra",
-  Nehemiah: "Nehemja",
-  Esther: "Ester",
-  Job: "Job",
-  Psalms: "Psaltaren",
-  Proverbs: "Ordspråksboken",
-  Ecclesiastes: "Predikaren",
-  "Solomon's Song": "Höga Visan",
-  Isaiah: "Jesaja",
-  Jeremiah: "Jeremia",
-  Lamentations: "Klagovisorna",
-  Ezekiel: "Hesekiel",
-  Daniel: "Daniel",
-  Hosea: "Hosea",
-  Joel: "Joel",
-  Amos: "Amos",
-  Obadiah: "Obadja",
-  Jonah: "Jona",
-  Micah: "Mika",
-  Nahum: "Nahum",
-  Habakkuk: "Habackuk",
-  Zephaniah: "Sefanja",
-  Haggai: "Haggai",
-  Zechariah: "Sakarja",
-  Malachi: "Malaki",
-  Matthew: "Matteusevangeliet",
-  Mark: "Markusevangeliet",
-  Luke: "Lukasevangeliet",
-  John: "Johannesevangeliet",
-  Acts: "Apostlagärningarna",
-  Romans: "Romarbrevet",
-  "1 Corinthians": "Första Korinthierbrevet",
-  "2 Corinthians": "Andra Korinthierbrevet",
-  Galatians: "Galaterbrevet",
-  Ephesians: "Efesierbrevet",
-  Philippians: "Filipperbrevet",
-  Colossians: "Kolosserbrevet",
-  "1 Thessalonians": "Första Thessalonikerbrevet",
-  "2 Thessalonians": "Andra Thessalonikerbrevet",
-  "1 Timothy": "Första Timotheosbrevet",
-  "2 Timothy": "Andra Timotheosbrevet",
-  Titus: "Titusbrevet",
-  Philemon: "Filemonbrevet",
-  Hebrews: "Hebreerbrevet",
-  James: "Jakobsbrevet",
-  "1 Peter": "Första Petrusbrevet",
-  "2 Peter": "Andra Petrusbrevet",
-  "1 John": "Första Johannesbrevet",
-  "2 John": "Andra Johannesbrevet",
-  "3 John": "Tredje Johannesbrevet",
-  Jude: "Judasbrevet",
-  Revelation: "Uppenbarelseboken",
-};
 
 const defaultPosition = normalizeBiblePosition({ book: "Philippians", chapter: 4, verse: 4 });
 const defaultFontId: BibleReaderFontId = "serif";
@@ -529,48 +461,6 @@ function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "r
 function biblePositionFromReference(reference?: string) {
   if (!reference) return undefined;
   return biblePositionFromVerse(bibleVerseFromReference(reference));
-}
-
-function displayBibleBookName(bookName: string, language: AppLanguage) {
-  return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
-}
-
-function displayBibleReference(reference: string, language: AppLanguage) {
-  if (language !== "sv") return reference;
-  const canonicalBook = Object.keys(swedishBibleBookNames)
-    .sort((a, b) => b.length - a.length)
-    .find((bookName) => reference === bookName || reference.startsWith(`${bookName} `));
-  return canonicalBook
-    ? `${displayBibleBookName(canonicalBook, language)}${reference.slice(canonicalBook.length)}`
-    : reference;
-}
-
-function canonicalizeBibleSearchQuery(query: string, language: AppLanguage) {
-  const trimmed = query.trim();
-  if (language !== "sv") return trimmed;
-
-  const localizedBooks = Object.entries(swedishBibleBookNames).sort((a, b) => b[1].length - a[1].length);
-  const normalizedQuery = trimmed.toLocaleLowerCase("sv");
-  const match = localizedBooks.find(([, localizedName]) => {
-    const normalizedName = localizedName.toLocaleLowerCase("sv");
-    return normalizedQuery === normalizedName || normalizedQuery.startsWith(`${normalizedName} `);
-  });
-  if (!match) return trimmed;
-
-  const [canonicalName, localizedName] = match;
-  return `${canonicalName}${trimmed.slice(localizedName.length)}`;
-}
-
-function biblePositionFromSearchQuery(query: string, language: AppLanguage) {
-  const trimmed = query.trim();
-  if (!trimmed) return undefined;
-  const canonicalQuery = canonicalizeBibleSearchQuery(trimmed, language);
-  const versePosition = biblePositionFromReference(canonicalQuery);
-  if (versePosition) return versePosition;
-
-  const chapterMatch = canonicalQuery.match(/^(.+?)\s+(\d+)$/);
-  if (!chapterMatch) return undefined;
-  return normalizeBiblePosition({ book: chapterMatch[1], chapter: Number(chapterMatch[2]), verse: 1 });
 }
 
 function testamentForBook(bookName: string): TestamentFilter {
@@ -4468,6 +4358,9 @@ function VerseActionSheet({
   const references = useMemo(() => (displayedPosition ? bibleCrossReferences(displayedPosition, bibleVersionId) : []), [bibleVersionId, displayedPosition]);
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
+  const bottomPadding = Math.max(28, insets.bottom + 20);
+  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 7 * 72 + bottomPadding;
+  const sheetHeight = Math.min(height * 0.78, contentHeight);
 
   useEffect(() => {
     if (visible && position) {
@@ -4512,87 +4405,91 @@ function VerseActionSheet({
   return (
     <Modal transparent visible={mounted} onRequestClose={onClose}>
       <BibleSheetModalFrame accessibilityLabel={t("bible.actions.close")} onBackdropPress={onClose}>
-        <BibleSheetShell
-          animatedStyle={{
-            elevation: 2,
-            transform: [{ translateY: sheetTranslateY }],
-          }}
-          contentStyle={{
-            gap: 2,
-            paddingBottom: Math.max(28, insets.bottom + 20),
-          }}
-          palette={palette}
-          style={{
-            maxHeight: "78%",
-          }}
-        >
-          <BibleSheetTop palette={palette} />
-          {view === "actions" ? (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
-              <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
-              <VerseSheetAction
-                icon="bookmark"
-                onPress={() => onAction("save")}
-                palette={palette}
-                subtitle={saved ? t("bible.actions.unsaveSubtitle") : t("bible.actions.saveSubtitle")}
-                title={saved ? t("bible.actions.unsave") : t("bible.actions.save")}
-              />
-              <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
-              <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
-              <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
-              <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
-              <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
-            </ScrollView>
-          ) : (
-            <View style={{ flexShrink: 1, gap: 14, minHeight: 0, paddingHorizontal: bibleSheetHorizontalPadding }}>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
-                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
-                </View>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
-                {references.length > 0 ? (
-                  references.map((reference, index) => (
-                    <View
-                      key={`${reference.source}-${index}`}
-                      style={{
-                        borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
-                        borderBottomWidth: 1,
-                        gap: 8,
-                        paddingBottom: 18,
-                        paddingTop: index === 0 ? 0 : 18,
-                      }}
-                    >
-                      <Pressable
-                        accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          onClose();
-                          onReadChapter(reference.startPosition);
-                        }}
-                        style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
-                      >
-                        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                          <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
-                          <Feather name="arrow-right" size={17} color={palette.accent} />
-                        </View>
-                        <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
-                          {reference.text}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ))
-                ) : (
-                  <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
-                    <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
-                  </View>
-                )}
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            animatedStyle={{
+              elevation: 2,
+              transform: [{ translateY: sheetTranslateY }],
+            }}
+            contentStyle={{
+              gap: 2,
+              paddingBottom: bottomPadding,
+            }}
+            palette={palette}
+            style={{ height: sheetHeight }}
+          >
+            <BibleSheetTop palette={palette} />
+            {view === "actions" ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding }}
+                style={{ flex: 1, minHeight: 0 }}
+              >
+                <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
+                <VerseSheetAction
+                  icon="bookmark"
+                  onPress={() => onAction("save")}
+                  palette={palette}
+                  subtitle={saved ? t("bible.actions.unsaveSubtitle") : t("bible.actions.saveSubtitle")}
+                  title={saved ? t("bible.actions.unsave") : t("bible.actions.save")}
+                />
+                <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
+                <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
+                <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
+                <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
+                <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
               </ScrollView>
-            </View>
-          )}
-        </BibleSheetShell>
+            ) : (
+              <View style={{ flex: 1, gap: 14, minHeight: 0, paddingHorizontal: bibleSheetHorizontalPadding }}>
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                  <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
+                    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
+                  </View>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
+                  {references.length > 0 ? (
+                    references.map((reference, index) => (
+                      <View
+                        key={`${reference.source}-${index}`}
+                        style={{
+                          borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
+                          borderBottomWidth: 1,
+                          gap: 8,
+                          paddingBottom: 18,
+                          paddingTop: index === 0 ? 0 : 18,
+                        }}
+                      >
+                        <Pressable
+                          accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            onClose();
+                            onReadChapter(reference.startPosition);
+                          }}
+                          style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
+                        >
+                          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                            <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
+                            <Feather name="arrow-right" size={17} color={palette.accent} />
+                          </View>
+                          <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
+                            {reference.text}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
+                      <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
       </BibleSheetModalFrame>
     </Modal>
   );
@@ -6213,7 +6110,7 @@ function BibleDrawer({
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
   const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
-  const searchPosition = biblePositionFromSearchQuery(bookQuery, language);
+  const searchPosition = biblePositionFromSearchQuery(bookQuery, language, bibleVersionId);
   const selectableBooks = kjvBooks.filter((item) => {
     const displayName = displayBibleBookName(item.name, language).toLocaleLowerCase(language);
     const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
