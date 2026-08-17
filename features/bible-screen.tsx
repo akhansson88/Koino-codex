@@ -72,7 +72,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
-import { colors, platformShadow, radius } from "@/ui/theme";
+import { colors, platformShadow, radius, themes, type ThemeName } from "@/ui/theme";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -97,6 +97,7 @@ type TestamentFilter = "all" | "old" | "new";
 type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save" | "share";
 
 type BibleReaderPreferences = {
+  appTheme?: ThemeName;
   audioPosition: BiblePosition;
   audioVoiceId: string;
   audioVoiceName?: string;
@@ -110,6 +111,8 @@ type BibleReaderPreferences = {
   showFootnotes: boolean;
   showVerseNumbers: boolean;
 };
+
+type BibleReaderThemePreference = Pick<BibleReaderPreferences, "appTheme" | "readerTheme">;
 
 type AudioPlaybackState = "idle" | "preparing" | "playing" | "paused" | "error";
 
@@ -324,6 +327,10 @@ function isReaderThemeId(value: unknown): value is BibleReaderThemeId {
   return typeof value === "string" && readerThemes.some((theme) => theme.id === value);
 }
 
+function isAppTheme(value: unknown): value is ThemeName {
+  return value === "light" || value === "dark";
+}
+
 function normalizeFontSize(value: unknown) {
   const numericValue = typeof value === "number" && Number.isFinite(value) ? value : defaultFontSize;
   const clamped = Math.min(maxFontSize, Math.max(minFontSize, numericValue));
@@ -388,6 +395,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
     const storedVoice = normalizeStoredVoice(parsed?.audioVoiceId, parsed?.audioVoiceName);
     const position = normalizeBiblePosition(parsed?.position);
     return {
+      appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
       audioPosition: normalizeBiblePosition(parsed?.audioPosition ?? position),
       audioVoiceId: storedVoice.id,
       audioVoiceName: storedVoice.name,
@@ -712,38 +720,40 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
     };
   }
 
+  const lightColors = themes.light;
+
   if (theme === "sepia") {
     return {
-      accent: colors.textMuted,
-      background: colors.cardPaper,
-      buttonText: colors.onAccent,
-      danger: colors.danger,
+      accent: lightColors.textMuted,
+      background: lightColors.cardPaper,
+      buttonText: lightColors.onAccent,
+      danger: lightColors.danger,
       dim: "rgba(11, 18, 32, 0.28)",
-      input: colors.surface,
-      line: colors.border,
-      muted: colors.textSecondary,
-      peach: colors.warmSoft,
-      shadow: colors.textPrimary,
-      sheet: colors.surface,
-      surface: colors.surface,
-      text: colors.textPrimary,
+      input: lightColors.surface,
+      line: lightColors.border,
+      muted: lightColors.textSecondary,
+      peach: lightColors.warmSoft,
+      shadow: lightColors.textPrimary,
+      sheet: lightColors.surface,
+      surface: lightColors.surface,
+      text: lightColors.textPrimary,
     };
   }
 
   return {
-    accent: colors.olive,
-    background: colors.cream,
-    buttonText: colors.onAccent,
-    danger: colors.danger,
+    accent: lightColors.olive,
+    background: lightColors.cream,
+    buttonText: lightColors.onAccent,
+    danger: lightColors.danger,
     dim: "rgba(11, 18, 32, 0.34)",
-    input: colors.input,
-    line: colors.line,
-    muted: colors.muted,
-    peach: colors.accentSubtle,
-    shadow: colors.ink,
-    sheet: colors.paper,
-    surface: colors.paper,
-    text: colors.ink,
+    input: lightColors.input,
+    line: lightColors.line,
+    muted: lightColors.muted,
+    peach: lightColors.accentSubtle,
+    shadow: lightColors.ink,
+    sheet: lightColors.paper,
+    surface: lightColors.paper,
+    text: lightColors.ink,
   };
 }
 
@@ -926,7 +936,10 @@ export function BibleScreen() {
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
-  const [readerTheme, setReaderTheme] = useState<BibleReaderThemeId>(defaultReaderTheme);
+  const [readerThemePreference, setReaderThemePreference] = useState<BibleReaderThemePreference>({
+    appTheme: state.theme,
+    readerTheme: state.theme,
+  });
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
   const [showFootnotes, setShowFootnotes] = useState(defaultShowFootnotes);
   const [showCrossReferences, setShowCrossReferences] = useState(defaultShowCrossReferences);
@@ -976,11 +989,13 @@ export function BibleScreen() {
   const [audioControlsHeight, setAudioControlsHeight] = useState(58);
   const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
+  const persistedAppThemeRef = useRef<ThemeName | undefined>(undefined);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
-  const readerPalette = useMemo(() => readerPaletteFor(readerTheme), [readerTheme]);
+  const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
+  const readerPalette = readerPaletteFor(effectiveReaderTheme);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const activeBiblePlans = useMemo(
     () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId && plan.status === "active"),
@@ -1117,6 +1132,11 @@ export function BibleScreen() {
   }, [position]);
 
   useEffect(() => {
+    if (readerThemePreference.appTheme === state.theme) return;
+    setReaderThemePreference({ appTheme: state.theme, readerTheme: state.theme });
+  }, [readerThemePreference.appTheme, state.theme]);
+
+  useEffect(() => {
     void setAudioModeAsync({ playsInSilentMode: true });
   }, []);
 
@@ -1196,7 +1216,8 @@ export function BibleScreen() {
         notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
         setFontSize(nextPreferences.fontSize);
-        setReaderTheme(nextPreferences.readerTheme);
+        persistedAppThemeRef.current = nextPreferences.appTheme;
+        setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
         setShowVerseNumbers(nextPreferences.showVerseNumbers);
         setShowFootnotes(nextPreferences.showFootnotes);
         setShowCrossReferences(nextPreferences.showCrossReferences);
@@ -1214,8 +1235,9 @@ export function BibleScreen() {
   useEffect(() => {
     if (!storageKey || !preferencesReady) return;
 
-    const timeout = setTimeout(() => {
+    const persistPreferences = (nextReaderTheme = effectiveReaderTheme) => {
       const payload: BibleReaderPreferences = {
+        appTheme: state.theme,
         audioPosition,
         audioVoiceId: audioVoice.id,
         audioVoiceName: audioVoice.name,
@@ -1224,16 +1246,24 @@ export function BibleScreen() {
         fontId,
         fontSize,
         position,
-        readerTheme,
+        readerTheme: nextReaderTheme,
         showCrossReferences,
         showFootnotes,
         showVerseNumbers,
       };
+      persistedAppThemeRef.current = state.theme;
       void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
-    }, 250);
+    };
+
+    if (persistedAppThemeRef.current !== state.theme) {
+      persistPreferences(state.theme);
+      return;
+    }
+
+    const timeout = setTimeout(persistPreferences, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showCrossReferences, showFootnotes, showVerseNumbers, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -2363,7 +2393,7 @@ export function BibleScreen() {
         fontId={fontId}
         fontSize={fontSize}
         onChangeFont={setFontId}
-        onChangeReaderTheme={setReaderTheme}
+        onChangeReaderTheme={(readerTheme) => setReaderThemePreference({ appTheme: state.theme, readerTheme })}
         onChangeShowCrossReferences={setShowCrossReferences}
         onChangeShowFootnotes={setShowFootnotes}
         onChangeShowVerseNumbers={setShowVerseNumbers}
@@ -2371,7 +2401,7 @@ export function BibleScreen() {
         onCompactModeChange={setCompactMode}
         onFontSizeChange={changeFontSize}
         palette={readerPalette}
-        readerTheme={readerTheme}
+        readerTheme={effectiveReaderTheme}
         showCrossReferences={showCrossReferences}
         showFootnotes={showFootnotes}
         showVerseNumbers={showVerseNumbers}
@@ -2894,7 +2924,7 @@ function BibleTopicsModal({
                       accessibilityRole="button"
                       disabled={!available}
                       key={letter}
-                      onPress={() => setActiveLetter(letter)}
+                      onPress={() => setActiveLetter((currentLetter) => (currentLetter === letter ? "" : letter))}
                       style={{
                         alignItems: "center",
                         backgroundColor: selected ? palette.peach : palette.surface,
@@ -2925,9 +2955,18 @@ function BibleTopicsModal({
 
           {!normalizedQuery && activeLetter ? (
             <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
-              <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>
-                {t("bible.topics.letterTitle", { letter: activeLetter })}
-              </Text>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+                <Text style={{ color: palette.text, flexShrink: 1, fontSize: 13, fontWeight: "900" }}>
+                  {t("bible.topics.letterTitle", { letter: activeLetter })}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setActiveLetter("")}
+                  style={{ alignItems: "center", justifyContent: "center", minHeight: 44, minWidth: 96, paddingHorizontal: 4 }}
+                >
+                  <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "800" }}>{t("bible.topics.showSuggestions")}</Text>
+                </Pressable>
+              </View>
               <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" }}>
                 {activeLetterTopics.map((item, index) => (
                   <TopicIndexRow
