@@ -14,6 +14,33 @@ const waves = [
   { color: brandPalette.softCyan, d: "M0 106 C24 90 48 90 72 106 S120 122 144 106 S192 90 216 106 S264 122 288 106" },
 ] as const;
 
+const horizonWaves = [
+  {
+    color: brandPalette.warmPersika,
+    d: "M-144 54 C-24 18 96 18 216 54 S456 90 576 54 S816 18 936 54",
+    opacity: 0.32,
+    strokeWidth: 2.4,
+  },
+  {
+    color: brandPalette.blushRosa,
+    d: "M-72 96 C48 58 168 58 288 96 S528 134 648 96 S888 58 1008 96",
+    opacity: 0.3,
+    strokeWidth: 2.7,
+  },
+  {
+    color: brandPalette.lavenderHaze,
+    d: "M-168 146 C-48 102 72 102 192 146 S432 190 552 146 S792 102 912 146",
+    opacity: 0.36,
+    strokeWidth: 3,
+  },
+  {
+    color: brandPalette.softCyan,
+    d: "M-48 198 C72 154 192 154 312 198 S552 242 672 198 S912 154 1032 198",
+    opacity: 0.34,
+    strokeWidth: 3.2,
+  },
+] as const;
+
 export function BrandWaveMotif({
   height = 128,
   intensity = 1,
@@ -28,16 +55,22 @@ export function BrandWaveMotif({
   layerIndices?: readonly number[];
   opacity?: number;
   style?: StyleProp<ViewStyle>;
-  variant?: "accent" | "full";
+  variant?: "accent" | "full" | "horizon";
   width?: number;
 }) {
   const accent = variant === "accent";
+  const horizon = variant === "horizon";
   const indexedWaves = waves.map((wave, index) => ({ index, wave }));
-  const visibleWaves = accent
-    ? waves.slice(1, 4).map((wave, index) => ({ index, wave }))
-    : layerIndices
-      ? indexedWaves.filter(({ index }) => layerIndices.includes(index))
-      : indexedWaves;
+  const indexedHorizonWaves = horizonWaves.map((wave, index) => ({ index, wave }));
+  const visibleWaves = horizon
+    ? layerIndices
+      ? indexedHorizonWaves.filter(({ index }) => layerIndices.includes(index))
+      : indexedHorizonWaves
+    : accent
+      ? waves.slice(1, 4).map((wave, index) => ({ index, wave }))
+      : layerIndices
+        ? indexedWaves.filter(({ index }) => layerIndices.includes(index))
+        : indexedWaves;
 
   return (
     <Svg
@@ -45,7 +78,7 @@ export function BrandWaveMotif({
       opacity={opacity}
       pointerEvents="none"
       style={style}
-      viewBox={accent ? "0 18 288 52" : "0 0 288 128"}
+      viewBox={horizon ? "0 0 720 252" : accent ? "0 18 288 52" : "0 0 288 128"}
       width={width}
     >
       {visibleWaves.map(({ index, wave }) => (
@@ -53,10 +86,13 @@ export function BrandWaveMotif({
           d={wave.d}
           fill="none"
           key={`${wave.color}-${index}`}
-          opacity={Math.min(1, (0.22 + (index % 2) * 0.06) * intensity)}
+          opacity={Math.min(
+            1,
+            (horizon ? horizonWaves[index].opacity : 0.22 + (index % 2) * 0.06) * intensity,
+          )}
           stroke={wave.color}
           strokeLinecap="round"
-          strokeWidth={accent ? 5 : 1.35}
+          strokeWidth={horizon ? horizonWaves[index].strokeWidth : accent ? 5 : 1.35}
         />
       ))}
     </Svg>
