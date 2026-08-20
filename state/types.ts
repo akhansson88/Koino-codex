@@ -185,6 +185,7 @@ export type Post = {
   images?: string[];
   answeredAt?: string;
   answeredMarkedAt?: string;
+  answeredUpdate?: string;
   createdAt: string;
 };
 
@@ -323,6 +324,7 @@ export type FeedItem =
       images?: string[];
       answeredAt?: string;
       answeredMarkedAt?: string;
+      answeredUpdate?: string;
       createdAt: string;
     }
   | {

@@ -66,6 +66,7 @@ function isRenderablePost(post: Post, groupId: Id) {
     (post.images !== undefined && (!Array.isArray(post.images) || !post.images.every((image) => typeof image === "string"))) ||
     (post.answeredAt !== undefined && !isValidTimestamp(post.answeredAt)) ||
     (post.answeredMarkedAt !== undefined && !isValidTimestamp(post.answeredMarkedAt)) ||
+    (post.answeredUpdate !== undefined && (typeof post.answeredUpdate !== "string" || post.answeredUpdate.length > 280)) ||
     !isValidTimestamp(post.createdAt) ||
     !hasRenderableScripture(post)
   ) {
@@ -106,6 +107,7 @@ function postFeedItem(post: Post): CommunityPostItem {
     images: post.images,
     answeredAt: post.answeredAt,
     answeredMarkedAt: post.answeredMarkedAt,
+    answeredUpdate: post.answeredUpdate,
     createdAt: post.createdAt,
   };
 }

@@ -2304,7 +2304,7 @@ function PrayerRequestCard({
       actions={
         prayerMoment ? (
           <CommunityCardAction active icon="pray" label={t("community.action.prayer.completed")} tone="prayer" />
-        ) : !answered ? (
+        ) : (
           <CommunityCardAction
             active={prayed}
             icon="pray"
@@ -2312,7 +2312,7 @@ function PrayerRequestCard({
             onPress={onPray}
             tone="prayer"
           />
-        ) : undefined
+        )
       }
       attachment={<VerseList verse={item.verse} verses={item.verses} compact />}
       authorImage={authorImage}

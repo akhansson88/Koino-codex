@@ -109,7 +109,8 @@ type Action =
   | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deletePost"; id: Id }
-  | { type: "markPrayerAnswered"; id: Id }
+  | { type: "markPrayerAnswered"; id: Id; answeredUpdate?: string }
+  | { type: "updatePrayerAnswer"; id: Id; answeredUpdate?: string }
   | { type: "unmarkPrayerAnswered"; id: Id }
   | {
       type: "finishPrayer";
@@ -1351,9 +1352,20 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!post || post.userId !== firebaseUser.uid || post.kind !== "prayer_request") return;
+              const timestamp = now();
               await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
-                answeredAt: now(),
-                answeredMarkedAt: now(),
+                answeredAt: timestamp,
+                answeredMarkedAt: timestamp,
+                answeredUpdate: action.answeredUpdate?.trim() || null,
+              });
+              return;
+            }
+            case "updatePrayerAnswer": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!post || post.userId !== firebaseUser.uid || post.kind !== "prayer_request" || !post.answeredAt) return;
+              await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
+                answeredUpdate: action.answeredUpdate?.trim() || null,
               });
               return;
             }
@@ -1364,6 +1376,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                 answeredAt: null,
                 answeredMarkedAt: null,
+                answeredUpdate: null,
               });
               return;
             }
@@ -2033,6 +2046,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "deleteUserAvatar" ||
           (action.type === "togglePostReaction" && action.mode === "ensure") ||
           (action.type === "createReply" && Boolean(action.replyId)) ||
+          action.type === "markPrayerAnswered" ||
+          action.type === "updatePrayerAnswer" ||
+          action.type === "unmarkPrayerAnswered" ||
           (action.type === "finishPrayer" && action.throwOnError)
         ) {
           throw error;

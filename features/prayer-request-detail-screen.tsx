@@ -12,11 +12,14 @@ import {
   Avatar,
   AvatarStack,
   BodyText,
+  BottomSheet,
   Card,
   IconButton,
+  PrimaryButton,
   SecondaryButton,
   SectionHeading,
   StatusPill,
+  TextInputField,
   VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
@@ -27,6 +30,8 @@ import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+
+const MAX_ANSWERED_UPDATE_LENGTH = 280;
 
 export type PrayerRequestDetailItem = Omit<Post, "kind"> & { kind: "prayer_request" };
 
@@ -56,7 +61,7 @@ export type PrayerRequestDetailScreenProps = {
   onBack: () => void;
   onChangeEncouragement: (value: string) => void;
   onDeleteEncouragement: (id: Id) => void;
-  onMarkAnswered: () => void;
+  onOpenOwnerActions: () => void;
   onPray: () => void;
   onSendEncouragement: (body: string, replyId: string) => Promise<void>;
   ownsItem: boolean;
@@ -67,7 +72,7 @@ function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function PrayerRequestHeader({ onBack }: { onBack: () => void }) {
+function PrayerRequestHeader({ onBack, onOpenOptions }: { onBack: () => void; onOpenOptions?: () => void }) {
   const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
@@ -75,8 +80,104 @@ function PrayerRequestHeader({ onBack }: { onBack: () => void }) {
       <Text style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}>
         {t("community.page.prayer")}
       </Text>
-      <View style={{ width: 38 }} />
+      {onOpenOptions ? (
+        <IconButton accessibilityLabel={t("community.prayer.ownerActions")} icon="more-horizontal" onPress={onOpenOptions} />
+      ) : (
+        <View style={{ width: 38 }} />
+      )}
     </View>
+  );
+}
+
+function AnsweredPrayerEditorSheet({
+  draft,
+  error,
+  mode,
+  onChangeDraft,
+  onClose,
+  onSave,
+  saving,
+}: {
+  draft: string;
+  error?: string;
+  mode?: "edit" | "mark";
+  onChangeDraft: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const { t } = useAppTranslation();
+  const editing = mode === "edit";
+  return (
+    <BottomSheet
+      onClose={saving ? () => undefined : onClose}
+      title={t(editing ? "community.prayer.editAnswer" : "community.prayer.answerTitle")}
+      visible={Boolean(mode)}
+    >
+      <BodyText muted>{t(editing ? "community.prayer.editAnswerBody" : "community.prayer.answerBody")}</BodyText>
+      <TextInputField
+        accessibilityLabel={t("community.prayer.answerPlaceholder")}
+        maxLength={MAX_ANSWERED_UPDATE_LENGTH}
+        multiline
+        onChangeText={(value) => onChangeDraft(value.slice(0, MAX_ANSWERED_UPDATE_LENGTH))}
+        placeholder={t("community.prayer.answerPlaceholder")}
+        value={draft}
+      />
+      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", textAlign: "right" }}>
+        {draft.length}/{MAX_ANSWERED_UPDATE_LENGTH}
+      </Text>
+      {error ? <BodyText style={{ color: colors.danger }}>{error}</BodyText> : null}
+      <PrimaryButton disabled={saving} icon="check-circle" onPress={onSave}>
+        {t(editing ? "common.done" : "community.prayer.markAnswered")}
+      </PrimaryButton>
+      <SecondaryButton disabled={saving} onPress={onClose}>
+        {t("common.cancel")}
+      </SecondaryButton>
+    </BottomSheet>
+  );
+}
+
+function PrayerOwnerActionsSheet({
+  answered,
+  error,
+  onClose,
+  onEditAnswer,
+  onMarkAnswered,
+  onReopen,
+  saving,
+  visible,
+}: {
+  answered: boolean;
+  error?: string;
+  onClose: () => void;
+  onEditAnswer: () => void;
+  onMarkAnswered: () => void;
+  onReopen: () => void;
+  saving: boolean;
+  visible: boolean;
+}) {
+  const { t } = useAppTranslation();
+  return (
+    <BottomSheet onClose={saving ? () => undefined : onClose} title={t("community.prayer.ownerActions")} visible={visible}>
+      {answered ? (
+        <>
+          <SecondaryButton disabled={saving} icon="edit-2" onPress={onEditAnswer}>
+            {t("community.prayer.editAnswer")}
+          </SecondaryButton>
+          <SecondaryButton disabled={saving} icon="rotate-ccw" onPress={onReopen}>
+            {t("community.prayer.reopen")}
+          </SecondaryButton>
+        </>
+      ) : (
+        <PrimaryButton disabled={saving} icon="check-circle" onPress={onMarkAnswered}>
+          {t("community.prayer.markAnswered")}
+        </PrimaryButton>
+      )}
+      {error ? <BodyText style={{ color: colors.danger }}>{error}</BodyText> : null}
+      <SecondaryButton disabled={saving} onPress={onClose}>
+        {t("common.cancel")}
+      </SecondaryButton>
+    </BottomSheet>
   );
 }
 
@@ -103,7 +204,7 @@ export function PrayerRequestDetailScreen({
   onBack,
   onChangeEncouragement,
   onDeleteEncouragement,
-  onMarkAnswered,
+  onOpenOwnerActions,
   onPray,
   onSendEncouragement,
   ownsItem,
@@ -113,7 +214,7 @@ export function PrayerRequestDetailScreen({
 
   return (
     <AppScreen>
-      <PrayerRequestHeader onBack={onBack} />
+      <PrayerRequestHeader onBack={onBack} onOpenOptions={ownsItem ? onOpenOwnerActions : undefined} />
       <View style={{ alignItems: "center", gap: 8 }}>
         <Avatar image={authorImage} name={authorName} size={58} tone="green" />
         <View style={{ alignItems: "center", gap: 3 }}>
@@ -158,14 +259,17 @@ export function PrayerRequestDetailScreen({
           <BodyText muted>
             {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
           </BodyText>
+          {item.answeredUpdate?.trim() ? (
+            <View style={{ borderTopColor: colors.line, borderTopWidth: 1, gap: 6, paddingTop: 10 }}>
+              <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>
+                {t("community.prayer.updateLabel")}
+              </Text>
+              <BodyText>{item.answeredUpdate}</BodyText>
+            </View>
+          ) : null}
         </Card>
       ) : null}
-      {!answered ? <PrayerActionButton onPress={onPray} prayed={prayer.prayed} /> : null}
-      {ownsItem && !answered ? (
-        <SecondaryButton icon="check-circle" onPress={onMarkAnswered}>
-          {t("community.prayer.markAnswered")}
-        </SecondaryButton>
-      ) : null}
+      <PrayerActionButton onPress={onPray} prayed={prayer.prayed} />
       {encouragements.length > 0 ? (
         <View style={{ gap: 12 }}>
           <SectionHeading>{t("community.reply.heading")}</SectionHeading>
@@ -260,6 +364,11 @@ export function PrayerRequestDetailRouteScreen() {
   const { t } = useAppTranslation();
   const [encouragementDraft, setEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [ownerActionsVisible, setOwnerActionsVisible] = useState(false);
+  const [answerEditorMode, setAnswerEditorMode] = useState<"edit" | "mark">();
+  const [answeredUpdateDraft, setAnsweredUpdateDraft] = useState("");
+  const [answerSaving, setAnswerSaving] = useState(false);
+  const [answerError, setAnswerError] = useState<string>();
 
   const routeIsValid = Boolean(groupId && prayerRequestId);
   const routeUsesCurrentGroup = Boolean(groupId && groupId === state.currentGroupId);
@@ -345,33 +454,75 @@ export function PrayerRequestDetailRouteScreen() {
     return <PrayerRequestRouteState loading={false} onBack={goBack} />;
   }
 
-  const authorName = userById.get(prayerRequest.userId) ?? t("common.someone");
-  const authorImage = userImageById.get(prayerRequest.userId);
+  const activePrayerRequest = prayerRequest;
+  const authorName = userById.get(activePrayerRequest.userId) ?? t("common.someone");
+  const authorImage = userImageById.get(activePrayerRequest.userId);
+  const answered = Boolean(activePrayerRequest.answeredAt);
+
+  function openAnswerEditor(mode: "edit" | "mark") {
+    setOwnerActionsVisible(false);
+    setAnsweredUpdateDraft(mode === "edit" ? activePrayerRequest.answeredUpdate ?? "" : "");
+    setAnswerError(undefined);
+    setAnswerEditorMode(mode);
+  }
+
+  async function saveAnswer() {
+    if (answerSaving) return;
+    setAnswerSaving(true);
+    setAnswerError(undefined);
+    try {
+      await dispatch({
+        type: answerEditorMode === "edit" ? "updatePrayerAnswer" : "markPrayerAnswered",
+        id: activePrayerRequest.id,
+        answeredUpdate: answeredUpdateDraft,
+      });
+      setAnswerEditorMode(undefined);
+    } catch {
+      setAnswerError(t("community.prayer.answerError"));
+    } finally {
+      setAnswerSaving(false);
+    }
+  }
+
+  async function reopenPrayer() {
+    if (answerSaving) return;
+    setAnswerSaving(true);
+    setAnswerError(undefined);
+    try {
+      await dispatch({ type: "unmarkPrayerAnswered", id: activePrayerRequest.id });
+      setOwnerActionsVisible(false);
+    } catch {
+      setAnswerError(t("community.prayer.answerError"));
+    } finally {
+      setAnswerSaving(false);
+    }
+  }
 
   return (
     <>
       <PrayerRequestDetailScreen
         activity={activity}
-        answered={Boolean(prayerRequest.answeredAt)}
+        answered={answered}
         authorImage={authorImage}
         authorName={authorName}
         encouragementDraft={encouragementDraft}
         encouragements={encouragements}
-        item={prayerRequest}
+        item={activePrayerRequest}
         onBack={goBack}
         onChangeEncouragement={setEncouragementDraft}
         onDeleteEncouragement={(id) => {
           void dispatch({ type: "deleteReply", id });
         }}
-        onMarkAnswered={() => {
-          void dispatch({ type: "markPrayerAnswered", id: prayerRequest.id });
+        onOpenOwnerActions={() => {
+          setAnswerError(undefined);
+          setOwnerActionsVisible(true);
         }}
         onPray={() => {
           setPrayerTarget({
             targetType: "post",
-            targetId: prayerRequest.id,
-            body: prayerRequest.body,
-            recipientUserId: prayerRequest.userId,
+            targetId: activePrayerRequest.id,
+            body: activePrayerRequest.body,
+            recipientUserId: activePrayerRequest.userId,
             recipientName: authorName,
             recipientImage: authorImage,
           });
@@ -382,13 +533,13 @@ export function PrayerRequestDetailRouteScreen() {
           await dispatch({
             type: "createReply",
             targetType: "post",
-            targetId: prayerRequest.id,
+            targetId: activePrayerRequest.id,
             body: trimmedBody,
             replyId,
           });
           setEncouragementDraft("");
         }}
-        ownsItem={prayerRequest.userId === state.currentUserId}
+        ownsItem={activePrayerRequest.userId === state.currentUserId}
         prayer={prayer}
       />
       <PrayerMoment
@@ -407,6 +558,29 @@ export function PrayerRequestDetailRouteScreen() {
             recipientUserId: target.recipientUserId,
           });
         }}
+      />
+      <PrayerOwnerActionsSheet
+        answered={answered}
+        error={ownerActionsVisible ? answerError : undefined}
+        onClose={() => setOwnerActionsVisible(false)}
+        onEditAnswer={() => openAnswerEditor("edit")}
+        onMarkAnswered={() => openAnswerEditor("mark")}
+        onReopen={() => {
+          void reopenPrayer();
+        }}
+        saving={answerSaving}
+        visible={ownerActionsVisible}
+      />
+      <AnsweredPrayerEditorSheet
+        draft={answeredUpdateDraft}
+        error={answerEditorMode ? answerError : undefined}
+        mode={answerEditorMode}
+        onChangeDraft={setAnsweredUpdateDraft}
+        onClose={() => setAnswerEditorMode(undefined)}
+        onSave={() => {
+          void saveAnswer();
+        }}
+        saving={answerSaving}
       />
     </>
   );
