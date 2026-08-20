@@ -24,6 +24,7 @@ import {
   TextStyle,
   useWindowDimensions,
   View,
+  ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
@@ -76,6 +77,15 @@ import { colors, platformShadow, radius, themes, type ThemeName } from "@/ui/the
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
+
+const bibleVerseWebInteractionStyle =
+  Platform.OS === "web"
+    ? ({
+        userSelect: "none",
+        WebkitTouchCallout: "none",
+        WebkitUserSelect: "none",
+      } as TextStyle & ViewStyle)
+    : undefined;
 
 const readerFonts = [
   { id: "serif", label: "Serif" },
@@ -3518,6 +3528,7 @@ function BibleText({
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
             style={{
+              ...bibleVerseWebInteractionStyle,
               backgroundColor: temporarySelected ? palette.peach : "transparent",
               borderColor: "transparent",
               borderRadius: radius.md,
@@ -3530,6 +3541,7 @@ function BibleText({
               <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
                 <Text
                   style={{
+                    ...bibleVerseWebInteractionStyle,
                     color: palette.accent,
                     fontFamily: fontFamilyFor("classic"),
                     fontSize: 44,
@@ -3541,14 +3553,14 @@ function BibleText({
                   {position.chapter}
                 </Text>
                 <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
-                  {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                  <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
+                  {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                  <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
                 </View>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
+                {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
               </View>
             )}
           </Pressable>
