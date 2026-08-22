@@ -146,6 +146,7 @@ type Action =
 type KoinoContextValue = {
   state: KoinoState;
   dispatch: (action: Action) => Promise<void>;
+  getAuthToken: () => Promise<string | null>;
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -2031,7 +2032,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  return <KoinoContext.Provider value={{ state, dispatch }}>{children}</KoinoContext.Provider>;
+  const getAuthToken = useCallback(() => firebaseUser?.getIdToken() ?? Promise.resolve(null), [firebaseUser]);
+
+  return <KoinoContext.Provider value={{ state, dispatch, getAuthToken }}>{children}</KoinoContext.Provider>;
 }
 
 export function useKoino() {

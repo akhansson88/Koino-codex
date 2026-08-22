@@ -27,6 +27,7 @@
     "deploy:netlify": "npm run build:web && netlify deploy --prod --dir dist --functions netlify/functions",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "typecheck": "tsc --noEmit",
+    "test:donations": "node --test tests/donations.test.mjs",
     "video:studio": "remotion studio remotion/src/index.ts",
     "video:render": "remotion render remotion/src/index.ts KoinoLaunchTeaser out/koino-launch-teaser.mp4",
     "video:still": "remotion still remotion/src/index.ts KoinoLaunchTeaser --frame=90 --scale=0.25 out/koino-launch-teaser-frame.png"
@@ -56,6 +57,7 @@
     "expo-status-bar": "~3.0.8",
     "expo-web-browser": "~15.0.11",
     "firebase": "^12.12.1",
+    "firebase-admin": "^14.3.0",
     "pako": "^3.0.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -65,6 +67,7 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "13.15.0",
+    "stripe": "^22.4.0",
     "three": "^0.184.0"
   },
   "devDependencies": {

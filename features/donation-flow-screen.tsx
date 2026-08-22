@@ -1,16 +1,15 @@
 import type { ComponentProps, PropsWithChildren } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useKoino } from "@/state/koino-store";
+import { openDonationPortal, startDonationCheckout, verifyDonation, type DonationFrequency } from "@/features/donation-api";
 import { platformShadow, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
-type DonationFrequency = "one_time" | "monthly";
-type DonationMethod = "card" | "swish";
 type DonationAmountOption = "50" | "100" | "200" | "500" | "custom";
 
 const donationColors = {
@@ -649,7 +648,8 @@ export function DonationAmountScreen() {
   const [selectedAmount, setSelectedAmount] = useState<DonationAmountOption>("100");
   const [customAmount, setCustomAmount] = useState("");
   const resolvedAmount = selectedAmount === "custom" ? customAmount : selectedAmount;
-  const canContinue = Number(resolvedAmount) > 0;
+  const numericAmount = Number(resolvedAmount);
+  const canContinue = Number.isSafeInteger(numericAmount) && numericAmount >= 10 && numericAmount <= 100000;
 
   function continueToConfirm() {
     if (!canContinue) return;
@@ -692,6 +692,9 @@ export function DonationAmountScreen() {
       <DonationPrimaryButton disabled={!canContinue} onPress={continueToConfirm}>
         Fortsätt
       </DonationPrimaryButton>
+      {selectedAmount === "custom" && customAmount && !canContinue ? (
+        <Text style={[typography.body, { color: donationColors.stone, textAlign: "center" }]}>Ange mellan 10 och 100 000 kr.</Text>
+      ) : null}
     </DonationScreenFrame>
   );
 }
@@ -751,104 +754,30 @@ function DonationContactRow({ email }: { email?: string | null }) {
   );
 }
 
-function DonationMethodRow({
-  icon,
-  onPress,
-  selected,
-  subtitle,
-  title,
-}: {
-  icon: FeatherName;
-  onPress: () => void;
-  selected: boolean;
-  subtitle: string;
-  title: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: "center",
-        flexDirection: "row",
-        gap: 14,
-        minHeight: 78,
-        opacity: pressed ? 0.78 : 1,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-      })}
-    >
-      <CircleIcon backgroundColor={donationColors.warmTint} color={donationColors.deepNavy} icon={icon} size={52} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[typography.title, { color: donationColors.deepNavy, fontSize: 16, lineHeight: 22 }]}>{title}</Text>
-        <Text style={[typography.body, { color: donationColors.stone, fontSize: 14, lineHeight: 20 }]}>{subtitle}</Text>
-      </View>
-      <View
-        style={{
-          alignItems: "center",
-          borderColor: selected ? donationColors.deepNavy : donationColors.stone,
-          borderRadius: 999,
-          borderWidth: 2,
-          height: 32,
-          justifyContent: "center",
-          width: 32,
-        }}
-      >
-        {selected ? <View style={{ backgroundColor: donationColors.deepNavy, borderRadius: 999, height: 18, width: 18 }} /> : null}
-      </View>
-    </Pressable>
-  );
-}
-
-function DonationMethodSection({ method, onChange }: { method: DonationMethod; onChange: (value: DonationMethod) => void }) {
-  return (
-    <View
-      style={{
-        backgroundColor: donationColors.surfaceWhite,
-        borderColor: donationColors.softBorder,
-        borderRadius: 18,
-        borderWidth: 1,
-        overflow: "hidden",
-      }}
-    >
-      <DonationMethodRow
-        icon="credit-card"
-        onPress={() => onChange("card")}
-        selected={method === "card"}
-        subtitle="Visa, Mastercard eller Amex"
-        title="Kort"
-      />
-      <View style={{ backgroundColor: donationColors.softBorder, height: 1, marginLeft: 82 }} />
-      <DonationMethodRow
-        icon="smartphone"
-        onPress={() => onChange("swish")}
-        selected={method === "swish"}
-        subtitle="Betala säkert med Swish"
-        title="Swish"
-      />
-    </View>
-  );
-}
-
 function SectionTitle({ children }: PropsWithChildren) {
   return <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 20, lineHeight: 26 }]}>{children}</Text>;
 }
 
 export function DonationConfirmScreen() {
-  const { state } = useKoino();
-  const params = useLocalSearchParams<{ amount?: string; frequency?: DonationFrequency }>();
+  const { state, getAuthToken } = useKoino();
+  const params = useLocalSearchParams<{ amount?: string; frequency?: DonationFrequency; cancelled?: string }>();
   const amount = parseAmount(params.amount);
   const frequency = parseFrequency(params.frequency);
-  const [method, setMethod] = useState<DonationMethod>("card");
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string>();
   const email = state.authEmail;
 
-  function startDonationCheckout() {
-    // TODO: Connect Stripe/Payment Link checkout here. This MVP keeps payment handling out of the app.
-    router.push({
-      pathname: "/donation-thank-you",
-      params: { amount, frequency },
-    } as never);
+  async function handleDonationCheckout() {
+    if (checkoutPending) return;
+    setCheckoutPending(true);
+    setCheckoutError(undefined);
+    try {
+      await startDonationCheckout(await getAuthToken(), Number(amount), frequency);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Betalningen kunde inte startas. Försök igen.");
+    } finally {
+      setCheckoutPending(false);
+    }
   }
 
   return (
@@ -861,13 +790,18 @@ export function DonationConfirmScreen() {
           Säker betalning sker via extern betaltjänst.
         </Text>
       </View>
+      {params.cancelled === "1" ? (
+        <DonationTrustNote icon="info">Betalningen avbröts. Ingen gåva har dragits.</DonationTrustNote>
+      ) : null}
       <View style={{ gap: 12 }}>
         <SectionTitle>Kontakt</SectionTitle>
         <DonationContactRow email={email} />
       </View>
       <View style={{ gap: 12 }}>
         <SectionTitle>Betalningssätt</SectionTitle>
-        <DonationMethodSection method={method} onChange={setMethod} />
+        <DonationTrustNote icon="credit-card" iconBackground={donationColors.lavenderTint} iconColor={donationColors.deepNavy}>
+          Stripe visar automatiskt de säkra betalningssätt som är tillgängliga för din gåva.
+        </DonationTrustNote>
       </View>
       <DonationTrustNote
         backgroundColor="rgba(142, 214, 218, 0.14)"
@@ -900,9 +834,11 @@ export function DonationConfirmScreen() {
         </Text>
         <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
       </Pressable>
-      <DonationPrimaryButton icon="lock" onPress={startDonationCheckout} tone="navy">
-        Fortsätt till säker betalning
+      {checkoutError ? <Text style={[typography.body, { color: "#A33A3A", lineHeight: 22, textAlign: "center" }]}>{checkoutError}</Text> : null}
+      <DonationPrimaryButton disabled={checkoutPending} icon="lock" onPress={handleDonationCheckout} tone="navy">
+        {checkoutPending ? "Öppnar säker betalning…" : "Fortsätt till säker betalning"}
       </DonationPrimaryButton>
+      {checkoutPending ? <ActivityIndicator color={donationColors.deepNavy} /> : null}
     </DonationScreenFrame>
   );
 }
@@ -986,10 +922,48 @@ function DonationActionRow({
 }
 
 export function DonationThankYouScreen() {
-  const params = useLocalSearchParams<{ amount?: string; frequency?: DonationFrequency }>();
-  const amount = parseAmount(params.amount);
-  const frequency = parseFrequency(params.frequency);
+  const { getAuthToken } = useKoino();
+  const params = useLocalSearchParams<{ session_id?: string }>();
+  const sessionId = Array.isArray(params.session_id) ? params.session_id[0] : params.session_id;
+  const [verification, setVerification] = useState<{ amountSek: number; frequency: DonationFrequency }>();
+  const [verificationError, setVerificationError] = useState<string>();
+  const [verificationAttempt, setVerificationAttempt] = useState(0);
+  const [portalPending, setPortalPending] = useState(false);
+  const [portalError, setPortalError] = useState<string>();
+  const amount = String(verification?.amountSek || 0);
+  const frequency = verification?.frequency || "one_time";
   const monthly = frequency === "monthly";
+
+  useEffect(() => {
+    let active = true;
+    if (!sessionId) {
+      setVerificationError("Ingen betalning kunde verifieras.");
+      return () => { active = false; };
+    }
+    void (async () => {
+      try {
+        const result = await verifyDonation(await getAuthToken(), sessionId);
+        if (!result.paid) throw new Error("Betalningen är ännu inte slutförd.");
+        if (active) setVerification({ amountSek: result.amountSek, frequency: result.frequency });
+      } catch (error) {
+        if (active) setVerificationError(error instanceof Error ? error.message : "Betalningen kunde inte verifieras.");
+      }
+    })();
+    return () => { active = false; };
+  }, [getAuthToken, sessionId, verificationAttempt]);
+
+  async function handleDonationPortal() {
+    if (portalPending) return;
+    setPortalPending(true);
+    setPortalError(undefined);
+    try {
+      await openDonationPortal(await getAuthToken());
+    } catch (error) {
+      setPortalError(error instanceof Error ? error.message : "Kunde inte öppna gåvohanteringen.");
+    } finally {
+      setPortalPending(false);
+    }
+  }
 
   function handlePrayForKoino() {
     // TODO: Connect this to a private prayer composer or prayer route when that flow exists.
@@ -1000,6 +974,28 @@ export function DonationThankYouScreen() {
     requestAnimationFrame(() => {
       router.replace("/(tabs)/me" as never);
     });
+  }
+
+  if (!verification) {
+    return (
+      <DonationScreenFrame>
+        <DonationHeader title="Verifierar gåva" />
+        {verificationError ? (
+          <>
+            <DonationTrustNote icon="alert-circle">{verificationError} Kontrollera betalningen eller försök igen.</DonationTrustNote>
+            <DonationPrimaryButton onPress={() => { setVerificationError(undefined); setVerificationAttempt((value) => value + 1); }} tone="navy">
+              Kontrollera igen
+            </DonationPrimaryButton>
+            <DonationPrimaryButton onPress={returnToMeTab} tone="warm">Tillbaka till Du</DonationPrimaryButton>
+          </>
+        ) : (
+          <View style={{ alignItems: "center", gap: 14, paddingVertical: 48 }}>
+            <ActivityIndicator color={donationColors.deepNavy} size="large" />
+            <Text style={[typography.body, { color: donationColors.stone }]}>Kontrollerar betalningen säkert med Stripe…</Text>
+          </View>
+        )}
+      </DonationScreenFrame>
+    );
   }
 
   return (
@@ -1029,14 +1025,17 @@ export function DonationThankYouScreen() {
           {monthly ? (
             <DonationActionRow
               icon="repeat"
-              subtitle="Ändra belopp, betalningsmetod eller paus"
+              onPress={handleDonationPortal}
+              subtitle="Ändra betalningsmetod eller avsluta"
               title="Hantera månadsvis gåva"
             />
           ) : null}
-          <DonationActionRow icon="file-text" showDivider={monthly} subtitle="Se och ladda ner dina kvitton" title="Gåvokvitton" />
+          <DonationActionRow icon="file-text" onPress={handleDonationPortal} showDivider={monthly} subtitle="Se och ladda ner dina kvitton" title="Gåvokvitton" />
           <DonationActionRow icon="help-circle" showDivider subtitle="Vanliga frågor och kontakt" title="Hjälp kring givande" />
         </View>
       </View>
+      {portalPending ? <ActivityIndicator color={donationColors.deepNavy} /> : null}
+      {portalError ? <Text style={[typography.body, { color: "#A33A3A", textAlign: "center" }]}>{portalError}</Text> : null}
       <View
         style={{
           backgroundColor: donationColors.surfaceWhite,

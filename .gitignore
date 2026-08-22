@@ -18,6 +18,8 @@ expo-env.d.ts
 
 # Local Netlify folder
 .netlify
+netlify/functions/*.zip
+netlify/functions/manifest.json
 
 # Local Codex/Expo navigation test logs
 community-nav-expo*.log
