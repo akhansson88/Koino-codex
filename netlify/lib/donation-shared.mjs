@@ -1,9 +1,13 @@
-import { getApps, cert, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
+import { decodeProtectedHeader, importX509, jwtVerify } from "jose";
 import Stripe from "stripe";
 
 const allowedFrequency = new Set(["one_time", "monthly"]);
 const allowedPlatform = new Set(["web", "native"]);
+const firebaseProjectId = "koino-codex";
+const firebaseIssuer = `https://securetoken.google.com/${firebaseProjectId}`;
+const firebaseCertificatesUrl = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
+let firebaseCertificates = {};
+let firebaseCertificatesExpireAt = 0;
 
 export const corsHeaders = {
   "Access-Control-Allow-Headers": "Accept, Authorization, Content-Type",
@@ -43,15 +47,40 @@ export function stripeClient() {
   });
 }
 
-function firebaseAuth() {
-  if (getApps().length === 0) {
-    const serviceAccount = JSON.parse(requiredEnvironment("FIREBASE_SERVICE_ACCOUNT_JSON"));
-    if (typeof serviceAccount.private_key === "string") {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
-    }
-    initializeApp({ credential: cert(serviceAccount) });
+function certificateMaxAge(cacheControl) {
+  const seconds = Number(cacheControl?.match(/(?:^|,)\s*max-age=(\d+)/i)?.[1]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 60 * 60 * 1000;
+}
+
+async function firebaseCertificate(kid) {
+  if (Date.now() >= firebaseCertificatesExpireAt || !firebaseCertificates[kid]) {
+    const response = await fetch(firebaseCertificatesUrl, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`Firebase certificate request failed with ${response.status}`);
+    firebaseCertificates = await response.json();
+    firebaseCertificatesExpireAt = Date.now() + certificateMaxAge(response.headers.get("cache-control"));
   }
-  return getAuth();
+  const certificate = firebaseCertificates[kid];
+  if (typeof certificate !== "string") throw new Error("Firebase token key is not trusted");
+  return importX509(certificate, "RS256");
+}
+
+async function verifyFirebaseIdToken(idToken) {
+  const header = decodeProtectedHeader(idToken);
+  if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) {
+    throw new Error("Firebase token header is invalid");
+  }
+  const key = await firebaseCertificate(header.kid);
+  const { payload } = await jwtVerify(idToken, key, {
+    algorithms: ["RS256"],
+    audience: firebaseProjectId,
+    issuer: firebaseIssuer,
+  });
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 128) throw new Error("Firebase token subject is invalid");
+  if (typeof payload.iat !== "number" || payload.iat > now) throw new Error("Firebase token issued-at time is invalid");
+  if (typeof payload.auth_time !== "number" || payload.auth_time > now) throw new Error("Firebase token authentication time is invalid");
+  if (typeof payload.email !== "string" || !payload.email) throw new Error("Firebase token email is missing");
+  return { uid: payload.sub, email: payload.email };
 }
 
 export async function authenticatedUser(request) {
@@ -59,10 +88,11 @@ export async function authenticatedUser(request) {
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) throw Object.assign(new Error("Authentication required"), { status: 401 });
   try {
-    const token = await firebaseAuth().verifyIdToken(match[1], true);
-    if (!token.uid || !token.email) throw new Error("Incomplete identity");
-    return { uid: token.uid, email: token.email };
-  } catch {
+    return await verifyFirebaseIdToken(match[1]);
+  } catch (error) {
+    const kind = error?.code || error?.name || "unknown";
+    const message = error?.message || "No error message";
+    console.log(`Donation authentication error: ${kind}: ${message}`);
     throw Object.assign(new Error("Invalid authentication"), { status: 401 });
   }
 }
@@ -116,6 +146,11 @@ export async function findOrCreateCustomer(stripe, user) {
 
 export function safeErrorResponse(error) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
-  if (status >= 500) console.error("Donation service error", error?.type || error?.name || "unknown");
+  if (status >= 500) {
+    const kind = error?.type || error?.name || "unknown";
+    const code = error?.code ? ` (${error.code})` : "";
+    const message = error?.message || "No error message";
+    console.log(`Donation service error: ${kind}${code}: ${message}`);
+  }
   return jsonResponse({ error: status < 500 ? error.message : "Donation service unavailable" }, status);
 }

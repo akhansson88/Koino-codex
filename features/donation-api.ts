@@ -33,6 +33,8 @@ async function donationRequest<T>(path: string, token: string | null, body: unkn
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const detail = typeof payload?.error === "string" ? `: ${payload.error}` : "";
+    console.warn(`Donation request failed (${response.status})${detail}`);
     throw new Error(response.status === 401 ? "Din inloggning har gått ut. Logga in igen och försök." : "Betalningen kunde inte startas. Försök igen om en stund.");
   }
   return payload as T;
