@@ -24,6 +24,7 @@ import {
   TextStyle,
   useWindowDimensions,
   View,
+  ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
@@ -62,18 +63,29 @@ import {
   versesForChapter,
 } from "@/features/bible-kjv";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
+import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
-import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField, VersePreviewCard } from "@/ui/app-components";
+import { savedVerseIdentity } from "@/state/saved-verses";
+import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
 import { useAppTranslation } from "@/ui/app-language";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
-import { colors, platformShadow, radius } from "@/ui/theme";
+import { colors, platformShadow, radius, themes, type ThemeName } from "@/ui/theme";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
+
+const bibleVerseWebInteractionStyle =
+  Platform.OS === "web"
+    ? ({
+        userSelect: "none",
+        WebkitTouchCallout: "none",
+        WebkitUserSelect: "none",
+      } as TextStyle & ViewStyle)
+    : undefined;
 
 const readerFonts = [
   { id: "serif", label: "Serif" },
@@ -95,6 +107,7 @@ type TestamentFilter = "all" | "old" | "new";
 type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save" | "share";
 
 type BibleReaderPreferences = {
+  appTheme?: ThemeName;
   audioPosition: BiblePosition;
   audioVoiceId: string;
   audioVoiceName?: string;
@@ -108,6 +121,8 @@ type BibleReaderPreferences = {
   showFootnotes: boolean;
   showVerseNumbers: boolean;
 };
+
+type BibleReaderThemePreference = Pick<BibleReaderPreferences, "appTheme" | "readerTheme">;
 
 type AudioPlaybackState = "idle" | "preparing" | "playing" | "paused" | "error";
 
@@ -181,75 +196,6 @@ const suggestedTopics: SuggestedTopic[] = [
 ];
 
 const bibleTopicAlphabet = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "#"];
-
-const swedishBibleBookNames: Record<string, string> = {
-  Genesis: "Första Moseboken",
-  Exodus: "Andra Moseboken",
-  Leviticus: "Tredje Moseboken",
-  Numbers: "Fjärde Moseboken",
-  Deuteronomy: "Femte Moseboken",
-  Joshua: "Josua",
-  Judges: "Domarboken",
-  Ruth: "Rut",
-  "1 Samuel": "Första Samuelsboken",
-  "2 Samuel": "Andra Samuelsboken",
-  "1 Kings": "Första Kungaboken",
-  "2 Kings": "Andra Kungaboken",
-  "1 Chronicles": "Första Krönikeboken",
-  "2 Chronicles": "Andra Krönikeboken",
-  Ezra: "Esra",
-  Nehemiah: "Nehemja",
-  Esther: "Ester",
-  Job: "Job",
-  Psalms: "Psaltaren",
-  Proverbs: "Ordspråksboken",
-  Ecclesiastes: "Predikaren",
-  "Solomon's Song": "Höga Visan",
-  Isaiah: "Jesaja",
-  Jeremiah: "Jeremia",
-  Lamentations: "Klagovisorna",
-  Ezekiel: "Hesekiel",
-  Daniel: "Daniel",
-  Hosea: "Hosea",
-  Joel: "Joel",
-  Amos: "Amos",
-  Obadiah: "Obadja",
-  Jonah: "Jona",
-  Micah: "Mika",
-  Nahum: "Nahum",
-  Habakkuk: "Habackuk",
-  Zephaniah: "Sefanja",
-  Haggai: "Haggai",
-  Zechariah: "Sakarja",
-  Malachi: "Malaki",
-  Matthew: "Matteusevangeliet",
-  Mark: "Markusevangeliet",
-  Luke: "Lukasevangeliet",
-  John: "Johannesevangeliet",
-  Acts: "Apostlagärningarna",
-  Romans: "Romarbrevet",
-  "1 Corinthians": "Första Korinthierbrevet",
-  "2 Corinthians": "Andra Korinthierbrevet",
-  Galatians: "Galaterbrevet",
-  Ephesians: "Efesierbrevet",
-  Philippians: "Filipperbrevet",
-  Colossians: "Kolosserbrevet",
-  "1 Thessalonians": "Första Thessalonikerbrevet",
-  "2 Thessalonians": "Andra Thessalonikerbrevet",
-  "1 Timothy": "Första Timotheosbrevet",
-  "2 Timothy": "Andra Timotheosbrevet",
-  Titus: "Titusbrevet",
-  Philemon: "Filemonbrevet",
-  Hebrews: "Hebreerbrevet",
-  James: "Jakobsbrevet",
-  "1 Peter": "Första Petrusbrevet",
-  "2 Peter": "Andra Petrusbrevet",
-  "1 John": "Första Johannesbrevet",
-  "2 John": "Andra Johannesbrevet",
-  "3 John": "Tredje Johannesbrevet",
-  Jude: "Judasbrevet",
-  Revelation: "Uppenbarelseboken",
-};
 
 const defaultPosition = normalizeBiblePosition({ book: "Philippians", chapter: 4, verse: 4 });
 const defaultFontId: BibleReaderFontId = "serif";
@@ -326,10 +272,6 @@ const colorWheelColors = [
   "#CE93D8",
 ];
 
-function savedVerseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
-  return `${verse.reference}|${verse.translation ?? ""}`;
-}
-
 function selectedVerseRangesFor(verses: number[]): SelectedVerseRange[] {
   const sortedVerses = Array.from(new Set(verses)).sort((a, b) => a - b);
   const ranges: SelectedVerseRange[] = [];
@@ -393,6 +335,10 @@ function isReaderFontId(value: unknown): value is BibleReaderFontId {
 
 function isReaderThemeId(value: unknown): value is BibleReaderThemeId {
   return typeof value === "string" && readerThemes.some((theme) => theme.id === value);
+}
+
+function isAppTheme(value: unknown): value is ThemeName {
+  return value === "light" || value === "dark";
 }
 
 function normalizeFontSize(value: unknown) {
@@ -459,6 +405,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
     const storedVoice = normalizeStoredVoice(parsed?.audioVoiceId, parsed?.audioVoiceName);
     const position = normalizeBiblePosition(parsed?.position);
     return {
+      appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
       audioPosition: normalizeBiblePosition(parsed?.audioPosition ?? position),
       audioVoiceId: storedVoice.id,
       audioVoiceName: storedVoice.name,
@@ -532,48 +479,6 @@ function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "r
 function biblePositionFromReference(reference?: string) {
   if (!reference) return undefined;
   return biblePositionFromVerse(bibleVerseFromReference(reference));
-}
-
-function displayBibleBookName(bookName: string, language: AppLanguage) {
-  return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
-}
-
-function displayBibleReference(reference: string, language: AppLanguage) {
-  if (language !== "sv") return reference;
-  const canonicalBook = Object.keys(swedishBibleBookNames)
-    .sort((a, b) => b.length - a.length)
-    .find((bookName) => reference === bookName || reference.startsWith(`${bookName} `));
-  return canonicalBook
-    ? `${displayBibleBookName(canonicalBook, language)}${reference.slice(canonicalBook.length)}`
-    : reference;
-}
-
-function canonicalizeBibleSearchQuery(query: string, language: AppLanguage) {
-  const trimmed = query.trim();
-  if (language !== "sv") return trimmed;
-
-  const localizedBooks = Object.entries(swedishBibleBookNames).sort((a, b) => b[1].length - a[1].length);
-  const normalizedQuery = trimmed.toLocaleLowerCase("sv");
-  const match = localizedBooks.find(([, localizedName]) => {
-    const normalizedName = localizedName.toLocaleLowerCase("sv");
-    return normalizedQuery === normalizedName || normalizedQuery.startsWith(`${normalizedName} `);
-  });
-  if (!match) return trimmed;
-
-  const [canonicalName, localizedName] = match;
-  return `${canonicalName}${trimmed.slice(localizedName.length)}`;
-}
-
-function biblePositionFromSearchQuery(query: string, language: AppLanguage) {
-  const trimmed = query.trim();
-  if (!trimmed) return undefined;
-  const canonicalQuery = canonicalizeBibleSearchQuery(trimmed, language);
-  const versePosition = biblePositionFromReference(canonicalQuery);
-  if (versePosition) return versePosition;
-
-  const chapterMatch = canonicalQuery.match(/^(.+?)\s+(\d+)$/);
-  if (!chapterMatch) return undefined;
-  return normalizeBiblePosition({ book: chapterMatch[1], chapter: Number(chapterMatch[2]), verse: 1 });
 }
 
 function testamentForBook(bookName: string): TestamentFilter {
@@ -825,39 +730,183 @@ function readerPaletteFor(theme: BibleReaderThemeId): ReaderPalette {
     };
   }
 
+  const lightColors = themes.light;
+
   if (theme === "sepia") {
     return {
-      accent: colors.textMuted,
-      background: colors.cardPaper,
-      buttonText: colors.onAccent,
-      danger: colors.danger,
+      accent: lightColors.textMuted,
+      background: lightColors.cardPaper,
+      buttonText: lightColors.onAccent,
+      danger: lightColors.danger,
       dim: "rgba(11, 18, 32, 0.28)",
-      input: colors.surface,
-      line: colors.border,
-      muted: colors.textSecondary,
-      peach: colors.warmSoft,
-      shadow: colors.textPrimary,
-      sheet: colors.surface,
-      surface: colors.surface,
-      text: colors.textPrimary,
+      input: lightColors.surface,
+      line: lightColors.border,
+      muted: lightColors.textSecondary,
+      peach: lightColors.warmSoft,
+      shadow: lightColors.textPrimary,
+      sheet: lightColors.surface,
+      surface: lightColors.surface,
+      text: lightColors.textPrimary,
     };
   }
 
   return {
-    accent: colors.olive,
-    background: colors.cream,
-    buttonText: colors.onAccent,
-    danger: colors.danger,
+    accent: lightColors.olive,
+    background: lightColors.cream,
+    buttonText: lightColors.onAccent,
+    danger: lightColors.danger,
     dim: "rgba(11, 18, 32, 0.34)",
-    input: colors.input,
-    line: colors.line,
-    muted: colors.muted,
-    peach: colors.accentSubtle,
-    shadow: colors.ink,
-    sheet: colors.paper,
-    surface: colors.paper,
-    text: colors.ink,
+    input: lightColors.input,
+    line: lightColors.line,
+    muted: lightColors.muted,
+    peach: lightColors.accentSubtle,
+    shadow: lightColors.ink,
+    sheet: lightColors.paper,
+    surface: lightColors.paper,
+    text: lightColors.ink,
   };
+}
+
+const bibleSheetHorizontalPadding = 20;
+const bibleSheetTopPadding = 10;
+const bibleSheetHandleHeight = 28;
+const bibleSheetHeaderBottomPadding = 14;
+const bibleSheetHeaderMinHeight = 42;
+const bibleVersionListTopPadding = 18;
+const bibleVersionRowGap = 10;
+const bibleVersionRowMinHeight = 68;
+
+function BibleSheetShell({
+  animatedStyle,
+  children,
+  contentStyle,
+  palette,
+  style,
+}: {
+  animatedStyle?: ComponentProps<typeof Animated.View>["style"];
+  children: ReactNode;
+  contentStyle?: ComponentProps<typeof View>["style"];
+  palette: ReaderPalette;
+  style?: ComponentProps<typeof Animated.View>["style"];
+}) {
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: "transparent",
+          borderTopLeftRadius: radius.xxl,
+          borderTopRightRadius: radius.xxl,
+          flexShrink: 1,
+          zIndex: 1,
+          ...platformShadow({
+            boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
+            color: palette.shadow,
+            offset: { width: 0, height: -12 },
+            opacity: 0.15,
+            radius: 34,
+          }),
+        },
+        style,
+        animatedStyle,
+      ]}
+    >
+      <View
+        style={[
+          {
+            backgroundColor: palette.sheet,
+            borderTopLeftRadius: radius.xxl,
+            borderTopRightRadius: radius.xxl,
+            flex: 1,
+            overflow: "hidden",
+          },
+          contentStyle,
+        ]}
+      >
+        {children}
+      </View>
+    </Animated.View>
+  );
+}
+
+function BibleSheetModalFrame({
+  accessibilityLabel,
+  children,
+  onBackdropPress,
+}: {
+  accessibilityLabel?: string;
+  children: ReactNode;
+  onBackdropPress: () => void;
+}) {
+  return (
+    <View style={{ backgroundColor: "transparent", bottom: 0, justifyContent: "flex-end", left: 0, position: "absolute", right: 0, top: 0 }}>
+      <Pressable
+        accessible={Boolean(accessibilityLabel)}
+        accessibilityElementsHidden={!accessibilityLabel}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={accessibilityLabel ? "button" : "none"}
+        importantForAccessibility={accessibilityLabel ? "auto" : "no"}
+        onPress={onBackdropPress}
+        style={{ backgroundColor: "transparent", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+      />
+      {children}
+    </View>
+  );
+}
+
+function BibleSheetBottomPositioner({ children }: { children: ReactNode }) {
+  return (
+    <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
+      <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0 }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function BibleSheetTop({
+  bordered = false,
+  children,
+  handleProps,
+  palette,
+  topProps,
+}: {
+  bordered?: boolean;
+  children?: ReactNode;
+  handleProps?: ComponentProps<typeof View>;
+  palette: ReaderPalette;
+  topProps?: ComponentProps<typeof View>;
+}) {
+  return (
+    <View
+      {...topProps}
+      style={[
+        {
+          borderBottomColor: bordered ? palette.line : "transparent",
+          borderBottomWidth: bordered ? 1 : 0,
+          paddingHorizontal: bibleSheetHorizontalPadding,
+          paddingTop: bibleSheetTopPadding,
+        },
+        topProps?.style,
+      ]}
+    >
+      <View
+        {...handleProps}
+        style={[
+          {
+            alignItems: "center",
+            alignSelf: "center",
+            height: bibleSheetHandleHeight,
+            justifyContent: "center",
+            width: 150,
+          },
+          handleProps?.style,
+        ]}
+      >
+        <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
+      </View>
+      {children ? <View style={{ paddingBottom: bibleSheetHeaderBottomPadding }}>{children}</View> : null}
+    </View>
+  );
 }
 
 export function BibleScreen() {
@@ -897,7 +946,10 @@ export function BibleScreen() {
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
-  const [readerTheme, setReaderTheme] = useState<BibleReaderThemeId>(defaultReaderTheme);
+  const [readerThemePreference, setReaderThemePreference] = useState<BibleReaderThemePreference>({
+    appTheme: state.theme,
+    readerTheme: state.theme,
+  });
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
   const [showFootnotes, setShowFootnotes] = useState(defaultShowFootnotes);
   const [showCrossReferences, setShowCrossReferences] = useState(defaultShowCrossReferences);
@@ -947,11 +999,13 @@ export function BibleScreen() {
   const [audioControlsHeight, setAudioControlsHeight] = useState(58);
   const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
+  const persistedAppThemeRef = useRef<ThemeName | undefined>(undefined);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
-  const readerPalette = useMemo(() => readerPaletteFor(readerTheme), [readerTheme]);
+  const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
+  const readerPalette = readerPaletteFor(effectiveReaderTheme);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const activeBiblePlans = useMemo(
     () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId && plan.status === "active"),
@@ -968,6 +1022,18 @@ export function BibleScreen() {
   );
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
+  const selectedPassages = useMemo(
+    () => selectedVerseRanges
+      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
+      .filter((verse): verse is BibleVerse => Boolean(verse)),
+    [bibleVersionId, position.book, position.chapter, selectedVerseRanges],
+  );
+  const selectedPassagesAreSaved = useMemo(
+    () => selectedPassages.length > 0 && selectedPassages.length === selectedVerseRanges.length && selectedPassages.every((selectedVerse) =>
+      state.savedVerses.some((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)),
+    ),
+    [selectedPassages, selectedVerseRanges.length, state.savedVerses],
+  );
   const chapterHighlightByVerse = useMemo(() => {
     const highlights = state.bibleHighlights
       .filter(
@@ -1076,6 +1142,11 @@ export function BibleScreen() {
   }, [position]);
 
   useEffect(() => {
+    if (readerThemePreference.appTheme === state.theme) return;
+    setReaderThemePreference({ appTheme: state.theme, readerTheme: state.theme });
+  }, [readerThemePreference.appTheme, state.theme]);
+
+  useEffect(() => {
     void setAudioModeAsync({ playsInSilentMode: true });
   }, []);
 
@@ -1155,7 +1226,8 @@ export function BibleScreen() {
         notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
         setFontSize(nextPreferences.fontSize);
-        setReaderTheme(nextPreferences.readerTheme);
+        persistedAppThemeRef.current = nextPreferences.appTheme;
+        setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
         setShowVerseNumbers(nextPreferences.showVerseNumbers);
         setShowFootnotes(nextPreferences.showFootnotes);
         setShowCrossReferences(nextPreferences.showCrossReferences);
@@ -1173,8 +1245,9 @@ export function BibleScreen() {
   useEffect(() => {
     if (!storageKey || !preferencesReady) return;
 
-    const timeout = setTimeout(() => {
+    const persistPreferences = (nextReaderTheme = effectiveReaderTheme) => {
       const payload: BibleReaderPreferences = {
+        appTheme: state.theme,
         audioPosition,
         audioVoiceId: audioVoice.id,
         audioVoiceName: audioVoice.name,
@@ -1183,16 +1256,24 @@ export function BibleScreen() {
         fontId,
         fontSize,
         position,
-        readerTheme,
+        readerTheme: nextReaderTheme,
         showCrossReferences,
         showFootnotes,
         showVerseNumbers,
       };
+      persistedAppThemeRef.current = state.theme;
       void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
-    }, 250);
+    };
+
+    if (persistedAppThemeRef.current !== state.theme) {
+      persistPreferences(state.theme);
+      return;
+    }
+
+    const timeout = setTimeout(persistPreferences, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, fontId, fontSize, position, preferencesReady, readerTheme, showCrossReferences, showFootnotes, showVerseNumbers, storageKey]);
+  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -1711,35 +1792,39 @@ export function BibleScreen() {
   const handleSaveSelectedVerses = useCallback(async () => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
 
-    const selectedVerses = selectedVerseRanges
-      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
-      .filter((verse): verse is BibleVerse => Boolean(verse));
-
-    if (selectedVerses.length === 0) {
-      setReaderToast({ detail: "Try selecting the verses again.", message: "Could not save selection", tone: "error" });
+    if (selectedPassages.length === 0) {
+      setReaderToast({ detail: t("bible.selection.errorDetail"), message: t("bible.selection.errorTitle"), tone: "error" });
       return;
     }
 
-    const unsavedVerses = selectedVerses.filter((selectedVerse) => !state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse)));
-
-    if (unsavedVerses.length === 0) {
-      setReaderToast({ detail: "Every selected reference is already saved.", message: "Selection already saved", tone: "error" });
-      return;
-    }
+    const matchingSavedVerses = selectedPassages
+      .map((selectedVerse) => state.savedVerses.find((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)))
+      .filter((verse): verse is SavedVerse => Boolean(verse));
+    const shouldRemove = matchingSavedVerses.length === selectedPassages.length;
+    const passagesToSave = selectedPassages.filter((selectedVerse) =>
+      !state.savedVerses.some((savedVerse) => savedVerseIdentity(savedVerse) === savedVerseIdentity(selectedVerse)),
+    );
+    const isSingleVerse = selectedVerseNumbers.length === 1;
 
     setSelectionSaving(true);
     try {
-      await Promise.all(unsavedVerses.map((verse) => dispatch({ type: "saveVerse", verse })));
+      if (shouldRemove) {
+        await Promise.all(matchingSavedVerses.map((verse) => dispatch({ type: "removeSavedVerse", id: verse.id })));
+      } else {
+        await Promise.all(passagesToSave.map((verse) => dispatch({ type: "saveVerse", verse })));
+      }
       setSelectedVerseNumbers([]);
       setReaderToast({
-        detail: unsavedVerses.length === 1 ? "You can find it under saved verses." : "You can find them under saved verses.",
-        message: unsavedVerses.length === 1 ? "Selection saved" : `${unsavedVerses.length} selections saved`,
+        detail: t(shouldRemove ? "bible.selection.removedDetail" : "bible.selection.savedDetail"),
+        message: t(shouldRemove
+          ? isSingleVerse ? "bible.selection.removedVerse" : "bible.selection.removedPassage"
+          : isSingleVerse ? "bible.selection.savedVerse" : "bible.selection.savedPassage"),
         tone: "success",
       });
     } finally {
       setSelectionSaving(false);
     }
-  }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving, state.savedVerses]);
+  }, [dispatch, selectedPassages, selectedVerseNumbers.length, selectedVerseRanges.length, selectionSaving, state.savedVerses, t]);
 
   const handleHighlightSelectedVerses = useCallback(async (color: BibleHighlightColor, colorId?: string) => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
@@ -2284,6 +2369,7 @@ export function BibleScreen() {
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
           reference={displayBibleReference(selectedVerseReference, language)}
+          saved={selectedPassagesAreSaved}
           saving={selectionSaving}
           verseCount={selectedVerseNumbers.length}
         />
@@ -2317,7 +2403,7 @@ export function BibleScreen() {
         fontId={fontId}
         fontSize={fontSize}
         onChangeFont={setFontId}
-        onChangeReaderTheme={setReaderTheme}
+        onChangeReaderTheme={(readerTheme) => setReaderThemePreference({ appTheme: state.theme, readerTheme })}
         onChangeShowCrossReferences={setShowCrossReferences}
         onChangeShowFootnotes={setShowFootnotes}
         onChangeShowVerseNumbers={setShowVerseNumbers}
@@ -2325,7 +2411,7 @@ export function BibleScreen() {
         onCompactModeChange={setCompactMode}
         onFontSizeChange={changeFontSize}
         palette={readerPalette}
-        readerTheme={readerTheme}
+        readerTheme={effectiveReaderTheme}
         showCrossReferences={showCrossReferences}
         showFootnotes={showFootnotes}
         showVerseNumbers={showVerseNumbers}
@@ -2370,6 +2456,10 @@ export function BibleScreen() {
             return;
           }
           setTopicsVisible(true);
+        }}
+        onRemoveSavedVerse={async (id) => {
+          await dispatch({ type: "removeSavedVerse", id });
+          setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
         }}
         onSelect={(nextPosition) => {
           setPickerVisible(false);
@@ -2844,7 +2934,7 @@ function BibleTopicsModal({
                       accessibilityRole="button"
                       disabled={!available}
                       key={letter}
-                      onPress={() => setActiveLetter(letter)}
+                      onPress={() => setActiveLetter((currentLetter) => (currentLetter === letter ? "" : letter))}
                       style={{
                         alignItems: "center",
                         backgroundColor: selected ? palette.peach : palette.surface,
@@ -2875,9 +2965,18 @@ function BibleTopicsModal({
 
           {!normalizedQuery && activeLetter ? (
             <View style={{ gap: 10, maxWidth: 430, width: "100%" }}>
-              <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>
-                {t("bible.topics.letterTitle", { letter: activeLetter })}
-              </Text>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+                <Text style={{ color: palette.text, flexShrink: 1, fontSize: 13, fontWeight: "900" }}>
+                  {t("bible.topics.letterTitle", { letter: activeLetter })}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setActiveLetter("")}
+                  style={{ alignItems: "center", justifyContent: "center", minHeight: 44, minWidth: 96, paddingHorizontal: 4 }}
+                >
+                  <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "800" }}>{t("bible.topics.showSuggestions")}</Text>
+                </Pressable>
+              </View>
               <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" }}>
                 {activeLetterTopics.map((item, index) => (
                   <TopicIndexRow
@@ -3429,6 +3528,7 @@ function BibleText({
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
             style={{
+              ...bibleVerseWebInteractionStyle,
               backgroundColor: temporarySelected ? palette.peach : "transparent",
               borderColor: "transparent",
               borderRadius: radius.md,
@@ -3441,6 +3541,7 @@ function BibleText({
               <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
                 <Text
                   style={{
+                    ...bibleVerseWebInteractionStyle,
                     color: palette.accent,
                     fontFamily: fontFamilyFor("classic"),
                     fontSize: 44,
@@ -3452,14 +3553,14 @@ function BibleText({
                   {position.chapter}
                 </Text>
                 <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
-                  {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                  <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
+                  {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                  <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
                 </View>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                {showVerseNumbers ? <Text style={[verseNumberStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                <Text style={[readerTextStyle, { flex: 1 }]}><Text style={persistedHighlightStyle}>{item.text}</Text></Text>
+                {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
+                <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
               </View>
             )}
           </Pressable>
@@ -3713,6 +3814,7 @@ function SelectedVerseSuggestionBar({
   onSave,
   palette,
   reference,
+  saved,
   saving,
   verseCount,
 }: {
@@ -3728,6 +3830,7 @@ function SelectedVerseSuggestionBar({
   onSave: () => void;
   palette: ReaderPalette;
   reference: string;
+  saved: boolean;
   saving: boolean;
   verseCount: number;
 }) {
@@ -3785,7 +3888,7 @@ function SelectedVerseSuggestionBar({
             <Feather name="x" size={18} color={palette.accent} />
           </Pressable>
           <Pressable
-            accessibilityLabel={t("bible.selection.saveAccessibility", { reference })}
+            accessibilityLabel={t(saved ? "bible.selection.removeAccessibility" : "bible.selection.saveAccessibility", { reference })}
             accessibilityRole="button"
             accessibilityState={{ disabled: saving }}
             disabled={saving}
@@ -3806,7 +3909,11 @@ function SelectedVerseSuggestionBar({
           >
             <Feather name="bookmark" size={16} color={saving ? palette.muted : palette.accent} />
             <Text numberOfLines={1} style={{ color: saving ? palette.muted : palette.text, fontSize: 13, fontWeight: "900" }}>
-              {t(saving ? "bible.selection.saving" : "bible.selection.save")}
+              {t(saving
+                ? saved ? "bible.selection.removing" : "bible.selection.saving"
+                : saved
+                  ? "bible.selection.remove"
+                  : verseCount === 1 ? "bible.selection.saveVerse" : "bible.selection.savePassage")}
             </Text>
           </Pressable>
         </View>
@@ -4302,6 +4409,9 @@ function VerseActionSheet({
   const references = useMemo(() => (displayedPosition ? bibleCrossReferences(displayedPosition, bibleVersionId) : []), [bibleVersionId, displayedPosition]);
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
+  const bottomPadding = Math.max(28, insets.bottom + 20);
+  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 7 * 72 + bottomPadding;
+  const sheetHeight = Math.min(height * 0.78, contentHeight);
 
   useEffect(() => {
     if (visible && position) {
@@ -4345,112 +4455,93 @@ function VerseActionSheet({
 
   return (
     <Modal transparent visible={mounted} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            backgroundColor: palette.dim,
-            bottom: 0,
-            left: 0,
-            opacity: slideProgress,
-            position: "absolute",
-            right: 0,
-            top: 0,
-          }}
-        />
-        <Pressable accessibilityLabel={t("bible.actions.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <Animated.View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
-            gap: 2,
-            maxHeight: "78%",
-            paddingBottom: Math.max(28, insets.bottom + 20),
-            paddingHorizontal: 20,
-            paddingTop: 16,
-            elevation: 2,
-            transform: [{ translateY: sheetTranslateY }],
-            zIndex: 1,
-            ...platformShadow({
-              boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
-              color: palette.shadow,
-              offset: { width: 0, height: -12 },
-              opacity: 0.18,
-              radius: 34,
-            }),
-          }}
-        >
-          <View style={{ alignItems: "center", paddingBottom: 20 }}>
-            <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
-          </View>
-          {view === "actions" ? (
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
-              <VerseSheetAction
-                icon="bookmark"
-                onPress={() => onAction("save")}
-                palette={palette}
-                subtitle={saved ? t("bible.actions.unsaveSubtitle") : t("bible.actions.saveSubtitle")}
-                title={saved ? t("bible.actions.unsave") : t("bible.actions.save")}
-              />
-              <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
-              <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
-              <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
-              <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
-              <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
-            </ScrollView>
-          ) : (
-            <View style={{ gap: 14 }}>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
-                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
-                </View>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
-                {references.length > 0 ? (
-                  references.map((reference, index) => (
-                    <View
-                      key={`${reference.source}-${index}`}
-                      style={{
-                        borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
-                        borderBottomWidth: 1,
-                        gap: 8,
-                        paddingBottom: 18,
-                        paddingTop: index === 0 ? 0 : 18,
-                      }}
-                    >
-                      <Pressable
-                        accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          onClose();
-                          onReadChapter(reference.startPosition);
-                        }}
-                        style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
-                      >
-                        <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                          <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
-                          <Feather name="arrow-right" size={17} color={palette.accent} />
-                        </View>
-                        <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
-                          {reference.text}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ))
-                ) : (
-                  <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
-                    <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
-                  </View>
-                )}
+      <BibleSheetModalFrame accessibilityLabel={t("bible.actions.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            animatedStyle={{
+              elevation: 2,
+              transform: [{ translateY: sheetTranslateY }],
+            }}
+            contentStyle={{
+              gap: 2,
+              paddingBottom: bottomPadding,
+            }}
+            palette={palette}
+            style={{ height: sheetHeight }}
+          >
+            <BibleSheetTop palette={palette} />
+            {view === "actions" ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding }}
+                style={{ flex: 1, minHeight: 0 }}
+              >
+                <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
+                <VerseSheetAction
+                  icon="bookmark"
+                  onPress={() => onAction("save")}
+                  palette={palette}
+                  subtitle={saved ? t("bible.actions.unsaveSubtitle") : t("bible.actions.saveSubtitle")}
+                  title={saved ? t("bible.actions.unsave") : t("bible.actions.save")}
+                />
+                <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
+                <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
+                <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
+                <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
+                <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
               </ScrollView>
-            </View>
-          )}
-        </Animated.View>
-      </View>
+            ) : (
+              <View style={{ flex: 1, gap: 14, minHeight: 0, paddingHorizontal: bibleSheetHorizontalPadding }}>
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                  <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
+                    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
+                  </View>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
+                  {references.length > 0 ? (
+                    references.map((reference, index) => (
+                      <View
+                        key={`${reference.source}-${index}`}
+                        style={{
+                          borderBottomColor: index === references.length - 1 ? "transparent" : palette.line,
+                          borderBottomWidth: 1,
+                          gap: 8,
+                          paddingBottom: 18,
+                          paddingTop: index === 0 ? 0 : 18,
+                        }}
+                      >
+                        <Pressable
+                          accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            onClose();
+                            onReadChapter(reference.startPosition);
+                          }}
+                          style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
+                        >
+                          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                            <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
+                            <Feather name="arrow-right" size={17} color={palette.accent} />
+                          </View>
+                          <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
+                            {reference.text}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
+                      <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4461,13 +4552,16 @@ function VerseSheetAction({
   palette,
   subtitle,
   title,
+  tone = "default",
 }: {
-  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "users";
+  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
   onPress: () => void;
   palette: ReaderPalette;
   subtitle: string;
   title: string;
+  tone?: "danger" | "default";
 }) {
+  const destructive = tone === "danger";
   return (
     <Pressable
       accessibilityRole="button"
@@ -4493,13 +4587,80 @@ function VerseSheetAction({
           width: 46,
         }}
       >
-        <Feather name={icon} size={21} color={palette.accent} />
+        <Feather name={icon} size={21} color={destructive ? colors.danger : palette.accent} />
       </View>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
+        <Text style={{ color: destructive ? colors.danger : palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
         <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "600" }}>{subtitle}</Text>
       </View>
     </Pressable>
+  );
+}
+
+function SavedVerseActionSheet({
+  onClose,
+  onOpen,
+  onRemove,
+  palette,
+  verse,
+}: {
+  onClose: () => void;
+  onOpen: (verse: SavedVerse) => void;
+  onRemove: (verse: SavedVerse) => void;
+  palette: ReaderPalette;
+  verse?: SavedVerse;
+}) {
+  const { language, t } = useAppTranslation();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  if (!verse) return null;
+
+  const bottomPadding = Math.max(28, insets.bottom + 20);
+  const titleLineHeight = 24;
+  const contentHeight =
+    bibleSheetTopPadding +
+    bibleSheetHandleHeight +
+    2 +
+    titleLineHeight +
+    8 +
+    2 * 72 +
+    bottomPadding;
+  const sheetHeight = Math.min(height * 0.92, contentHeight);
+
+  return (
+    <Modal transparent visible onRequestClose={onClose}>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.saved.actions.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            contentStyle={{ gap: 2, paddingBottom: bottomPadding }}
+            palette={palette}
+            style={{ height: sheetHeight }}
+          >
+            <BibleSheetTop palette={palette} />
+            <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
+              <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", lineHeight: titleLineHeight, paddingBottom: 8 }}>
+                {displayBibleReference(verse.reference, language)}
+              </Text>
+              <VerseSheetAction
+                icon="book-open"
+                onPress={() => onOpen(verse)}
+                palette={palette}
+                subtitle={t("bible.saved.actions.openSubtitle")}
+                title={t("bible.saved.actions.open")}
+              />
+              <VerseSheetAction
+                icon="trash-2"
+                onPress={() => onRemove(verse)}
+                palette={palette}
+                subtitle={t("bible.saved.actions.removeSubtitle")}
+                title={t("bible.saved.actions.remove")}
+                tone="danger"
+              />
+            </View>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
+    </Modal>
   );
 }
 
@@ -4542,27 +4703,30 @@ function ReadingSettingsSheet({
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
+  const { height } = useWindowDimensions();
+  const sheetHeight = height * 0.92;
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel={t("bible.settings.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
-            maxHeight: "92%",
-            paddingBottom: Math.max(26, insets.bottom + 18),
-            paddingHorizontal: 20,
-            paddingTop: 24,
-          }}
-        >
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 24 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
-              <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
-              <ReaderCircleButton accessibilityLabel={t("bible.settings.close")} icon="x" onPress={onClose} palette={palette} />
-            </View>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.settings.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            contentStyle={{ paddingBottom: Math.max(26, insets.bottom + 18) }}
+            palette={palette}
+            style={{ height: sheetHeight }}
+          >
+            <BibleSheetTop palette={palette}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
+                <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
+                <ReaderCircleButton accessibilityLabel={t("bible.settings.close")} icon="x" onPress={onClose} palette={palette} />
+              </View>
+            </BibleSheetTop>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 24, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 24 }}
+              style={{ flex: 1 }}
+            >
 
             <SettingsGroup palette={palette} title={t("bible.settings.fontFamily")}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -4624,9 +4788,10 @@ function ReadingSettingsSheet({
                 <SettingsToggle label={t("bible.settings.compactMode")} onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
             </SettingsGroup>
-          </ScrollView>
-        </View>
-      </View>
+            </ScrollView>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4646,6 +4811,18 @@ function BibleVersionSheet({
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
+  const { height } = useWindowDimensions();
+  const bottomPadding = Math.max(26, insets.bottom + 18);
+  const contentHeight =
+    bibleSheetTopPadding +
+    bibleSheetHandleHeight +
+    bibleSheetHeaderMinHeight +
+    bibleSheetHeaderBottomPadding +
+    bibleVersionListTopPadding +
+    bibleVersions.length * bibleVersionRowMinHeight +
+    Math.max(0, bibleVersions.length - 1) * bibleVersionRowGap +
+    bottomPadding;
+  const sheetHeight = Math.min(height * 0.92, contentHeight);
 
   function chooseVersion(versionId: BibleVersionId) {
     onChangeBibleVersion(versionId);
@@ -4654,52 +4831,39 @@ function BibleVersionSheet({
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: palette.dim, flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel={t("bible.version.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-        <View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
-            gap: 18,
-            paddingBottom: Math.max(26, insets.bottom + 18),
-            paddingHorizontal: 20,
-            paddingTop: 18,
-            ...platformShadow({
-              boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
-              color: palette.shadow,
-              offset: { width: 0, height: -12 },
-              opacity: 0.14,
-              radius: 34,
-            }),
-          }}
-        >
-          <View style={{ alignItems: "center", paddingBottom: 2 }}>
-            <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
-          </View>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.version.title")}</Text>
-              <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>{t("bible.version.description")}</Text>
-            </View>
-            <ReaderCircleButton accessibilityLabel={t("bible.version.close")} icon="x" onPress={onClose} palette={palette} />
-          </View>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.version.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell contentStyle={{ paddingBottom: bottomPadding }} palette={palette} style={{ height: sheetHeight }}>
+            <BibleSheetTop palette={palette}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.version.title")}</Text>
+                  <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>{t("bible.version.description")}</Text>
+                </View>
+                <ReaderCircleButton accessibilityLabel={t("bible.version.close")} icon="x" onPress={onClose} palette={palette} />
+              </View>
+            </BibleSheetTop>
 
-          <View style={{ gap: 10 }}>
-            {bibleVersions.map((version) => (
-              <BibleVersionRow
-                description={bibleVersionDescription(version.id, t)}
-                key={version.id}
-                label={version.label}
-                onPress={() => chooseVersion(version.id)}
-                palette={palette}
-                selected={version.id === bibleVersionId}
-                shortLabel={bibleVersionShortLabel(version.id)}
-              />
-            ))}
-          </View>
-        </View>
-      </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: bibleVersionRowGap, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: bibleVersionListTopPadding }}
+              style={{ flex: 1 }}
+            >
+              {bibleVersions.map((version) => (
+                <BibleVersionRow
+                  description={bibleVersionDescription(version.id, t)}
+                  key={version.id}
+                  label={version.label}
+                  onPress={() => chooseVersion(version.id)}
+                  palette={palette}
+                  selected={version.id === bibleVersionId}
+                  shortLabel={bibleVersionShortLabel(version.id)}
+                />
+              ))}
+            </ScrollView>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -4732,7 +4896,7 @@ function BibleVersionRow({
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
-        minHeight: 68,
+        minHeight: bibleVersionRowMinHeight,
         paddingHorizontal: 14,
         paddingVertical: 10,
       }}
@@ -5162,63 +5326,6 @@ function SmallPillButton({
   );
 }
 
-function SavedVersesSection({
-  onAddToJournal,
-  onOpenInBible,
-  onRemove,
-  onShareToRoom,
-  palette,
-  verses,
-}: {
-  onAddToJournal: (verse: BibleVerse) => void;
-  onOpenInBible: (verse: BibleVerse) => void;
-  onRemove: (id: string) => void;
-  onShareToRoom: (verse: BibleVerse) => void;
-  palette: ReaderPalette;
-  verses: SavedVerse[];
-}) {
-  return (
-    <View
-      style={{
-        backgroundColor: palette.surface,
-        borderColor: palette.line,
-        borderRadius: radius.xl,
-        borderWidth: 1,
-        gap: 12,
-        padding: 16,
-      }}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <Text style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>Saved verses</Text>
-        <Feather name="bookmark" size={18} color={palette.accent} />
-      </View>
-      {verses.length === 0 ? (
-        <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>
-          No saved verses yet. Save a verse to return to it later.
-        </Text>
-      ) : (
-        verses.slice(0, 5).map((verse) => (
-          <View key={verse.id} style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <VersePreviewCard
-                compact
-                onAddToJournal={onAddToJournal}
-                onOpenInBible={onOpenInBible}
-                onShareToRoom={onShareToRoom}
-                showFullText
-                verse={verse}
-              />
-            </View>
-            <Pressable accessibilityLabel={`Remove ${verse.reference}`} accessibilityRole="button" onPress={() => onRemove(verse.id)} style={{ padding: 8 }}>
-              <Feather name="trash-2" size={18} color={colors.danger} />
-            </Pressable>
-          </View>
-        ))
-      )}
-    </View>
-  );
-}
-
 function NextChapterCard({
   nextChapter,
   onPress,
@@ -5348,40 +5455,24 @@ function CrossReferenceSheet({
 
   return (
     <Modal transparent visible={visible} onRequestClose={() => closeWithAnimation()}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close cross references" style={{ backgroundColor: palette.dim, flex: 1 }} onPress={() => closeWithAnimation()} />
-        <Animated.View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xl,
-            borderTopRightRadius: radius.xl,
-            height: sheetHeight,
-            overflow: "hidden",
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-            ...platformShadow({
-              boxShadow: "0 -16px 34px rgba(11, 18, 32, 0.18)",
-              color: palette.shadow,
-              offset: { width: 0, height: -10 },
-              opacity: 0.14,
-              radius: 26,
-            }),
-          }}
+      <BibleSheetModalFrame accessibilityLabel="Close cross references" onBackdropPress={() => closeWithAnimation()}>
+        <BibleSheetShell
+          animatedStyle={{ transform: [{ translateY }] }}
+          contentStyle={{ paddingBottom: insets.bottom }}
+          palette={palette}
+          style={{ height: sheetHeight }}
         >
-          <View style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 8 }}>
-            <View {...panResponder.panHandlers} style={{ alignItems: "center", height: 22, justifyContent: "center", width: 120 }}>
-              <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 56 }} />
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
+          <BibleSheetTop bordered handleProps={panResponder.panHandlers} palette={palette}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
                 <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(position)}</Text>
               </View>
               <ReaderCircleButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} palette={palette} />
             </View>
-          </View>
+          </BibleSheetTop>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 18 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding, paddingVertical: 18 }}>
             {references.length > 0 ? (
               references.map((reference, index) => (
                 <View
@@ -5418,8 +5509,8 @@ function CrossReferenceSheet({
               </View>
             )}
           </ScrollView>
-        </Animated.View>
-      </View>
+        </BibleSheetShell>
+      </BibleSheetModalFrame>
     </Modal>
   );
 }
@@ -5921,6 +6012,7 @@ function BibleDrawer({
   onOpenPlans,
   onOpenReflection,
   onOpenTopic,
+  onRemoveSavedVerse,
   onSelect,
   palette,
   savedVerses,
@@ -5937,6 +6029,7 @@ function BibleDrawer({
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
   onOpenTopic: (topic?: string) => void;
+  onRemoveSavedVerse: (id: string) => Promise<void>;
   onSelect: (position: BiblePosition) => void;
   palette: ReaderPalette;
   savedVerses: SavedVerse[];
@@ -5957,8 +6050,12 @@ function BibleDrawer({
   const [testament, setTestament] = useState<TestamentFilter>("all");
   const [phraseSearchLoading, setPhraseSearchLoading] = useState(false);
   const [phraseSearchResults, setPhraseSearchResults] = useState<BibleTextSearchResult[]>([]);
-  const drawerCornerRadius = 44;
-
+  const [savedVerseMenu, setSavedVerseMenu] = useState<SavedVerse | undefined>();
+  const [hiddenSavedVerseIds, setHiddenSavedVerseIds] = useState<string[]>([]);
+  const visibleSavedVerses = useMemo(
+    () => savedVerses.filter((verse) => !hiddenSavedVerseIds.includes(verse.id)),
+    [hiddenSavedVerseIds, savedVerses],
+  );
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
       duration: 190,
@@ -6024,7 +6121,27 @@ function BibleDrawer({
     setBookParentStage(initialStage === "search" ? "search" : "book");
     setSelectedBook(normalized.book);
     setTestament("all");
+    setSavedVerseMenu(undefined);
   }, [initialPosition, initialStage, visible]);
+
+  useEffect(() => {
+    setHiddenSavedVerseIds((current) => current.filter((id) => savedVerses.some((verse) => verse.id === id)));
+  }, [savedVerses]);
+
+  const openSavedVerse = useCallback((verse: SavedVerse) => {
+    const nextPosition = biblePositionFromVerse(verse);
+    if (!nextPosition) return;
+    setSavedVerseMenu(undefined);
+    onSelect(nextPosition);
+  }, [onSelect]);
+
+  const removeSavedVerse = useCallback((verse: SavedVerse) => {
+    setSavedVerseMenu(undefined);
+    setHiddenSavedVerseIds((current) => current.includes(verse.id) ? current : [...current, verse.id]);
+    void onRemoveSavedVerse(verse.id).catch(() => {
+      setHiddenSavedVerseIds((current) => current.filter((id) => id !== verse.id));
+    });
+  }, [onRemoveSavedVerse]);
 
   useEffect(() => {
     if (!visible) return;
@@ -6044,7 +6161,7 @@ function BibleDrawer({
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
   const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
-  const searchPosition = biblePositionFromSearchQuery(bookQuery, language);
+  const searchPosition = biblePositionFromSearchQuery(bookQuery, language, bibleVersionId);
   const selectableBooks = kjvBooks.filter((item) => {
     const displayName = displayBibleBookName(item.name, language).toLocaleLowerCase(language);
     const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
@@ -6162,38 +6279,20 @@ function BibleDrawer({
 
   return (
     <Modal transparent visible={visible} onRequestClose={goBack}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable
-          accessible={false}
-          accessibilityElementsHidden
-          accessibilityRole="none"
-          importantForAccessibility="no"
-          onPress={closeWithAnimation}
-          style={{ backgroundColor: palette.dim, flex: 1 }}
-        />
-        <Animated.View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: drawerCornerRadius,
-            borderTopRightRadius: drawerCornerRadius,
-            height: sheetHeight,
-            overflow: "hidden",
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-            ...platformShadow({
-              boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
-              color: palette.shadow,
-              offset: { width: 0, height: -12 },
-              opacity: 0.15,
-              radius: 34,
-            }),
-          }}
+      <BibleSheetModalFrame onBackdropPress={closeWithAnimation}>
+        <BibleSheetShell
+          animatedStyle={{ transform: [{ translateY }] }}
+          contentStyle={{ paddingBottom: insets.bottom }}
+          palette={palette}
+          style={{ height: sheetHeight }}
         >
-          <View {...topPanResponder.panHandlers} style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingHorizontal: 18, paddingTop: 10 }}>
-            <View {...handlePanResponder.panHandlers} style={{ alignItems: "center", height: 28, justifyContent: "center", width: 150 }}>
-              <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 58 }} />
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 14, width: "100%" }}>
+          <BibleSheetTop
+            bordered
+            handleProps={handlePanResponder.panHandlers}
+            palette={palette}
+            topProps={topPanResponder.panHandlers}
+          >
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <ReaderCircleButton
                 accessibilityLabel={stage === "home" ? t("bible.navigator.close") : t("bible.navigator.back")}
                 icon={stage === "home" ? "x" : "chevron-left"}
@@ -6205,14 +6304,14 @@ function BibleDrawer({
                 <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition, language)} - ${versionLabel}` : versionLabel}</Text>
               </View>
             </View>
-          </View>
+          </BibleSheetTop>
 
           <ScrollView
             ref={drawerScrollRef}
             contentInsetAdjustmentBehavior="never"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 18, padding: 18, paddingBottom: Math.max(28, insets.bottom + 20) }}
+            contentContainerStyle={{ gap: 18, padding: bibleSheetHorizontalPadding, paddingBottom: Math.max(28, insets.bottom + 20) }}
           >
             {stage === "home" ? (
               <>
@@ -6426,16 +6525,33 @@ function BibleDrawer({
 
             {stage === "saved" ? (
               <View style={{ gap: 8 }}>
-                {savedVerses.length ? (
-                  savedVerses.map((verse) => (
+                {visibleSavedVerses.length ? (
+                  visibleSavedVerses.map((verse) => (
                     <DrawerVerseRow
+                      action={(
+                        <Pressable
+                          accessibilityLabel={t("bible.saved.actions.more", { reference: displayBibleReference(verse.reference, language) })}
+                          accessibilityRole="button"
+                          onPress={() => setSavedVerseMenu(verse)}
+                          style={{
+                            alignItems: "center",
+                            backgroundColor: palette.input,
+                            borderColor: palette.line,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            height: 40,
+                            justifyContent: "center",
+                            width: 40,
+                          }}
+                        >
+                          <Feather name="more-horizontal" size={18} color={palette.accent} />
+                        </Pressable>
+                      )}
                       key={verse.id}
-                      onPress={() => {
-                        const nextPosition = biblePositionFromVerse(verse);
-                        if (nextPosition) onSelect(nextPosition);
-                      }}
+                      onPress={() => openSavedVerse(verse)}
                       palette={palette}
                       reference={displayBibleReference(verse.reference, language)}
+                      showArrow={false}
                       meta={verse.translation && verse.translation !== versionLabel ? verse.translation : undefined}
                       text={verse.text}
                     />
@@ -6490,8 +6606,15 @@ function BibleDrawer({
               </View>
             ) : null}
           </ScrollView>
-        </Animated.View>
-      </View>
+        </BibleSheetShell>
+      </BibleSheetModalFrame>
+      <SavedVerseActionSheet
+        onClose={() => setSavedVerseMenu(undefined)}
+        onOpen={openSavedVerse}
+        onRemove={removeSavedVerse}
+        palette={palette}
+        verse={savedVerseMenu}
+      />
     </Modal>
   );
 }
@@ -6665,22 +6788,26 @@ function DrawerBookRow({
 }
 
 function DrawerVerseRow({
+  action,
   accentColor,
   meta,
   onPress,
   palette,
   reference,
+  showArrow = true,
   text,
 }: {
+  action?: ReactNode;
   accentColor?: BibleHighlightColor;
   meta?: string;
   onPress: () => void;
   palette: ReaderPalette;
   reference: string;
+  showArrow?: boolean;
   text?: string;
 }) {
   const { t } = useAppTranslation();
-  return (
+  const card = (
     <Pressable
       accessibilityLabel={t("bible.navigator.openPassage", { reference })}
       accessibilityRole="button"
@@ -6693,6 +6820,7 @@ function DrawerVerseRow({
         gap: 6,
         minHeight: 74,
         padding: 14,
+        paddingRight: action ? 66 : 14,
       }}
     >
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
@@ -6714,7 +6842,7 @@ function DrawerVerseRow({
             }}
           />
         ) : null}
-        <Feather name="arrow-right" size={16} color={palette.accent} />
+        {showArrow ? <Feather name="arrow-right" size={16} color={palette.accent} /> : null}
       </View>
       {text ? (
         <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
@@ -6727,6 +6855,15 @@ function DrawerVerseRow({
         </Text>
       ) : null}
     </Pressable>
+  );
+
+  if (!action) return card;
+
+  return (
+    <View style={{ position: "relative" }}>
+      {card}
+      <View style={{ position: "absolute", right: 10, top: 10, zIndex: 1 }}>{action}</View>
+    </View>
   );
 }
 

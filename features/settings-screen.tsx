@@ -2,8 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
-import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, Image, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
@@ -23,7 +22,7 @@ import {
   selectCommunityPostById,
   selectPrayerRequests,
 } from "@/state/selectors/community-content";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, Membership, PostReactionKind, Reply } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, Reply } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -65,7 +64,6 @@ import type { TranslationFunction } from "@/ui/localization";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
-import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { SharedComposer } from "@/ui/shared-composer";
 import {
   CommunityCardAction,
@@ -175,15 +173,9 @@ export function SettingsScreen() {
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
-  const [manageSheetVisible, setManageSheetVisible] = useState(false);
-  const [transferSheetVisible, setTransferSheetVisible] = useState(false);
   const [joinInviteCode, setJoinInviteCode] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
-  const [currentGroupName, setCurrentGroupName] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
-  const [roomImageMessage, setRoomImageMessage] = useState("");
-  const [cropSource, setCropSource] = useState<RoomImageCropSource>();
-  const [roomImagePickerRequested, setRoomImagePickerRequested] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerContext, setComposerContext] = useState<ComposerContext>("room");
   const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
@@ -247,10 +239,6 @@ export function SettingsScreen() {
     [state.memberships, state.users],
   );
   const otherCommunityMembers = useMemo(() => communityMembers.filter((member) => member.id !== state.currentUserId), [communityMembers, state.currentUserId]);
-  const transferableMemberships = useMemo(
-    () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
-    [state.currentUserId, state.memberships],
-  );
   const feedItems = useMemo(() => {
     return selectCommunityContent({
       checkIns: state.checkIns,
@@ -291,7 +279,6 @@ export function SettingsScreen() {
   }, [sharedCheckIns]);
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
-  const canRename = Boolean(ownsGroup && group && currentGroupName.trim() && currentGroupName.trim() !== group.name);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: roomView !== "prayer" && roomView !== "checkins" });
@@ -864,149 +851,8 @@ export function SettingsScreen() {
     setJoinSheetVisible(false);
   }
 
-  async function handleRenameRoom() {
-    if (!group || !canRename) return;
-    await dispatch({ type: "updateGroup", id: group.id, name: currentGroupName });
-    setManageSheetVisible(false);
-  }
-
-  useEffect(() => {
-    if (!roomImagePickerRequested) return;
-
-    const timer = setTimeout(() => {
-      void openRoomImagePicker();
-    }, Platform.OS === "ios" ? 500 : 250);
-
-    return () => clearTimeout(timer);
-  }, [roomImagePickerRequested]);
-
-  async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
-    if (asset.width > 0 && asset.height > 0) {
-      return { height: asset.height, width: asset.width };
-    }
-
-    return new Promise<{ height: number; width: number }>((resolve, reject) => {
-      Image.getSize(
-        asset.uri,
-        (width, height) => resolve({ height, width }),
-        () => reject(new Error(t("community.management.imageReadError"))),
-      );
-    });
-  }
-
-  function handleChooseRoomImage() {
-    if (!group || !ownsGroup) return;
-    setRoomImageMessage("");
-    setManageSheetVisible(false);
-    setRoomImagePickerRequested(true);
-  }
-
-  async function openRoomImagePicker() {
-    setRoomImagePickerRequested(false);
-
-    try {
-      if (!group || !ownsGroup) return;
-
-      if (Platform.OS !== "web") {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          setRoomImageMessage(t("community.management.imagePermission"));
-          return;
-        }
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: false,
-        mediaTypes: ["images"],
-        quality: 1,
-      });
-
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.uri) {
-        setRoomImageMessage(t("community.management.imageReadError"));
-        return;
-      }
-
-      const size = await selectedImageSize(asset);
-      setCropSource({ ...size, uri: asset.uri });
-    } catch {
-      setRoomImageMessage(t("community.management.imageOpenError"));
-    }
-  }
-
-  async function handleSaveRoomImage(localUri: string) {
-    if (!group) return;
-    await dispatch({ type: "uploadGroupImage", id: group.id, localUri });
-    setCropSource(undefined);
-    setRoomImageMessage(t("community.management.imageUpdated"));
-  }
-
-  function handleDeleteRoomImage() {
-    if (!group?.image || !ownsGroup) return;
-    setManageSheetVisible(false);
-    confirmAction({
-      title: t("community.management.deleteImageTitle"),
-      message: t("community.management.deleteImageBody"),
-      confirmText: t("common.delete"),
-      destructive: true,
-      onConfirm: () => {
-        void dispatch({ type: "deleteGroupImage", id: group.id })
-          .then(() => setRoomImageMessage(t("community.management.imageDeleted")))
-          .catch(() => setRoomImageMessage(t("community.management.imageDeleteError")));
-      },
-    });
-  }
-
-  function handleLeaveRoom() {
-    if (!group) return;
-    setManageSheetVisible(false);
-    confirmAction({
-      title: t("community.management.leaveTitle"),
-      message: t("community.management.leaveBody", { name: group.name }),
-      confirmText: t("community.management.leave"),
-      destructive: true,
-      onConfirm: () => dispatch({ type: "leaveGroup", id: group.id }),
-    });
-  }
-
-  function handleDeleteRoom() {
-    if (!group) return;
-    setManageSheetVisible(false);
-    confirmAction({
-      title: t("community.management.deleteTitle"),
-      message: t("community.management.deleteBody"),
-      confirmText: t("common.delete"),
-      destructive: true,
-      onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
-    });
-  }
-
-  function openTransferOwnership() {
-    if (!ownsGroup) return;
-    setManageSheetVisible(false);
-    setTransferSheetVisible(true);
-  }
-
-  function handleTransferOwnership(membership: Membership) {
-    if (!group || !ownsGroup || membership.userId === state.currentUserId || membership.role === "owner") return;
-
-    setTransferSheetVisible(false);
-    confirmAction({
-      title: t("community.management.transferTitle"),
-      message: t("community.management.transferBody", { community: group.name, name: membership.userName }),
-      confirmText: t("community.management.transfer"),
-      onConfirm: () => {
-        void dispatch({ type: "transferGroupOwnership", groupId: group.id, userId: membership.userId })
-          .then(() => setRoomImageMessage(t("community.management.transferSuccess", { name: membership.userName })))
-          .catch(() => setRoomImageMessage(t("community.management.transferError")));
-      },
-    });
-  }
-
   async function handleSignOut() {
     setJoinSheetVisible(false);
-    setManageSheetVisible(false);
     await dispatch({ type: "signOut" });
     router.replace("/");
   }
@@ -1014,7 +860,6 @@ export function SettingsScreen() {
   function openRoomOverview() {
     navigateToRoomView("rooms");
     setJoinSheetVisible(false);
-    setManageSheetVisible(false);
   }
 
   function renderCommunityFeedItem(item: FeedItem) {
@@ -1266,11 +1111,7 @@ export function SettingsScreen() {
             memberCount={memberCount}
             members={communityMembers}
             onInvite={handleInvite}
-            onManage={() => {
-              setCurrentGroupName(group.name);
-              setManageSheetVisible(true);
-              navigateToRoomView("detail", "back");
-            }}
+            onManage={() => router.push("/room-details" as never)}
             onSwitchRoom={openRoomOverview}
           />
         </AppScreen>
@@ -1291,37 +1132,24 @@ export function SettingsScreen() {
             topInset={false}
           >
             <View style={{ gap: 12 }}>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("community.detail.openCommunityDetails", {
-                    memberCount: communityMemberCount(memberCount, t),
-                    name: group.name,
-                  })}
-                  onPress={() => router.push("/room-details" as never)}
-                  style={{ alignItems: "center", flex: 1, flexDirection: "row", gap: 10, minWidth: 0 }}
-                >
-                  <RoomImage image={group.image} name={group.name} size={44} />
-                  <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
-                    <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("community.detail.openCommunityDetails", {
+                  memberCount: communityMemberCount(memberCount, t),
+                  name: group.name,
+                })}
+                onPress={() => router.push("/room-details" as never)}
+                style={{ alignItems: "center", flexDirection: "row", gap: 10, minWidth: 0 }}
+              >
+                <RoomImage image={group.image} name={group.name} size={44} />
+                <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+                  <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
                       {communityMemberCount(memberCount, t)} · {t("common.private")}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={17} color={colors.muted} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("community.management.open")}
-                  onPress={() => {
-                    setCurrentGroupName(group.name);
-                    setManageSheetVisible(true);
-                  }}
-                  style={{ alignItems: "center", backgroundColor: colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, height: 44, justifyContent: "center", width: 44 }}
-                >
-                  <Feather name="more-horizontal" size={20} color={colors.ink} />
-                </Pressable>
-              </View>
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={17} color={colors.muted} />
+              </Pressable>
 
               <CommunityPrayerActions
                 groupId={group.id}
@@ -1434,73 +1262,6 @@ export function SettingsScreen() {
         {communityPrayerMemberModal}
         {directPrayerResultSheet}
         {feedEncouragementSheet}
-        <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible} onClose={() => setManageSheetVisible(false)}>
-          <Card style={{ gap: 0, padding: 0 }}>
-            <View style={{ paddingHorizontal: 14 }}>
-              <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.rename")}</Text>
-                <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder={t("community.management.namePlaceholder")} returnKeyType="done" style={{ marginTop: 8 }} />
-                {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.renameHint")}</Text> : null}
-              </Row>
-            </View>
-            <View style={{ backgroundColor: colors.line, height: 1 }} />
-            <View style={{ paddingHorizontal: 14 }}>
-              <Row icon="image" onPress={ownsGroup ? handleChooseRoomImage : undefined}>
-                <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                  <RoomImage image={group.image} name={group.name} size={42} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-                      {t(group.image ? "community.management.changeImage" : "community.management.addImage")}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                      {t(ownsGroup ? "community.management.imageOwnerHint" : "community.management.ownerOnlyChange")}
-                    </Text>
-                  </View>
-                </View>
-              </Row>
-            </View>
-            {group.image ? (
-              <>
-                <View style={{ backgroundColor: colors.line, height: 1 }} />
-                <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
-                  <Row icon="trash-2" tone="danger">
-                    <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.deleteImage")}</Text>
-                    <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteImageHint")}</Text>
-                  </Row>
-                </Pressable>
-              </>
-            ) : null}
-            <View style={{ backgroundColor: colors.line, height: 1 }} />
-            <View style={{ paddingHorizontal: 14 }}>
-              <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.transfer")}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                  {t(ownsGroup ? "community.management.transferHint" : "community.management.ownerOnlyTransfer")}
-                </Text>
-              </Row>
-            </View>
-            <View style={{ backgroundColor: colors.line, height: 1 }} />
-            <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
-              <Row icon="log-out">
-                <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.leave")}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.leaveHint")}</Text>
-              </Row>
-            </Pressable>
-            <View style={{ backgroundColor: colors.line, height: 1 }} />
-            <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
-              <Row icon="trash-2" tone="danger">
-                <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.delete")}</Text>
-                <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteHint")}</Text>
-              </Row>
-            </Pressable>
-          </Card>
-          <SecondaryButton onPress={() => setManageSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
-        </BottomSheet>
-        <BottomSheet title={t("community.management.transfer")} visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
-          <BodyText muted>{t("community.management.transferChoose")}</BodyText>
-          <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
-        </BottomSheet>
-        <RoomImageCropper source={cropSource} title={t("community.management.cropImage")} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
         <PrayerMoment
           target={prayerTarget}
           onClose={closePrayerMoment}
@@ -1557,7 +1318,6 @@ export function SettingsScreen() {
                 {t("community.rooms.open")}
               </SecondaryButton>
               {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
-              {roomImageMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{roomImageMessage}</Text> : null}
             </>
           ) : (
             <>
@@ -1623,18 +1383,6 @@ export function SettingsScreen() {
         </Card>
       </View>
 
-      {group ? (
-        <SecondaryButton
-          icon="settings"
-          onPress={() => {
-            setCurrentGroupName(group.name);
-            setManageSheetVisible(true);
-          }}
-        >
-          {t("community.management.settingsTitle")}
-        </SecondaryButton>
-      ) : null}
-
       <SecondaryButton icon="log-out" onPress={handleSignOut}>
         {t("common.logOut")}
       </SecondaryButton>
@@ -1663,75 +1411,8 @@ export function SettingsScreen() {
         <SecondaryButton onPress={() => setJoinSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
       </BottomSheet>
 
-      <BottomSheet title={t("community.management.settingsTitle")} visible={manageSheetVisible && Boolean(group)} onClose={() => setManageSheetVisible(false)}>
-        <Card style={{ gap: 0, padding: 0 }}>
-          <View style={{ paddingHorizontal: 14 }}>
-            <Row icon="edit-2" onPress={ownsGroup ? handleRenameRoom : undefined}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.rename")}</Text>
-              <TextInputField value={currentGroupName} onChangeText={setCurrentGroupName} onSubmitEditing={handleRenameRoom} placeholder={t("community.management.namePlaceholder")} returnKeyType="done" style={{ marginTop: 8 }} />
-              {ownsGroup ? <Text style={{ color: canRename ? colors.gold : colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.renameHint")}</Text> : null}
-            </Row>
-          </View>
-          <View style={{ backgroundColor: colors.line, height: 1 }} />
-          <View style={{ paddingHorizontal: 14 }}>
-            <Row icon="image" onPress={ownsGroup ? handleChooseRoomImage : undefined}>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-                <RoomImage image={group?.image} name={group?.name} size={42} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
-                    {t(group?.image ? "community.management.changeImage" : "community.management.addImage")}
-                  </Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                    {t(ownsGroup ? "community.management.imageOwnerHint" : "community.management.ownerOnlyChange")}
-                  </Text>
-                </View>
-              </View>
-            </Row>
-          </View>
-          {group?.image ? (
-            <>
-              <View style={{ backgroundColor: colors.line, height: 1 }} />
-              <Pressable accessibilityRole="button" onPress={handleDeleteRoomImage} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
-                <Row icon="trash-2" tone="danger">
-                  <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.deleteImage")}</Text>
-                  <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteImageHint")}</Text>
-                </Row>
-              </Pressable>
-            </>
-          ) : null}
-          <View style={{ backgroundColor: colors.line, height: 1 }} />
-          <View style={{ paddingHorizontal: 14 }}>
-            <Row icon="user-check" onPress={ownsGroup ? openTransferOwnership : undefined}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.transfer")}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                {t(ownsGroup ? "community.management.transferHint" : "community.management.ownerOnlyTransfer")}
-              </Text>
-            </Row>
-          </View>
-          <View style={{ backgroundColor: colors.line, height: 1 }} />
-          <Pressable accessibilityRole="button" onPress={handleLeaveRoom} disabled={ownsGroup} style={{ opacity: ownsGroup ? 0.45 : 1, paddingHorizontal: 14 }}>
-            <Row icon="log-out">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.management.leave")}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.management.leaveHint")}</Text>
-            </Row>
-          </Pressable>
-          <View style={{ backgroundColor: colors.line, height: 1 }} />
-          <Pressable accessibilityRole="button" onPress={handleDeleteRoom} disabled={!ownsGroup} style={{ opacity: ownsGroup ? 1 : 0.45, paddingHorizontal: 14 }}>
-            <Row icon="trash-2" tone="danger">
-              <Text style={{ color: colors.danger, fontSize: 15, fontWeight: "900" }}>{t("community.management.delete")}</Text>
-              <Text style={{ color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.management.deleteHint")}</Text>
-            </Row>
-          </Pressable>
-        </Card>
-        <SecondaryButton onPress={() => setManageSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
-      </BottomSheet>
-      <BottomSheet title={t("community.management.transfer")} visible={transferSheetVisible} onClose={() => setTransferSheetVisible(false)}>
-        <BodyText muted>{t("community.management.transferChoose")}</BodyText>
-        <TransferOwnershipList memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
-      </BottomSheet>
         </AppScreen>
       </CommunityTransitionFrame>
-      <RoomImageCropper source={cropSource} title={t("community.management.cropImage")} visible={Boolean(cropSource)} onCancel={() => setCropSource(undefined)} onSave={handleSaveRoomImage} />
     </>
   );
 }
@@ -2623,7 +2304,7 @@ function PrayerRequestCard({
       actions={
         prayerMoment ? (
           <CommunityCardAction active icon="pray" label={t("community.action.prayer.completed")} tone="prayer" />
-        ) : !answered ? (
+        ) : (
           <CommunityCardAction
             active={prayed}
             icon="pray"
@@ -2631,7 +2312,7 @@ function PrayerRequestCard({
             onPress={onPray}
             tone="prayer"
           />
-        ) : undefined
+        )
       }
       attachment={<VerseList verse={item.verse} verses={item.verses} compact />}
       authorImage={authorImage}
@@ -2813,61 +2494,5 @@ function MembersPanel({
         {t("community.rooms.joinOrCreate")}
       </SecondaryButton>
     </View>
-  );
-}
-
-function TransferOwnershipList({
-  memberships,
-  onTransfer,
-}: {
-  memberships: Membership[];
-  onTransfer: (membership: Membership) => void;
-}) {
-  const { t } = useAppTranslation();
-  if (memberships.length === 0) {
-    return <BodyText muted>{t("community.management.transferEmpty")}</BodyText>;
-  }
-
-  return (
-    <Card style={{ gap: 0, padding: 0 }}>
-      {memberships.map((membership, index) => (
-        <View
-          key={membership.id}
-          style={{
-            alignItems: "center",
-            borderBottomColor: colors.line,
-            borderBottomWidth: index === memberships.length - 1 ? 0 : 1,
-            flexDirection: "row",
-            gap: 10,
-            padding: 14,
-          }}
-        >
-          <Avatar image={membership.image} name={membership.userName} size={38} tone="green" />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.members.role.member")}</Text>
-          </View>
-          <Pressable
-            accessibilityLabel={t("community.management.transferTo", { name: membership.userName })}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => onTransfer(membership)}
-            style={({ pressed }) => ({
-              alignItems: "center",
-              backgroundColor: colors.mossSurface,
-              borderColor: colors.moss,
-              borderRadius: 999,
-              borderWidth: 1,
-              height: 36,
-              justifyContent: "center",
-              opacity: pressed ? 0.75 : 1,
-              width: 36,
-            })}
-          >
-            <Feather name="user-check" size={17} color={colors.olive} />
-          </Pressable>
-        </View>
-      ))}
-    </Card>
   );
 }

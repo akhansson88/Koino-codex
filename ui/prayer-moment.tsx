@@ -31,9 +31,10 @@ const EXIT_DURATION_MS = 460;
 const AMBIENT_WAVE_INPUT_RANGE = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
 const AMBIENT_WAVE_PATTERN = [0, 0.707, 1, 0.707, 0, -0.707, -1, -0.707, 0];
 const AMBIENT_WAVE_MOTIONS = [
-  { duration: 11_000, layerIndices: [0, 3, 6], translateX: 3, translateY: 0.75 },
-  { duration: 13_500, layerIndices: [1, 4, 7], translateX: -4, translateY: -1 },
-  { duration: 15_500, layerIndices: [2, 5], translateX: 5, translateY: 1.5 },
+  { duration: 22_400, layerIndex: 0, translateX: -18, translateY: 1.5 },
+  { duration: 27_200, layerIndex: 1, translateX: 14, translateY: -2.5 },
+  { duration: 24_800, layerIndex: 2, translateX: -22, translateY: 3 },
+  { duration: 30_400, layerIndex: 3, translateX: 18, translateY: -3.5 },
 ] as const;
 
 export type PrayerMomentTarget = {
@@ -56,24 +57,64 @@ function initialMotionPreference() {
   return { known: false, reduced: false };
 }
 
+function PrayerHorizonBackground() {
+  return (
+    <View
+      accessibilityElementsHidden
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={StyleSheet.absoluteFillObject}
+    >
+      <LinearGradient
+        colors={[
+          "rgba(255, 199, 154, 0.44)",
+          "rgba(243, 172, 200, 0.16)",
+          "rgba(255, 255, 252, 0.76)",
+          "rgba(250, 248, 244, 0.98)",
+        ]}
+        locations={[0, 0.25, 0.49, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <LinearGradient
+        colors={[
+          "rgba(255, 255, 252, 0)",
+          "rgba(255, 238, 222, 0.54)",
+          "rgba(255, 255, 252, 0.58)",
+          "rgba(200, 188, 231, 0)",
+        ]}
+        locations={[0, 0.34, 0.58, 1]}
+        style={{ height: "28%", left: 0, position: "absolute", right: 0, top: "39%" }}
+      />
+      <LinearGradient
+        colors={[
+          "rgba(200, 188, 231, 0)",
+          "rgba(200, 188, 231, 0.15)",
+          "rgba(142, 220, 218, 0.24)",
+        ]}
+        locations={[0, 0.47, 1]}
+        style={{ bottom: 0, height: "44%", left: 0, position: "absolute", right: 0 }}
+      />
+    </View>
+  );
+}
+
 function AmbientPrayerWaves({
   active,
-  bottom,
   compactHeight,
   exitTranslateY,
   reducedMotion,
   width,
 }: {
   active: boolean;
-  bottom: number;
   compactHeight: boolean;
   exitTranslateY: Animated.Value;
   reducedMotion: boolean;
   width: number;
 }) {
   const layerProgress = useRef(AMBIENT_WAVE_MOTIONS.map(() => new Animated.Value(0))).current;
-  const waveHeight = compactHeight ? 142 : 180;
-  const waveWidth = Math.max(width + 172, 520);
+  const waveHeight = compactHeight ? 252 : 338;
+  const waveWidth = Math.max(width * 1.55, 720);
 
   useEffect(() => {
     layerProgress.forEach((value) => {
@@ -117,12 +158,12 @@ function AmbientPrayerWaves({
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
       style={{
-        bottom,
+        bottom: 0,
         height: waveHeight,
-        left: -86,
-        opacity: 0.78,
+        left: -Math.max(100, width * 0.275),
+        opacity: 0.9,
         position: "absolute",
-        right: -86,
+        right: -Math.max(100, width * 0.275),
         transform: [{ translateY: exitTranslateY }],
       }}
     >
@@ -151,7 +192,13 @@ function AmbientPrayerWaves({
               ],
             }}
           >
-            <BrandWaveMotif height={waveHeight} layerIndices={motion.layerIndices} opacity={0.72} width={waveWidth} />
+            <BrandWaveMotif
+              height={waveHeight}
+              layerIndices={[motion.layerIndex]}
+              opacity={0.94}
+              variant="horizon"
+              width={waveWidth}
+            />
           </Animated.View>
         );
       })}
@@ -356,17 +403,13 @@ export function PrayerMoment({
           transform: [{ translateY: contentTranslateY }],
         }}
       >
-        <LinearGradient
-          colors={[
-            "rgba(255, 199, 154, 0.44)",
-            "rgba(255, 199, 154, 0.12)",
-            "rgba(250, 248, 244, 0.99)",
-            "rgba(243, 172, 200, 0.23)",
-            "rgba(200, 188, 231, 0.26)",
-            "rgba(142, 220, 218, 0.14)",
-          ]}
-          locations={[0, 0.24, 0.38, 0.64, 0.84, 1]}
-          style={StyleSheet.absoluteFillObject}
+        <PrayerHorizonBackground />
+        <AmbientPrayerWaves
+          active={Boolean(target)}
+          compactHeight={compactHeight}
+          exitTranslateY={wavesTranslateY}
+          reducedMotion={!motionPreferenceKnown || reduceMotion}
+          width={width}
         />
         <Pressable
           accessibilityLabel={t("community.prayerMoment.leave")}
@@ -495,15 +538,6 @@ export function PrayerMoment({
             </Text>
           ) : null}
         </ScrollView>
-
-        <AmbientPrayerWaves
-          active={Boolean(target)}
-          bottom={buttonBottom + (compactHeight ? 72 : 70)}
-          compactHeight={compactHeight}
-          exitTranslateY={wavesTranslateY}
-          reducedMotion={!motionPreferenceKnown || reduceMotion}
-          width={width}
-        />
 
         <View
           style={{

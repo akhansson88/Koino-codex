@@ -32,7 +32,7 @@ import { SupportKoinoCard } from "@/features/donation-flow-screen";
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "language" | "account" | "help" | "security" | "privacy" | "terms";
 type IdentityPresentation = "screen" | "sheet";
-type RoomSheet = "members" | "rename" | "notifications";
+type RoomSheet = "members" | "notifications" | "rename" | "transfer";
 
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
@@ -520,10 +520,15 @@ export function RoomDetailsScreen() {
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
   const [roomMessage, setRoomMessage] = useState("");
+  const [roomImageCropSource, setRoomImageCropSource] = useState<RoomImageCropSource>();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const [roomName, setRoomName] = useState(group?.name ?? "");
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
+  const transferableMemberships = useMemo(
+    () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
+    [state.currentUserId, state.memberships],
+  );
 
   async function handleInvite() {
     if (!group) return;
@@ -539,6 +544,61 @@ export function RoomDetailsScreen() {
     await dispatch({ type: "updateGroup", id: group.id, name: roomName });
     setActiveSheet(undefined);
     setRoomMessage(t("community.roomDetails.nameUpdated"));
+  }
+
+  async function handleChooseRoomImage() {
+    if (!group || !ownsGroup) return;
+    setRoomMessage("");
+
+    try {
+      if (Platform.OS !== "web") {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setRoomMessage(t("community.management.imagePermission"));
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setRoomMessage(t("community.management.imageReadError"));
+        return;
+      }
+
+      const size = await selectedImageSize(asset);
+      setRoomImageCropSource({ ...size, uri: asset.uri });
+    } catch {
+      setRoomMessage(t("community.management.imageOpenError"));
+    }
+  }
+
+  async function handleSaveRoomImage(localUri: string) {
+    if (!group || !ownsGroup) return;
+    await dispatch({ type: "uploadGroupImage", id: group.id, localUri });
+    setRoomImageCropSource(undefined);
+    setRoomMessage(t("community.management.imageUpdated"));
+  }
+
+  function handleDeleteRoomImage() {
+    if (!group?.image || !ownsGroup) return;
+    confirmAction({
+      title: t("community.management.deleteImageTitle"),
+      message: t("community.management.deleteImageBody"),
+      confirmText: t("common.delete"),
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "deleteGroupImage", id: group.id })
+          .then(() => setRoomMessage(t("community.management.imageDeleted")))
+          .catch(() => setRoomMessage(t("community.management.imageDeleteError")));
+      },
+    });
   }
 
   function handleLeaveRoom() {
@@ -578,6 +638,7 @@ export function RoomDetailsScreen() {
   function handleTransferOwnership(membership: Membership) {
     if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
 
+    setActiveSheet(undefined);
     confirmAction({
       title: t("community.management.transferTitle"),
       message: t("community.management.transferBody", { community: group.name, name: membership.userName }),
@@ -587,6 +648,17 @@ export function RoomDetailsScreen() {
           .then(() => setRoomMessage(t("community.management.transferSuccess", { name: membership.userName })))
           .catch(() => setRoomMessage(t("community.management.transferError")));
       },
+    });
+  }
+
+  function handleDeleteRoom() {
+    if (!group || !ownsGroup) return;
+    confirmAction({
+      title: t("community.management.deleteTitle"),
+      message: t("community.management.deleteBody"),
+      confirmText: t("common.delete"),
+      destructive: true,
+      onConfirm: () => dispatch({ type: "deleteGroup", id: group.id }),
     });
   }
 
@@ -603,6 +675,25 @@ export function RoomDetailsScreen() {
         {group ? (
           <>
             <RoomHeaderCard group={group} memberCount={memberCount} inviteMessage={inviteMessage} onInvite={handleInvite} />
+
+            <SettingsSection label={t("community.page.community")}>
+              <SettingsRow
+                icon="image"
+                title={t(group.image ? "community.management.changeImage" : "community.management.addImage")}
+                subtitle={t(ownsGroup ? "community.management.imageOwnerHint" : "community.management.ownerOnlyChange")}
+                onPress={ownsGroup ? handleChooseRoomImage : undefined}
+              />
+              {ownsGroup && group.image ? (
+                <SettingsRow
+                  icon="trash-2"
+                  title={t("community.management.deleteImage")}
+                  subtitle={t("community.management.deleteImageHint")}
+                  tone="danger"
+                  onPress={handleDeleteRoomImage}
+                  showDivider
+                />
+              ) : null}
+            </SettingsSection>
 
             {roomMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{roomMessage}</Text> : null}
 
@@ -625,8 +716,35 @@ export function RoomDetailsScreen() {
                 onPress={() => setActiveSheet("notifications")}
                 showDivider
               />
-              <SettingsRow icon="log-out" title={t("community.management.leave")} tone="danger" onPress={handleLeaveRoom} showDivider />
             </SettingsSection>
+
+            {ownsGroup ? (
+              <SettingsSection label={t("community.roomDetails.ownerSettings")}>
+                <SettingsRow
+                  icon="user-check"
+                  title={t("community.management.transfer")}
+                  subtitle={t("community.management.transferHint")}
+                  onPress={() => setActiveSheet("transfer")}
+                />
+                <SettingsRow
+                  icon="trash-2"
+                  title={t("community.management.delete")}
+                  subtitle={t("community.management.deleteHint")}
+                  tone="danger"
+                  onPress={handleDeleteRoom}
+                  showDivider
+                />
+              </SettingsSection>
+            ) : (
+              <SettingsSection label={t("community.roomDetails.membership")}>
+                <SettingsRow
+                  icon="log-out"
+                  title={t("community.management.leaveHint")}
+                  tone="danger"
+                  onPress={handleLeaveRoom}
+                />
+              </SettingsSection>
+            )}
 
             <JoinSwitchCard onBrowse={() => setSwitcherVisible(true)} />
           </>
@@ -672,7 +790,23 @@ export function RoomDetailsScreen() {
         doneLabel={t("community.checkIn.done")}
       />
 
+      <BottomSheet title={t("community.management.transfer")} visible={activeSheet === "transfer"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{t("community.management.transferChoose")}</BodyText>
+        {transferableMemberships.length > 0 ? (
+          <MemberList currentUserId={state.currentUserId} memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
+        ) : (
+          <BodyText muted>{t("community.management.transferEmpty")}</BodyText>
+        )}
+      </BottomSheet>
+
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
+      <RoomImageCropper
+        source={roomImageCropSource}
+        title={t("community.management.cropImage")}
+        visible={Boolean(roomImageCropSource)}
+        onCancel={() => setRoomImageCropSource(undefined)}
+        onSave={handleSaveRoomImage}
+      />
     </>
   );
 }

@@ -428,14 +428,23 @@ export function FeedDetailScreen() {
         {prayerAnswered ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
             <Feather name="check-circle" size={20} color={colors.olive} />
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 6 }}>
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
               <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
                 {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
               </Text>
+              {item.type === "post" && item.answeredUpdate?.trim() ? (
+                <>
+                  <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900", marginTop: 4 }}>
+                    {t("community.prayer.updateLabel")}
+                  </Text>
+                  <BodyText>{item.answeredUpdate}</BodyText>
+                </>
+              ) : null}
             </View>
           </Card>
-        ) : isPraise ? (
+        ) : null}
+        {isPraise ? (
           <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <CommunityCardAction
               active={Boolean(reaction?.reacted)}
@@ -487,9 +496,6 @@ export function FeedDetailScreen() {
               <DetailReactionButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
             ) : null}
           </View>
-        ) : null}
-        {ownsItem && isPrayerRequest && !prayerAnswered ? (
-          <SecondaryPrayerAction onPress={() => dispatch({ type: "markPrayerAnswered", id: item.id })} />
         ) : null}
         {!isPrayerMoment && !isExpandedFeedCard && !isPraise && (!isScripture || (prayer?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
@@ -570,7 +576,6 @@ export function FeedDetailScreen() {
     </KeyboardAvoidingView>
   );
 }
-
 function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: boolean }) {
   const { t } = useAppTranslation();
   return (
@@ -618,31 +623,6 @@ function DetailReactionButton({ active, label, onPress }: { active: boolean; lab
     >
       <Ionicons name={active ? "heart" : "heart-outline"} size={20} color={active ? colors.accentPrayer : colors.olive} />
       <Text style={{ color: colors.olive, fontSize: 16, fontWeight: "900" }}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function SecondaryPrayerAction({ onPress }: { onPress: () => void }) {
-  const { t } = useAppTranslation();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 9,
-        justifyContent: "center",
-        minHeight: 50,
-        paddingHorizontal: 16,
-      }}
-    >
-      <Feather name="check-circle" size={18} color={colors.olive} />
-      <Text style={{ color: colors.olive, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.markAnswered")}</Text>
     </Pressable>
   );
 }
