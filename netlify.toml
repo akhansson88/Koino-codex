@@ -24,6 +24,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/donations/status"
+  to = "/.netlify/functions/donation-status"
+  status = 200
+
+[[redirects]]
   from = "/api/donations/portal"
   to = "/.netlify/functions/donation-portal"
   status = 200

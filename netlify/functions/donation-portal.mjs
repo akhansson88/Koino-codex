@@ -1,7 +1,8 @@
 import {
   appOrigin,
   authenticatedUser,
-  findOrCreateCustomer,
+  donationStatusForCustomer,
+  findCustomer,
   jsonResponse,
   optionsResponse,
   parsePlatform,
@@ -18,7 +19,10 @@ export default async function donationPortal(request) {
     const [user, body] = await Promise.all([authenticatedUser(request), requestBody(request)]);
     const platform = parsePlatform(body?.platform);
     const stripe = stripeClient();
-    const customer = await findOrCreateCustomer(stripe, user);
+    const customer = await findCustomer(stripe, user);
+    if (!customer) return jsonResponse({ error: "Donation account not found" }, 404);
+    const status = await donationStatusForCustomer(stripe, customer.id, user.uid);
+    if (!status.hasCompletedDonation) return jsonResponse({ error: "Completed donation not found" }, 404);
     const origin = appOrigin();
     const returnUrl = platform === "native"
       ? `${origin}/.netlify/functions/donation-return?result=portal`

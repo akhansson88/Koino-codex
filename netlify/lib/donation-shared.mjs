@@ -3,6 +3,7 @@ import Stripe from "stripe";
 
 const allowedFrequency = new Set(["one_time", "monthly"]);
 const allowedPlatform = new Set(["web", "native"]);
+const manageableSubscriptionStatuses = new Set(["active", "trialing", "past_due", "unpaid", "paused"]);
 const firebaseProjectId = "koino-codex";
 const firebaseIssuer = `https://securetoken.google.com/${firebaseProjectId}`;
 const firebaseCertificatesUrl = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
@@ -125,13 +126,17 @@ export function parsePlatform(value) {
   return value;
 }
 
-export async function findOrCreateCustomer(stripe, user) {
+export async function findCustomer(stripe, user) {
   const escapedUid = user.uid.replace(/['\\]/g, "");
   const existing = await stripe.customers.search({
     query: `metadata['firebase_uid']:'${escapedUid}'`,
     limit: 1,
   });
-  const customer = existing.data[0];
+  return existing.data[0] || null;
+}
+
+export async function findOrCreateCustomer(stripe, user) {
+  const customer = await findCustomer(stripe, user);
   if (customer) {
     if (customer.email !== user.email) {
       return stripe.customers.update(customer.id, { email: user.email });
@@ -142,6 +147,33 @@ export async function findOrCreateCustomer(stripe, user) {
     { email: user.email, metadata: { firebase_uid: user.uid } },
     { idempotencyKey: `koino-customer-${user.uid}` },
   );
+}
+
+export function summarizeDonationStatus(sessions, subscriptions, userUid) {
+  const belongsToUser = (metadata, clientReferenceId) =>
+    metadata?.firebase_uid === userUid || clientReferenceId === userUid;
+  const paidSessions = sessions.filter((session) =>
+    session.status === "complete" &&
+    session.payment_status === "paid" &&
+    belongsToUser(session.metadata, session.client_reference_id));
+  const userSubscriptions = subscriptions.filter((subscription) =>
+    belongsToUser(subscription.metadata));
+
+  return {
+    hasCompletedDonation: paidSessions.length > 0,
+    hasSubscriptionHistory:
+      userSubscriptions.length > 0 || paidSessions.some((session) => session.mode === "subscription"),
+    hasManageableSubscription: userSubscriptions.some((subscription) =>
+      manageableSubscriptionStatuses.has(subscription.status)),
+  };
+}
+
+export async function donationStatusForCustomer(stripe, customerId, userUid) {
+  const [sessions, subscriptions] = await Promise.all([
+    stripe.checkout.sessions.list({ customer: customerId, limit: 100, status: "complete" }),
+    stripe.subscriptions.list({ customer: customerId, limit: 100, status: "all" }),
+  ]);
+  return summarizeDonationStatus(sessions.data, subscriptions.data, userUid);
 }
 
 export function safeErrorResponse(error) {
