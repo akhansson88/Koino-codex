@@ -19,6 +19,18 @@ class MainActivity : ReactActivity() {
     super.onCreate(null)
   }
 
+  override fun onResume() {
+    super.onResume()
+
+    // Stripe is opened through a Chrome Custom Tab. On edge-to-edge Android builds,
+    // returning from that browser can leave React Native with stale system-bar insets,
+    // which clips the bottom of the app until the process is restarted. Re-dispatch
+    // the current insets after the activity has resumed and its decor view is attached.
+    window.decorView.post {
+      window.decorView.requestApplyInsets()
+    }
+  }
+
   /**
    * Returns the name of the main component registered from JavaScript. This is used to schedule
    * rendering of the component.
