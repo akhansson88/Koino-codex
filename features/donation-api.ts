@@ -30,6 +30,22 @@ function endpoint(path: string) {
   return `${origin}${path}`;
 }
 
+async function openDonationBrowser(url: string) {
+  await WebBrowser.openBrowserAsync(
+    url,
+    Platform.OS === "android"
+      ? {
+          // Keep Stripe's Chrome Custom Tab in KOINO's task. Expo's Android default
+          // creates a separate task, which can leave edge-to-edge window insets stale
+          // when the custom tab is dismissed and the app becomes active again.
+          createTask: false,
+        }
+      : {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        },
+  );
+}
+
 async function donationRequest<T>(path: string, token: string | null, body: unknown, fallbackMessage = "Betalningen kunde inte startas. Försök igen om en stund."): Promise<T> {
   if (!token) throw new Error("Logga in igen för att fortsätta med gåvan.");
   let response: Response;
@@ -68,9 +84,7 @@ export async function startDonationCheckout(
     window.location.assign(result.checkoutUrl);
     return;
   }
-  await WebBrowser.openBrowserAsync(result.checkoutUrl, {
-    presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-  });
+  await openDonationBrowser(result.checkoutUrl);
 }
 
 export async function verifyDonation(token: string | null, sessionId: string) {
@@ -121,7 +135,5 @@ export async function openDonationPortal(token: string | null) {
     window.location.assign(result.portalUrl);
     return;
   }
-  await WebBrowser.openBrowserAsync(result.portalUrl, {
-    presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-  });
+  await openDonationBrowser(result.portalUrl);
 }
