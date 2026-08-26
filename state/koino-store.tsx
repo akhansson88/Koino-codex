@@ -2080,7 +2080,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  const getAuthToken = useCallback(() => firebaseUser?.getIdToken() ?? Promise.resolve(null), [firebaseUser]);
+  const getAuthToken = useCallback(() => firebaseUser?.getIdToken(true) ?? Promise.resolve(null), [firebaseUser]);
 
   return <KoinoContext.Provider value={{ state, dispatch, getAuthToken }}>{children}</KoinoContext.Provider>;
 }

@@ -1,12 +1,20 @@
 import type { ComponentProps, PropsWithChildren } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useKoino } from "@/state/koino-store";
-import { openDonationPortal, startDonationCheckout, verifyDonation, type DonationFrequency } from "@/features/donation-api";
+import {
+  getDonationStatus,
+  openDonationPortal,
+  primeDonationStatus,
+  startDonationCheckout,
+  verifyDonation,
+  type DonationFrequency,
+  type DonationStatus,
+} from "@/features/donation-api";
 import { platformShadow, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
@@ -54,6 +62,43 @@ function parseAmount(value: unknown) {
 
 function amountLine(amount: string, frequency: DonationFrequency) {
   return frequency === "monthly" ? `${amount} kr / månad` : `${amount} kr`;
+}
+
+function usePersistentDonationStatus() {
+  const { state, getAuthToken } = useKoino();
+  const userId = state.currentUserId;
+  const [status, setStatus] = useState<DonationStatus>();
+  const [pending, setPending] = useState(true);
+  const [error, setError] = useState<string>();
+  const requestVersion = useRef(0);
+
+  const load = useCallback(async (force: boolean) => {
+    const version = ++requestVersion.current;
+    if (!userId) {
+      setStatus(undefined);
+      setPending(false);
+      return;
+    }
+    setPending(true);
+    setError(undefined);
+    try {
+      const result = await getDonationStatus(await getAuthToken(), userId, force);
+      if (version === requestVersion.current) setStatus(result);
+    } catch (loadError) {
+      if (version === requestVersion.current) {
+        setError(loadError instanceof Error ? loadError.message : "Kunde inte hämta ditt givande.");
+      }
+    } finally {
+      if (version === requestVersion.current) setPending(false);
+    }
+  }, [getAuthToken, userId]);
+
+  useEffect(() => {
+    void load(false);
+    return () => { requestVersion.current += 1; };
+  }, [load]);
+
+  return { error, pending, refresh: () => load(true), status };
 }
 
 function DonationScreenFrame({ children }: PropsWithChildren) {
@@ -362,58 +407,154 @@ function DonationAmountLine({ amount, frequency }: { amount: string; frequency: 
   );
 }
 
-export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
+function DonationStatusRetry({ error, onRetry, pending }: { error: string; onRetry: () => void; pending: boolean }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        backgroundColor: donationColors.surfaceWhite,
-        borderColor: donationColors.softBorder,
-        borderRadius: 18,
-        borderWidth: 1,
-        minHeight: 190,
-        opacity: pressed ? 0.82 : 1,
-        overflow: "hidden",
-        padding: 18,
-        ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
-          offset: { width: 0, height: 10 },
-          opacity: 0.055,
-          radius: 24,
-        }),
-      })}
-    >
-      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1, gap: 12, minWidth: 0, paddingRight: 2 }}>
-          <View style={{ gap: 8 }}>
-            <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>Stötta KOINO</Text>
-            <Text style={[typography.body, { color: donationColors.deepNavy, lineHeight: 22 }]}>
-              Hjälp oss bygga en lugn plats för bön, Ordet och verklig gemenskap.
-            </Text>
-          </View>
-          <View
-            style={{
-              alignItems: "center",
-              alignSelf: "flex-start",
-              backgroundColor: donationColors.warmTintStrong,
-              borderRadius: 14,
-              flexDirection: "row",
-              gap: 9,
-              minHeight: 48,
-              paddingHorizontal: 16,
-            }}
-          >
-            <Text style={[typography.button, { color: donationColors.deepNavy }]}>Ge en gåva</Text>
-            <Feather name="heart" size={18} color={donationColors.deepNavy} />
-          </View>
+    <View style={{ alignItems: "center", gap: 8, paddingHorizontal: 8 }}>
+      <Text style={[typography.body, { color: "#A33A3A", fontSize: 13, lineHeight: 18, textAlign: "center" }]}>{error}</Text>
+      <Pressable accessibilityRole="button" disabled={pending} onPress={onRetry} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, padding: 6 })}>
+        <Text style={[typography.button, { color: donationColors.mutedNavy }]}>{pending ? "Försöker igen…" : "Försök igen"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function DonationManagementPanel({
+  onDonate,
+  status,
+}: {
+  onDonate?: () => void;
+  status: DonationStatus;
+}) {
+  const { getAuthToken } = useKoino();
+  const [portalPending, setPortalPending] = useState(false);
+  const [portalError, setPortalError] = useState<string>();
+
+  async function handlePortal() {
+    if (portalPending) return;
+    setPortalPending(true);
+    setPortalError(undefined);
+    try {
+      await openDonationPortal(await getAuthToken());
+    } catch (openError) {
+      setPortalError(openError instanceof Error ? openError.message : "Kunde inte öppna gåvohanteringen.");
+    } finally {
+      setPortalPending(false);
+    }
+  }
+
+  const subtitle = status.hasManageableSubscription
+    ? "Din månadsvisa gåva kan hanteras säkert via Stripe."
+    : status.hasSubscriptionHistory
+      ? "Se tidigare givande, betalningar och kvitton."
+      : "Tack för att du hjälper oss bygga KOINO.";
+
+  return (
+    <View style={{ gap: 12 }}>
+      <View
+        style={{
+          backgroundColor: donationColors.surfaceWhite,
+          borderColor: donationColors.softBorder,
+          borderRadius: 18,
+          borderWidth: 1,
+          overflow: "hidden",
+          ...platformShadow({
+            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+            offset: { width: 0, height: 10 },
+            opacity: 0.055,
+            radius: 24,
+          }),
+        }}
+      >
+        <View style={{ gap: 5, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8 }}>
+          <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>Ditt givande</Text>
+          <Text style={[typography.body, { color: donationColors.stone, fontSize: 14, lineHeight: 20 }]}>{subtitle}</Text>
         </View>
-        <View style={{ alignItems: "flex-end", justifyContent: "space-between" }}>
-          <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
-          <DonationEntryIllustration compact />
-        </View>
+        {status.hasManageableSubscription ? (
+          <DonationActionRow icon="repeat" onPress={handlePortal} subtitle="Ändra betalningsmetod eller avsluta" title="Hantera månadsvis gåva" />
+        ) : null}
+        <DonationActionRow
+          icon="file-text"
+          onPress={handlePortal}
+          showDivider={status.hasManageableSubscription}
+          subtitle="Se betalningar och ladda ner kvitton"
+          title="Kvitton och betalningar"
+        />
+        {onDonate ? (
+          <DonationActionRow icon="heart" onPress={onDonate} showDivider subtitle="Välj engångsgåva eller månadsvis gåva" title="Ge en ny gåva" />
+        ) : null}
       </View>
-    </Pressable>
+      {portalPending ? <ActivityIndicator color={donationColors.deepNavy} /> : null}
+      {portalError ? <Text style={[typography.body, { color: "#A33A3A", textAlign: "center" }]}>{portalError}</Text> : null}
+    </View>
+  );
+}
+
+export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
+  const { error, pending, refresh, status } = usePersistentDonationStatus();
+
+  if (status?.hasCompletedDonation) {
+    return (
+      <View style={{ gap: 10 }}>
+        <DonationManagementPanel onDonate={onPress} status={status} />
+        {error ? <DonationStatusRetry error={error} onRetry={refresh} pending={pending} /> : null}
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          backgroundColor: donationColors.surfaceWhite,
+          borderColor: donationColors.softBorder,
+          borderRadius: 18,
+          borderWidth: 1,
+          minHeight: 190,
+          opacity: pressed ? 0.82 : 1,
+          overflow: "hidden",
+          padding: 18,
+          ...platformShadow({
+            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
+            offset: { width: 0, height: 10 },
+            opacity: 0.055,
+            radius: 24,
+          }),
+        })}
+      >
+        <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1, gap: 12, minWidth: 0, paddingRight: 2 }}>
+            <View style={{ gap: 8 }}>
+              <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>Stötta KOINO</Text>
+              <Text style={[typography.body, { color: donationColors.deepNavy, lineHeight: 22 }]}>Hjälp oss bygga en lugn plats för bön, Ordet och verklig gemenskap.</Text>
+            </View>
+            <View style={{ alignItems: "center", alignSelf: "flex-start", backgroundColor: donationColors.warmTintStrong, borderRadius: 14, flexDirection: "row", gap: 9, minHeight: 48, paddingHorizontal: 16 }}>
+              <Text style={[typography.button, { color: donationColors.deepNavy }]}>Ge en gåva</Text>
+              {pending ? <ActivityIndicator color={donationColors.deepNavy} size="small" /> : <Feather name="heart" size={18} color={donationColors.deepNavy} />}
+            </View>
+          </View>
+          <View style={{ alignItems: "flex-end", justifyContent: "space-between" }}>
+            <Feather name="chevron-right" size={22} color={donationColors.deepNavy} />
+            <DonationEntryIllustration compact />
+          </View>
+        </View>
+      </Pressable>
+      {error ? <DonationStatusRetry error={error} onRetry={refresh} pending={pending} /> : null}
+    </View>
+  );
+}
+
+function ReturningDonorManagement() {
+  const { error, pending, refresh, status } = usePersistentDonationStatus();
+  if (!status?.hasCompletedDonation) {
+    return error ? <DonationStatusRetry error={error} onRetry={refresh} pending={pending} /> : null;
+  }
+  return (
+    <View style={{ gap: 10 }}>
+      <DonationManagementPanel status={status} />
+      {error ? <DonationStatusRetry error={error} onRetry={refresh} pending={pending} /> : null}
+    </View>
   );
 }
 
@@ -668,6 +809,7 @@ export function DonationAmountScreen() {
           Välj ett belopp som känns rätt för dig.{"\n"}Varje gåva är frivillig.
         </Text>
       </View>
+      <ReturningDonorManagement />
       <DonationFrequencySelector frequency={frequency} onChange={setFrequency} />
       <DonationAmountGrid
         customAmount={customAmount}
@@ -922,7 +1064,7 @@ function DonationActionRow({
 }
 
 export function DonationThankYouScreen() {
-  const { getAuthToken } = useKoino();
+  const { state, getAuthToken } = useKoino();
   const params = useLocalSearchParams<{ session_id?: string }>();
   const sessionId = Array.isArray(params.session_id) ? params.session_id[0] : params.session_id;
   const [verification, setVerification] = useState<{ amountSek: number; frequency: DonationFrequency }>();
@@ -944,13 +1086,16 @@ export function DonationThankYouScreen() {
       try {
         const result = await verifyDonation(await getAuthToken(), sessionId);
         if (!result.paid) throw new Error("Betalningen är ännu inte slutförd.");
-        if (active) setVerification({ amountSek: result.amountSek, frequency: result.frequency });
+        if (active) {
+          if (state.currentUserId) primeDonationStatus(state.currentUserId, result.frequency);
+          setVerification({ amountSek: result.amountSek, frequency: result.frequency });
+        }
       } catch (error) {
         if (active) setVerificationError(error instanceof Error ? error.message : "Betalningen kunde inte verifieras.");
       }
     })();
     return () => { active = false; };
-  }, [getAuthToken, sessionId, verificationAttempt]);
+  }, [getAuthToken, sessionId, state.currentUserId, verificationAttempt]);
 
   async function handleDonationPortal() {
     if (portalPending) return;
