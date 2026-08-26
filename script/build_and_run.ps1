@@ -13,7 +13,6 @@ function Show-Usage {
   Write-Host "  --tunnel, tunnel    Start Expo using tunnel transport"
   Write-Host "  --ios, ios          Start Expo and open iOS"
   Write-Host "  --android, android  Start Expo and open Android"
-  Write-Host "  --web, web          Start Expo for web"
   Write-Host "  --doctor, doctor    Run Expo diagnostics"
   Write-Host "  --help, help        Show this help"
 }
@@ -62,9 +61,6 @@ switch ($Mode) {
   }
   { $_ -in @("--android", "android") } {
     Invoke-Expo @("start", "--android")
-  }
-  { $_ -in @("--web", "web") } {
-    Invoke-Expo @("start", "--web")
   }
   { $_ -in @("--doctor", "doctor") } {
     & npx expo-doctor

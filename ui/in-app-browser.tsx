@@ -16,7 +16,6 @@ import {
   Linking,
   Modal,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -86,7 +85,7 @@ export function InAppBrowserProvider({ children }: PropsWithChildren) {
   const openExternalLink = useCallback<OpenExternalLink>((value) => {
     const url = normalizeExternalHttpUrl(value);
 
-    if (Platform.OS === "web" || !url) {
+    if (!url) {
       void openLinkInApp(value);
       return;
     }
@@ -122,37 +121,35 @@ export function InAppBrowserProvider({ children }: PropsWithChildren) {
   return (
     <InAppBrowserContext.Provider value={openExternalLink}>
       {children}
-      {Platform.OS !== "web" ? (
-        <InAppBrowserSheet
-          attempt={attempt}
-          currentUrl={currentUrl}
-          loadError={loadError}
-          loading={loading}
-          loadUrl={loadUrl}
-          onClose={close}
-          onError={(url) => {
-            if (normalizeExternalHttpUrl(url)) setCurrentUrl(url);
-            setLoading(false);
-            setLoadError(true);
-          }}
-          onLoadEnd={() => {
-            setLoading(false);
-            setProgress(1);
-          }}
-          onLoadProgress={setProgress}
-          onLoadStart={() => {
-            setLoading(true);
-            setProgress(0.04);
-            setLoadError(false);
-          }}
-          onNavigate={(url) => {
-            if (normalizeExternalHttpUrl(url)) setCurrentUrl(url);
-          }}
-          onRetry={retry}
-          progress={progress}
-          session={session}
-        />
-      ) : null}
+      <InAppBrowserSheet
+        attempt={attempt}
+        currentUrl={currentUrl}
+        loadError={loadError}
+        loading={loading}
+        loadUrl={loadUrl}
+        onClose={close}
+        onError={(url) => {
+          if (normalizeExternalHttpUrl(url)) setCurrentUrl(url);
+          setLoading(false);
+          setLoadError(true);
+        }}
+        onLoadEnd={() => {
+          setLoading(false);
+          setProgress(1);
+        }}
+        onLoadProgress={setProgress}
+        onLoadStart={() => {
+          setLoading(true);
+          setProgress(0.04);
+          setLoadError(false);
+        }}
+        onNavigate={(url) => {
+          if (normalizeExternalHttpUrl(url)) setCurrentUrl(url);
+        }}
+        onRetry={retry}
+        progress={progress}
+        session={session}
+      />
     </InAppBrowserContext.Provider>
   );
 }

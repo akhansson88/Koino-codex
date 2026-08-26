@@ -3,6 +3,10 @@
     "name": "KOINO",
     "slug": "koino-mvp",
     "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "scheme": "koino",
     "userInterfaceStyle": "light",
@@ -10,17 +14,8 @@
     "splash": {
       "backgroundColor": "#F7EFE4"
     },
-    "web": {
-      "bundler": "metro",
-      "favicon": "./koino-logo.png",
-      "name": "KOINO",
-      "shortName": "KOINO",
-      "description": "Community faith app",
-      "backgroundColor": "#F7EFE4",
-      "themeColor": "#F7EFE4"
-    },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoadsInWebContent": true

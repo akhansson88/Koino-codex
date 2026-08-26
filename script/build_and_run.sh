@@ -19,7 +19,6 @@ Modes:
   --ios, ios        Start Expo and open iOS
   --android, android
                     Start Expo and open Android
-  --web, web        Start Expo for web
   --doctor, doctor Run Expo diagnostics
   --help, help     Show this help
 USAGE
@@ -85,10 +84,6 @@ case "$MODE" in
   --android|android)
     ensure_generated_bible_data
     exec "${EXPO_CMD[@]}" start --android
-    ;;
-  --web|web)
-    ensure_generated_bible_data
-    exec "${EXPO_CMD[@]}" start --web
     ;;
   --doctor|doctor)
     run_doctor

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Image, Platform, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 
 import { firstUrl } from "@/ui/link-utils";
 import { useAppTranslation } from "@/ui/app-language";
@@ -67,10 +67,8 @@ function fallbackImageForUrl(value: string) {
   }
 }
 
-function displayImageUrl(value: string, direct: boolean) {
-  if (!value || direct || Platform.OS !== "web") return value;
-  if (/^(data|blob):/i.test(value)) return value;
-  return `/.netlify/functions/link-preview-image?url=${encodeURIComponent(value)}`;
+function displayImageUrl(value: string) {
+  return value;
 }
 
 function previewWithFallback(data: LinkPreviewData | null, url: string): LinkPreviewData | null {
@@ -186,33 +184,12 @@ function parsePreviewHtml(html: string, url: string): LinkPreviewData | null {
   };
 }
 
-function isLinkPreviewData(value: unknown): value is LinkPreviewData {
-  return Boolean(value && typeof value === "object" && typeof (value as { url?: unknown }).url === "string");
-}
-
-function isPreviewEnvelope(
-  value: unknown,
-): value is { preview: LinkPreviewData | null; provenance: Exclude<LinkPreviewProvenance, "loading"> } {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { preview?: unknown; provenance?: unknown };
-  if (candidate.provenance !== "success" && candidate.provenance !== "fallback") return false;
-  return candidate.preview === null || isLinkPreviewData(candidate.preview);
-}
-
 async function fetchPreview(url: string, signal: AbortSignal): Promise<ResolvedLinkPreview> {
-  const endpoint = Platform.OS === "web" ? `/.netlify/functions/link-preview?url=${encodeURIComponent(url)}` : url;
-  const response = await fetch(endpoint, {
-    headers: Platform.OS === "web" ? undefined : { Accept: "text/html,application/xhtml+xml" },
+  const response = await fetch(url, {
+    headers: { Accept: "text/html,application/xhtml+xml" },
     signal,
   });
   if (!response.ok) throw new Error(`Preview request failed with ${response.status}`);
-
-  if (Platform.OS === "web") {
-    const data: unknown = await response.json();
-    if (!isPreviewEnvelope(data)) return fallbackPreview(url);
-    if (data.provenance === "success" && data.preview) return successfulPreview(url, data.preview);
-    return fallbackPreview(url, data.preview);
-  }
 
   const html = await response.text();
   const parsedPreview = parsePreviewHtml(html.slice(0, 180000), url);
@@ -265,7 +242,6 @@ export function LinkPreview({
   const sourceUrl = useMemo(() => firstUrl(text), [text]);
   const [result, setResult] = useState<CachedLinkPreview>(() => fallbackPreview("", null));
   const [imageFailed, setImageFailed] = useState(false);
-  const [directImage, setDirectImage] = useState(false);
   const [presentedPreviewUrl, setPresentedPreviewUrl] = useState("");
   const onPreviewStateChangeRef = useRef(onPreviewStateChange);
 
@@ -275,7 +251,6 @@ export function LinkPreview({
 
   useEffect(() => {
     setImageFailed(false);
-    setDirectImage(false);
   }, [sourceUrl]);
 
   useEffect(() => {
@@ -317,7 +292,7 @@ export function LinkPreview({
     }
   })();
   const video = isVideoPreview(preview);
-  const imageUri = preview.image && !imageFailed ? displayImageUrl(preview.image, directImage) : "";
+  const imageUri = preview.image && !imageFailed ? displayImageUrl(preview.image) : "";
   const siteLabel = preview.siteName?.trim() || host || t("shared.linkPreview.link");
   const titleLabel = preview.title?.trim() && !samePreviewText(preview.title, siteLabel) ? preview.title.trim() : "";
   const descriptionLabel =
@@ -351,13 +326,7 @@ export function LinkPreview({
         <View style={{ backgroundColor: colors.line, height: 96, position: "relative", width: 116 }}>
           <Image
             accessibilityIgnoresInvertColors
-            onError={() => {
-              if (Platform.OS === "web" && !directImage) {
-                setDirectImage(true);
-                return;
-              }
-              setImageFailed(true);
-            }}
+            onError={() => setImageFailed(true)}
             resizeMode="cover"
             source={{ uri: imageUri }}
             style={{ height: "100%", width: "100%" }}

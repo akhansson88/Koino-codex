@@ -2,13 +2,11 @@ node_modules/
 functions/lib/
 functions/.secret.local
 .expo/
-dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 expo-web*.log
 .npm-cache/
-.sites-runtime/
 .env
 .env.*
 
@@ -17,11 +15,6 @@ expo-web*.log
 
 expo-env.d.ts
 # @end expo-cli
-
-# Local Netlify folder
-.netlify
-netlify/functions/*.zip
-netlify/functions/manifest.json
 
 # Local Codex/Expo navigation test logs
 community-nav-expo*.log

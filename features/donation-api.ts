@@ -1,5 +1,4 @@
 import * as WebBrowser from "expo-web-browser";
-import { Platform } from "react-native";
 
 export type DonationFrequency = "one_time" | "monthly";
 
@@ -13,7 +12,6 @@ export type DonationVerification = {
 };
 
 function endpoint(path: string) {
-  if (Platform.OS === "web") return path;
   const origin = process.env.EXPO_PUBLIC_DONATION_API_ORIGIN?.trim().replace(/\/$/, "");
   if (!origin) throw new Error("Betalning är inte konfigurerad för appen ännu.");
   return `${origin}${path}`;
@@ -46,14 +44,10 @@ export async function startDonationCheckout(
   const result = await donationRequest<CheckoutResult>("/api/donations/checkout", token, {
     amountSek,
     frequency,
-    platform: Platform.OS === "web" ? "web" : "native",
+    platform: "native",
   });
   if (!result.checkoutUrl?.startsWith("https://checkout.stripe.com/")) {
     throw new Error("Betaltjänsten returnerade en ogiltig adress.");
-  }
-  if (Platform.OS === "web") {
-    window.location.assign(result.checkoutUrl);
-    return;
   }
   await WebBrowser.openBrowserAsync(result.checkoutUrl, {
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
@@ -66,14 +60,10 @@ export async function verifyDonation(token: string | null, sessionId: string) {
 
 export async function openDonationPortal(token: string | null) {
   const result = await donationRequest<PortalResult>("/api/donations/portal", token, {
-    platform: Platform.OS === "web" ? "web" : "native",
+    platform: "native",
   });
   if (!result.portalUrl?.startsWith("https://billing.stripe.com/")) {
     throw new Error("Betaltjänsten returnerade en ogiltig adress.");
-  }
-  if (Platform.OS === "web") {
-    window.location.assign(result.portalUrl);
-    return;
   }
   await WebBrowser.openBrowserAsync(result.portalUrl, {
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,

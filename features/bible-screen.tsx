@@ -29,6 +29,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
+import bibleTopicIndexData from "@/assets/bible/topics-index.json";
 import {
   currentPlanDay,
   biblePlanDayRegionLabel,
@@ -512,18 +513,7 @@ function readerThemeLabel(themeId: BibleReaderThemeId, t: TranslationFunction) {
   return t("bible.settings.theme.light");
 }
 
-const productionBibleTopicApiOrigin = "https://koino-codex.akhansson.chatgpt.site";
 let bibleTopicIndexPromise: Promise<BibleTopicIndexItem[]> | undefined;
-
-function bibleTopicEndpoints(topic: string) {
-  const path = `/api/bible-topic?topic=${encodeURIComponent(topic)}&v=votes`;
-  return Platform.OS === "web" ? [path] : [`${productionBibleTopicApiOrigin}${path}`];
-}
-
-function bibleTopicIndexEndpoints() {
-  const path = "/data/topics-index.json";
-  return Platform.OS === "web" ? [path] : [`${productionBibleTopicApiOrigin}${path}`];
-}
 
 function bibleTopicKey(value: string) {
   return value
@@ -539,89 +529,63 @@ function bibleTopicVoteKey(topic: string, voteId: string) {
   return `${bibleTopicKey(topic)}:${voteId}`;
 }
 
+function bibleTopicSourceUrl(topic: string) {
+  return `https://www.openbible.info/topics/${encodeURIComponent(bibleTopicKey(topic))}`;
+}
+
+function decodeBibleTopicHtml(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function parseBibleTopicReferences(html: string): BibleTopicReference[] {
+  const references: BibleTopicReference[] = [];
+  const seen = new Set<string>();
+  const headingPattern = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
+  const referencePattern = /<a\b[^>]*class="[^"]*\bbibleref\b[^"]*"[^>]*>([^<]+)<\/a>/i;
+
+  for (const headingMatch of html.matchAll(headingPattern)) {
+    const heading = headingMatch[1];
+    const referenceMatch = heading.match(referencePattern);
+    if (!referenceMatch) continue;
+
+    const reference = decodeBibleTopicHtml(referenceMatch[1]);
+    if (!reference || seen.has(reference)) continue;
+    seen.add(reference);
+    const voteId = heading.match(/\bid=["']vote_u_([0-9]+(?:-[0-9]+)?)["']/i)?.[1];
+    const voteText = decodeBibleTopicHtml(heading.replace(/<[^>]+>/g, " "));
+    const votes = Number(voteText.match(/([\d,]+)\s+helpful\s+votes?/i)?.[1].replace(/,/g, "")) || 0;
+    references.push({ reference, votes, ...(voteId ? { voteId } : {}) });
+  }
+
+  return references.sort((left, right) => right.votes - left.votes || left.reference.localeCompare(right.reference));
+}
+
 async function fetchBibleTopicIndex() {
   if (!bibleTopicIndexPromise) {
-    bibleTopicIndexPromise = (async () => {
-      let lastError: unknown;
-      for (const endpoint of bibleTopicIndexEndpoints()) {
-        try {
-          const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
-          if (!response.ok) throw new Error(`Topic directory request failed with ${response.status}`);
-          const data = (await response.json()) as { topics?: unknown };
-          if (!Array.isArray(data.topics)) throw new Error("The topic directory is invalid.");
-          const topics = data.topics
-            .map((item): BibleTopicIndexItem | undefined => {
-              if (!item || typeof item !== "object") return undefined;
-              const candidate = item as Partial<BibleTopicIndexItem>;
-              if (typeof candidate.name !== "string" || typeof candidate.slug !== "string" || typeof candidate.letter !== "string") return undefined;
-              return {
-                letter: candidate.letter,
-                name: candidate.name,
-                passageCount: typeof candidate.passageCount === "number" ? candidate.passageCount : 0,
-                slug: candidate.slug,
-                verseCount: typeof candidate.verseCount === "number" ? candidate.verseCount : 0,
-              };
-            })
-            .filter((item): item is BibleTopicIndexItem => Boolean(item));
-          if (topics.length === 0) throw new Error("The topic directory is empty.");
-          return topics;
-        } catch (error) {
-          lastError = error;
-        }
-      }
-      throw lastError instanceof Error ? lastError : new Error("Could not load the topic directory.");
-    })().catch((error) => {
-      bibleTopicIndexPromise = undefined;
-      throw error;
-    });
+    bibleTopicIndexPromise = Promise.resolve(bibleTopicIndexData.topics as BibleTopicIndexItem[]);
   }
   return bibleTopicIndexPromise;
 }
 
 async function fetchBibleTopic(topic: string) {
-  let lastError: unknown;
-
-  for (const endpoint of bibleTopicEndpoints(topic)) {
-    try {
-      const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
-      const data = (await response.json().catch(() => ({}))) as Partial<Omit<BibleTopicResult, "references">> & { error?: string; references?: unknown };
-      if (!response.ok) {
-        throw new Error(data.error || `Topic request failed with ${response.status}`);
-      }
-      if (!Array.isArray(data.references)) {
-        throw new Error("The topic response did not include Bible references.");
-      }
-      const references = data.references
-        .map((item): BibleTopicReference | undefined => {
-          if (typeof item === "string") {
-            const reference = item.trim();
-            return reference ? { reference, votes: 0 } : undefined;
-          }
-          if (!item || typeof item !== "object") return undefined;
-          const candidate = item as { reference?: unknown; votes?: unknown; voteId?: unknown };
-          const reference = typeof candidate.reference === "string" ? candidate.reference.trim() : "";
-          if (!reference) return undefined;
-          return {
-            reference,
-            votes: typeof candidate.votes === "number" && Number.isFinite(candidate.votes) ? candidate.votes : 0,
-            voteId: typeof candidate.voteId === "string" && candidate.voteId.trim() ? candidate.voteId.trim() : undefined,
-          };
-        })
-        .filter((item): item is BibleTopicReference => Boolean(item))
-        .sort((a, b) => b.votes - a.votes || a.reference.localeCompare(b.reference));
-      return {
-        count: typeof data.count === "number" ? data.count : references.length,
-        references,
-        source: "openbible" as const,
-        sourceUrl: typeof data.sourceUrl === "string" ? data.sourceUrl : "",
-        topic: typeof data.topic === "string" ? data.topic : topic,
-      };
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error("Could not load this topic.");
+  const sourceUrl = bibleTopicSourceUrl(topic);
+  const response = await fetch(sourceUrl, { headers: { Accept: "text/html,application/xhtml+xml" } });
+  if (!response.ok) throw new Error(`Topic request failed with ${response.status}`);
+  const references = parseBibleTopicReferences((await response.text()).slice(0, 400_000));
+  if (references.length === 0) throw new Error("The topic response did not include Bible references.");
+  return {
+    count: references.length,
+    references,
+    source: "openbible" as const,
+    sourceUrl,
+    topic,
+  };
 }
 
 async function searchBibleTopicText(topic: string, bibleVersionId: BibleVersionId): Promise<BibleTopicReference[]> {
@@ -650,22 +614,19 @@ async function searchBibleTopicText(topic: string, bibleVersionId: BibleVersionI
 }
 
 async function submitBibleTopicVote(topic: string, voteId: string, value: BibleTopicVoteValue) {
-  let lastError: unknown;
-  for (const endpoint of bibleTopicEndpoints(topic)) {
-    try {
-      const response = await fetch(endpoint, {
-        body: JSON.stringify({ topic, value, voteId }),
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; ok?: boolean };
-      if (!response.ok || data.ok !== true) throw new Error(data.error || `Vote request failed with ${response.status}`);
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("Could not submit this vote.");
+  const slug = bibleTopicKey(topic);
+  const sourceUrl = bibleTopicSourceUrl(topic);
+  const topicResponse = await fetch(sourceUrl, { headers: { Accept: "text/html,application/xhtml+xml" } });
+  if (!topicResponse.ok) throw new Error(`Topic validation failed with ${topicResponse.status}`);
+  const topicHtml = (await topicResponse.text()).slice(0, 400_000);
+  const databaseCode = topicHtml.match(/\bid=["']db["'][^>]*\bvalue=["']([^"']+)["']/i)?.[1] || "dy";
+  const voteButtonId = `vote_${value === 1 ? "u" : "d"}_${voteId}`;
+  const response = await fetch(`https://www.openbible.info/topics/tools/vote?w=${encodeURIComponent(slug)}`, {
+    body: new URLSearchParams({ db: databaseCode, id: voteButtonId, word: slug }).toString(),
+    headers: { Accept: "*/*", "Content-Type": "application/x-www-form-urlencoded" },
+    method: "POST",
+  });
+  if (!response.ok) throw new Error(`Vote request failed with ${response.status}`);
 }
 
 function topicTitle(value: string) {
