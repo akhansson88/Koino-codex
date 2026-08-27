@@ -18,6 +18,7 @@
     "ios": "expo start --ios",
     "doctor": "npx expo-doctor",
     "validate:bible-search": "node scripts/validate-bible-search.mjs",
+    "test:donations": "node --test scripts/donation-api.test.cjs",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "npm --prefix functions run build",
     "test:functions": "npm --prefix functions test"

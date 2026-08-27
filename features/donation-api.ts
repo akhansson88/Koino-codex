@@ -23,10 +23,21 @@ const donationStatusCache = new Map<string, DonationStatusCacheEntry>();
 const donationStatusRequests = new Map<string, Promise<DonationStatus>>();
 const donationStatusCacheMs = 2 * 60 * 1000;
 
+// Public API address, not a Stripe secret. Expo Go does not require a local .env.
+const defaultDonationApiOrigin = "https://koino-community.netlify.app";
+
 function endpoint(path: string) {
-  const origin = process.env.EXPO_PUBLIC_DONATION_API_ORIGIN?.trim().replace(/\/$/, "");
-  if (!origin) throw new Error("Betalning är inte konfigurerad för appen ännu.");
-  return `${origin}${path}`;
+  const origin = process.env.EXPO_PUBLIC_DONATION_API_ORIGIN?.trim() || defaultDonationApiOrigin;
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    throw new Error("Betaltjänstens adress är felaktigt konfigurerad. Kontakta KOINO.");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("Betaltjänstens adress är felaktigt konfigurerad. Kontakta KOINO.");
+  }
+  return `${url.origin}${path}`;
 }
 
 async function openDonationBrowser(url: string) {
@@ -47,9 +58,11 @@ async function openDonationBrowser(url: string) {
 
 async function donationRequest<T>(path: string, token: string | null, body: unknown, fallbackMessage = "Betalningen kunde inte startas. Försök igen om en stund."): Promise<T> {
   if (!token) throw new Error("Logga in igen för att fortsätta med gåvan.");
+  // Keep configuration errors distinct from connectivity failures.
+  const requestUrl = endpoint(path);
   let response: Response;
   try {
-    response = await fetch(endpoint(path), {
+    response = await fetch(requestUrl, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
