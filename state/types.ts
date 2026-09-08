@@ -111,6 +111,7 @@ export type BiblePlanRange = {
 export type BiblePlanDay = {
   dayNumber: number;
   ranges: BiblePlanRange[];
+  scheduledDate?: string;
   completedAt?: string;
 };
 
@@ -118,6 +119,7 @@ export type BiblePlanStatus = "saved" | "active" | "completed";
 export type BiblePlanSource = "personal" | "group";
 
 export type BiblePlan = {
+  pausedAt?: string;
   id: Id;
   userId: Id;
   title: string;

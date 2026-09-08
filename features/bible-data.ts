@@ -3,7 +3,6 @@ import {
   compressedCrossReferences,
   compressedKjvVerses,
   compressedReformationsbibelnVerses,
-  compressedSv1917Verses,
 } from "./.generated/bible-data";
 
 const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -34,7 +33,6 @@ function parseCompressedJson<T>(value: string): T {
 
 export const kjvVerseMap = parseCompressedJson<Record<string, string>>(compressedKjvVerses);
 export const reformationsbibelnVerseMap = parseCompressedJson<Record<string, string>>(compressedReformationsbibelnVerses);
-export const sv1917VerseMap = parseCompressedJson<Record<string, string>>(compressedSv1917Verses);
 export const crossReferenceMap = parseCompressedJson<{
   references: Record<string, Array<{ verse: string; votes: number }>>;
 }>(compressedCrossReferences);

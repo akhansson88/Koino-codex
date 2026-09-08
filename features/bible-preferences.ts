@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { isBibleVersionId, type BibleVersionId } from "@/features/bible-kjv";
 
-export const defaultBibleVersionId: BibleVersionId = "sv1917";
+export const defaultBibleVersionId: BibleVersionId = "reformationsbibeln2026";
 
 export function readerStorageKey(userId?: string) {
   return userId ? `koino.bibleReader.${userId}` : undefined;
