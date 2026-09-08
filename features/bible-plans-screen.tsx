@@ -4,14 +4,16 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import {
+  buildBiblePlanDays,
   completionPercent,
-  currentPlanDay,
+  dayKeyForPlanDay,
   firstPositionForPlanDay,
   makeBiblePlanRange,
   todayDateKey,
 } from "@/features/bible-plans";
 import { kjvBooks, normalizeBiblePosition, versesForChapter, type BiblePosition } from "@/features/bible-kjv";
 import { useKoino } from "@/state/koino-store";
+import { isPlanDate, nextUnreadPlanDay, todayPlanDay, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import type { BiblePlan, BiblePlanRange, GroupBiblePlanAnnouncement } from "@/state/types";
 import { AppScreen, BodyText, Card, FilterChips, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
@@ -138,6 +140,8 @@ export function BiblePlansScreen() {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
   const [tab, setTab] = useState<PlanTab>("active");
+  const [creating, setCreating] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
   const [title, setTitle] = useState("");
   const [dayCount, setDayCount] = useState("7");
   const [startDate, setStartDate] = useState(todayDateKey());
@@ -159,23 +163,23 @@ export function BiblePlansScreen() {
     if (tab === "active") return plan.status === "active";
     return plan.status === tab;
   });
-  const ranges = rangeDrafts.map(rangeFromDraft);
-  const canCreate = title.trim().length > 0 && ranges.length > 0 && Number(dayCount) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(startDate);
+  const ranges = useMemo(() => rangeDrafts.map(rangeFromDraft), [rangeDrafts]);
+  const validDayCount = Number.isInteger(Number(dayCount)) && Number(dayCount) > 0 && Number(dayCount) <= 3660;
+  const canCreate = !savingPlan && title.trim().length > 0 && ranges.length > 0 && validDayCount && isPlanDate(startDate);
 
   async function createPlan() {
     if (!canCreate) return;
-    await dispatch({
-      type: "createBiblePlan",
-      title,
-      ranges,
-      dayCount: Number(dayCount),
-      startDate,
-    });
-    setTitle("");
-    setDayCount("7");
-    setStartDate(todayDateKey());
-    setRangeDrafts([firstRangeDraft()]);
-    setTab("active");
+    setSavingPlan(true);
+    try {
+      await dispatch({ type: "createBiblePlan", title, ranges, dayCount: Number(dayCount), startDate });
+      setTitle("");
+      setDayCount("7");
+      setStartDate(todayDateKey());
+      setRangeDrafts([firstRangeDraft()]);
+      setTab("active");
+      setCreating(false);
+    } catch { /* The store exposes the save error; keep the draft open. */ }
+    finally { setSavingPlan(false); }
   }
 
   function updateRange(id: string, side: "start" | "end", next: BiblePosition) {
@@ -203,7 +207,10 @@ export function BiblePlansScreen() {
         <BodyText muted>{t("bible.plans.description")}</BodyText>
       </View>
 
-      <CreatePlanCard
+      <SecondaryButton icon={creating ? "x" : "plus"} disabled={savingPlan} onPress={() => setCreating(!creating)}>
+        {t(creating ? "bible.plans.confirm.cancel" : "bible.plans.create.action")}
+      </SecondaryButton>
+      {creating ? <CreatePlanCard
         canCreate={canCreate}
         dayCount={dayCount}
         onAddRange={addRange}
@@ -216,9 +223,10 @@ export function BiblePlansScreen() {
         rangeDrafts={rangeDrafts}
         startDate={startDate}
         title={title}
-      />
+      /> : null}
 
       <FilterChips options={tabs} value={tab} onChange={setTab} />
+      {state.authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{state.authError}</Text> : null}
 
       {tab === "group" ? (
         <View style={{ gap: 12 }}>
@@ -276,10 +284,13 @@ export function BiblePlansScreen() {
                   onConfirm: () => dispatch({ type: "deleteBiblePlan", id: plan.id }),
                 })
               }
-              onJump={() => {
-                const position = firstPositionForPlanDay(currentPlanDay(plan)?.day);
-                if (position) router.push("/(tabs)/bible" as never);
+              onJump={(dayNumber) => {
+                const day = plan.days.find((item) => item.dayNumber === dayNumber);
+                if (firstPositionForPlanDay(day)) router.push({ pathname: "/(tabs)/bible", params: { planId: plan.id, planDay: String(dayNumber), planJump: String(Date.now()) } });
               }}
+              onMarkDay={(dayNumber, read) => dispatch({ type: "markBiblePlanDay", planId: plan.id, dayNumber, read })}
+              onPause={() => dispatch({ type: "pauseBiblePlan", planId: plan.id })}
+              onReschedule={(date) => dispatch({ type: "rescheduleBiblePlan", planId: plan.id, startDate: date })}
               plan={plan}
             />
           ))}
@@ -317,6 +328,11 @@ function CreatePlanCard({
   title: string;
 }) {
   const { t } = useAppTranslation();
+  const preview = useMemo(() => {
+    const count = Number(dayCount);
+    return Number.isInteger(count) && count > 0 && count <= 3660 ? buildBiblePlanDays(rangeDrafts.map(rangeFromDraft), count) : [];
+  }, [dayCount, rangeDrafts]);
+  const emptyDays = preview.filter((day) => !day.ranges.length).length;
 
   return (
     <Card>
@@ -350,6 +366,18 @@ function CreatePlanCard({
       <SecondaryButton icon="plus" onPress={onAddRange}>
         {t("bible.plans.create.addPassage")}
       </SecondaryButton>
+      <SectionHeading>{t("bible.plans.preview")}</SectionHeading>
+      {!isPlanDate(startDate) || !preview.length ? <BodyText muted>{t("bible.plans.invalidSchedule")}</BodyText> : (
+        <>
+          {emptyDays > 0 ? <BodyText>{t("bible.plans.emptyDays", { count: emptyDays })}</BodyText> : null}
+          <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+            {preview.map((day) => <View key={day.dayNumber} style={{ paddingVertical: 8, gap: 4 }}>
+              <Text style={[typography.label, { color: colors.ink }]}>{t("bible.plans.checklist.day", { day: day.dayNumber })} · {dayKeyForPlanDay({ startDate }, day.dayNumber)}</Text>
+              <BodyText muted>{day.ranges.map((range) => range.displayReference).join("; ") || t("bible.plans.plan.noReading")}</BodyText>
+            </View>)}
+          </ScrollView>
+        </>
+      )}
       <PrimaryButton disabled={!canCreate} icon="calendar" onPress={onCreate}>
         {t("bible.plans.create.action")}
       </PrimaryButton>
@@ -463,18 +491,34 @@ function PlanCard({
   onAnnounce,
   onDelete,
   onJump,
+  onMarkDay,
+  onPause,
+  onReschedule,
   plan,
 }: {
   canAnnounce: boolean;
   onAnnounce: () => void;
   onDelete: () => void;
-  onJump: () => void;
+  onJump: (dayNumber: number) => void;
+  onMarkDay: (dayNumber: number, read: boolean) => Promise<void>;
+  onPause: () => Promise<void>;
+  onReschedule: (date: string) => Promise<void>;
   plan: BiblePlan;
 }) {
   const { language, t } = useAppTranslation();
+  const [saving, setSaving] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [restartDate, setRestartDate] = useState(todayDateKey());
   const completed = completedCount(plan);
   const percent = completionPercent(completed, plan.days.length);
-  const current = currentPlanDay(plan);
+  const today = todayPlanDay(plan, todayDateKey());
+  const next = nextUnreadPlanDay(plan);
+  const schedulePreview = isPlanDate(restartDate) ? rescheduleBiblePlan(plan, restartDate).filter((day) => !day.completedAt) : [];
+  async function changeSchedule(action: () => Promise<void>) {
+    setSaving(true);
+    try { await action(); setScheduleOpen(false); } catch { /* Keep controls open; the store exposes the error. */ }
+    finally { setSaving(false); }
+  }
 
   return (
     <Card>
@@ -496,16 +540,77 @@ function PlanCard({
       <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 8, overflow: "hidden" }}>
         <View style={{ backgroundColor: colors.gold, height: 8, width: `${percent}%` }} />
       </View>
-      <BodyText muted>{current?.day ? t("bible.plans.plan.today", { day: current.day.dayNumber }) : t("bible.plans.plan.noReading")}</BodyText>
+      {plan.pausedAt ? <BodyText>{t("bible.plans.paused")}</BodyText> : null}
+      <BodyText muted>{today ? t("bible.plans.plan.today", { day: today.dayNumber }) : t("bible.plans.noToday")}</BodyText>
+      <BodyText muted>{next ? t("bible.plans.nextDay", { day: next.dayNumber }) : t("bible.plans.noUnread")}</BodyText>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <SecondaryButton icon="book-open" onPress={onJump} style={{ flex: 1 }}>
-          {t("bible.plans.plan.read")}
+        <SecondaryButton disabled={!today?.ranges?.length} icon="calendar" onPress={() => today && onJump(today.dayNumber)} style={{ flex: 1 }}>
+          {t("bible.plans.today")}
         </SecondaryButton>
+        <SecondaryButton disabled={!next} icon="book-open" onPress={() => next && onJump(next.dayNumber)} style={{ flex: 1 }}>
+          {t("bible.plans.nextUnread")}
+        </SecondaryButton>
+      </View>
+      <View style={{ gap: 10 }}>
         {canAnnounce ? (
           <PrimaryButton icon="users" onPress={onAnnounce} style={{ flex: 1 }}>
             {t("bible.plans.plan.share")}
           </PrimaryButton>
         ) : null}
+      </View>
+      {plan.status !== "completed" ? <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <SecondaryButton disabled={saving} icon={plan.pausedAt ? "play" : "pause"} onPress={() => changeSchedule(plan.pausedAt ? () => onReschedule(todayDateKey()) : onPause)} style={{ flex: 1 }}>
+            {t(plan.pausedAt ? "bible.plans.resume" : "bible.plans.pause")}
+          </SecondaryButton>
+          <SecondaryButton disabled={saving} icon="calendar" onPress={() => setScheduleOpen(!scheduleOpen)} style={{ flex: 1 }}>
+            {t("bible.plans.reschedule")}
+          </SecondaryButton>
+        </View>
+        {plan.pausedAt || scheduleOpen ? <BodyText muted>{t("bible.plans.scheduleHelp")}</BodyText> : null}
+        {scheduleOpen ? <View style={{ gap: 10 }}>
+          <Text style={[typography.label, { color: colors.ink }]}>{t("bible.plans.restartDate")}</Text>
+          <TextInputField value={restartDate} onChangeText={setRestartDate} placeholder="YYYY-MM-DD" />
+          {!isPlanDate(restartDate) ? <BodyText>{t("bible.plans.invalidSchedule")}</BodyText> : <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+            {schedulePreview.map((day) => <BodyText muted key={day.dayNumber}>{t("bible.plans.checklist.day", { day: day.dayNumber })} · {day.scheduledDate}</BodyText>)}
+          </ScrollView>}
+          <PrimaryButton disabled={saving || !isPlanDate(restartDate)} onPress={() => changeSchedule(() => onReschedule(restartDate))}>
+            {t("bible.plans.applySchedule")}
+          </PrimaryButton>
+        </View> : null}
+      </View> : null}
+      <View style={{ gap: 10 }}>
+        {plan.days.map((day) => {
+          const read = Boolean(day.completedAt);
+          return (
+            <View key={day.dayNumber} style={{ borderTopWidth: 1, borderColor: colors.line, paddingTop: 12, gap: 6 }}>
+              <Text style={[typography.label, { color: colors.ink }]}>
+                {t("bible.plans.checklist.day", { day: day.dayNumber })} · {formatPlanDate(dayKeyForPlanDay(plan, day.dayNumber), language)}
+              </Text>
+              {day.ranges.map((range) => <BodyText muted key={range.id}>{range.displayReference}</BodyText>)}
+              {!day.ranges.length ? <BodyText muted>{t("bible.plans.plan.noReading")}</BodyText> : null}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <SecondaryButton disabled={!day.ranges.length} icon="book-open" onPress={() => onJump(day.dayNumber)} style={{ flex: 1 }}>
+                  {t("bible.plans.plan.read")}
+                </SecondaryButton>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: read, disabled: saving }}
+                  accessibilityLabel={`${t("bible.plans.checklist.day", { day: day.dayNumber })}: ${t(read ? "bible.plans.markUnread" : "bible.plans.markRead")}`}
+                  disabled={saving}
+                  onPress={async () => {
+                    setSaving(true);
+                    try { await onMarkDay(day.dayNumber, !read); } finally { setSaving(false); }
+                  }}
+                  style={{ flex: 1, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: saving ? 0.5 : 1 }}
+                >
+                  <Feather name={read ? "check-square" : "square"} size={20} color={colors.olive} />
+                  <Text style={[typography.label, { color: colors.olive }]}>{t(read ? "bible.plans.markUnread" : "bible.plans.markRead")}</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
       </View>
     </Card>
   );

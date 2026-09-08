@@ -9,6 +9,7 @@
     ],
     "orientation": "portrait",
     "scheme": "koino",
+    "icon": "./koino-logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -24,14 +25,15 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./koino-logo.png",
         "backgroundColor": "#F7EFE4"
       },
-      "package": "com.akhansson.koinomvp"
+      "package": "com.akhansson.koinomvp",
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-audio",
       [
         "expo-image-picker",
         {
@@ -39,11 +41,22 @@
         }
       ],
       "expo-web-browser",
-      "expo-secure-store",
       "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "587506fb-be73-46b3-a680-0207aadeb2cf"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf"
     }
   }
 }

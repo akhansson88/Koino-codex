@@ -6,6 +6,8 @@ import { get, getDatabase, onValue, ref, remove, runTransaction, set, update } f
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
+import { updateBiblePlanProgress } from "@/state/bible-plan-progress";
+import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
@@ -139,6 +141,8 @@ type Action =
   | { type: "updateBiblePlan"; id: Id; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
   | { type: "deleteBiblePlan"; id: Id }
   | { type: "markBiblePlanDay"; planId: Id; dayNumber: number; read: boolean }
+  | { type: "pauseBiblePlan"; planId: Id }
+  | { type: "rescheduleBiblePlan"; planId: Id; startDate: string }
   | { type: "announceBiblePlan"; planId: Id }
   | { type: "unannounceBiblePlan"; announcementId: Id }
   | { type: "joinGroupBiblePlan"; announcementId: Id }
@@ -781,7 +785,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }),
       onValue(biblePlansRef, (snapshot) =>
         setBiblePlans(
-          asArray<BiblePlan>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
+          asArray<BiblePlan>(snapshot.val()).map((plan) => ({ ...plan, days: (plan.days ?? []).map((day) => ({ ...day, ranges: day.ranges ?? [] })) })).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
         ),
       ),
       onValue(participantIdsRef, (snapshot) => setGroupBiblePlanParticipantIds((snapshot.val() as Record<Id, Id> | null) ?? {})),
@@ -1820,6 +1824,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "createBiblePlan": {
               if (!firebaseUser || !action.title.trim() || action.ranges.length === 0) return;
+              if (!isPlanDate(action.startDate) || !Number.isInteger(action.dayCount) || action.dayCount < 1 || action.dayCount > 3660) throw new Error("Choose a valid date and between 1 and 3660 days.");
               const timestamp = now();
               const planId = id("bibleplan");
               const dayCount = Math.max(1, Math.floor(action.dayCount));
@@ -1880,16 +1885,29 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database), updates);
               return;
             }
+            case "pauseBiblePlan":
+            case "rescheduleBiblePlan": {
+              if (!firebaseUser) return;
+              const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
+              if (!plan || plan.status === "completed") return;
+              const timestamp = now();
+              if (action.type === "rescheduleBiblePlan" && !isPlanDate(action.startDate)) throw new Error("Use a valid date in YYYY-MM-DD format.");
+              await runTransaction(ref(database, `biblePlans/${firebaseUser.uid}/${plan.id}`), (current: BiblePlan | null) => {
+                if (!current || current.status === "completed") return;
+                if (action.type === "pauseBiblePlan") return { ...current, pausedAt: current.pausedAt ?? timestamp, updatedAt: timestamp };
+                const { pausedAt, ...resumed } = current;
+                return { ...resumed, days: rescheduleBiblePlan(current, action.startDate), updatedAt: timestamp };
+              });
+              return;
+            }
             case "markBiblePlanDay": {
               if (!firebaseUser) return;
               const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
-              if (!plan) return;
+              if (!plan || !plan.days.some((day) => day.dayNumber === action.dayNumber)) return;
               const timestamp = now();
-              const days = plan.days.map((day) =>
-                day.dayNumber === action.dayNumber ? { ...day, completedAt: action.read ? day.completedAt ?? timestamp : undefined } : day,
-              );
-              const status = planCompletionStatus(days);
-              const completedAt = status === "completed" ? plan.completedAt ?? timestamp : undefined;
+              const progress = updateBiblePlanProgress(plan, action.dayNumber, action.read, timestamp);
+              if (!progress) return;
+              const { days, status, completedAt } = progress;
               const updates: Record<string, unknown> = {
                 [`biblePlans/${firebaseUser.uid}/${plan.id}/days`]: days,
                 [`biblePlans/${firebaseUser.uid}/${plan.id}/status`]: status,
@@ -2034,6 +2052,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       } catch (error) {
         setAuthError(authMessage(error));
         if (
+          action.type === "createBiblePlan" ||
+          action.type === "pauseBiblePlan" ||
+          action.type === "rescheduleBiblePlan" ||
           action.type === "requestPasswordReset" ||
           action.type === "confirmPasswordReset" ||
           action.type === "changePassword" ||

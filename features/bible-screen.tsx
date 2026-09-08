@@ -1,12 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { File, Paths } from "expo-file-system";
-import * as FileSystem from "expo-file-system/legacy";
-import * as SecureStore from "expo-secure-store";
-import { router, useNavigation } from "expo-router";
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { router, useNavigation, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -27,9 +23,9 @@ import {
   ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import bibleTopicIndexData from "@/assets/bible/topics-index.json";
+import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
 import {
   currentPlanDay,
   biblePlanDayRegionLabel,
@@ -72,7 +68,6 @@ import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHead
 import { confirmAction } from "@/ui/confirm";
 import { useAppTranslation } from "@/ui/app-language";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
-import { openLinkInApp } from "@/ui/open-link";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
 import { colors, platformShadow, radius, themes, type ThemeName } from "@/ui/theme";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
@@ -109,9 +104,6 @@ type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save" | "sh
 
 type BibleReaderPreferences = {
   appTheme?: ThemeName;
-  audioPosition: BiblePosition;
-  audioVoiceId: string;
-  audioVoiceName?: string;
   bibleVersionId: BibleVersionId;
   compactMode: boolean;
   fontId: BibleReaderFontId;
@@ -124,35 +116,6 @@ type BibleReaderPreferences = {
 };
 
 type BibleReaderThemePreference = Pick<BibleReaderPreferences, "appTheme" | "readerTheme">;
-
-type AudioPlaybackState = "idle" | "preparing" | "playing" | "paused" | "error";
-
-type AudioVoice = {
-  description?: string;
-  id: string;
-  languageName?: string;
-  name: string;
-};
-
-type AudioBridgeMessage =
-  | { type: "ready" }
-  | { type: "voices"; requestId: string; voices: unknown }
-  | { type: "audio"; base64: string; mimeType?: string; requestId: string }
-  | { chunk: string; index: number; requestId: string; type: "audio-chunk" }
-  | { mimeType?: string; requestId: string; totalChunks: number; type: "audio-start" }
-  | { requestId: string; type: "audio-end" }
-  | { message?: string; requestId: string; type: "interaction" }
-  | { type: "error"; message?: string; requestId?: string };
-
-type AudioBridgeCommand =
-  | { token: string; type: "setAuthToken" }
-  | { type: "listVoices"; requestId: string }
-  | { requiresGesture?: boolean; text: string; type: "synthesize"; requestId: string; voiceId: string };
-
-type PendingAudioTransfer = {
-  chunks: string[];
-  totalChunks: number;
-};
 
 type BibleTopicResult = {
   count: number;
@@ -210,19 +173,6 @@ const oldTestamentBookCount = 39;
 const minFontSize = 16;
 const maxFontSize = 28;
 const fontSizeStep = 2;
-const elevenLabsTurboModel = "eleven_turbo_v2_5";
-const puterDashboardUrl = "https://puter.com/dashboard#account";
-const defaultAudioVoice: AudioVoice = { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", description: "Warm and steady" };
-const fallbackAudioVoices: AudioVoice[] = [
-  defaultAudioVoice,
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", description: "Clear sample voice" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella", description: "Soft and bright" },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", description: "Calm narration" },
-  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli", description: "Gentle reading" },
-  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh", description: "Grounded voice" },
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", description: "Deep narration" },
-  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam", description: "Measured tone" },
-];
 
 type ReaderToast = {
   detail?: string;
@@ -326,10 +276,6 @@ function highlightTime(highlight: BibleHighlight) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function puterTokenStorageKey(userId?: string) {
-  return userId ? `koino.puterAuthToken.${userId}` : "koino.puterAuthToken";
-}
-
 function isReaderFontId(value: unknown): value is BibleReaderFontId {
   return typeof value === "string" && readerFonts.some((font) => font.id === value);
 }
@@ -348,47 +294,9 @@ function normalizeFontSize(value: unknown) {
   return minFontSize + Math.round((clamped - minFontSize) / fontSizeStep) * fontSizeStep;
 }
 
-function normalizeStoredVoice(id: unknown, name: unknown): AudioVoice {
-  const voiceId = typeof id === "string" && id.trim().length > 0 ? id : defaultAudioVoice.id;
-  const voiceName = typeof name === "string" && name.trim().length > 0 ? name : fallbackAudioVoices.find((voice) => voice.id === voiceId)?.name ?? defaultAudioVoice.name;
-  return { id: voiceId, name: voiceName };
-}
-
-function normalizeBridgeVoices(value: unknown): AudioVoice[] {
-  if (!Array.isArray(value)) return fallbackAudioVoices;
-
-  const voices = value
-    .map((item): AudioVoice | undefined => {
-      if (!item || typeof item !== "object") return undefined;
-      const candidate = item as {
-        category?: unknown;
-        description?: unknown;
-        id?: unknown;
-        language?: { name?: unknown };
-        name?: unknown;
-      };
-      if (typeof candidate.id !== "string" || candidate.id.trim().length === 0) return undefined;
-      const name = typeof candidate.name === "string" && candidate.name.trim().length > 0 ? candidate.name : candidate.id;
-      const description =
-        typeof candidate.description === "string" && candidate.description.trim().length > 0
-          ? candidate.description
-          : typeof candidate.category === "string" && candidate.category.trim().length > 0
-            ? candidate.category
-            : undefined;
-      const languageName = typeof candidate.language?.name === "string" ? candidate.language.name : undefined;
-      return { description, id: candidate.id, languageName, name };
-    })
-    .filter((item): item is AudioVoice => Boolean(item));
-
-  return voices.length > 0 ? voices.slice(0, 30) : fallbackAudioVoices;
-}
-
 function parsePreferences(value: string | null): BibleReaderPreferences {
   if (!value) {
     return {
-      audioPosition: defaultPosition,
-      audioVoiceId: defaultAudioVoice.id,
-      audioVoiceName: defaultAudioVoice.name,
       bibleVersionId: defaultBibleVersionId,
       compactMode: defaultCompactMode,
       fontId: defaultFontId,
@@ -403,13 +311,9 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
 
   try {
     const parsed = JSON.parse(value) as Partial<BibleReaderPreferences> | null;
-    const storedVoice = normalizeStoredVoice(parsed?.audioVoiceId, parsed?.audioVoiceName);
     const position = normalizeBiblePosition(parsed?.position);
     return {
       appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
-      audioPosition: normalizeBiblePosition(parsed?.audioPosition ?? position),
-      audioVoiceId: storedVoice.id,
-      audioVoiceName: storedVoice.name,
       bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
       compactMode: typeof parsed?.compactMode === "boolean" ? parsed.compactMode : defaultCompactMode,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
@@ -422,9 +326,6 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
     };
   } catch {
     return {
-      audioPosition: defaultPosition,
-      audioVoiceId: defaultAudioVoice.id,
-      audioVoiceName: defaultAudioVoice.name,
       bibleVersionId: defaultBibleVersionId,
       compactMode: defaultCompactMode,
       fontId: defaultFontId,
@@ -490,13 +391,11 @@ function testamentForBook(bookName: string): TestamentFilter {
 
 function bibleVersionShortLabel(versionId: BibleVersionId) {
   if (versionId === "reformationsbibeln2026") return "RB26";
-  if (versionId === "sv1917") return "1917";
   return "KJV";
 }
 
 function bibleVersionDescription(versionId: BibleVersionId, t: TranslationFunction) {
   if (versionId === "reformationsbibeln2026") return t("bible.version.description.reformationsbibeln2026");
-  if (versionId === "sv1917") return t("bible.version.description.sv1917");
   return t("bible.version.description.kjv");
 }
 
@@ -871,28 +770,20 @@ function BibleSheetTop({
 }
 
 export function BibleScreen() {
+  const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
+  const handledPlanJump = useRef<string | undefined>(undefined);
+  const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
   const { state, dispatch } = useKoino();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
-  const audioPlayer = useAudioPlayer(null, { keepAudioSessionActive: true, updateInterval: 250 });
-  const audioStatus = useAudioPlayerStatus(audioPlayer);
   const scrollRef = useRef<ScrollView>(null);
-  const audioBridgeRef = useRef<WebView>(null);
-  const activeAudioRequestRef = useRef<string | undefined>(undefined);
-  const audioFinishHandledRef = useRef(false);
-  const audioFileRef = useRef<File | undefined>(undefined);
-  const audioPrepareTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const audioServiceConnectedRef = useRef(false);
-  const pendingAudioTransfersRef = useRef<Record<string, PendingAudioTransfer>>({});
-  const bridgeReadyRef = useRef(false);
   const verseOffsetsRef = useRef<Record<number, number>>({});
   const verseRowsRef = useRef<Record<number, MeasurableView | null>>({});
   const readerScrollOffsetRef = useRef(0);
   const pendingScrollVerseRef = useRef<number | undefined>(undefined);
   const positionRef = useRef<BiblePosition>(defaultPosition);
-  const audioPositionRef = useRef<BiblePosition>(defaultPosition);
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const topicRequestRef = useRef(0);
@@ -902,7 +793,6 @@ export function BibleScreen() {
   const verseLongPressActiveRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
-  const [audioPosition, setAudioPosition] = useState<BiblePosition>(defaultPosition);
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
@@ -923,16 +813,6 @@ export function BibleScreen() {
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [reflectionText, setReflectionText] = useState("");
-  const [audioError, setAudioError] = useState<string | undefined>();
-  const [audioPlaybackState, setAudioPlaybackState] = useState<AudioPlaybackState>("idle");
-  const [audioVoice, setAudioVoice] = useState<AudioVoice>(defaultAudioVoice);
-  const [audioVoices, setAudioVoices] = useState<AudioVoice[]>(fallbackAudioVoices);
-  const [authTokenInput, setAuthTokenInput] = useState("");
-  const [bridgeOverlayVisible, setBridgeOverlayVisible] = useState(false);
-  const [bridgeReady, setBridgeReady] = useState(false);
-  const [puterAuthToken, setPuterAuthToken] = useState<string | undefined>();
-  const [puterTokenModalVisible, setPuterTokenModalVisible] = useState(false);
-  const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [crossReferencePosition, setCrossReferencePosition] = useState<BiblePosition | undefined>();
   const [topicsVisible, setTopicsVisible] = useState(false);
   const [topicDetailVisible, setTopicDetailVisible] = useState(false);
@@ -957,29 +837,34 @@ export function BibleScreen() {
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
-  const [audioControlsHeight, setAudioControlsHeight] = useState(58);
   const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
   const persistedAppThemeRef = useRef<ThemeName | undefined>(undefined);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
-  const puterTokenKey = useMemo(() => puterTokenStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
   const readerPalette = readerPaletteFor(effectiveReaderTheme);
   const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
   const activeBiblePlans = useMemo(
-    () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId && plan.status === "active"),
+    () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId),
     [state.biblePlans, state.currentUserId],
   );
   const selectedPlan = useMemo(
     () => activeBiblePlans.find((plan) => plan.id === selectedPlanId) ?? activeBiblePlans[0],
     [activeBiblePlans, selectedPlanId],
   );
-  const selectedPlanCurrentDay = useMemo(() => (selectedPlan ? currentPlanDay(selectedPlan) : undefined), [selectedPlan]);
+  const selectedPlanCurrentDay = useMemo(() => {
+    if (!selectedPlan) return undefined;
+    const defaultDay = todayPlanDay(selectedPlan, todayDateKey()) ?? nextUnreadPlanDay(selectedPlan);
+    const index = selectedPlan.days.findIndex((day) => day.dayNumber === (selectedPlanDayNumber ?? defaultDay?.dayNumber));
+    return index >= 0
+      ? { day: selectedPlan.days[index], index, isBeforeStart: false, isAfterEnd: false }
+      : currentPlanDay(selectedPlan);
+  }, [selectedPlan, selectedPlanDayNumber]);
   const selectedPlanMarkers = useMemo(
-    () => (selectedPlan ? planMarkersForChapter(selectedPlan, position) : []),
-    [position, selectedPlan],
+    () => (selectedPlan ? planMarkersForChapter(selectedPlan, position, selectedPlanCurrentDay?.day) : []),
+    [position, selectedPlan, selectedPlanCurrentDay],
   );
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
@@ -1046,46 +931,19 @@ export function BibleScreen() {
   const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition, bibleVersionId) : []), [bibleVersionId, crossReferencePosition]);
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
-  const previousAudioChapter = useMemo(() => previousBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
-  const nextAudioChapter = useMemo(() => nextBibleChapter(audioPosition.book, audioPosition.chapter), [audioPosition.book, audioPosition.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
   const effectiveFontSize = compactMode ? Math.max(minFontSize, fontSize - 1) : fontSize;
   const readerLineHeight = Math.round(effectiveFontSize * (compactMode ? 1.48 : 1.62));
   const contentWidth = width >= 780 ? 720 : undefined;
-  const audioIsPreparing = audioPlaybackState === "preparing";
-  const audioIsPlaying = audioPlaybackState === "playing";
-  const audioMiniPlayerVisible = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const audioMiniPlayerRendered = audioMiniPlayerVisible && !selectedVerseBarVisible;
-  const chapterControlsVisible = !audioMiniPlayerVisible && !selectedVerseBarVisible;
+  const chapterControlsVisible = !selectedVerseBarVisible;
   const floatingControlsBottom = Math.max(92, insets.bottom + 72);
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
-    : audioMiniPlayerRendered
-      ? audioControlsHeight
-      : chapterControlsHeight;
+    : chapterControlsHeight;
   const readerBottomPadding = Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
   const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
-  const audioHighlightActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
   const readerCanGoBack = navigation.canGoBack();
-  const audioStatusLabel =
-    audioPlaybackState === "preparing"
-      ? bridgeOverlayVisible
-        ? "Complete the voice service prompt, then playback will continue."
-        : "Preparing verse audio..."
-      : audioPlaybackState === "playing"
-        ? `Listening to ${referenceLabel(audioPosition, language)}`
-        : audioPlaybackState === "paused"
-          ? `Paused at ${referenceLabel(audioPosition, language)}`
-          : audioPlaybackState === "error"
-            ? audioError ?? "Audio could not be prepared."
-            : !puterAuthToken
-              ? "Connect Puter in your browser to enable ElevenLabs audio."
-            : bridgeOverlayVisible
-              ? "Complete the voice service prompt, then playback will continue."
-            : bridgeReady
-              ? `Ready to listen from ${referenceLabel(audioPosition, language)}`
-            : "Loading voice service...";
   const group = state.groups.find((item) => item.id === state.currentGroupId);
 
   useEffect(() => {
@@ -1106,40 +964,6 @@ export function BibleScreen() {
     if (readerThemePreference.appTheme === state.theme) return;
     setReaderThemePreference({ appTheme: state.theme, readerTheme: state.theme });
   }, [readerThemePreference.appTheme, state.theme]);
-
-  useEffect(() => {
-    void setAudioModeAsync({ playsInSilentMode: true });
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    void SecureStore.getItemAsync(puterTokenKey)
-      .then((token) => {
-        if (!active) return;
-        const normalizedToken = token?.trim();
-        if (normalizedToken) {
-          audioServiceConnectedRef.current = true;
-          setPuterAuthToken(normalizedToken);
-          setAuthTokenInput(normalizedToken);
-        } else {
-          audioServiceConnectedRef.current = false;
-          setPuterAuthToken(undefined);
-          setAuthTokenInput("");
-        }
-      })
-      .catch(() => {
-        if (active) {
-          audioServiceConnectedRef.current = false;
-          setPuterAuthToken(undefined);
-          setAuthTokenInput("");
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [puterTokenKey]);
 
   const showTemporaryHighlight = useCallback((nextPosition: BiblePosition) => {
     if (highlightTimeoutRef.current) {
@@ -1179,10 +1003,7 @@ export function BibleScreen() {
         verseOffsetsRef.current = {};
         pendingScrollVerseRef.current = nextPreferences.position.verse;
         positionRef.current = nextPreferences.position;
-        audioPositionRef.current = nextPreferences.audioPosition;
         setPosition(nextPreferences.position);
-        setAudioPosition(nextPreferences.audioPosition);
-        setAudioVoice(normalizeStoredVoice(nextPreferences.audioVoiceId, nextPreferences.audioVoiceName));
         setBibleVersionId(nextPreferences.bibleVersionId);
         notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
         setFontId(nextPreferences.fontId);
@@ -1209,9 +1030,6 @@ export function BibleScreen() {
     const persistPreferences = (nextReaderTheme = effectiveReaderTheme) => {
       const payload: BibleReaderPreferences = {
         appTheme: state.theme,
-        audioPosition,
-        audioVoiceId: audioVoice.id,
-        audioVoiceName: audioVoice.name,
         bibleVersionId,
         compactMode,
         fontId,
@@ -1234,7 +1052,7 @@ export function BibleScreen() {
     const timeout = setTimeout(persistPreferences, 250);
 
     return () => clearTimeout(timeout);
-  }, [audioPosition, audioVoice.id, audioVoice.name, bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
+  }, [bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -1298,6 +1116,18 @@ export function BibleScreen() {
     [showTemporaryHighlight, tryScrollToVerse],
   );
 
+  useEffect(() => {
+    if (!preferencesReady || !planParams.planId || !planParams.planJump || handledPlanJump.current === planParams.planJump) return;
+    const plan = activeBiblePlans.find((item) => item.id === planParams.planId);
+    const day = plan?.days.find((item) => item.dayNumber === Number(planParams.planDay));
+    const start = firstPositionForPlanDay(day);
+    if (!plan || !day || !start) return;
+    handledPlanJump.current = planParams.planJump;
+    setSelectedPlanId(plan.id);
+    setSelectedPlanDayNumber(day.dayNumber);
+    jumpToPosition(start, true, true);
+  }, [activeBiblePlans, jumpToPosition, planParams.planId, planParams.planDay, planParams.planJump, preferencesReady]);
+
   const jumpToSelectedPlanDay = useCallback(() => {
     const start = firstPositionForPlanDay(selectedPlanCurrentDay?.day);
     if (start) {
@@ -1305,9 +1135,9 @@ export function BibleScreen() {
     }
   }, [jumpToPosition, selectedPlanCurrentDay?.day]);
 
-  const toggleSelectedPlanDay = useCallback(() => {
-    if (!selectedPlan || !selectedPlanCurrentDay?.day || selectedPlanCurrentDay.isBeforeStart || selectedPlanCurrentDay.isAfterEnd) return;
-    void dispatch({
+  const toggleSelectedPlanDay = useCallback(async () => {
+    if (!selectedPlan || !selectedPlanCurrentDay?.day) return;
+    await dispatch({
       type: "markBiblePlanDay",
       planId: selectedPlan.id,
       dayNumber: selectedPlanCurrentDay.day.dayNumber,
@@ -1315,332 +1145,10 @@ export function BibleScreen() {
     });
   }, [dispatch, selectedPlan, selectedPlanCurrentDay]);
 
-  const updateAudioPosition = useCallback((nextPosition: Partial<BiblePosition>) => {
-    const normalized = normalizeBiblePosition(nextPosition);
-    audioPositionRef.current = normalized;
-    setAudioPosition(normalized);
-    return normalized;
+  const chooseBibleVersion = useCallback((nextVersionId: BibleVersionId) => {
+    setBibleVersionId(nextVersionId);
+    notifyBibleVersionPreferenceChanged(nextVersionId);
   }, []);
-
-  const cleanupAudioFile = useCallback(() => {
-    const file = audioFileRef.current;
-    audioFileRef.current = undefined;
-    if (!file?.exists) return;
-
-    try {
-      file.delete();
-    } catch {
-      // Cache cleanup is best-effort; playback should not fail because a temp file lingered.
-    }
-  }, []);
-
-  const clearAudioPrepareTimeout = useCallback(() => {
-    if (audioPrepareTimeoutRef.current) {
-      clearTimeout(audioPrepareTimeoutRef.current);
-      audioPrepareTimeoutRef.current = undefined;
-    }
-  }, []);
-
-  const sendAudioBridgeCommand = useCallback((command: AudioBridgeCommand) => {
-    audioBridgeRef.current?.postMessage(JSON.stringify(command));
-  }, []);
-
-  const stopAudioPlayback = useCallback(
-    (nextState: AudioPlaybackState = "idle") => {
-      activeAudioRequestRef.current = undefined;
-      audioFinishHandledRef.current = true;
-      clearAudioPrepareTimeout();
-      pendingAudioTransfersRef.current = {};
-      audioPlayer.pause();
-      setBridgeOverlayVisible(false);
-      setAudioPlaybackState(nextState);
-    },
-    [audioPlayer, clearAudioPrepareTimeout],
-  );
-
-  useEffect(() => {
-    const audioActive = audioPlaybackState === "preparing" || audioPlaybackState === "playing" || audioPlaybackState === "paused";
-    if (!audioActive) return;
-    if (audioPosition.book === position.book && audioPosition.chapter === position.chapter) return;
-    stopAudioPlayback("idle");
-  }, [audioPlaybackState, audioPosition.book, audioPosition.chapter, position.book, position.chapter, stopAudioPlayback]);
-
-  const startVerseAudio = useCallback(
-    (requestedPosition?: Partial<BiblePosition>) => {
-      const nextPosition = updateAudioPosition(requestedPosition ?? audioPositionRef.current);
-      const activePuterToken = puterAuthToken || authTokenInput.trim();
-      if (!activePuterToken) {
-        setAudioPlaybackState("idle");
-        setAudioError(undefined);
-        setPuterTokenModalVisible(true);
-        return;
-      }
-
-      if (!bridgeReadyRef.current) {
-        setAudioPlaybackState("error");
-        setAudioError("Voice service is still loading.");
-        return;
-      }
-
-      const verse = bibleChapterVerses(nextPosition.book, nextPosition.chapter, bibleVersionId).find((item) => item.verse === nextPosition.verse);
-
-      if (!verse) {
-        setAudioPlaybackState("error");
-        setAudioError("That verse could not be found.");
-        return;
-      }
-
-      const requestId = `bible-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      activeAudioRequestRef.current = requestId;
-      audioFinishHandledRef.current = true;
-      clearAudioPrepareTimeout();
-      audioPlayer.pause();
-      setAudioError(undefined);
-      setAudioPlaybackState("preparing");
-      setBridgeOverlayVisible(false);
-
-      sendAudioBridgeCommand({ token: activePuterToken, type: "setAuthToken" });
-      sendAudioBridgeCommand({
-        requestId,
-        requiresGesture: false,
-        text: verse.text,
-        type: "synthesize",
-        voiceId: audioVoice.id,
-      });
-    },
-    [audioPlayer, audioVoice.id, authTokenInput, bibleVersionId, clearAudioPrepareTimeout, puterAuthToken, sendAudioBridgeCommand, updateAudioPosition],
-  );
-
-  const advanceAudioPlayback = useCallback(() => {
-    const current = audioPositionRef.current;
-    const verses = bibleChapterVerses(current.book, current.chapter, bibleVersionId);
-    const verseIndex = verses.findIndex((item) => item.verse === current.verse);
-    const nextVerse = verseIndex >= 0 ? verses[verseIndex + 1] : undefined;
-
-    if (nextVerse) {
-      const nextPosition = { ...current, verse: nextVerse.verse };
-      updateAudioPosition(nextPosition);
-      requestAnimationFrame(() => startVerseAudio(nextPosition));
-      return;
-    }
-
-    const nextChapterPosition = nextBibleChapter(current.book, current.chapter);
-    if (nextChapterPosition) {
-      updateAudioPosition(nextChapterPosition);
-      jumpToPosition(nextChapterPosition);
-      setTimeout(() => startVerseAudio(nextChapterPosition), 80);
-      return;
-    }
-
-    stopAudioPlayback("idle");
-  }, [bibleVersionId, jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition]);
-
-  const chooseBibleVersion = useCallback(
-    (nextVersionId: BibleVersionId) => {
-      setBibleVersionId(nextVersionId);
-      notifyBibleVersionPreferenceChanged(nextVersionId);
-      if (audioPlaybackState === "playing" || audioPlaybackState === "preparing" || audioPlaybackState === "paused") {
-        stopAudioPlayback("idle");
-      }
-    },
-    [audioPlaybackState, stopAudioPlayback],
-  );
-
-  const playAudioBase64 = useCallback(
-    async (requestId: string, base64: string) => {
-      try {
-        const file = new File(Paths.cache, `${requestId}.mp3`);
-        if (file.exists) {
-          file.delete();
-        }
-        await FileSystem.writeAsStringAsync(file.uri, base64, { encoding: FileSystem.EncodingType.Base64 });
-        cleanupAudioFile();
-        audioFileRef.current = file;
-        activeAudioRequestRef.current = undefined;
-        audioFinishHandledRef.current = false;
-        audioServiceConnectedRef.current = true;
-        clearAudioPrepareTimeout();
-        setBridgeOverlayVisible(false);
-        audioPlayer.replace({ uri: file.uri });
-        audioPlayer.play();
-        setAudioPlaybackState("playing");
-      } catch (error) {
-        activeAudioRequestRef.current = undefined;
-        clearAudioPrepareTimeout();
-        setAudioPlaybackState("error");
-        setAudioError(error instanceof Error ? error.message : "Audio could not be played.");
-      }
-    },
-    [audioPlayer, cleanupAudioFile, clearAudioPrepareTimeout],
-  );
-
-  const handleAudioBridgeMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      let message: AudioBridgeMessage | undefined;
-      try {
-        message = JSON.parse(event.nativeEvent.data) as AudioBridgeMessage;
-      } catch {
-        return;
-      }
-
-      if (message.type === "ready") {
-        bridgeReadyRef.current = true;
-        setBridgeReady(true);
-        if (puterAuthToken) {
-          sendAudioBridgeCommand({ token: puterAuthToken, type: "setAuthToken" });
-        }
-        sendAudioBridgeCommand({ requestId: `voices-${Date.now()}`, type: "listVoices" });
-        return;
-      }
-
-      if (message.type === "voices") {
-        const nextVoices = normalizeBridgeVoices(message.voices);
-        setAudioVoices(nextVoices);
-        setAudioVoice((current) => {
-          const matchingVoice = nextVoices.find((voice) => voice.id === current.id);
-          return matchingVoice ?? current;
-        });
-        return;
-      }
-
-      if (message.type === "error") {
-        if (!message.requestId || message.requestId === activeAudioRequestRef.current) {
-          activeAudioRequestRef.current = undefined;
-          clearAudioPrepareTimeout();
-          pendingAudioTransfersRef.current = {};
-          setAudioPlaybackState("error");
-          setAudioError(message.message ?? "Audio could not be prepared.");
-        }
-        return;
-      }
-
-      if (message.type === "interaction") {
-        if (message.requestId === activeAudioRequestRef.current) {
-          setBridgeOverlayVisible(true);
-        }
-        return;
-      }
-
-      if (message.type === "audio-start") {
-        if (message.requestId !== activeAudioRequestRef.current) return;
-        pendingAudioTransfersRef.current[message.requestId] = {
-          chunks: new Array(message.totalChunks).fill(""),
-          totalChunks: message.totalChunks,
-        };
-        return;
-      }
-
-      if (message.type === "audio-chunk") {
-        if (message.requestId !== activeAudioRequestRef.current) return;
-        const transfer = pendingAudioTransfersRef.current[message.requestId];
-        if (!transfer || message.index < 0 || message.index >= transfer.totalChunks) return;
-        transfer.chunks[message.index] = message.chunk;
-        return;
-      }
-
-      if (message.type === "audio-end") {
-        if (message.requestId !== activeAudioRequestRef.current) return;
-        const transfer = pendingAudioTransfersRef.current[message.requestId];
-        if (!transfer || transfer.chunks.some((chunk) => chunk.length === 0)) {
-          activeAudioRequestRef.current = undefined;
-          clearAudioPrepareTimeout();
-          setAudioPlaybackState("error");
-          setAudioError("Audio transfer was interrupted.");
-          return;
-        }
-        delete pendingAudioTransfersRef.current[message.requestId];
-        playAudioBase64(message.requestId, transfer.chunks.join(""));
-        return;
-      }
-
-      if (message.type !== "audio" || message.requestId !== activeAudioRequestRef.current) return;
-      playAudioBase64(message.requestId, message.base64);
-    },
-    [clearAudioPrepareTimeout, playAudioBase64, puterAuthToken, sendAudioBridgeCommand],
-  );
-
-  useEffect(() => {
-    if (!bridgeReady || !puterAuthToken) return;
-    sendAudioBridgeCommand({ token: puterAuthToken, type: "setAuthToken" });
-  }, [bridgeReady, puterAuthToken, sendAudioBridgeCommand]);
-
-  const handleAudioToggle = useCallback(() => {
-    if (audioPlaybackState === "preparing") {
-      stopAudioPlayback("idle");
-      return;
-    }
-
-    if (audioPlaybackState === "playing") {
-      activeAudioRequestRef.current = undefined;
-      audioPlayer.pause();
-      setAudioPlaybackState("paused");
-      return;
-    }
-
-    if (audioPlaybackState === "paused" && audioStatus.isLoaded) {
-      audioFinishHandledRef.current = false;
-      audioPlayer.play();
-      setAudioPlaybackState("playing");
-      return;
-    }
-
-    startVerseAudio(positionRef.current);
-  }, [audioPlaybackState, audioPlayer, audioStatus.isLoaded, startVerseAudio, stopAudioPlayback]);
-
-  const handleAudioChapterJump = useCallback(
-    (nextPosition: BiblePosition) => {
-      const shouldResume = audioPlaybackState === "playing" || audioPlaybackState === "preparing";
-      stopAudioPlayback(shouldResume ? "preparing" : "idle");
-      updateAudioPosition(nextPosition);
-      jumpToPosition(nextPosition);
-      if (shouldResume) {
-        setTimeout(() => startVerseAudio(nextPosition), 80);
-      }
-    },
-    [audioPlaybackState, jumpToPosition, startVerseAudio, stopAudioPlayback, updateAudioPosition],
-  );
-
-  const chooseAudioVoice = useCallback(
-    (voice: AudioVoice) => {
-      setAudioVoice(voice);
-      setVoicePickerVisible(false);
-      if (audioPlaybackState === "playing" || audioPlaybackState === "preparing") {
-        stopAudioPlayback("idle");
-      }
-    },
-    [audioPlaybackState, stopAudioPlayback],
-  );
-
-  const openPuterDashboard = useCallback(async () => {
-    await openLinkInApp(puterDashboardUrl);
-  }, []);
-
-  const savePuterAuthToken = useCallback(async () => {
-    const token = authTokenInput.trim();
-    if (!token) {
-      setAudioError("Paste your Puter auth token first.");
-      return;
-    }
-
-    await SecureStore.setItemAsync(puterTokenKey, token);
-    setPuterAuthToken(token);
-    setPuterTokenModalVisible(false);
-    setAudioError(undefined);
-    audioServiceConnectedRef.current = true;
-    if (bridgeReadyRef.current) {
-      sendAudioBridgeCommand({ token, type: "setAuthToken" });
-    }
-    startVerseAudio(audioPositionRef.current);
-  }, [authTokenInput, puterTokenKey, sendAudioBridgeCommand, startVerseAudio]);
-
-  const forgetPuterAuthToken = useCallback(async () => {
-    await SecureStore.deleteItemAsync(puterTokenKey);
-    setPuterAuthToken(undefined);
-    setAuthTokenInput("");
-    audioServiceConnectedRef.current = false;
-    sendAudioBridgeCommand({ token: "", type: "setAuthToken" });
-    stopAudioPlayback("idle");
-  }, [puterTokenKey, sendAudioBridgeCommand, stopAudioPlayback]);
 
   const handleVerseLayout = useCallback(
     (verse: number, offset: number) => {
@@ -2073,22 +1581,6 @@ export function BibleScreen() {
   );
 
   useEffect(() => {
-    if (!audioStatus.didJustFinish || audioPlaybackState !== "playing" || audioFinishHandledRef.current) return;
-    audioFinishHandledRef.current = true;
-    advanceAudioPlayback();
-  }, [advanceAudioPlayback, audioPlaybackState, audioStatus.didJustFinish]);
-
-  useEffect(() => {
-    return () => {
-      activeAudioRequestRef.current = undefined;
-      pendingAudioTransfersRef.current = {};
-      clearAudioPrepareTimeout();
-      audioPlayer.pause();
-      cleanupAudioFile();
-    };
-  }, [audioPlayer, cleanupAudioFile, clearAudioPrepareTimeout]);
-
-  useEffect(() => {
     if (!readerToast) return;
     const timeout = setTimeout(() => setReaderToast(undefined), 2200);
     return () => clearTimeout(timeout);
@@ -2193,10 +1685,7 @@ export function BibleScreen() {
   return (
     <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
       <BibleReaderHeader
-        audioActive={audioIsPlaying || audioIsPreparing}
-        audioDisabled={false}
         canGoBack={readerCanGoBack}
-        onAudioPress={handleAudioToggle}
         onBack={handleReaderBack}
         onOpenPicker={() => {
           setPickerInitialStage("home");
@@ -2246,14 +1735,17 @@ export function BibleScreen() {
               markers={selectedPlanMarkers}
               onJump={jumpToSelectedPlanDay}
               onMarkRead={toggleSelectedPlanDay}
-              onSelectPlan={setSelectedPlanId}
+              onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
+              onSelectDay={(dayNumber) => {
+                const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
+                const start = firstPositionForPlanDay(day);
+                if (start) { setSelectedPlanDayNumber(dayNumber); jumpToPosition(start, true, true); }
+              }}
               palette={readerPalette}
               plan={selectedPlan}
               plans={activeBiblePlans}
             />
             <BibleText
-              audioHighlightActive={audioHighlightActive}
-              audioPosition={audioPosition}
               chapterHighlightByVerse={chapterHighlightByVerse}
               compactMode={compactMode}
               crossReferenceAvailability={chapterCrossReferenceAvailability}
@@ -2287,21 +1779,6 @@ export function BibleScreen() {
         previousChapter={previousChapter}
         progress={chapterSwipeX}
       />
-
-      {audioMiniPlayerRendered ? (
-        <CompactAudioPlayer
-          bottom={floatingControlsBottom}
-          disabled={false}
-          isActive={audioIsPlaying}
-          label={`${chapterLabel(audioPosition, language)} · ${audioVoice.name}`}
-          maxWidth={contentWidth}
-          onHeightChange={setAudioControlsHeight}
-          onToggle={handleAudioToggle}
-          onVoicePress={() => setVoicePickerVisible(true)}
-          palette={readerPalette}
-          statusLabel={audioStatusLabel}
-        />
-      ) : null}
 
       {chapterControlsVisible ? (
         <BibleBottomReadingControls
@@ -2481,29 +1958,6 @@ export function BibleScreen() {
         roomName={group?.name}
         roomImage={group?.image}
       />
-      <AudioVoicePicker
-        onClose={() => setVoicePickerVisible(false)}
-        onSelect={chooseAudioVoice}
-        selectedVoiceId={audioVoice.id}
-        visible={voicePickerVisible}
-        voices={audioVoices}
-      />
-      <PuterTokenModal
-        authTokenInput={authTokenInput}
-        hasStoredToken={Boolean(puterAuthToken)}
-        onChangeAuthToken={setAuthTokenInput}
-        onClose={() => setPuterTokenModalVisible(false)}
-        onForget={forgetPuterAuthToken}
-        onOpenDashboard={openPuterDashboard}
-        onSave={savePuterAuthToken}
-        visible={puterTokenModalVisible}
-      />
-      <PuterAudioBridge
-        ref={audioBridgeRef}
-        onClose={() => setBridgeOverlayVisible(false)}
-        onMessage={handleAudioBridgeMessage}
-        visible={bridgeOverlayVisible}
-      />
     </View>
   );
 }
@@ -2550,10 +2004,7 @@ function ReaderCircleButton({
 }
 
 function BibleReaderHeader({
-  audioActive,
-  audioDisabled,
   canGoBack,
-  onAudioPress,
   onBack,
   onOpenPicker,
   onOpenSearch,
@@ -2564,10 +2015,7 @@ function BibleReaderHeader({
   translationLabel,
   topInset,
 }: {
-  audioActive: boolean;
-  audioDisabled: boolean;
   canGoBack: boolean;
-  onAudioPress: () => void;
   onBack: () => void;
   onOpenPicker: () => void;
   onOpenSearch: () => void;
@@ -2632,13 +2080,6 @@ function BibleReaderHeader({
 
         <View style={{ flexDirection: "row", gap: 6 }}>
           <ReaderCircleButton accessibilityLabel={t("bible.accessibility.search")} icon="search" onPress={onOpenSearch} palette={palette} />
-          <ReaderCircleButton
-            accessibilityLabel={audioActive ? t("bible.accessibility.pauseAudio") : t("bible.accessibility.playAudio")}
-            disabled={audioDisabled}
-            icon="volume-2"
-            onPress={onAudioPress}
-            palette={palette}
-          />
           <ReaderCircleButton accessibilityLabel={t("bible.accessibility.readingSettings")} onPress={onOpenSettings} palette={palette} text="Aa" />
         </View>
       </View>
@@ -3376,8 +2817,6 @@ function TopicVerseCard({
 }
 
 function BibleText({
-  audioHighlightActive,
-  audioPosition,
   chapterHighlightByVerse,
   compactMode,
   highlightedPosition,
@@ -3396,8 +2835,6 @@ function BibleText({
   showVerseNumbers,
   verses,
 }: {
-  audioHighlightActive: boolean;
-  audioPosition: BiblePosition;
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   compactMode: boolean;
   crossReferenceAvailability: Record<number, boolean>;
@@ -3444,17 +2881,12 @@ function BibleText({
           highlightedPosition?.book === position.book &&
           highlightedPosition.chapter === position.chapter &&
           highlightedPosition.verse === item.verse;
-        const audioHighlighted =
-          audioHighlightActive &&
-          audioPosition.book === position.book &&
-          audioPosition.chapter === position.chapter &&
-          audioPosition.verse === item.verse;
         const actionSelected =
           selectedVersePosition?.book === position.book &&
           selectedVersePosition.chapter === position.chapter &&
           selectedVersePosition.verse === item.verse;
         const persistedHighlightColor = chapterHighlightByVerse[item.verse];
-        const surfaceSelected = highlighted || audioHighlighted || actionSelected;
+        const surfaceSelected = highlighted || actionSelected;
         const tapSelected = selectedVerseNumbers.includes(item.verse);
         const selected = surfaceSelected || tapSelected || Boolean(persistedHighlightColor);
         const persistedHighlightStyle = persistedHighlightColor
@@ -3541,6 +2973,7 @@ function BiblePlanReaderPanel({
   onJump,
   onMarkRead,
   onSelectPlan,
+  onSelectDay,
   palette,
   plan,
   plans,
@@ -3548,22 +2981,27 @@ function BiblePlanReaderPanel({
   currentDay?: BiblePlanCurrentDay;
   markers: BiblePlanMarker[];
   onJump: () => void;
-  onMarkRead: () => void;
+  onMarkRead: () => Promise<void>;
   onSelectPlan: (id: string) => void;
+  onSelectDay: (dayNumber: number) => void;
   palette: ReaderPalette;
   plan?: BiblePlan;
   plans: BiblePlan[];
 }) {
+  const { t } = useAppTranslation();
+  const { state } = useKoino();
+  const [saving, setSaving] = useState(false);
   if (!plan || plans.length === 0) return null;
 
   const completed = plan.days.filter((day) => Boolean(day.completedAt)).length;
   const percent = completionPercent(completed, plan.days.length);
   const day = currentDay?.day;
   const dayCompleted = Boolean(day?.completedAt);
-  const outOfSchedule = Boolean(currentDay?.isBeforeStart || currentDay?.isAfterEnd);
   const hasMarkersInChapter = markers.length > 0;
   const dateLabel = day ? dayKeyForPlanDay(plan, day.dayNumber) : todayDateKey();
   const regionLabel = biblePlanDayRegionLabel(day);
+  const today = todayPlanDay(plan, todayDateKey());
+  const next = nextUnreadPlanDay(plan);
 
   return (
     <View
@@ -3587,7 +3025,7 @@ function BiblePlanReaderPanel({
           </Text>
           {regionLabel ? (
             <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
-              Today: {regionLabel}
+              {regionLabel}
             </Text>
           ) : null}
         </View>
@@ -3596,6 +3034,16 @@ function BiblePlanReaderPanel({
             {plans.findIndex((item) => item.id === plan.id) + 1}/{plans.length}
           </Text>
         ) : null}
+      </View>
+      {plan.pausedAt ? <Text style={{ color: palette.muted }}>{t("bible.plans.paused")}</Text> : null}
+      <Text style={{ color: palette.muted }}>{today ? t("bible.plans.plan.today", { day: today.dayNumber }) : t("bible.plans.noToday")}</Text>
+      <Text style={{ color: palette.muted }}>{next ? t("bible.plans.nextDay", { day: next.dayNumber }) : t("bible.plans.noUnread")}</Text>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        {[{ label: t("bible.plans.today"), target: today }, { label: t("bible.plans.nextUnread"), target: next }].map(({ label, target }) => (
+          <Pressable key={label} accessibilityRole="button" disabled={!target?.ranges?.length} onPress={() => target && onSelectDay(target.dayNumber)} style={{ flex: 1, minHeight: 44, justifyContent: "center", alignItems: "center", opacity: target?.ranges?.length ? 1 : 0.5 }}>
+            <Text style={{ color: palette.accent, fontWeight: "800" }}>{label}</Text>
+          </Pressable>
+        ))}
       </View>
       {plans.length > 1 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -3646,12 +3094,16 @@ function BiblePlanReaderPanel({
           }}
         >
           <Feather name={hasMarkersInChapter ? "map-pin" : "corner-up-right"} size={15} color={palette.accent} />
-          <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "900" }}>{hasMarkersInChapter ? "Markers here" : "Today"}</Text>
+          <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "900" }}>{t("bible.plans.plan.read")}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          disabled={!day || outOfSchedule}
-          onPress={onMarkRead}
+          disabled={!day || saving}
+          accessibilityState={{ disabled: !day || saving }}
+          onPress={async () => {
+            setSaving(true);
+            try { await onMarkRead(); } finally { setSaving(false); }
+          }}
           style={{
             alignItems: "center",
             backgroundColor: dayCompleted ? palette.peach : palette.accent,
@@ -3663,14 +3115,15 @@ function BiblePlanReaderPanel({
             gap: 7,
             justifyContent: "center",
             minHeight: 40,
-            opacity: !day || outOfSchedule ? 0.5 : 1,
+            opacity: !day || saving ? 0.5 : 1,
             paddingHorizontal: 10,
           }}
         >
           <Feather name={dayCompleted ? "check-circle" : "circle"} size={15} color={dayCompleted ? palette.accent : palette.surface} />
-          <Text style={{ color: dayCompleted ? palette.accent : palette.surface, fontSize: 12, fontWeight: "900" }}>{dayCompleted ? "Read" : "Mark read"}</Text>
+          <Text style={{ color: dayCompleted ? palette.accent : palette.surface, fontSize: 12, fontWeight: "900" }}>{t(dayCompleted ? "bible.plans.markUnread" : "bible.plans.markRead")}</Text>
         </Pressable>
       </View>
+      {state.authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{state.authError}</Text> : null}
     </View>
   );
 }
@@ -5007,91 +4460,6 @@ function SettingsStepperButton({
   );
 }
 
-function CompactAudioPlayer({
-  bottom,
-  disabled,
-  isActive,
-  label,
-  maxWidth,
-  onHeightChange,
-  onToggle,
-  onVoicePress,
-  palette,
-  statusLabel,
-}: {
-  bottom: number;
-  disabled: boolean;
-  isActive: boolean;
-  label: string;
-  maxWidth?: number;
-  onHeightChange: (height: number) => void;
-  onToggle: () => void;
-  onVoicePress: () => void;
-  palette: ReaderPalette;
-  statusLabel: string;
-}) {
-  return (
-    <View pointerEvents="box-none" style={{ alignItems: "center", bottom, left: 0, paddingHorizontal: 18, position: "absolute", right: 0 }}>
-      <View
-        onLayout={(event) => onHeightChange(Math.ceil(event.nativeEvent.layout.height))}
-        style={{
-          alignItems: "center",
-          backgroundColor: palette.surface,
-          borderColor: palette.line,
-          borderRadius: 999,
-          borderWidth: 1,
-          flexDirection: "row",
-          gap: 12,
-          minHeight: 58,
-          maxWidth,
-          paddingHorizontal: 8,
-          paddingVertical: 6,
-          width: "100%",
-          ...platformShadow({
-            boxShadow: "0 14px 32px rgba(11, 18, 32, 0.13)",
-            color: palette.shadow,
-            offset: { width: 0, height: 12 },
-            opacity: 0.13,
-            radius: 26,
-          }),
-        }}
-      >
-        <Pressable
-          accessibilityLabel={isActive ? "Pause audio Bible" : "Play audio Bible"}
-          accessibilityRole="button"
-          accessibilityState={{ disabled }}
-          disabled={disabled}
-          onPress={onToggle}
-          style={{
-            alignItems: "center",
-            backgroundColor: disabled ? palette.line : palette.peach,
-            borderRadius: 999,
-            height: 44,
-            justifyContent: "center",
-            opacity: disabled ? 0.62 : 1,
-            width: 44,
-          }}
-        >
-          <Feather name={isActive ? "pause" : "play"} size={20} color={disabled ? palette.muted : palette.accent} />
-        </Pressable>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
-            {label}
-          </Text>
-          {statusLabel ? (
-            <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 11, fontWeight: "600" }}>
-              {statusLabel}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable accessibilityLabel="Choose audio voice" accessibilityRole="button" hitSlop={8} onPress={onVoicePress} style={{ padding: 12 }}>
-          <Feather name="chevron-up" size={18} color={palette.accent} />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
 function BibleBottomReadingControls({
   bottom,
   maxWidth,
@@ -5549,418 +4917,6 @@ function StepperButton({
     </Pressable>
   );
 }
-
-function PuterTokenModal({
-  authTokenInput,
-  hasStoredToken,
-  onChangeAuthToken,
-  onClose,
-  onForget,
-  onOpenDashboard,
-  onSave,
-  visible,
-}: {
-  authTokenInput: string;
-  hasStoredToken: boolean;
-  onChangeAuthToken: (value: string) => void;
-  onClose: () => void;
-  onForget: () => void;
-  onOpenDashboard: () => void;
-  onSave: () => void;
-  visible: boolean;
-}) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: colors.cream, flex: 1 }}>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(28, insets.bottom + 18), paddingTop: insets.top + 18 }}
-        >
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-            <IconButton accessibilityLabel="Close Puter connection" icon="x" onPress={onClose} />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Connect Puter</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>Google sign-in opens in your browser</Text>
-            </View>
-          </View>
-
-          <Card style={{ gap: 12, padding: 16 }}>
-            <BodyText muted selectable>
-              Google does not allow sign-in inside embedded app webviews. Open Puter in your browser, sign in with Google there, copy your Auth Token from Account, then paste it here.
-            </BodyText>
-            <SecondaryButton icon="external-link" onPress={onOpenDashboard} style={{ minHeight: 44, paddingHorizontal: 14 }}>
-              Open Puter Account
-            </SecondaryButton>
-          </Card>
-
-          <Card style={{ gap: 12, padding: 16 }}>
-            <SectionHeading>{hasStoredToken ? "Saved token" : "Auth token"}</SectionHeading>
-            <TextInputField
-              autoCapitalize="none"
-              autoCorrect={false}
-              multiline
-              onChangeText={onChangeAuthToken}
-              onSubmitEditing={onSave}
-              placeholder="Paste Puter auth token"
-              returnKeyType="done"
-              secureTextEntry={false}
-              submitBehavior="submit"
-              value={authTokenInput}
-            />
-            <SecondaryButton icon="check" onPress={onSave} style={{ minHeight: 44, paddingHorizontal: 14 }}>
-              Save and play
-            </SecondaryButton>
-            {hasStoredToken ? (
-              <Pressable accessibilityRole="button" onPress={onForget} style={{ alignItems: "center", minHeight: 42, justifyContent: "center" }}>
-                <Text style={{ color: colors.danger, fontSize: 14, fontWeight: "900" }}>Forget saved token</Text>
-              </Pressable>
-            ) : null}
-          </Card>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-function AudioVoicePicker({
-  onClose,
-  onSelect,
-  selectedVoiceId,
-  visible,
-  voices,
-}: {
-  onClose: () => void;
-  onSelect: (voice: AudioVoice) => void;
-  selectedVoiceId: string;
-  visible: boolean;
-  voices: AudioVoice[];
-}) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <View style={{ backgroundColor: colors.cream, flex: 1 }}>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ gap: 14, padding: 18, paddingBottom: Math.max(28, insets.bottom + 18), paddingTop: insets.top + 18 }}
-        >
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-            <IconButton accessibilityLabel="Close voice picker" icon="x" onPress={onClose} />
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Choose voice</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>ElevenLabs Turbo</Text>
-            </View>
-          </View>
-
-          <View style={{ gap: 8 }}>
-            {voices.map((voice) => {
-              const selected = voice.id === selectedVoiceId;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  key={voice.id}
-                  onPress={() => onSelect(voice)}
-                  style={{
-                    alignItems: "center",
-                    backgroundColor: selected ? colors.accentSubtle : colors.paper,
-                    borderColor: selected ? colors.gold : colors.line,
-                    borderRadius: radius.lg,
-                    borderWidth: 1,
-                    flexDirection: "row",
-                    gap: 12,
-                    minHeight: 58,
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <View style={{ alignItems: "center", backgroundColor: selected ? colors.gold : colors.input, borderRadius: 999, height: 36, justifyContent: "center", width: 36 }}>
-                    <Feather name="volume-2" size={16} color={selected ? colors.white : colors.olive} />
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>
-                      {voice.name}
-                    </Text>
-                    <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 16 }}>
-                      {voice.languageName ?? voice.description ?? "ElevenLabs voice"}
-                    </Text>
-                  </View>
-                  {selected ? <Feather name="check" size={18} color={colors.olive} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-const puterAudioBridgeHtml = `
-<!doctype html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://js.puter.com/v2/"></script>
-    <style>
-      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { align-items: center; background: #fffdf9; color: #0b1220; display: flex; justify-content: center; margin: 0; min-height: 100vh; padding: 20px; }
-      main { border: 1px solid #e9d9c8; border-radius: 14px; box-sizing: border-box; max-width: 420px; padding: 18px; width: 100%; }
-      h1 { font-size: 20px; line-height: 25px; margin: 0 0 8px; }
-      p { color: #6f7686; font-size: 14px; font-weight: 600; line-height: 20px; margin: 0 0 14px; }
-      button { align-items: center; background: #a45118; border: 0; border-radius: 999px; color: white; display: flex; font-size: 15px; font-weight: 800; justify-content: center; min-height: 46px; padding: 0 18px; width: 100%; }
-      button:disabled { background: #ede5da; color: #9a9085; }
-      #status { color: #6f7686; font-size: 12px; font-weight: 700; line-height: 17px; margin-top: 12px; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Voice service</h1>
-      <p>Tap continue if Puter asks you to sign in or approve the ElevenLabs voice request.</p>
-      <button id="continue-button" type="button">Continue</button>
-      <div id="status">Waiting for the audio request...</div>
-    </main>
-    <script>
-      var turboModel = ${JSON.stringify(elevenLabsTurboModel)};
-      var pendingSynthesisCommand = null;
-      var continueButton = document.getElementById("continue-button");
-      var statusElement = document.getElementById("status");
-
-      function setStatus(message, busy) {
-        statusElement.textContent = message;
-        continueButton.disabled = Boolean(busy);
-      }
-
-      function postToNative(payload) {
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-        }
-      }
-
-      function postAudioToNative(requestId, base64, mimeType) {
-        var chunkSize = 24000;
-        var totalChunks = Math.ceil(base64.length / chunkSize);
-        postToNative({ type: "audio-start", requestId: requestId, totalChunks: totalChunks, mimeType: mimeType || "audio/mpeg" });
-        for (var index = 0; index < totalChunks; index += 1) {
-          postToNative({
-            type: "audio-chunk",
-            requestId: requestId,
-            index: index,
-            chunk: base64.slice(index * chunkSize, (index + 1) * chunkSize)
-          });
-        }
-        postToNative({ type: "audio-end", requestId: requestId });
-      }
-
-      function waitForPuter() {
-        return new Promise(function(resolve, reject) {
-          var attempts = 0;
-          var interval = setInterval(function() {
-            attempts += 1;
-            if (window.puter && window.puter.ai && window.puter.ai.txt2speech) {
-              clearInterval(interval);
-              resolve(window.puter);
-              return;
-            }
-            if (attempts > 120) {
-              clearInterval(interval);
-              reject(new Error("Puter.js did not finish loading."));
-            }
-          }, 250);
-        });
-      }
-
-      function blobToBase64(blob) {
-        return new Promise(function(resolve, reject) {
-          var reader = new FileReader();
-          reader.onerror = function() {
-            reject(new Error("Could not read generated audio."));
-          };
-          reader.onloadend = function() {
-            var result = String(reader.result || "");
-            resolve(result.indexOf(",") >= 0 ? result.split(",")[1] : result);
-          };
-          reader.readAsDataURL(blob);
-        });
-      }
-
-      async function listVoices(command) {
-        try {
-          var puter = await waitForPuter();
-          var voices = await puter.ai.txt2speech.listVoices({ provider: "elevenlabs" });
-          postToNative({ type: "voices", requestId: command.requestId, voices: voices });
-        } catch (error) {
-          postToNative({ type: "error", requestId: command.requestId, message: error && error.message ? error.message : "Could not load voices." });
-        }
-      }
-
-      async function setAuthToken(command) {
-        try {
-          var puter = await waitForPuter();
-          if (command.token) {
-            puter.setAuthToken(command.token);
-            localStorage.setItem("puter.auth.token", command.token);
-            setStatus("Puter is connected.", true);
-          } else {
-            puter.resetAuthToken();
-            localStorage.removeItem("puter.auth.token");
-            setStatus("Waiting for the audio request...", false);
-          }
-        } catch (error) {
-          postToNative({ type: "error", message: error && error.message ? error.message : "Could not apply Puter token." });
-        }
-      }
-
-      async function synthesize(command) {
-        var interactionTimer;
-        try {
-          pendingSynthesisCommand = command;
-          var puter = window.puter && window.puter.ai && window.puter.ai.txt2speech ? window.puter : await waitForPuter();
-          if (command.requiresGesture) {
-            setStatus("Tap Continue to connect Puter and generate this verse.", false);
-            postToNative({
-              type: "interaction",
-              requestId: command.requestId,
-              message: "Tap Continue to connect Puter and generate this verse."
-            });
-            return;
-          }
-          setStatus("Generating verse audio...", true);
-          var audio = await puter.ai.txt2speech(command.text, {
-            provider: "elevenlabs",
-            model: turboModel,
-            voice: command.voiceId,
-            output_format: "mp3_44100_128"
-          });
-          clearTimeout(interactionTimer);
-          var src = audio && audio.src ? audio.src : String(audio);
-          var response = await fetch(src);
-          if (!response.ok) {
-            throw new Error("Generated audio could not be downloaded.");
-          }
-          var blob = await response.blob();
-          var base64 = await blobToBase64(blob);
-          setStatus("Sending audio to Koino...", true);
-          postAudioToNative(command.requestId, base64, blob.type || "audio/mpeg");
-        } catch (error) {
-          if (interactionTimer) {
-            clearTimeout(interactionTimer);
-          }
-          setStatus(error && error.message ? error.message : "Audio could not be prepared.", false);
-          postToNative({ type: "error", requestId: command.requestId, message: error && error.message ? error.message : "Audio could not be prepared." });
-        }
-      }
-
-      continueButton.addEventListener("click", function() {
-        if (!pendingSynthesisCommand) {
-          setStatus("No verse is waiting yet. Press Play in Koino first.", false);
-          return;
-        }
-
-        var command = Object.assign({}, pendingSynthesisCommand, { requiresGesture: false });
-        pendingSynthesisCommand = command;
-        synthesize(command);
-      });
-
-      function handleMessage(event) {
-        var command;
-        try {
-          command = JSON.parse(event.data);
-        } catch (error) {
-          return;
-        }
-
-        if (!command || !command.type) return;
-        if (command.type === "setAuthToken") {
-          setAuthToken(command);
-        }
-        if (command.type === "listVoices") {
-          listVoices(command);
-        }
-        if (command.type === "synthesize") {
-          synthesize(command);
-        }
-      }
-
-      window.addEventListener("message", handleMessage);
-      document.addEventListener("message", handleMessage);
-      waitForPuter()
-        .then(function() {
-          postToNative({ type: "ready" });
-        })
-        .catch(function(error) {
-          postToNative({ type: "error", message: error && error.message ? error.message : "Puter.js did not finish loading." });
-        });
-    </script>
-  </body>
-</html>
-`;
-
-const PuterAudioBridge = forwardRef<WebView, { onClose: () => void; onMessage: (event: WebViewMessageEvent) => void; visible: boolean }>(function PuterAudioBridge(
-  { onClose, onMessage, visible },
-  ref,
-) {
-  const insets = useSafeAreaInsets();
-
-  if (Platform.OS === "web") {
-    return null;
-  }
-
-  return (
-    <View
-      pointerEvents={visible ? "auto" : "none"}
-      style={
-        visible
-          ? {
-              backgroundColor: colors.cream,
-              bottom: 0,
-              left: 0,
-              paddingBottom: Math.max(16, insets.bottom + 12),
-              paddingHorizontal: 16,
-              paddingTop: insets.top + 12,
-              position: "absolute",
-              right: 0,
-              top: 0,
-              zIndex: 50,
-            }
-          : { height: 1, left: -20, opacity: 0, position: "absolute", top: -20, width: 1 }
-      }
-    >
-      {visible ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 12 }}>
-          <IconButton accessibilityLabel="Hide voice service" icon="x" onPress={onClose} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>Voice service</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>Puter handles ElevenLabs access</Text>
-          </View>
-        </View>
-      ) : null}
-      <View style={{ borderColor: visible ? colors.line : "transparent", borderRadius: visible ? radius.lg : 0, borderWidth: visible ? 1 : 0, flex: visible ? 1 : undefined, overflow: "hidden" }}>
-        <WebView
-          ref={ref}
-          allowsInlineMediaPlayback
-          domStorageEnabled
-          javaScriptCanOpenWindowsAutomatically
-          javaScriptEnabled
-          mediaPlaybackRequiresUserAction={false}
-          onMessage={onMessage}
-          originWhitelist={["*"]}
-          setSupportMultipleWindows={false}
-          sharedCookiesEnabled
-          source={{ html: puterAudioBridgeHtml, baseUrl: "https://developer.puter.com" }}
-          thirdPartyCookiesEnabled
-          style={visible ? { backgroundColor: colors.paper, flex: 1 } : { height: 1, width: 1 }}
-        />
-      </View>
-    </View>
-  );
-});
 
 function BibleDrawer({
   biblePlanCount,

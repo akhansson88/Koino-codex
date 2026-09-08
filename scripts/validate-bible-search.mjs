@@ -73,8 +73,6 @@ try {
     assert.equal(resolveBibleReference(query, "en", "kjv"), undefined, `${query} must not resolve as a reference`);
   });
 
-  assert.equal(resolveBibleReference("Numbers 12:16", "en", "sv1917"), undefined, "Unavailable translation coordinates must fail safely");
-
   assert.deepEqual(biblePositionFromSearchQuery("Psalm 23", "en", "kjv"), { book: "Psalms", chapter: 23, verse: 1 });
   assert.deepEqual(biblePositionFromSearchQuery("Psaltaren 23", "sv", "kjv"), { book: "Psalms", chapter: 23, verse: 1 });
   assert.equal(biblePositionFromSearchQuery("Fakebook 3", "en", "kjv"), undefined);
@@ -104,10 +102,6 @@ try {
   const swedishPhraseResults = await searchScripture({ language: "sv", query: "så älskade Gud världen", versionId: "reformationsbibeln2026" });
   assert.equal(swedishPhraseResults[0]?.matchType, "text");
   assert.equal(swedishPhraseResults[0]?.verse.reference, "John 3:16");
-
-  const swedishPartialResults = await searchScripture({ language: "sv", query: "kärleken tålig", versionId: "sv1917" });
-  assert.equal(swedishPartialResults[0]?.matchType, "text");
-  assert.equal(swedishPartialResults[0]?.verse.reference, "1 Corinthians 13:4");
 
   const wordingMismatchResults = await searchScripture({ language: "en", query: "do not worry tomorrow", versionId: "kjv", limit: 5 });
   assert.ok(wordingMismatchResults.every((result) => result.matchType === "text"), "Non-reference prose must use local text search");

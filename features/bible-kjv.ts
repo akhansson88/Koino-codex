@@ -1,8 +1,7 @@
-import { crossReferenceMap, kjvVerseMap, reformationsbibelnVerseMap, sv1917VerseMap } from "@/features/bible-data";
+import { crossReferenceMap, kjvVerseMap, reformationsbibelnVerseMap } from "@/features/bible-data";
 import type { BibleVerse } from "@/state/types";
 
 type VerseMap = Record<string, string>;
-type BookNameMap = Record<string, string>;
 type CrossReferenceMap = {
   references: Record<string, Array<{ verse: string; votes: number }>>;
 };
@@ -147,78 +146,8 @@ const osisBookByName: Record<string, string> = {
   Revelation: "Rev",
 };
 const bookNameByOsis = Object.fromEntries(Object.entries(osisBookByName).map(([name, osis]) => [osis, name])) as Record<string, string>;
-const sv1917BookNameMap: BookNameMap = {
-  "Andra Konungaboken": "2 Kings",
-  "Andra Krönikeboken": "2 Chronicles",
-  "Andra Samuelsboken": "2 Samuel",
-  Apostlagärningarna: "Acts",
-  "Brevet till hebréerna": "Hebrews",
-  Deuteronomium: "Deuteronomy",
-  Domarboken: "Judges",
-  "Evangelium enligt Johannes": "John",
-  "Evangelium enligt Lukas": "Luke",
-  "Evangelium enligt Markus": "Mark",
-  "Evangelium enligt Matteus": "Matthew",
-  Esra: "Ezra",
-  Ester: "Esther",
-  "Första Konungaboken": "1 Kings",
-  "Första Krönikeboken": "1 Chronicles",
-  "Första Samuelsboken": "1 Samuel",
-  Habackuk: "Habakkuk",
-  Hesekiel: "Ezekiel",
-  Hosea: "Hosea",
-  "Höga Visan": "Solomon's Song",
-  "Jakobs' brev": "James",
-  Jeremia: "Jeremiah",
-  Jesaja: "Isaiah",
-  Jona: "Jonah",
-  Josua: "Joshua",
-  Klagovisorna: "Lamentations",
-  Malaki: "Malachi",
-  Mika: "Micah",
-  Nehemja: "Nehemiah",
-  Numeri: "Numbers",
-  "Ordspråksboken": "Proverbs",
-  "Paulus' andra brev till korintierna": "2 Corinthians",
-  "Paulus' andra brev till tessalonikerna": "2 Thessalonians",
-  "Paulus' andra brev till Timoteus": "2 Timothy",
-  "Paulus' brev till efesierna": "Ephesians",
-  "Paulus' brev till Filemon": "Philemon",
-  "Paulus' brev till filipperna": "Philippians",
-  "Paulus' brev till galaterna": "Galatians",
-  "Paulus' brev till kolosserna": "Colossians",
-  "Paulus' brev till romarna": "Romans",
-  "Paulus' brev till Titus": "Titus",
-  "Paulus' första brev till korintierna": "1 Corinthians",
-  "Paulus' första brev till tessalonikerna": "1 Thessalonians",
-  "Paulus' första brev till Timoteus": "1 Timothy",
-  "Petrus' andra brev": "2 Peter",
-  "Petrus' första brev": "1 Peter",
-  Predikaren: "Ecclesiastes",
-  Psaltaren: "Psalms",
-  Rut: "Ruth",
-  Sakarja: "Zechariah",
-  Sefanja: "Zephaniah",
-  "Johannes' andra brev": "2 John",
-  "Johannes' första brev": "1 John",
-  "Johannes' tredje brev": "3 John",
-  "Johannes' uppenbarelse": "Revelation",
-  "Judas' brev": "Jude",
-};
-
-function normalizeVerseMapBookNames(verseMap: VerseMap, bookNameMap: BookNameMap): VerseMap {
-  return Object.fromEntries(
-    Object.entries(verseMap).map(([reference, text]) => {
-      const match = reference.match(/^(.+) (\d+:\d+)$/);
-      if (!match) return [reference, text];
-      return [`${bookNameMap[match[1]] ?? match[1]} ${match[2]}`, text];
-    }),
-  );
-}
-
 export const bibleVersions = [
   { id: "kjv", label: "KJV", translation: "KJV", verses: versesByReference },
-  { id: "sv1917", label: "Bibel 1917", translation: "Bibel 1917", verses: normalizeVerseMapBookNames(sv1917VerseMap as VerseMap, sv1917BookNameMap) },
   { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", verses: reformationsbibelnVerseMap as VerseMap },
 ] as const;
 

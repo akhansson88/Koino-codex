@@ -5,6 +5,7 @@ import {
   type BiblePosition,
 } from "@/features/bible-kjv";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange, BiblePlanStatus } from "@/state/types";
+import { scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
 
 type ChapterKey = `${string} ${number}`;
 
@@ -24,21 +25,12 @@ export type BiblePlanCurrentDay = {
   isAfterEnd: boolean;
 };
 
-const msPerDay = 24 * 60 * 60 * 1000;
-
 function chapterKey(position: Pick<BiblePosition, "book" | "chapter">): ChapterKey {
   return `${position.book} ${position.chapter}`;
 }
 
 function localDateKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-}
-
-function parseLocalDateKey(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return undefined;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function comparePositions(first: BiblePosition, second: BiblePosition) {
@@ -142,23 +134,14 @@ export function todayDateKey() {
   return localDateKey(new Date());
 }
 
-export function dayKeyForPlanDay(plan: Pick<BiblePlan, "startDate">, dayNumber: number) {
-  const startDate = parseLocalDateKey(plan.startDate);
-  if (!startDate) return plan.startDate;
-  return localDateKey(new Date(startDate.getTime() + Math.max(0, dayNumber - 1) * msPerDay));
+export function dayKeyForPlanDay(plan: Pick<BiblePlan, "startDate"> & Partial<Pick<BiblePlan, "days">>, dayNumber: number) {
+  return scheduledPlanDate(plan, dayNumber);
 }
 
-export function currentPlanDay(plan: Pick<BiblePlan, "days" | "startDate">, now = new Date()): BiblePlanCurrentDay | undefined {
-  if (plan.days.length === 0) return undefined;
-  const startDate = parseLocalDateKey(plan.startDate);
-  if (!startDate) return { day: plan.days[0], index: 0, isAfterEnd: false, isBeforeStart: false };
-  const today = parseLocalDateKey(localDateKey(now)) ?? now;
-  const dayIndex = Math.floor((today.getTime() - startDate.getTime()) / msPerDay);
-  if (dayIndex < 0) return { day: plan.days[0], index: 0, isAfterEnd: false, isBeforeStart: true };
-  if (dayIndex >= plan.days.length) {
-    return { day: plan.days[plan.days.length - 1], index: plan.days.length - 1, isAfterEnd: true, isBeforeStart: false };
-  }
-  return { day: plan.days[dayIndex], index: dayIndex, isAfterEnd: false, isBeforeStart: false };
+export function currentPlanDay(plan: Pick<BiblePlan, "days" | "startDate" | "pausedAt">, now = new Date()): BiblePlanCurrentDay | undefined {
+  const today = todayPlanDay(plan, localDateKey(now));
+  const index = plan.days.findIndex((day) => day === today);
+  return index < 0 ? undefined : { day: plan.days[index], index, isAfterEnd: false, isBeforeStart: false };
 }
 
 export function planCompletionStatus(days: BiblePlanDay[]): BiblePlanStatus {
@@ -180,8 +163,8 @@ export function biblePlanDayRegionLabel(day?: BiblePlanDay) {
   return readablePlanRange(firstRange.start, lastRange.end);
 }
 
-export function planMarkersForChapter(plan: BiblePlan, chapter: Pick<BiblePosition, "book" | "chapter">): BiblePlanMarker[] {
-  const current = currentPlanDay(plan);
+export function planMarkersForChapter(plan: BiblePlan, chapter: Pick<BiblePosition, "book" | "chapter">, selectedDay?: BiblePlanDay): BiblePlanMarker[] {
+  const current = selectedDay ? { day: selectedDay, isBeforeStart: false, isAfterEnd: false } : currentPlanDay(plan);
   if (!current || current.isBeforeStart || current.isAfterEnd) return [];
   const firstRange = current.day.ranges[0];
   const lastRange = current.day.ranges[current.day.ranges.length - 1];

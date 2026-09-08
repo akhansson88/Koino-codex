@@ -9,7 +9,6 @@ const sources = {
   compressedCrossReferences: "assets/bible/cross-references/cross_references.json",
   compressedKjvVerses: "assets/bible/kjv-verses-1769.json",
   compressedReformationsbibelnVerses: "assets/bible/reformationsbibeln.json",
-  compressedSv1917Verses: "assets/bible/sv1917-verses.json",
 };
 
 const exports = [];
