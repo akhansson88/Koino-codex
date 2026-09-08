@@ -546,8 +546,12 @@
         "$announcementId": {
           ".write": "auth != null && !newData.exists() && root.child('groups').child($groupId).child('ownerId').val() == auth.uid",
           "$participantId": {
-            ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
-            ".validate": "newData.val() == null || (newData.child('id').val() == $participantId && newData.child('announcementId').val() == $announcementId && newData.child('totalDays').isNumber() && newData.child('joinedAt').isString() && newData.child('updatedAt').isString())"
+            ".write": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists() && root.child('groupBiblePlanParticipantIds').child(auth.uid).child($announcementId).val() == $participantId",
+            ".validate": "newData.val() == null || (newData.child('id').val() == $participantId && newData.child('announcementId').val() == $announcementId && newData.child('totalDays').isNumber() && newData.child('joinedAt').isString() && newData.child('updatedAt').isString() && newData.child('completedDayNumbers').exists())",
+            "completedDayNumbers": {
+              "$dayNumber": { ".validate": "newData.val() == true" }
+            },
+            "$other": { ".validate": false }
           }
         }
       }
