@@ -1,9 +1,9 @@
 import {
-  bibleChapterVerses,
   kjvBooks,
   normalizeBiblePosition,
+  verseCountForChapter,
   type BiblePosition,
-} from "@/features/bible-kjv";
+} from "@/features/bible-canon";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange, BiblePlanStatus } from "@/state/types";
 import { scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
 
@@ -41,13 +41,8 @@ function comparePositions(first: BiblePosition, second: BiblePosition) {
   return first.verse - second.verse;
 }
 
-function firstVerse(book: string, chapter: number) {
-  return bibleChapterVerses(book, chapter, "kjv")[0]?.verse ?? 1;
-}
-
 function lastVerse(book: string, chapter: number) {
-  const verses = bibleChapterVerses(book, chapter, "kjv");
-  return verses[verses.length - 1]?.verse ?? 1;
+  return verseCountForChapter(book, chapter) || 1;
 }
 
 function nextChapterPosition(position: Pick<BiblePosition, "book" | "chapter">) {
@@ -97,7 +92,7 @@ export function expandPlanRangeToChapterRanges(range: BiblePlanRange): BiblePlan
   let cursor = normalizeBiblePosition({ ...range.start, verse: 1 });
 
   while (comparePositions(cursor, range.end) <= 0) {
-    const startVerse = chapterKey(cursor) === chapterKey(range.start) ? range.start.verse : firstVerse(cursor.book, cursor.chapter);
+    const startVerse = chapterKey(cursor) === chapterKey(range.start) ? range.start.verse : 1;
     const endVerse = chapterKey(cursor) === chapterKey(range.end) ? range.end.verse : lastVerse(cursor.book, cursor.chapter);
     const start = normalizeBiblePosition({ book: cursor.book, chapter: cursor.chapter, verse: startVerse });
     const end = normalizeBiblePosition({ book: cursor.book, chapter: cursor.chapter, verse: endVerse });

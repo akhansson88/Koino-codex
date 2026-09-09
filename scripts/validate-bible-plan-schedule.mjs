@@ -1,6 +1,28 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { transform } from "esbuild";
+import { fileURLToPath } from "node:url";
+import { build, transform } from "esbuild";
+
+const providerBundle = await build({
+  bundle: true,
+  entryPoints: [fileURLToPath(new URL("../state/koino-store.tsx", import.meta.url))],
+  logLevel: "silent",
+  metafile: true,
+  packages: "external",
+  platform: "neutral",
+  write: false,
+});
+const providerDependencies = Object.keys(providerBundle.metafile.inputs).map((path) => path.replaceAll("\\", "/"));
+const providerBibleTextDependencies = providerDependencies.filter(
+  (path) =>
+    /(^|\/)features\/(bible-data|bible-kjv)\.ts$/.test(path) ||
+    /(^|\/)features\/\.generated\//.test(path),
+);
+assert.deepEqual(
+  providerBibleTextDependencies,
+  [],
+  "KoinoProvider's dependency graph must not include Bible text or generated Bible payloads",
+);
 
 const source = await readFile(new URL("../state/bible-plan-schedule.ts", import.meta.url), "utf8");
 const compiled = await transform(source, { loader: "ts", format: "esm" });
@@ -40,10 +62,10 @@ assert.equal(nextUnreadPlanDay({ days: plan.days.map((day) => ({ ...day, complet
 
 // Exercise the real preview distributor with a small, deterministic Bible fixture.
 let previewSource = await readFile(new URL("../features/bible-plans.ts", import.meta.url), "utf8");
-previewSource = previewSource.replace(/import\s*\{[\s\S]*?\}\s*from "@\/features\/bible-kjv";/, `
+previewSource = previewSource.replace(/import\s*\{[\s\S]*?\}\s*from "@\/features\/bible-canon";/, `
 const kjvBooks = [{ name: "Genesis", chapters: [1, 2] }];
 const normalizeBiblePosition = (position) => position;
-const bibleChapterVerses = () => [{ verse: 1 }, { verse: 2 }];
+const verseCountForChapter = () => 2;
 `);
 previewSource = previewSource.replace('"@/state/bible-plan-schedule"', JSON.stringify(scheduleUrl));
 const previewCode = await transform(previewSource, { loader: "ts", format: "esm" });

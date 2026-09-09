@@ -21,8 +21,13 @@ Useful checks:
 ```sh
 npm run typecheck
 npm run doctor
+npm run validate:bible-plans
 npm run validate:bible-search
 ```
+
+Bible text, full-text search, and cross-references are packaged in
+`assets/bible/koino-bible-v1.db`. Start commands verify its source fingerprint;
+rebuilding it after source-data changes requires Python 3 with SQLite FTS5.
 
 The `functions/` directory contains the Firebase backend used by app services.
 It is separate from the Expo client and is not a website.

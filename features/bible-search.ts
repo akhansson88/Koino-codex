@@ -1,7 +1,6 @@
 import {
-  bibleChapterVerses,
+  bibleVersionFor,
   bibleVerseFromReference,
-  buildBibleVerse,
   kjvBooks,
   searchBibleText,
   type BiblePosition,
@@ -230,8 +229,7 @@ export function biblePositionFromSearchQuery(query: string, language: AppLanguag
   const book = kjvBooks.find((item) => item.name === bookName);
   if (!book || !book.chapters.includes(chapter)) return undefined;
 
-  const firstVerse = bibleChapterVerses(book.name, chapter, versionId)[0]?.verse;
-  return firstVerse ? { book: book.name, chapter, verse: firstVerse } : undefined;
+  return { book: book.name, chapter, verse: 1 };
 }
 
 export async function searchScripture({ language, limit = 20, query, versionId }: SearchScriptureOptions): Promise<ScriptureSearchResult[]> {
@@ -242,10 +240,20 @@ export async function searchScripture({ language, limit = 20, query, versionId }
   if (referenceVerse) return [{ matchType: "reference", verse: referenceVerse }];
 
   const textResults = await searchBibleText(normalizedQuery, versionId, Math.floor(limit));
-  return textResults
-    .map((result) => buildBibleVerse(result.position.book, result.position.chapter, result.position.verse, result.position.verse, versionId))
-    .filter((verse): verse is BibleVerse => Boolean(verse))
-    .map((verse) => ({ matchType: "text", verse }));
+  const translation = bibleVersionFor(versionId).translation;
+  return textResults.map((result) => ({
+    matchType: "text",
+    verse: {
+      book: result.position.book,
+      chapter: result.position.chapter,
+      endVerse: result.position.verse,
+      reference: result.reference,
+      referenceText: result.reference,
+      startVerse: result.position.verse,
+      text: result.text,
+      translation,
+    },
+  }));
 }
 
 export function displayBibleBookName(bookName: string, language: AppLanguage) {

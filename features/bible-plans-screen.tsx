@@ -11,7 +11,7 @@ import {
   makeBiblePlanRange,
   todayDateKey,
 } from "@/features/bible-plans";
-import { kjvBooks, normalizeBiblePosition, versesForChapter, type BiblePosition } from "@/features/bible-kjv";
+import { kjvBooks, normalizeBiblePosition, versesForChapter, type BiblePosition } from "@/features/bible-canon";
 import { useKoino } from "@/state/koino-store";
 import { isPlanDate, nextUnreadPlanDay, todayPlanDay, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import type { BiblePlan, BiblePlanRange, GroupBiblePlanAnnouncement } from "@/state/types";

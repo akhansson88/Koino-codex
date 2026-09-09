@@ -3,11 +3,12 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 import { build } from "esbuild";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
-const generatedBibleData = path.join(projectRoot, "features", ".generated", "kjv-verses.ts");
+const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v1.db");
 
 try {
   await access(generatedBibleData);
@@ -17,8 +18,22 @@ try {
 
 const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "koino-bible-search-"));
 const bundlePath = path.join(temporaryDirectory, "bible-search.mjs");
+const nativeDatabase = new DatabaseSync(generatedBibleData, { readOnly: true });
 
 try {
+  assert.equal(nativeDatabase.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+  assert.deepEqual(
+    nativeDatabase
+      .prepare("SELECT translations.code, COUNT(*) AS count FROM verses JOIN translations ON translations.id = verses.translation_id GROUP BY translations.code ORDER BY translations.id")
+      .all()
+      .map(({ code, count }) => ({ code, count })),
+    [
+      { code: "kjv", count: 31102 },
+      { code: "reformationsbibeln2026", count: 31053 },
+    ],
+  );
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM cross_references").get().count, 344799);
+
   await build({
     bundle: true,
     format: "esm",
@@ -29,6 +44,7 @@ try {
       contents: `
         export * from "./features/bible-search.ts";
         export { bibleCrossReferences, hasBibleCrossReferences } from "./features/bible-kjv.ts";
+        export { setBibleDatabaseForTesting } from "./features/bible-database.ts";
       `,
       resolveDir: projectRoot,
       sourcefile: "bible-search-validation.ts",
@@ -44,7 +60,14 @@ try {
     hasBibleCrossReferences,
     resolveBibleReference,
     searchScripture,
+    setBibleDatabaseForTesting,
   } = await import(`${pathToFileURL(bundlePath).href}?${Date.now()}`);
+
+  setBibleDatabaseForTesting({
+    getAllAsync: async (source, ...params) => nativeDatabase.prepare(source).all(...params),
+    getAllSync: (source, ...params) => nativeDatabase.prepare(source).all(...params),
+    getFirstSync: (source, ...params) => nativeDatabase.prepare(source).get(...params),
+  });
 
   function assertReference(query, language, expectedReference, versionId = "kjv") {
     const verse = resolveBibleReference(query, language, versionId);
@@ -133,5 +156,6 @@ try {
 
   console.log("Bible search validation passed.");
 } finally {
+  nativeDatabase.close();
   await rm(temporaryDirectory, { force: true, recursive: true });
 }
