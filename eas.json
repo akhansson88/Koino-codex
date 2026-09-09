@@ -20,5 +20,18 @@
         "buildType": "app-bundle"
       }
     }
+  },
+  "submit": {
+    "internal": {
+      "android": {
+        "serviceAccountKeyPath": ".eas-submit/google-play-service-account.json",
+        "track": "internal"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6809953941"
+      }
+    }
   }
 }

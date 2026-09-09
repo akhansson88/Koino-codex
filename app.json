@@ -17,11 +17,14 @@
     },
     "ios": {
       "supportsTablet": false,
+      "buildNumber": "2",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoadsInWebContent": true
-        }
-      }
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.akhansson.koino"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,7 +32,10 @@
         "backgroundColor": "#F7EFE4"
       },
       "package": "com.akhansson.koinomvp",
-      "versionCode": 2
+      "versionCode": 3,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",

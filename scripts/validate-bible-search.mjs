@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
-const generatedBibleData = path.join(projectRoot, "features", ".generated", "bible-data.ts");
+const generatedBibleData = path.join(projectRoot, "features", ".generated", "kjv-verses.ts");
 
 try {
   await access(generatedBibleData);
@@ -21,18 +21,27 @@ const bundlePath = path.join(temporaryDirectory, "bible-search.mjs");
 try {
   await build({
     bundle: true,
-    entryPoints: [path.join(projectRoot, "features", "bible-search.ts")],
     format: "esm",
     logLevel: "silent",
     outfile: bundlePath,
     platform: "node",
+    stdin: {
+      contents: `
+        export * from "./features/bible-search.ts";
+        export { bibleCrossReferences, hasBibleCrossReferences } from "./features/bible-kjv.ts";
+      `,
+      resolveDir: projectRoot,
+      sourcefile: "bible-search-validation.ts",
+    },
     tsconfig: path.join(projectRoot, "tsconfig.json"),
   });
 
   const {
+    bibleCrossReferences,
     biblePositionFromSearchQuery,
     displayBibleBookName,
     displayBibleReference,
+    hasBibleCrossReferences,
     resolveBibleReference,
     searchScripture,
   } = await import(`${pathToFileURL(bundlePath).href}?${Date.now()}`);
@@ -98,6 +107,12 @@ try {
   const partialResults = await searchScripture({ language: "sv", query: "bekymra morgondagen", versionId: "reformationsbibeln2026" });
   assert.equal(partialResults[0]?.matchType, "text");
   assert.equal(partialResults[0]?.verse.reference, "Matthew 6:34");
+
+  const crossReferencePosition = { book: "John", chapter: 3, verse: 16 };
+  assert.equal(hasBibleCrossReferences(crossReferencePosition), true, "The compact source index must preserve cross-reference indicators");
+  const crossReferences = bibleCrossReferences(crossReferencePosition, "kjv");
+  assert.ok(crossReferences.length > 0, "Full cross-references must load on demand");
+  assert.ok(crossReferences.every((reference) => reference.text && reference.reference), "Lazy cross-reference records must resolve normally");
 
   const swedishPhraseResults = await searchScripture({ language: "sv", query: "så älskade Gud världen", versionId: "reformationsbibeln2026" });
   assert.equal(swedishPhraseResults[0]?.matchType, "text");

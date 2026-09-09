@@ -1,9 +1,20 @@
 import { ungzip } from "pako";
-import {
-  compressedCrossReferences,
-  compressedKjvVerses,
-  compressedReformationsbibelnVerses,
-} from "./.generated/bible-data";
+import { crossReferenceSources } from "./.generated/cross-reference-sources";
+import { compressedKjvVerses } from "./.generated/kjv-verses";
+
+type CrossReferenceMap = {
+  references: Record<string, Array<{ verse: string; votes: number }>>;
+};
+
+type CompressedCrossReferenceModule = {
+  compressedCrossReferences: string;
+};
+
+type CompressedReformationsbibelnModule = {
+  compressedReformationsbibelnVerses: string;
+};
+
+declare const require: (path: string) => unknown;
 
 const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -32,7 +43,23 @@ function parseCompressedJson<T>(value: string): T {
 }
 
 export const kjvVerseMap = parseCompressedJson<Record<string, string>>(compressedKjvVerses);
-export const reformationsbibelnVerseMap = parseCompressedJson<Record<string, string>>(compressedReformationsbibelnVerses);
-export const crossReferenceMap = parseCompressedJson<{
-  references: Record<string, Array<{ verse: string; votes: number }>>;
-}>(compressedCrossReferences);
+export const crossReferenceSourceSet = new Set(crossReferenceSources);
+
+let cachedReformationsbibelnVerseMap: Record<string, string> | undefined;
+let cachedCrossReferenceMap: CrossReferenceMap | undefined;
+
+export function reformationsbibelnVerseMap() {
+  if (!cachedReformationsbibelnVerseMap) {
+    const { compressedReformationsbibelnVerses } = require("./.generated/reformationsbibeln-verses") as CompressedReformationsbibelnModule;
+    cachedReformationsbibelnVerseMap = parseCompressedJson<Record<string, string>>(compressedReformationsbibelnVerses);
+  }
+  return cachedReformationsbibelnVerseMap;
+}
+
+export function crossReferenceMap() {
+  if (!cachedCrossReferenceMap) {
+    const { compressedCrossReferences } = require("./.generated/cross-references") as CompressedCrossReferenceModule;
+    cachedCrossReferenceMap = parseCompressedJson<CrossReferenceMap>(compressedCrossReferences);
+  }
+  return cachedCrossReferenceMap;
+}

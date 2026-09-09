@@ -1,10 +1,7 @@
-import { crossReferenceMap, kjvVerseMap, reformationsbibelnVerseMap } from "@/features/bible-data";
+import { crossReferenceMap, crossReferenceSourceSet, kjvVerseMap, reformationsbibelnVerseMap } from "@/features/bible-data";
 import type { BibleVerse } from "@/state/types";
 
 type VerseMap = Record<string, string>;
-type CrossReferenceMap = {
-  references: Record<string, Array<{ verse: string; votes: number }>>;
-};
 
 export type BibleBook = {
   name: string;
@@ -51,7 +48,6 @@ type BibleTextSearchIndex = {
 };
 
 const versesByReference = kjvVerseMap as VerseMap;
-const crossReferencesBySource = (crossReferenceMap as CrossReferenceMap).references;
 const parsedReferences = Object.keys(versesByReference)
   .map((reference) => {
     const match = reference.match(/^(.+) (\d+):(\d+)$/);
@@ -147,8 +143,8 @@ const osisBookByName: Record<string, string> = {
 };
 const bookNameByOsis = Object.fromEntries(Object.entries(osisBookByName).map(([name, osis]) => [osis, name])) as Record<string, string>;
 export const bibleVersions = [
-  { id: "kjv", label: "KJV", translation: "KJV", verses: versesByReference },
-  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", verses: reformationsbibelnVerseMap as VerseMap },
+  { id: "kjv", label: "KJV", translation: "KJV" },
+  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026" },
 ] as const;
 
 export type BibleVersionId = (typeof bibleVersions)[number]["id"];
@@ -189,7 +185,7 @@ function yieldBibleSearchWork() {
 }
 
 async function buildBibleTextSearchIndex(versionId: BibleVersionId): Promise<BibleTextSearchIndex> {
-  const verseMap = bibleVersionFor(versionId).verses as VerseMap;
+  const verseMap = versesForVersion(versionId);
   const entries: BibleTextSearchEntry[] = [];
   const entriesByToken = new Map<string, number[]>();
 
@@ -295,7 +291,7 @@ function cleanVerseText(value: string) {
 }
 
 function versesForVersion(versionId?: BibleVersionId) {
-  return bibleVersionFor(versionId).verses;
+  return bibleVersionFor(versionId).id === "reformationsbibeln2026" ? reformationsbibelnVerseMap() : versesByReference;
 }
 
 function bookAliasKey(value: string) {
@@ -409,14 +405,14 @@ export function bibleChapterVerses(book: string, chapter: number, versionId?: Bi
 
 export function hasBibleCrossReferences(position: BiblePosition) {
   const key = crossReferenceKey(position);
-  return Boolean(key && crossReferencesBySource[key]?.length);
+  return Boolean(key && crossReferenceSourceSet.has(key));
 }
 
 export function bibleCrossReferences(position: BiblePosition, versionId?: BibleVersionId): BibleCrossReference[] {
   const key = crossReferenceKey(position);
   if (!key) return [];
 
-  return (crossReferencesBySource[key] ?? [])
+  return (crossReferenceMap().references[key] ?? [])
     .map((item): BibleCrossReference | undefined => {
       const parsed = parseCrossReferenceVerse(item.verse);
       if (!parsed) return undefined;

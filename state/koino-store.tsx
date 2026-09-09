@@ -6,7 +6,7 @@ import { get, getDatabase, onValue, ref, remove, runTransaction, set, update } f
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { updateBiblePlanProgress } from "@/state/bible-plan-progress";
+import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bible-plan-progress";
 import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
@@ -1851,10 +1851,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!existing) return;
               const timestamp = now();
               const dayCount = Math.max(1, Math.floor(action.dayCount));
-              const rebuiltDays = buildBiblePlanDays(action.ranges, dayCount).map((day) => ({
-                ...day,
-                completedAt: existing.days.find((item) => item.dayNumber === day.dayNumber)?.completedAt,
-              }));
+              const rebuiltDays = preserveBiblePlanProgress(buildBiblePlanDays(action.ranges, dayCount), existing.days);
               const completedAt = rebuiltDays.every((day) => Boolean(day.completedAt)) ? (existing.completedAt ?? timestamp) : undefined;
               await update(ref(database, `biblePlans/${firebaseUser.uid}/${action.id}`), {
                 title: action.title.trim().slice(0, 80),
@@ -1905,15 +1902,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
               if (!plan || !plan.days.some((day) => day.dayNumber === action.dayNumber)) return;
               const timestamp = now();
-              const progress = updateBiblePlanProgress(plan, action.dayNumber, action.read, timestamp);
-              if (!progress) return;
-              const { days, status, completedAt } = progress;
-              const updates: Record<string, unknown> = {
-                [`biblePlans/${firebaseUser.uid}/${plan.id}/days`]: days,
-                [`biblePlans/${firebaseUser.uid}/${plan.id}/status`]: status,
-                [`biblePlans/${firebaseUser.uid}/${plan.id}/completedAt`]: completedAt ?? null,
-                [`biblePlans/${firebaseUser.uid}/${plan.id}/updatedAt`]: timestamp,
-              };
+              const result = biblePlanProgressUpdates(plan, action.dayNumber, action.read, timestamp);
+              if (!result) return;
+              const { days } = result.progress;
+              const updates: Record<string, unknown> = { ...result.updates };
               if (plan.groupId && plan.announcementId) {
                 const participantId = groupBiblePlanParticipantIds[plan.announcementId];
                 if (participantId) {
