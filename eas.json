@@ -7,20 +7,25 @@
         "buildType": "apk"
       }
     },
+
     "internal": {
       "channel": "internal",
       "distribution": "internal",
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       }
     },
+
     "production": {
       "channel": "production",
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       }
     }
   },
+
   "submit": {
     "internal": {
       "android": {
@@ -28,6 +33,7 @@
         "track": "internal"
       }
     },
+
     "production": {
       "ios": {
         "ascAppId": "6809953941"
