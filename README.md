@@ -23,6 +23,7 @@ npm run typecheck
 npm run doctor
 npm run validate:bible-plans
 npm run validate:bible-search
+npm run validate:startup
 ```
 
 Bible text, full-text search, and cross-references are packaged in

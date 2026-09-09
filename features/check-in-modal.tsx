@@ -15,7 +15,7 @@ import {
   SectionHeading,
   TextInputField,
 } from "@/ui/app-components";
-import { BibleVerseField } from "@/ui/bible-verse-picker";
+import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, radius } from "@/ui/theme";
 

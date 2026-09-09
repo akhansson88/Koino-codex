@@ -596,24 +596,37 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     if (!firebaseUser) return;
 
     setProfileReady(false);
+    setProfile(null);
     const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
-    const unsubscribe = onValue(profileRef, async (snapshot) => {
-      if (!snapshot.exists()) {
-        await ensureProfile(firebaseUser);
-        return;
-      }
+    const unsubscribe = onValue(
+      profileRef,
+      async (snapshot) => {
+        if (!snapshot.exists()) {
+          try {
+            await ensureProfile(firebaseUser);
+          } catch (error) {
+            setAuthError(authMessage(error));
+            setProfileReady(true);
+          }
+          return;
+        }
 
-      const nextProfile = snapshot.val() as Profile;
-      setProfile(nextProfile);
-      const nextTheme = normalizeTheme(nextProfile.theme);
-      if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
-        isThemeSyncPendingRef.current = false;
-      }
-      if (!hasStoredThemeRef.current && !isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
-        setTheme(nextTheme);
-      }
-      setProfileReady(true);
-    });
+        const nextProfile = snapshot.val() as Profile;
+        setProfile(nextProfile);
+        const nextTheme = normalizeTheme(nextProfile.theme);
+        if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
+          isThemeSyncPendingRef.current = false;
+        }
+        if (!hasStoredThemeRef.current && !isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
+          setTheme(nextTheme);
+        }
+        setProfileReady(true);
+      },
+      (error) => {
+        setAuthError(authMessage(error));
+        setProfileReady(true);
+      },
+    );
 
     return unsubscribe;
   }, [firebaseUser]);
@@ -622,11 +635,19 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     if (!firebaseUser) return;
 
     setUserGroupsReady(false);
+    setUserMemberships([]);
     const userGroupsRef = ref(database, `userGroups/${firebaseUser.uid}`);
-    const unsubscribe = onValue(userGroupsRef, (snapshot) => {
-      setUserMemberships(asArray<Membership>(snapshot.val()));
-      setUserGroupsReady(true);
-    });
+    const unsubscribe = onValue(
+      userGroupsRef,
+      (snapshot) => {
+        setUserMemberships(asArray<Membership>(snapshot.val()));
+        setUserGroupsReady(true);
+      },
+      (error) => {
+        setAuthError(authMessage(error));
+        setUserGroupsReady(true);
+      },
+    );
 
     return unsubscribe;
   }, [firebaseUser]);
@@ -939,7 +960,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];
 
     return {
-      ready: themeReady && authReady && (!firebaseUser || (profileReady && userGroupsReady)),
+      authReady,
+      profileReady,
+      userGroupsReady,
       currentUserId: firebaseUser?.uid,
       currentGroupId: profile?.currentGroupId ?? undefined,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
@@ -978,7 +1001,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     communityFeedOffline,
     communityFeedReady,
     theme,
-    themeReady,
     authReady,
     checkIns,
     firebaseUser,

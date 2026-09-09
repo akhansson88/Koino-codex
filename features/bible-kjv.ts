@@ -14,10 +14,13 @@ import {
   queryBibleCrossReferences,
   queryBibleText,
 } from "@/features/bible-database";
+import { bibleVersionFor, bibleVersions, isBibleVersionId, type BibleVersionId } from "@/features/bible-versions";
 import type { BibleVerse } from "@/state/types";
 
 export { kjvBooks, nextBibleChapter, normalizeBiblePosition, previousBibleChapter, versesForChapter };
 export type { BibleBook, BiblePosition };
+export { bibleVersionFor, bibleVersions, isBibleVersionId };
+export type { BibleVersionId };
 
 export type BibleChapterVerse = {
   reference: string;
@@ -39,23 +42,6 @@ export type BibleTextSearchResult = {
   reference: string;
   text: string;
 };
-
-export const bibleVersions = [
-  { id: "kjv", label: "KJV", translation: "KJV" },
-  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026" },
-] as const;
-
-export type BibleVersionId = (typeof bibleVersions)[number]["id"];
-
-const defaultBibleVersionId: BibleVersionId = "kjv";
-
-export function isBibleVersionId(value: unknown): value is BibleVersionId {
-  return typeof value === "string" && bibleVersions.some((version) => version.id === value);
-}
-
-export function bibleVersionFor(versionId?: BibleVersionId) {
-  return bibleVersions.find((version) => version.id === versionId) ?? bibleVersions.find((version) => version.id === defaultBibleVersionId) ?? bibleVersions[0];
-}
 
 export function normalizeBibleReference(reference: string) {
   const cleanedReference = reference.replace(/[\u2013\u2014–—]/g, "-").replace(/\s+/g, " ").trim();

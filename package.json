@@ -19,6 +19,7 @@
     "doctor": "npx expo-doctor",
     "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs",
     "validate:bible-search": "node scripts/validate-bible-search.mjs",
+    "validate:startup": "node scripts/validate-startup-dependencies.mjs",
     "test:donations": "node --test scripts/donation-api.test.cjs",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "npm --prefix functions run build",

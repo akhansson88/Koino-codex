@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 
-import { isBibleVersionId, type BibleVersionId } from "@/features/bible-kjv";
+import { isBibleVersionId, type BibleVersionId } from "@/features/bible-versions";
 
 export const defaultBibleVersionId: BibleVersionId = "reformationsbibeln2026";
 

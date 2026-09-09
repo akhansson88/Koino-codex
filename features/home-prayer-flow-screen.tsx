@@ -240,7 +240,9 @@ export function HomePrayerFlowScreen() {
   const routeGroupExists = Boolean(groupId && state.groups.some((group) => group.id === groupId));
   const feedMatchesRoute = Boolean(groupId && state.communityFeedGroupId === groupId);
   const feedLoading =
-    !state.ready ||
+    !state.authReady ||
+    !state.profileReady ||
+    !state.userGroupsReady ||
     (routeIsValid &&
       routeUsesCurrentGroup &&
       routeGroupExists &&

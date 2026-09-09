@@ -42,7 +42,7 @@ import {
   TextInputField,
   VerseList,
 } from "@/ui/app-components";
-import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { useAppTranslation } from "@/ui/app-language";
 import {

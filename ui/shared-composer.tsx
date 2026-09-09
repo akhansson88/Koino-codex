@@ -5,7 +5,7 @@ import { Platform, Pressable, Text, useWindowDimensions, View } from "react-nati
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
-import { BibleVerseField } from "@/ui/bible-verse-picker";
+import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 

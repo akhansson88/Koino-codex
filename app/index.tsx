@@ -8,7 +8,7 @@ import { colors } from "@/ui/theme";
 export default function Index() {
   const { state } = useKoino();
 
-  if (!state.ready) {
+  if (!state.authReady) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cream }}>
         <ActivityIndicator color={colors.olive} />
@@ -17,7 +17,7 @@ export default function Index() {
   }
 
   if (state.currentUserId) {
-    return <Redirect href={(state.currentGroupId ? "/(tabs)" : "/(tabs)/community") as never} />;
+    return <Redirect href="/(tabs)" />;
   }
 
   return <OnboardingScreen />;

@@ -15,7 +15,7 @@ import {
   PrimaryButton,
 } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
-import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
 import { journalEntryPresentation } from "@/ui/journal-presentation";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";

@@ -5,6 +5,7 @@ import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
+import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
@@ -27,7 +28,6 @@ import {
   VersePreviewCard,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { primaryBibleVerse } from "@/ui/bible-verse-picker";
 import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communityPrayerNoun, communitySystemError } from "@/ui/community-copy";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
@@ -106,8 +106,11 @@ export function HomeScreen() {
   const communityFeedReadyForGroup = Boolean(
     state.currentGroupId && state.communityFeedGroupId === state.currentGroupId && state.communityFeedReady,
   );
+  const profileLoading = Boolean(state.currentUserId && !state.profileReady);
   const communityContentLoading =
-    !state.ready || Boolean(state.currentGroupId && !state.communityFeedError && !communityFeedReadyForGroup);
+    profileLoading ||
+    !state.userGroupsReady ||
+    Boolean(state.currentGroupId && !state.communityFeedError && !communityFeedReadyForGroup);
   const communityContent = useMemo(() => {
     return selectCommunityContent({
       checkIns: state.checkIns,
@@ -251,12 +254,16 @@ export function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: 18 }}
       >
-        <View style={{ gap: 5 }}>
-          <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
-            {t(greetingKey, greetingName ? { name: greetingName } : undefined)}
-          </Text>
-          <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
-        </View>
+        {profileLoading ? (
+          <ProfileGreetingSkeleton />
+        ) : (
+          <View style={{ gap: 5 }}>
+            <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
+              {t(greetingKey, greetingName ? { name: greetingName } : undefined)}
+            </Text>
+            <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
+          </View>
+        )}
 
         <HeartCheckInCard checkedIn={todaysCheckIn} loading={communityContentLoading} onPress={openCheckIn} />
 
@@ -390,6 +397,15 @@ export function HomeScreen() {
         </AppScreen>
       </FullScreenModal>
     </AppScreen>
+  );
+}
+
+function ProfileGreetingSkeleton() {
+  return (
+    <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 8, minHeight: 51 }}>
+      <View style={{ backgroundColor: colors.line, borderRadius: 8, height: 22, width: 190 }} />
+      <View style={{ backgroundColor: colors.line, borderRadius: 7, height: 14, width: 250 }} />
+    </View>
   );
 }
 

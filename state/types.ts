@@ -279,7 +279,9 @@ export type SupportIntent = {
 };
 
 export type KoinoState = {
-  ready: boolean;
+  authReady: boolean;
+  profileReady: boolean;
+  userGroupsReady: boolean;
   currentUserId?: Id;
   currentGroupId?: Id;
   authEmail?: string;

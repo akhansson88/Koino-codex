@@ -8,7 +8,7 @@ import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/produc
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { normalizeBibleVerses, primaryBibleVerse } from "@/ui/bible-verse-picker";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { journalEntryPresentation } from "@/ui/journal-presentation";
 import { LinkPreview } from "@/ui/link-preview";
 import { SharedComposer } from "@/ui/shared-composer";

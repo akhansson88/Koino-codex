@@ -20,7 +20,9 @@ export default function FeedDetailRoute() {
   const currentGroupId = state.currentGroupId;
   const waitingForPost =
     routeTargetType === "post" &&
-    (!state.ready ||
+    (!state.authReady ||
+      !state.profileReady ||
+      !state.userGroupsReady ||
       Boolean(
         currentGroupId &&
           !state.communityFeedError &&

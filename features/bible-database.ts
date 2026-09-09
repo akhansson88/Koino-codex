@@ -25,6 +25,7 @@ const CHAPTER_CACHE_LIMIT = 6;
 const CROSS_REFERENCE_CHAPTER_CACHE_LIMIT = 6;
 
 let database: BibleDatabaseConnection | undefined;
+const activeDatabases = new Map<BibleDatabaseConnection, number>();
 const chapterCache = new Map<string, BibleDatabaseVerseRow[]>();
 const crossReferenceChapterCache = new Map<string, Set<number>>();
 
@@ -57,7 +58,28 @@ export async function initializeBibleDatabase(nextDatabase: SQLiteDatabase) {
   crossReferenceChapterCache.clear();
 }
 
+export function retainBibleDatabase(retainedDatabase: BibleDatabaseConnection) {
+  activeDatabases.set(retainedDatabase, (activeDatabases.get(retainedDatabase) ?? 0) + 1);
+  database = retainedDatabase;
+}
+
+export function releaseBibleDatabase(releasedDatabase: BibleDatabaseConnection) {
+  const remainingReferences = (activeDatabases.get(releasedDatabase) ?? 1) - 1;
+  if (remainingReferences > 0) {
+    activeDatabases.set(releasedDatabase, remainingReferences);
+    return;
+  }
+  activeDatabases.delete(releasedDatabase);
+  if (database === releasedDatabase) {
+    database = Array.from(activeDatabases.keys()).at(-1);
+    chapterCache.clear();
+    crossReferenceChapterCache.clear();
+  }
+}
+
 export function setBibleDatabaseForTesting(nextDatabase: BibleDatabaseConnection) {
+  activeDatabases.clear();
+  activeDatabases.set(nextDatabase, 1);
   database = nextDatabase;
   chapterCache.clear();
   crossReferenceChapterCache.clear();

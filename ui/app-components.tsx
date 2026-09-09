@@ -6,8 +6,7 @@ import type { ModalProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
 
-import { bibleVerseForVersion } from "@/features/bible-kjv";
-import { usePreferredBibleVersion } from "@/features/bible-preferences";
+import { bibleVerseIdentity, normalizeBibleVerses } from "@/features/bible-verse-utils";
 import { useKoino } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
@@ -639,10 +638,6 @@ type VerseActionHandlers = {
   onShareToRoom?: (verse: BibleVerse) => void;
 };
 
-function verseIdentity(verse: Pick<BibleVerse, "reference" | "translation">) {
-  return `${verse.reference}|${verse.translation ?? ""}`;
-}
-
 export function VersePreviewCard({
   compact = false,
   inlineDetail = false,
@@ -671,10 +666,9 @@ export function VersePreviewCard({
 }) {
   const { state } = useKoino();
   const { t } = useAppTranslation();
-  const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
-  const displayVerse = bibleVerseForVersion(verse, preferredBibleVersion);
+  const displayVerse = verse;
   const previewLines = maxLines ?? (compact ? 3 : 5);
   const cardOpenLabel = openAccessibilityLabel ?? t("shared.scripture.openReference", { reference: displayVerse.reference });
   const cardOpenText = openLabel ?? t("shared.scripture.open");
@@ -686,7 +680,7 @@ export function VersePreviewCard({
     setDetailVisible(false);
     onDetailVisibilityChange?.(false);
   };
-  const saved = state.savedVerses.some((item) => verseIdentity(item) === verseIdentity(displayVerse));
+  const saved = state.savedVerses.some((item) => bibleVerseIdentity(item) === bibleVerseIdentity(displayVerse));
   const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
   const previewCardStyle: ViewStyle = {
     alignItems: compact ? "flex-start" : "center",
@@ -815,11 +809,6 @@ export function VerseCard(props: Parameters<typeof VersePreviewCard>[0]) {
   return <VersePreviewCard {...props} />;
 }
 
-export function bibleVerses(verse?: BibleVerse, verses?: BibleVerse[]) {
-  if (verses?.length) return verses.slice(0, 5);
-  return verse ? [verse] : [];
-}
-
 export function VerseList({
   compact = false,
   maxLines,
@@ -836,7 +825,7 @@ export function VerseList({
   maxLines?: number;
   showFullText?: boolean;
 }) {
-  const visibleVerses = bibleVerses(verse, verses);
+  const visibleVerses = normalizeBibleVerses(verse, verses);
   if (visibleVerses.length === 0) return null;
   return (
     <View style={{ gap: 8 }}>

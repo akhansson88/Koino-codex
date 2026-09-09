@@ -8,9 +8,7 @@ import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular"
 import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
 import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
 import { Platform } from "react-native";
-import { SQLiteProvider } from "expo-sqlite";
 
-import { initializeBibleDatabase } from "@/features/bible-database";
 import { KoinoProvider, useKoino } from "@/state/koino-store";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { colors, statusBarStyle } from "@/ui/theme";
@@ -28,17 +26,11 @@ export default function RootLayout() {
   });
 
   return (
-    <SQLiteProvider
-      assetSource={{ assetId: require("../assets/bible/koino-bible-v1.db") }}
-      databaseName="koino-bible-v1.db"
-      onInit={initializeBibleDatabase}
-    >
-      <AppLanguageProvider>
-        <KoinoProvider>
-          <RootNavigator />
-        </KoinoProvider>
-      </AppLanguageProvider>
-    </SQLiteProvider>
+    <AppLanguageProvider>
+      <KoinoProvider>
+        <RootNavigator />
+      </KoinoProvider>
+    </AppLanguageProvider>
   );
 }
 

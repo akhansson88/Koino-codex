@@ -14,7 +14,7 @@ export default function TabLayout() {
   const { state } = useKoino();
   const { t } = useAppTranslation();
 
-  if (state.ready && !state.currentUserId) {
+  if (state.authReady && !state.currentUserId) {
     return <OnboardingScreen />;
   }
 
