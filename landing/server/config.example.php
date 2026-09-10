@@ -5,4 +5,8 @@ return [
     'user' => 'dbu5790577',
     'password' => 'SET_ON_SERVER_ONLY',
     'rate_secret' => 'GENERATE_A_RANDOM_32_BYTE_SECRET',
+    'admin_allowed_origins' => [
+        'https://koinolabs.com',
+        'https://www.koinolabs.com',
+    ],
 ];

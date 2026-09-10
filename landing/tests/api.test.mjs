@@ -64,3 +64,28 @@ test("unconfigured database returns a generic failure, not success or credential
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { ok: false });
 });
+
+test("admin endpoints reject unauthenticated and cross-origin requests", async () => {
+  const adminBase = new URL("admin/", endpoint).toString();
+  for (const file of ["session.php", "overview.php", "registrations.php", "export.php?platform=google-play"]) {
+    const response = await fetch(new URL(file, adminBase));
+    assert.equal(response.status, 401, file);
+    assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+    assert.equal(response.headers.get("vary"), "Cookie");
+    const body = await response.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.code, "unauthorized");
+  }
+
+  const login = await fetch(new URL("login.php", adminBase), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "operator", password: "not-a-real-password" }),
+  });
+  assert.equal(login.status, 403);
+  assert.deepEqual(await login.json(), { ok: false });
+
+  const logout = await fetch(new URL("logout.php", adminBase), { method: "GET" });
+  assert.equal(logout.status, 405);
+  assert.equal(logout.headers.get("allow"), "POST");
+});
