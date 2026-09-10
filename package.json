@@ -32,7 +32,6 @@
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.14",
     "expo-font": "~14.0.12",
-    "expo-gl": "~16.0.10",
     "expo-haptics": "~15.0.8",
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.11",
