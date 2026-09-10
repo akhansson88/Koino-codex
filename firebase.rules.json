@@ -121,6 +121,7 @@
 
     "checkIns": {
       "$groupId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$checkInId": {
@@ -173,6 +174,7 @@
 
     "privateCheckIns": {
       "$uid": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && auth.uid == $uid",
         "$checkInId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",
@@ -224,6 +226,7 @@
 
     "posts": {
       "$groupId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$postId": {
@@ -279,6 +282,7 @@
 
     "replies": {
       "$groupId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$replyId": {
@@ -297,6 +301,7 @@
 
     "prayerReactions": {
       "$groupId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$reactionId": {
@@ -317,6 +322,7 @@
 
     "postReactions": {
       "$groupId": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$reactionId": {
@@ -354,6 +360,7 @@
 
     "prayerNotifications": {
       "$uid": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && auth.uid == $uid",
         "$notificationId": {
           ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('userId').val() == auth.uid) || (data.exists() && !newData.exists() && data.child('userId').val() == auth.uid))",
@@ -372,6 +379,7 @@
 
     "journalEntries": {
       "$uid": {
+        ".indexOn": ["createdAt"],
         ".read": "auth != null && auth.uid == $uid",
         "$entryId": {
           ".write": "auth != null && ((!data.exists() && !newData.exists()) || auth.uid == $uid)",

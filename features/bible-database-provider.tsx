@@ -2,6 +2,18 @@ import { PropsWithChildren, useEffect } from "react";
 import { SQLiteProvider, useSQLiteContext } from "expo-sqlite";
 
 import { initializeBibleDatabase, releaseBibleDatabase, retainBibleDatabase } from "@/features/bible-database";
+import { markStartupMilestone } from "@/features/startup-performance";
+
+async function initializeInstrumentedBibleDatabase(database: Parameters<typeof initializeBibleDatabase>[0]) {
+  markStartupMilestone("bibleInitializationStart");
+  try {
+    await initializeBibleDatabase(database);
+    markStartupMilestone("bibleInitializationReady");
+  } catch (error) {
+    markStartupMilestone("bibleInitializationError", error instanceof Error ? error.message : "unknown error");
+    throw error;
+  }
+}
 
 function BibleDatabaseLifetime({ children }: PropsWithChildren) {
   const database = useSQLiteContext();
@@ -19,7 +31,7 @@ export function BibleDatabaseProvider({ children }: PropsWithChildren) {
     <SQLiteProvider
       assetSource={{ assetId: require("../assets/bible/koino-bible-v1.db") }}
       databaseName="koino-bible-v1.db"
-      onInit={initializeBibleDatabase}
+      onInit={initializeInstrumentedBibleDatabase}
     >
       <BibleDatabaseLifetime>{children}</BibleDatabaseLifetime>
     </SQLiteProvider>

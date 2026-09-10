@@ -89,6 +89,7 @@ type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>
 const COMMUNITY_RECENT_DAYS = 30;
 const COMMUNITY_RECENT_ITEM_LIMIT = 20;
 const COMMUNITY_EARLIER_PAGE_SIZE = 20;
+const FIREBASE_COMMUNITY_REVEAL_RESERVE = 50;
 const COMMUNITY_FEED_TIMER_MAX_DELAY = 2_147_000_000;
 
 function localDayKey(value: string | Date) {
@@ -529,8 +530,22 @@ export function SettingsScreen() {
     }
   }
 
-  function revealEarlierActivity() {
-    if (!group || earlierFeedItems.length === 0) return;
+  async function revealEarlierActivity() {
+    if (!group) return;
+
+    if (revealedEarlierCount >= earlierFeedItems.length && state.communityContentHasMore) {
+      setCommunityFeedRevealState((current) => ({
+        ...current,
+        [group.id]: {
+          ...current[group.id],
+          [detailTab]: (current[group.id]?.[detailTab] ?? 0) + FIREBASE_COMMUNITY_REVEAL_RESERVE,
+        },
+      }));
+      await dispatch({ type: "loadOlderCommunityContent" });
+      return;
+    }
+
+    if (earlierFeedItems.length === 0) return;
 
     const nextCount = Math.min(revealedEarlierCount + COMMUNITY_EARLIER_PAGE_SIZE, earlierFeedItems.length);
     const newlyRevealedCount = nextCount - revealedEarlierCount;
@@ -1040,6 +1055,9 @@ export function SettingsScreen() {
             feedError={communityFeedError}
             feedLoading={communityFeedLoading}
             feedOffline={communityFeedOffline}
+            hasMore={state.communityContentHasMore}
+            loadingMore={state.communityContentLoadingMore}
+            onLoadMore={() => dispatch({ type: "loadOlderCommunityContent" })}
             userById={userById}
             userImageById={userImageById}
           />
@@ -1090,6 +1108,9 @@ export function SettingsScreen() {
             feedError={communityFeedError}
             feedLoading={communityFeedLoading}
             feedOffline={communityFeedOffline}
+            hasMore={state.communityContentHasMore}
+            loadingMore={state.communityContentLoadingMore}
+            onLoadMore={() => dispatch({ type: "loadOlderCommunityContent" })}
             userById={userById}
             userImageById={userImageById}
           />
@@ -1220,15 +1241,15 @@ export function SettingsScreen() {
                   <CommunityFeedEndpoint
                     communityName={group.name}
                     detailTab={detailTab}
-                    onViewEarlier={earlierFeedItems.length > 0 && visibleEarlierFeedItems.length === 0 ? revealEarlierActivity : undefined}
+                    onViewEarlier={(earlierFeedItems.length > 0 || state.communityContentHasMore) && visibleEarlierFeedItems.length === 0 ? revealEarlierActivity : undefined}
                     variant={recentFeedItems.length > 0 ? "caught-up" : "no-recent"}
                   />
                   {visibleEarlierFeedItems.length > 0 ? (
                     <>
                       <CommunityActivityDivider label={t("community.feed.earlierActivity")} />
                       {visibleEarlierFeedItems.map(renderCommunityFeedItem)}
-                      {hasMoreEarlierFeedItems ? (
-                        <CommunityEarlierActivityAction onPress={revealEarlierActivity} />
+                      {hasMoreEarlierFeedItems || state.communityContentHasMore ? (
+                        <CommunityEarlierActivityAction loading={state.communityContentLoadingMore} onPress={revealEarlierActivity} />
                       ) : (
                         <CommunityActivityDivider label={t("community.feed.beginning")} />
                       )}
@@ -1577,17 +1598,19 @@ function CommunityActivityDivider({ label }: { label: string }) {
   );
 }
 
-function CommunityEarlierActivityAction({ onPress }: { onPress: () => void }) {
+function CommunityEarlierActivityAction({ loading = false, onPress }: { loading?: boolean; onPress: () => void | Promise<void> }) {
   const { t } = useAppTranslation();
   return (
     <Pressable
       accessibilityLabel={t("community.feed.viewMoreEarlier")}
       accessibilityRole="button"
+      accessibilityState={{ busy: loading, disabled: loading }}
+      disabled={loading}
       onPress={onPress}
       style={{ alignItems: "center", alignSelf: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
     >
-      <Text style={[typography.label, { color: colors.olive }]}>{t("common.viewMore")}</Text>
-      <Feather name="chevron-down" size={16} color={colors.olive} />
+      <Text style={[typography.label, { color: colors.olive }]}>{t(loading ? "community.feed.loadingEarlier" : "common.viewMore")}</Text>
+      {loading ? <ActivityIndicator color={colors.olive} size="small" /> : <Feather name="chevron-down" size={16} color={colors.olive} />}
     </Pressable>
   );
 }
@@ -1947,6 +1970,8 @@ function CommunityPrayerScreen({
   feedError,
   feedLoading,
   feedOffline,
+  hasMore,
+  loadingMore,
   filter,
   onBack,
   onCreatePrayer,
@@ -1954,6 +1979,7 @@ function CommunityPrayerScreen({
   onOpenPrayer,
   onPray,
   onPrayForSomeone,
+  onLoadMore,
   prayerPosts,
   prayerState,
   userById,
@@ -1963,6 +1989,8 @@ function CommunityPrayerScreen({
   feedError?: string;
   feedLoading: boolean;
   feedOffline: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
   filter: PrayerFilter;
   onBack: () => void;
   onCreatePrayer: () => void;
@@ -1970,6 +1998,7 @@ function CommunityPrayerScreen({
   onOpenPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
   onPray: (item: FeedItem) => void;
   onPrayForSomeone: () => void;
+  onLoadMore: () => Promise<void>;
   prayerPosts: Extract<FeedItem, { type: "post" }>[];
   prayerState: (item: FeedItem) => { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
   userById: Map<Id, string>;
@@ -2046,6 +2075,9 @@ function CommunityPrayerScreen({
           );
         })
       )}
+      {hasMore && !feedLoading && !feedError ? (
+        <CommunityEarlierActivityAction loading={loadingMore} onPress={onLoadMore} />
+      ) : null}
     </AppScreen>
   );
 }
@@ -2200,10 +2232,13 @@ function CommunityCheckInsScreen({
   feedError,
   feedLoading,
   feedOffline,
+  hasMore,
+  loadingMore,
   onBack,
   onCheckIn,
   onOpenCheckIn,
   onReact,
+  onLoadMore,
   reactionState,
   userById,
   userImageById,
@@ -2214,10 +2249,13 @@ function CommunityCheckInsScreen({
   feedError?: string;
   feedLoading: boolean;
   feedOffline: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
   onBack: () => void;
   onCheckIn: () => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
   onReact: (item: FeedItem) => void;
+  onLoadMore: () => Promise<void>;
   reactionState: (item: FeedItem) => {
     reacted: boolean;
     count: number;
@@ -2272,6 +2310,9 @@ function CommunityCheckInsScreen({
           );
         })
       )}
+      {hasMore && !feedLoading && !feedError ? (
+        <CommunityEarlierActivityAction loading={loadingMore} onPress={onLoadMore} />
+      ) : null}
     </AppScreen>
   );
 }

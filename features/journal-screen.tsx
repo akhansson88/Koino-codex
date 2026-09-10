@@ -13,6 +13,7 @@ import {
   FullScreenModal,
   IconButton,
   PrimaryButton,
+  SecondaryButton,
 } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
@@ -211,6 +212,8 @@ export function JournalScreen() {
 
       <JournalHistoryModal
         entries={entries}
+        hasMore={state.journalEntriesHasMore}
+        loadingMore={state.journalEntriesLoadingMore}
         onClose={() => setHistoryVisible(false)}
         onOpen={(entry) => {
           setHistoryVisible(false);
@@ -220,6 +223,7 @@ export function JournalScreen() {
           setHistoryVisible(false);
           beginEntry("reflection", visibility.private);
         }}
+        onLoadMore={() => dispatch({ type: "loadOlderJournalEntries" })}
         visible={historyVisible}
       />
     </AppScreen>
@@ -282,13 +286,19 @@ function JourneySummaryCard({ entry, onPress }: { entry?: JournalEntry; onPress:
 
 function JournalHistoryModal({
   entries,
+  hasMore,
+  loadingMore,
   onClose,
+  onLoadMore,
   onOpen,
   onWriteEntry,
   visible,
 }: {
   entries: JournalEntry[];
+  hasMore: boolean;
+  loadingMore: boolean;
   onClose: () => void;
+  onLoadMore: () => Promise<void>;
   onOpen: (entry: JournalEntry) => void;
   onWriteEntry: () => void;
   visible: boolean;
@@ -329,6 +339,11 @@ function JournalHistoryModal({
             onOpen={() => onOpen(entry)}
           />
         ))}
+        {hasMore ? (
+          <SecondaryButton disabled={loadingMore} icon="chevron-down" onPress={onLoadMore}>
+            {t(loadingMore ? "me.journey.loadingEarlier" : "me.journey.loadEarlier")}
+          </SecondaryButton>
+        ) : null}
       </AppScreen>
     </FullScreenModal>
   );

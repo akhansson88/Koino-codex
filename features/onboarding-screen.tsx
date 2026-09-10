@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { markStartupMilestone } from "@/features/startup-performance";
 import { Body, Card, Choice, Field, PillButton, Screen } from "@/ui/components";
 import { KoinoLogo } from "@/ui/koino-logo";
 import { colors } from "@/ui/theme";
@@ -17,6 +18,10 @@ export function OnboardingScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [isSendingReset, setIsSendingReset] = useState(false);
+
+  useEffect(() => {
+    markStartupMilestone("firstScreenMounted", "onboarding");
+  }, []);
 
   useEffect(() => {
     if (!name && state.users[0]?.name) {

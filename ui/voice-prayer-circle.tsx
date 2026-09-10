@@ -294,25 +294,59 @@ function VoicePrayerCircleWeb({ size }: { size: number }) {
 function VoicePrayerCircleNative({ size }: { size: number }) {
   const { GLView } = require("expo-gl");
   const rafRef = useRef<number | null>(null);
+  const disposedRef = useRef(false);
+  const resourcesRef = useRef<{ gl: any; program: any; buffer: any; positionLocation: number } | null>(null);
 
   useEffect(() => {
+    disposedRef.current = false;
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      disposedRef.current = true;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+
+      const resources = resourcesRef.current;
+      resourcesRef.current = null;
+      if (!resources) return;
+      const { gl, positionLocation, buffer, program } = resources;
+      if (positionLocation >= 0) gl.disableVertexAttribArray(positionLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      gl.useProgram(null);
+      if (buffer) gl.deleteBuffer(buffer);
+      if (program) gl.deleteProgram(program);
+      gl.flush?.();
     };
   }, []);
 
   const onContextCreate = useCallback((gl: any) => {
+    if (disposedRef.current) return;
     const compile = (type: number, source: string) => {
       const shader = gl.createShader(type);
+      if (!shader) throw new Error("Shader creation failed");
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) || "Shader compile failed");
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const message = gl.getShaderInfoLog(shader) || "Shader compile failed";
+        gl.deleteShader(shader);
+        throw new Error(message);
+      }
       return shader;
     };
 
     const program = gl.createProgram();
-    const vertexShader = compile(gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = compile(gl.FRAGMENT_SHADER, fragmentShaderSource);
+    if (!program) return;
+    let vertexShader: any;
+    let fragmentShader: any;
+    try {
+      vertexShader = compile(gl.VERTEX_SHADER, vertexShaderSource);
+      fragmentShader = compile(gl.FRAGMENT_SHADER, fragmentShaderSource);
+    } catch (error) {
+      if (vertexShader) gl.deleteShader(vertexShader);
+      gl.deleteProgram(program);
+      console.error(error);
+      return;
+    }
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
@@ -320,7 +354,9 @@ function VoicePrayerCircleNative({ size }: { size: number }) {
     gl.deleteShader(fragmentShader);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      throw new Error(gl.getProgramInfoLog(program) || "Program linking failed");
+      console.error(gl.getProgramInfoLog(program) || "Program linking failed");
+      gl.deleteProgram(program);
+      return;
     }
 
     const positionLocation = gl.getAttribLocation(program, "a_position");
@@ -328,11 +364,17 @@ function VoicePrayerCircleNative({ size }: { size: number }) {
     const timeLocation = gl.getUniformLocation(program, "u_time");
 
     const buffer = gl.createBuffer();
+    if (!buffer) {
+      gl.deleteProgram(program);
+      return;
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
+    resourcesRef.current = { gl, program, buffer, positionLocation };
     const startTime = Date.now();
 
     const render = () => {
+      if (disposedRef.current || resourcesRef.current?.program !== program) return;
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.useProgram(program);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -342,7 +384,9 @@ function VoicePrayerCircleNative({ size }: { size: number }) {
       gl.uniform1f(timeLocation, (Date.now() - startTime) * 0.001);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.endFrameEXP();
-      rafRef.current = requestAnimationFrame(render);
+      if (!disposedRef.current && resourcesRef.current?.program === program) {
+        rafRef.current = requestAnimationFrame(render);
+      }
     };
 
     render();

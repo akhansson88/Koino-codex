@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
+import { markStartupMilestone } from "@/features/startup-performance";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
@@ -79,6 +80,10 @@ export function HomeScreen() {
   const [greetingPeriod, setGreetingPeriod] = useState<HomeGreetingPeriod>(() => homeGreetingPeriodAt(new Date()));
   const lastCheckInParamRef = useRef<string | undefined>(undefined);
   const directPrayerPersistencePendingRef = useRef(false);
+
+  useEffect(() => {
+    markStartupMilestone("firstScreenMounted", "home");
+  }, []);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);

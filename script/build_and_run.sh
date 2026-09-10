@@ -56,33 +56,23 @@ run_doctor() {
 
 resolve_expo_cmd
 
-ensure_generated_bible_data() {
-  node "$ROOT_DIR/scripts/generate-bible-data.mjs"
-}
-
 case "$MODE" in
   start|run)
-    ensure_generated_bible_data
-    exec "${EXPO_CMD[@]}" start --lan
+    exec "${EXPO_CMD[@]}" start
     ;;
   --lan|lan)
-    ensure_generated_bible_data
     exec "${EXPO_CMD[@]}" start --lan
     ;;
   --localhost|localhost)
-    ensure_generated_bible_data
     exec "${EXPO_CMD[@]}" start --localhost
     ;;
   --tunnel|tunnel)
-    ensure_generated_bible_data
-    exec "${EXPO_CMD[@]}" start --tunnel --clear
+    exec "${EXPO_CMD[@]}" start --tunnel
     ;;
   --ios|ios)
-    ensure_generated_bible_data
     exec "${EXPO_CMD[@]}" start --ios
     ;;
   --android|android)
-    ensure_generated_bible_data
     exec "${EXPO_CMD[@]}" start --android
     ;;
   --doctor|doctor)

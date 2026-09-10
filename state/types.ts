@@ -290,6 +290,12 @@ export type KoinoState = {
   communityFeedGroupId?: Id;
   communityFeedOffline?: boolean;
   communityFeedReady: boolean;
+  communityContentHasMore: boolean;
+  communityContentLoadingMore: boolean;
+  journalEntriesHasMore: boolean;
+  journalEntriesLoadingMore: boolean;
+  prayerNotificationsHasMore: boolean;
+  prayerNotificationsLoadingMore: boolean;
   theme: ThemeName;
   users: User[];
   groups: Group[];
