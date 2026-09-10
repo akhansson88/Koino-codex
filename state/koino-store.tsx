@@ -6,6 +6,14 @@ import { get, getDatabase, onValue, ref, remove, runTransaction, set, update } f
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
+import {
+  fetchOlderFirebasePage,
+  FIREBASE_PAGE_SIZE,
+  firebaseRecords,
+  mergeFirebaseRecords,
+  recentFirebaseQuery,
+} from "@/state/firebase-pagination";
+import { markStartupMilestone } from "@/features/startup-performance";
 import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bible-plan-progress";
 import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
@@ -147,6 +155,9 @@ type Action =
   | { type: "unannounceBiblePlan"; announcementId: Id }
   | { type: "joinGroupBiblePlan"; announcementId: Id }
   | { type: "createSupportIntent"; amount: number }
+  | { type: "loadOlderCommunityContent" }
+  | { type: "loadOlderJournalEntries" }
+  | { type: "loadOlderPrayerNotifications" }
   | { type: "setTheme"; theme: ThemeName };
 
 
@@ -154,6 +165,22 @@ type KoinoContextValue = {
   state: KoinoState;
   dispatch: (action: Action) => Promise<void>;
   getAuthToken: () => Promise<string | null>;
+};
+
+type CommunityPageAvailability = {
+  checkIns: boolean;
+  posts: boolean;
+  replies: boolean;
+  prayerReactions: boolean;
+  postReactions: boolean;
+};
+
+const noCommunityPages: CommunityPageAvailability = {
+  checkIns: false,
+  posts: false,
+  replies: false,
+  prayerReactions: false,
+  postReactions: false,
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -520,6 +547,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [communityFeedGroupId, setCommunityFeedGroupId] = useState<Id>();
   const [communityFeedOffline, setCommunityFeedOffline] = useState<boolean>();
   const [communityFeedReady, setCommunityFeedReady] = useState(false);
+  const [communityPageAvailability, setCommunityPageAvailability] = useState<CommunityPageAvailability>(noCommunityPages);
+  const [communityContentLoadingMore, setCommunityContentLoadingMore] = useState(false);
+  const [journalEntriesHasMore, setJournalEntriesHasMore] = useState(false);
+  const [journalEntriesLoadingMore, setJournalEntriesLoadingMore] = useState(false);
+  const [privateCheckInsHasMore, setPrivateCheckInsHasMore] = useState(false);
+  const [prayerNotificationsHasMore, setPrayerNotificationsHasMore] = useState(false);
+  const [prayerNotificationsLoadingMore, setPrayerNotificationsLoadingMore] = useState(false);
+  const olderJournalEntriesRef = useRef<JournalEntry[]>([]);
+  const olderPrivateCheckInsRef = useRef<CheckIn[]>([]);
+  const olderPrayerNotificationsRef = useRef<PrayerNotification[]>([]);
+  const olderCheckInsRef = useRef<CheckIn[]>([]);
+  const olderPostsRef = useRef<Post[]>([]);
+  const olderRepliesRef = useRef<Reply[]>([]);
+  const olderPrayerReactionsRef = useRef<PrayerReaction[]>([]);
+  const olderPostReactionsRef = useRef<PostReaction[]>([]);
   const [theme, setTheme] = useState<ThemeName>("light");
   const [themeReady, setThemeReady] = useState(false);
   const themeRef = useRef<ThemeName>("light");
@@ -556,6 +598,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setCommunityFeedGroupId(undefined);
     setCommunityFeedOffline(undefined);
     setCommunityFeedReady(true);
+    setCommunityPageAvailability(noCommunityPages);
+    setCommunityContentLoadingMore(false);
+    setJournalEntriesHasMore(false);
+    setJournalEntriesLoadingMore(false);
+    setPrivateCheckInsHasMore(false);
+    setPrayerNotificationsHasMore(false);
+    setPrayerNotificationsLoadingMore(false);
+    olderJournalEntriesRef.current = [];
+    olderPrivateCheckInsRef.current = [];
+    olderPrayerNotificationsRef.current = [];
+    olderCheckInsRef.current = [];
+    olderPostsRef.current = [];
+    olderRepliesRef.current = [];
+    olderPrayerReactionsRef.current = [];
+    olderPostReactionsRef.current = [];
   }, []);
 
   useEffect(() => {
@@ -575,9 +632,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthReady(true);
+      markStartupMilestone("authReady", user ? "signed-in" : "signed-out");
       setAuthError(undefined);
 
       if (!user) {
+        markStartupMilestone("profileReady", "signed-out");
+        markStartupMilestone("userGroupsReady", "signed-out");
         clearUserSession();
       }
 
@@ -607,6 +667,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           } catch (error) {
             setAuthError(authMessage(error));
             setProfileReady(true);
+            markStartupMilestone("profileReady", "error");
           }
           return;
         }
@@ -621,10 +682,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           setTheme(nextTheme);
         }
         setProfileReady(true);
+        markStartupMilestone("profileReady");
       },
       (error) => {
         setAuthError(authMessage(error));
         setProfileReady(true);
+        markStartupMilestone("profileReady", "error");
       },
     );
 
@@ -642,10 +705,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       (snapshot) => {
         setUserMemberships(asArray<Membership>(snapshot.val()));
         setUserGroupsReady(true);
+        markStartupMilestone("userGroupsReady");
       },
       (error) => {
         setAuthError(authMessage(error));
         setUserGroupsReady(true);
+        markStartupMilestone("userGroupsReady", "error");
       },
     );
 
@@ -748,13 +813,30 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const participantIdsRef = ref(database, `groupBiblePlanParticipantIds/${firebaseUser.uid}`);
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
+    olderJournalEntriesRef.current = [];
+    olderPrivateCheckInsRef.current = [];
+    olderPrayerNotificationsRef.current = [];
+    setJournalEntriesHasMore(false);
+    setPrivateCheckInsHasMore(false);
+    setPrayerNotificationsHasMore(false);
+
     const unsubs = [
-      onValue(journalRef, (snapshot) => setJournalEntries(asArray<JournalEntry>(snapshot.val()))),
-      onValue(privateCheckInsRef, (snapshot) => setPrivateCheckIns(asArray<CheckIn>(snapshot.val()))),
+      onValue(recentFirebaseQuery(journalRef), (snapshot) => {
+        const recent = firebaseRecords<JournalEntry>(snapshot.val());
+        setJournalEntries(mergeFirebaseRecords(olderJournalEntriesRef.current, recent));
+        setJournalEntriesHasMore(recent.length === FIREBASE_PAGE_SIZE);
+      }),
+      onValue(recentFirebaseQuery(privateCheckInsRef), (snapshot) => {
+        const recent = firebaseRecords<CheckIn>(snapshot.val());
+        setPrivateCheckIns(mergeFirebaseRecords(olderPrivateCheckInsRef.current, recent));
+        setPrivateCheckInsHasMore(recent.length === FIREBASE_PAGE_SIZE);
+      }),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
-      onValue(prayerNotificationsRef, (snapshot) =>
-        setPrayerNotifications(asArray<PrayerNotification>(snapshot.val()).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))),
-      ),
+      onValue(recentFirebaseQuery(prayerNotificationsRef), (snapshot) => {
+        const recent = firebaseRecords<PrayerNotification>(snapshot.val());
+        setPrayerNotifications(mergeFirebaseRecords(olderPrayerNotificationsRef.current, recent));
+        setPrayerNotificationsHasMore(recent.length === FIREBASE_PAGE_SIZE);
+      }),
       onValue(savedVersesRef, (snapshot) => {
         const normalized = normalizeSavedVerseRecords(snapshot.val());
         setSavedVerses(normalized.verses);
@@ -828,6 +910,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setReplies([]);
       setPrayerReactions([]);
       setPostReactions([]);
+      setCommunityPageAvailability(noCommunityPages);
+      setCommunityContentLoadingMore(false);
+      olderCheckInsRef.current = [];
+      olderPostsRef.current = [];
+      olderRepliesRef.current = [];
+      olderPrayerReactionsRef.current = [];
+      olderPostReactionsRef.current = [];
       setGroupBiblePlanAnnouncements([]);
       setGroupBiblePlanParticipations([]);
       return;
@@ -852,6 +941,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setReplies([]);
     setPrayerReactions([]);
     setPostReactions([]);
+    setCommunityPageAvailability(noCommunityPages);
+    setCommunityContentLoadingMore(false);
+    olderCheckInsRef.current = [];
+    olderPostsRef.current = [];
+    olderRepliesRef.current = [];
+    olderPrayerReactionsRef.current = [];
+    olderPostReactionsRef.current = [];
     setGroupBiblePlanAnnouncements([]);
     setGroupBiblePlanParticipations([]);
 
@@ -896,33 +992,43 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         membersReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(checkInsRef, (snapshot) => {
+      onValue(recentFirebaseQuery(checkInsRef), (snapshot) => {
         if (!active) return;
-        setCheckIns(asArray<CheckIn>(snapshot.val()));
+        const recent = firebaseRecords<CheckIn>(snapshot.val());
+        setCheckIns(mergeFirebaseRecords(olderCheckInsRef.current, recent));
+        setCommunityPageAvailability((current) => ({ ...current, checkIns: recent.length === FIREBASE_PAGE_SIZE }));
         checkInsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(postsRef, (snapshot) => {
+      onValue(recentFirebaseQuery(postsRef), (snapshot) => {
         if (!active) return;
-        setPosts(asArray<KoinoState["posts"][number]>(snapshot.val()));
+        const recent = firebaseRecords<Post>(snapshot.val());
+        setPosts(mergeFirebaseRecords(olderPostsRef.current, recent));
+        setCommunityPageAvailability((current) => ({ ...current, posts: recent.length === FIREBASE_PAGE_SIZE }));
         postsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(repliesRef, (snapshot) => {
+      onValue(recentFirebaseQuery(repliesRef), (snapshot) => {
         if (!active) return;
-        setReplies(asArray<Reply>(snapshot.val()));
+        const recent = firebaseRecords<Reply>(snapshot.val());
+        setReplies(mergeFirebaseRecords(olderRepliesRef.current, recent));
+        setCommunityPageAvailability((current) => ({ ...current, replies: recent.length === FIREBASE_PAGE_SIZE }));
         repliesReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(reactionsRef, (snapshot) => {
+      onValue(recentFirebaseQuery(reactionsRef), (snapshot) => {
         if (!active) return;
-        setPrayerReactions(asArray<PrayerReaction>(snapshot.val()));
+        const recent = firebaseRecords<PrayerReaction>(snapshot.val());
+        setPrayerReactions(mergeFirebaseRecords(olderPrayerReactionsRef.current, recent));
+        setCommunityPageAvailability((current) => ({ ...current, prayerReactions: recent.length === FIREBASE_PAGE_SIZE }));
         prayerReactionsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
-      onValue(postReactionsRef, (snapshot) => {
+      onValue(recentFirebaseQuery(postReactionsRef), (snapshot) => {
         if (!active) return;
-        setPostReactions(asArray<PostReaction>(snapshot.val()));
+        const recent = firebaseRecords<PostReaction>(snapshot.val());
+        setPostReactions(mergeFirebaseRecords(olderPostReactionsRef.current, recent));
+        setCommunityPageAvailability((current) => ({ ...current, postReactions: recent.length === FIREBASE_PAGE_SIZE }));
         postReactionsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
@@ -971,6 +1077,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       communityFeedGroupId,
       communityFeedOffline,
       communityFeedReady,
+      communityContentHasMore: Object.values(communityPageAvailability).some(Boolean),
+      communityContentLoadingMore,
+      journalEntriesHasMore: journalEntriesHasMore || privateCheckInsHasMore,
+      journalEntriesLoadingMore,
+      prayerNotificationsHasMore,
+      prayerNotificationsLoadingMore,
       theme,
       users,
       groups,
@@ -1000,6 +1112,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     communityFeedGroupId,
     communityFeedOffline,
     communityFeedReady,
+    communityPageAvailability,
+    communityContentLoadingMore,
     theme,
     authReady,
     checkIns,
@@ -1007,10 +1121,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     groupMemberCounts,
     groups,
     journalEntries,
+    journalEntriesHasMore,
+    journalEntriesLoadingMore,
     memberships,
     posts,
     postReactions,
     prayerNotifications,
+    prayerNotificationsHasMore,
+    prayerNotificationsLoadingMore,
+    privateCheckInsHasMore,
     privateCheckIns,
     prayerReactions,
     prayerSessions,
@@ -1340,6 +1459,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  verse: actionVerses(action)[0] ?? null,
                  verses: actionVerses(action).length ? actionVerses(action) : null,
                });
+               setCheckIns((current) => current.map((item) => item.id === action.id ? {
+                 ...item,
+                 mood: action.mood,
+                 readToday: action.readToday,
+                 reflectionText: action.reflectionText.trim(),
+                 visibility: action.visibility,
+                 verse: actionVerses(action)[0],
+                 verses: actionVerses(action).length ? actionVerses(action) : undefined,
+               } : item));
+               olderCheckInsRef.current = olderCheckInsRef.current.map((item) => item.id === action.id ? {
+                 ...item,
+                 mood: action.mood,
+                 readToday: action.readToday,
+                 reflectionText: action.reflectionText.trim(),
+                 visibility: action.visibility,
+                 verse: actionVerses(action)[0],
+                 verses: actionVerses(action).length ? actionVerses(action) : undefined,
+               } : item);
                return;
              }
              case "createPost": {
@@ -1373,6 +1510,22 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  // Note: We don't update createdAt to preserve the original timestamp
                  // We also don't update answeredAt or answeredMarkedAt for prayer requests
                });
+               setPosts((current) => current.map((item) => item.id === action.id ? {
+                 ...item,
+                 body: action.body.trim(),
+                 kind: action.kind,
+                 ...(postSupportsTitle(action.kind) ? { title: action.title?.trim() || undefined } : {}),
+                 verse: verses[0],
+                 verses: verses.length ? verses : undefined,
+               } : item));
+               olderPostsRef.current = olderPostsRef.current.map((item) => item.id === action.id ? {
+                 ...item,
+                 body: action.body.trim(),
+                 kind: action.kind,
+                 ...(postSupportsTitle(action.kind) ? { title: action.title?.trim() || undefined } : {}),
+                 verse: verses[0],
+                 verses: verses.length ? verses : undefined,
+               } : item);
                return;
              }
              case "markPrayerAnswered": {
@@ -1385,6 +1538,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 answeredMarkedAt: timestamp,
                 answeredUpdate: action.answeredUpdate?.trim() || null,
               });
+              setPosts((current) => current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredAt: timestamp,
+                answeredMarkedAt: timestamp,
+                answeredUpdate: action.answeredUpdate?.trim() || undefined,
+              } : item));
+              olderPostsRef.current = olderPostsRef.current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredAt: timestamp,
+                answeredMarkedAt: timestamp,
+                answeredUpdate: action.answeredUpdate?.trim() || undefined,
+              } : item);
               return;
             }
             case "updatePrayerAnswer": {
@@ -1394,6 +1559,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                 answeredUpdate: action.answeredUpdate?.trim() || null,
               });
+              setPosts((current) => current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredUpdate: action.answeredUpdate?.trim() || undefined,
+              } : item));
+              olderPostsRef.current = olderPostsRef.current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredUpdate: action.answeredUpdate?.trim() || undefined,
+              } : item);
               return;
             }
             case "unmarkPrayerAnswered": {
@@ -1405,6 +1578,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 answeredMarkedAt: null,
                 answeredUpdate: null,
               });
+              setPosts((current) => current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredAt: undefined,
+                answeredMarkedAt: undefined,
+                answeredUpdate: undefined,
+              } : item));
+              olderPostsRef.current = olderPostsRef.current.map((item) => item.id === action.id ? {
+                ...item,
+                answeredAt: undefined,
+                answeredMarkedAt: undefined,
+                answeredUpdate: undefined,
+              } : item);
               return;
             }
             case "deleteCheckIn": {
@@ -1412,6 +1597,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const checkIn = checkIns.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!checkIn || checkIn.userId !== firebaseUser.uid) return;
               await deleteFeedItemWithChildren(profile.currentGroupId, "check_in", action.id, firebaseUser.uid);
+              setCheckIns((current) => current.filter((item) => item.id !== action.id));
+              olderCheckInsRef.current = olderCheckInsRef.current.filter((item) => item.id !== action.id);
               return;
             }
             case "deletePost": {
@@ -1419,6 +1606,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!post || post.userId !== firebaseUser.uid) return;
               await deleteFeedItemWithChildren(profile.currentGroupId, "post", action.id, firebaseUser.uid);
+              setPosts((current) => current.filter((item) => item.id !== action.id));
+              olderPostsRef.current = olderPostsRef.current.filter((item) => item.id !== action.id);
               return;
             }
             case "finishPrayer": {
@@ -1591,6 +1780,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const reactionId = prayerReactionId(firebaseUser.uid, action.targetType, action.targetId);
               await remove(ref(database, `prayerReactions/${profile.currentGroupId}/${reactionId}`));
+              setPrayerReactions((current) => current.filter((reaction) => reaction.id !== reactionId));
+              olderPrayerReactionsRef.current = olderPrayerReactionsRef.current.filter((reaction) => reaction.id !== reactionId);
               return;
             }
             case "togglePostReaction": {
@@ -1607,6 +1798,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (postReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid)) {
                 if (action.mode === "ensure") return;
                 await remove(reactionRef);
+                setPostReactions((current) => current.filter((reaction) => reaction.id !== reactionId));
+                olderPostReactionsRef.current = olderPostReactionsRef.current.filter((reaction) => reaction.id !== reactionId);
                 return;
               }
 
@@ -1619,6 +1812,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: now(),
               };
               await set(reactionRef, reaction);
+              setPostReactions((current) => mergeFirebaseRecords(current, [reaction]));
               return;
             }
             case "createReply": {
@@ -1648,6 +1842,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 ...reactionDeletes,
                 [`replies/${profile.currentGroupId}/${action.id}`]: null,
               });
+              setReplies((current) => current.filter((item) => item.id !== action.id));
+              setPrayerReactions((current) => current.filter((reaction) => reaction.targetType !== "reply" || reaction.targetId !== action.id));
+              olderRepliesRef.current = olderRepliesRef.current.filter((item) => item.id !== action.id);
+              olderPrayerReactionsRef.current = olderPrayerReactionsRef.current.filter((reaction) => reaction.targetType !== "reply" || reaction.targetId !== action.id);
               return;
             }
             case "createJournalEntry": {
@@ -1691,8 +1889,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
               return;
             }
-            case "updateJournalEntry":
+            case "updateJournalEntry": {
               if (!firebaseUser) return;
+              const updatedAt = now();
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
                 title: action.title?.trim() || null,
@@ -1703,9 +1902,36 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 verses: actionVerses(action).length ? actionVerses(action) : null,
                 sharedPostId: action.sharedPostId ?? null,
                 images: null,
-                updatedAt: now(),
+                updatedAt,
               });
+              setJournalEntries((current) => current.map((entry) => entry.id === action.id ? {
+                ...entry,
+                body: action.body.trim(),
+                title: action.title?.trim() || undefined,
+                entryKind: action.entryKind,
+                journalType: action.journalType,
+                heartMood: action.heartMood,
+                verse: actionVerses(action)[0],
+                verses: actionVerses(action).length ? actionVerses(action) : undefined,
+                sharedPostId: action.sharedPostId,
+                images: undefined,
+                updatedAt,
+              } : entry));
+              olderJournalEntriesRef.current = olderJournalEntriesRef.current.map((entry) => entry.id === action.id ? {
+                ...entry,
+                body: action.body.trim(),
+                title: action.title?.trim() || undefined,
+                entryKind: action.entryKind,
+                journalType: action.journalType,
+                heartMood: action.heartMood,
+                verse: actionVerses(action)[0],
+                verses: actionVerses(action).length ? actionVerses(action) : undefined,
+                sharedPostId: action.sharedPostId,
+                images: undefined,
+                updatedAt,
+              } : entry);
               return;
+            }
             case "deleteJournalEntry": {
               if (!firebaseUser) return;
               const entry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
@@ -1724,6 +1950,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
 
               await update(ref(database), updates);
+              setJournalEntries((current) => current.filter((item) => item.id !== action.id));
+              olderJournalEntriesRef.current = olderJournalEntriesRef.current.filter((item) => item.id !== action.id);
+              if (entry?.source === "private_check_in") {
+                setPrivateCheckIns((current) => current.filter((checkIn) => checkIn.createdAt !== entry.createdAt));
+                olderPrivateCheckInsRef.current = olderPrivateCheckInsRef.current.filter((checkIn) => checkIn.createdAt !== entry.createdAt);
+              }
               return;
             }
             case "saveVerse": {
@@ -2046,6 +2278,91 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await set(ref(database, `supportIntents/${firebaseUser.uid}/${intent.id}`), intent);
               return;
             }
+            case "loadOlderCommunityContent": {
+              if (!firebaseUser || !profile?.currentGroupId || communityContentLoadingMore) return;
+              if (!Object.values(communityPageAvailability).some(Boolean)) return;
+              setCommunityContentLoadingMore(true);
+              try {
+                const groupId = profile.currentGroupId;
+                const [checkInPage, postPage, replyPage, prayerReactionPage, postReactionPage] = await Promise.all([
+                  communityPageAvailability.checkIns
+                    ? fetchOlderFirebasePage<CheckIn>(ref(database, `checkIns/${groupId}`), checkIns)
+                    : Promise.resolve({ hasMore: false, records: [] as CheckIn[] }),
+                  communityPageAvailability.posts
+                    ? fetchOlderFirebasePage<Post>(ref(database, `posts/${groupId}`), posts)
+                    : Promise.resolve({ hasMore: false, records: [] as Post[] }),
+                  communityPageAvailability.replies
+                    ? fetchOlderFirebasePage<Reply>(ref(database, `replies/${groupId}`), replies)
+                    : Promise.resolve({ hasMore: false, records: [] as Reply[] }),
+                  communityPageAvailability.prayerReactions
+                    ? fetchOlderFirebasePage<PrayerReaction>(ref(database, `prayerReactions/${groupId}`), prayerReactions)
+                    : Promise.resolve({ hasMore: false, records: [] as PrayerReaction[] }),
+                  communityPageAvailability.postReactions
+                    ? fetchOlderFirebasePage<PostReaction>(ref(database, `postReactions/${groupId}`), postReactions)
+                    : Promise.resolve({ hasMore: false, records: [] as PostReaction[] }),
+                ]);
+
+                olderCheckInsRef.current = mergeFirebaseRecords(olderCheckInsRef.current, checkInPage.records);
+                olderPostsRef.current = mergeFirebaseRecords(olderPostsRef.current, postPage.records);
+                olderRepliesRef.current = mergeFirebaseRecords(olderRepliesRef.current, replyPage.records);
+                olderPrayerReactionsRef.current = mergeFirebaseRecords(olderPrayerReactionsRef.current, prayerReactionPage.records);
+                olderPostReactionsRef.current = mergeFirebaseRecords(olderPostReactionsRef.current, postReactionPage.records);
+                setCheckIns((current) => mergeFirebaseRecords(current, checkInPage.records));
+                setPosts((current) => mergeFirebaseRecords(current, postPage.records));
+                setReplies((current) => mergeFirebaseRecords(current, replyPage.records));
+                setPrayerReactions((current) => mergeFirebaseRecords(current, prayerReactionPage.records));
+                setPostReactions((current) => mergeFirebaseRecords(current, postReactionPage.records));
+                setCommunityPageAvailability({
+                  checkIns: checkInPage.hasMore,
+                  posts: postPage.hasMore,
+                  replies: replyPage.hasMore,
+                  prayerReactions: prayerReactionPage.hasMore,
+                  postReactions: postReactionPage.hasMore,
+                });
+              } finally {
+                setCommunityContentLoadingMore(false);
+              }
+              return;
+            }
+            case "loadOlderJournalEntries": {
+              if (!firebaseUser || journalEntriesLoadingMore || (!journalEntriesHasMore && !privateCheckInsHasMore)) return;
+              setJournalEntriesLoadingMore(true);
+              try {
+                const [journalPage, checkInPage] = await Promise.all([
+                  journalEntriesHasMore
+                    ? fetchOlderFirebasePage<JournalEntry>(ref(database, `journalEntries/${firebaseUser.uid}`), journalEntries)
+                    : Promise.resolve({ hasMore: false, records: [] as JournalEntry[] }),
+                  privateCheckInsHasMore
+                    ? fetchOlderFirebasePage<CheckIn>(ref(database, `privateCheckIns/${firebaseUser.uid}`), privateCheckIns)
+                    : Promise.resolve({ hasMore: false, records: [] as CheckIn[] }),
+                ]);
+                olderJournalEntriesRef.current = mergeFirebaseRecords(olderJournalEntriesRef.current, journalPage.records);
+                olderPrivateCheckInsRef.current = mergeFirebaseRecords(olderPrivateCheckInsRef.current, checkInPage.records);
+                setJournalEntries((current) => mergeFirebaseRecords(current, journalPage.records));
+                setPrivateCheckIns((current) => mergeFirebaseRecords(current, checkInPage.records));
+                setJournalEntriesHasMore(journalPage.hasMore);
+                setPrivateCheckInsHasMore(checkInPage.hasMore);
+              } finally {
+                setJournalEntriesLoadingMore(false);
+              }
+              return;
+            }
+            case "loadOlderPrayerNotifications": {
+              if (!firebaseUser || prayerNotificationsLoadingMore || !prayerNotificationsHasMore) return;
+              setPrayerNotificationsLoadingMore(true);
+              try {
+                const page = await fetchOlderFirebasePage<PrayerNotification>(
+                  ref(database, `prayerNotifications/${firebaseUser.uid}`),
+                  prayerNotifications,
+                );
+                olderPrayerNotificationsRef.current = mergeFirebaseRecords(olderPrayerNotificationsRef.current, page.records);
+                setPrayerNotifications((current) => mergeFirebaseRecords(current, page.records));
+                setPrayerNotificationsHasMore(page.hasMore);
+              } finally {
+                setPrayerNotificationsLoadingMore(false);
+              }
+              return;
+            }
             case "setTheme": {
               if (!firebaseUser) return;
               hasStoredThemeRef.current = true;
@@ -2097,17 +2414,25 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       biblePlans,
       checkIns,
       clearUserSession,
+      communityContentLoadingMore,
+      communityPageAvailability,
       firebaseUser,
       groupBiblePlanAnnouncements,
       groupBiblePlanParticipantIds,
       groupBiblePlanParticipations,
       groups,
       journalEntries,
+      journalEntriesHasMore,
+      journalEntriesLoadingMore,
       memberships,
       posts,
       postReactions,
       prayerReactions,
+      prayerNotifications,
+      prayerNotificationsHasMore,
+      prayerNotificationsLoadingMore,
       privateCheckIns,
+      privateCheckInsHasMore,
       profile?.currentGroupId,
       profile?.name,
       replies,

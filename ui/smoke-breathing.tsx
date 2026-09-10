@@ -36,6 +36,14 @@ interface SmokeBreathingProps {
   secondaryColor?: string;
 }
 
+type NativeSmokeResources = {
+  renderer: WebGLRenderer;
+  scene: Scene;
+  particles: Mesh[];
+  geometry?: PlaneGeometry;
+  texture?: Texture;
+};
+
 function configureSmokeTexture(texture: Texture) {
   texture.minFilter = LinearFilter;
   texture.magFilter = LinearFilter;
@@ -214,6 +222,7 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const frameRef = useRef<number>(0);
   const disposedRef = useRef(false);
+  const resourcesRef = useRef<NativeSmokeResources | null>(null);
 
   useEffect(() => {
     disposedRef.current = false;
@@ -221,14 +230,31 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
       disposedRef.current = true;
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current);
+        frameRef.current = 0;
       }
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
+      const resources = resourcesRef.current;
+      resourcesRef.current = null;
+      rendererRef.current = null;
+      if (resources) {
+        resources.particles.forEach((particle) => {
+          if (Array.isArray(particle.material)) {
+            particle.material.forEach((material) => material.dispose());
+          } else {
+            particle.material.dispose();
+          }
+          resources.scene.remove(particle);
+        });
+        resources.geometry?.dispose();
+        resources.texture?.dispose();
+        resources.scene.clear();
+        resources.renderer.renderLists.dispose();
+        resources.renderer.dispose();
       }
     };
   }, []);
 
   const onContextCreate = async (gl: any) => {
+    if (disposedRef.current) return;
     const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
 
     const renderer = new WebGLRenderer({
@@ -249,6 +275,8 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
     rendererRef.current = renderer;
 
     const scene = new Scene();
+    const resources: NativeSmokeResources = { renderer, scene, particles: [] };
+    resourcesRef.current = resources;
     const camera = new PerspectiveCamera(60, width / height, 1, 10000);
     camera.position.z = fullScreen ? 4500 : 2200;
 
@@ -263,12 +291,15 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
       return;
     }
     const smokeTexture = createNativeSmokeTexture(smokeAsset);
+    resources.texture = smokeTexture;
 
     const primary = new Color(primaryColor);
     const secondary = new Color(secondaryColor);
 
     const smokeGeo = new PlaneGeometry(fullScreen ? 500 : 300, fullScreen ? 500 : 300);
+    resources.geometry = smokeGeo;
     const smokeParticles: Mesh[] = [];
+    resources.particles = smokeParticles;
     const particleData: SmokeParticleData[] = [];
 
     const count = fullScreen ? 800 : 400;
@@ -343,10 +374,13 @@ function SmokeBreathingNative({ size = 280, fullScreen = false, primaryColor = "
     };
 
     const render = () => {
+      if (disposedRef.current || resourcesRef.current !== resources) return;
       breathe();
       renderer.render(scene, camera);
       gl.endFrameEXP?.();
-      frameRef.current = requestAnimationFrame(render);
+      if (!disposedRef.current && resourcesRef.current === resources) {
+        frameRef.current = requestAnimationFrame(render);
+      }
     };
 
     frameRef.current = requestAnimationFrame(render);

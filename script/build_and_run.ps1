@@ -17,17 +17,8 @@ function Show-Usage {
   Write-Host "  --help, help        Show this help"
 }
 
-function Ensure-GeneratedBibleData {
-  & node (Join-Path $RootDir "scripts\generate-bible-data.mjs")
-  if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
-  }
-}
-
 function Invoke-Expo {
   param([string[]]$ExpoArgs)
-
-  Ensure-GeneratedBibleData
 
   if ($env:EXPO_CLI) {
     $parts = $env:EXPO_CLI -split " "
@@ -48,13 +39,13 @@ switch ($Mode) {
     Invoke-Expo @("start", "--lan")
   }
   { $_ -in @("start", "run") } {
-    Invoke-Expo @("start", "--tunnel", "--clear")
+    Invoke-Expo @("start")
   }
   { $_ -in @("--localhost", "localhost") } {
     Invoke-Expo @("start", "--localhost")
   }
   { $_ -in @("--tunnel", "tunnel") } {
-    Invoke-Expo @("start", "--tunnel", "--clear")
+    Invoke-Expo @("start", "--tunnel")
   }
   { $_ -in @("--ios", "ios") } {
     Invoke-Expo @("start", "--ios")

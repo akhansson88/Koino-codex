@@ -24,11 +24,18 @@ npm run doctor
 npm run validate:bible-plans
 npm run validate:bible-search
 npm run validate:startup
+npm run validate:pagination
 ```
 
+Cold-start milestones are logged as `[startup] … +Nms` and are also available
+at runtime in `globalThis.__KOINO_STARTUP_MARKS__` for device-side inspection.
+
 Bible text, full-text search, and cross-references are packaged in
-`assets/bible/koino-bible-v1.db`. Start commands verify its source fingerprint;
-rebuilding it after source-data changes requires Python 3 with SQLite FTS5.
+`assets/bible/koino-bible-v1.db`. Normal development starts never rebuild this
+asset or clear Metro's cache. After changing Bible source data, rebuild it
+explicitly with `npm run bible:build`; this requires Python 3 with SQLite FTS5.
+Use `npm run start:tunnel` only when LAN discovery is unavailable, and
+`npm run start:clear` only when Metro's cache genuinely needs resetting.
 
 The `functions/` directory contains the Firebase backend used by app services.
 It is separate from the Expo client and is not a website.
