@@ -377,6 +377,101 @@
       }
     },
 
+    "discussionFollowers": {
+      "$groupId": {
+        ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+        "$targetType": {
+          "$targetId": {
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+              ".validate": "newData.val() == null || (($targetType == 'post' || $targetType == 'check_in') && newData.child('id').val() == $targetType + '_' + $targetId && newData.child('userId').val() == $uid && newData.child('targetType').val() == $targetType && newData.child('targetId').val() == $targetId && newData.child('createdAt').isString())",
+              "id": { ".validate": "newData.isString()" },
+              "userId": { ".validate": "newData.val() == $uid" },
+              "targetType": { ".validate": "newData.val() == $targetType" },
+              "targetId": { ".validate": "newData.val() == $targetId" },
+              "createdAt": { ".validate": "newData.isString()" },
+              "$other": { ".validate": false }
+            }
+          }
+        }
+      }
+    },
+
+    "userDiscussionFollows": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$groupId": {
+          "$followId": {
+            ".write": "auth != null && auth.uid == $uid && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
+            ".validate": "newData.val() == null || (newData.child('id').val() == $followId && newData.child('userId').val() == $uid && (newData.child('targetType').val() == 'post' || newData.child('targetType').val() == 'check_in') && newData.child('targetId').isString() && newData.child('id').val() == newData.child('targetType').val() + '_' + newData.child('targetId').val() && newData.child('createdAt').isString())",
+            "id": { ".validate": "newData.val() == $followId" },
+            "userId": { ".validate": "newData.val() == $uid" },
+            "targetType": { ".validate": "newData.val() == 'post' || newData.val() == 'check_in'" },
+            "targetId": { ".validate": "newData.isString()" },
+            "createdAt": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
+    "activityNotifications": {
+      "$uid": {
+        ".indexOn": ["createdAt"],
+        ".read": "auth != null && auth.uid == $uid",
+        "$notificationId": {
+          ".write": "auth != null && auth.uid == $uid && data.exists() && newData.exists() && newData.child('readAt').isString()",
+          "id": { ".validate": "newData.val() == data.val()" },
+          "type": { ".validate": "newData.val() == data.val()" },
+          "reason": { ".validate": "newData.val() == data.val()" },
+          "priority": { ".validate": "newData.val() == data.val()" },
+          "bundleKey": { ".validate": "newData.val() == data.val()" },
+          "actorUserId": { ".validate": "newData.val() == data.val()" },
+          "actorName": { ".validate": "newData.val() == data.val()" },
+          "actorImage": { ".validate": "newData.val() == data.val()" },
+          "targetOwnerName": { ".validate": "newData.val() == data.val()" },
+          "recipientUserId": { ".validate": "newData.val() == data.val()" },
+          "groupId": { ".validate": "newData.val() == data.val()" },
+          "targetType": { ".validate": "newData.val() == data.val()" },
+          "targetId": { ".validate": "newData.val() == data.val()" },
+          "replyId": { ".validate": "newData.val() == data.val()" },
+          "contentLabel": { ".validate": "newData.val() == data.val()" },
+          "preview": { ".validate": "newData.val() == data.val()" },
+          "createdAt": { ".validate": "newData.val() == data.val()" },
+          "readAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "notificationPreferences": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.val() == null || ((!newData.child('pushEnabled').exists() || newData.child('pushEnabled').isBoolean()) && (!newData.child('ownContent').exists() || newData.child('ownContent').isBoolean()) && (!newData.child('mentions').exists() || newData.child('mentions').isBoolean()) && (!newData.child('followedDiscussions').exists() || newData.child('followedDiscussions').isBoolean()) && (!newData.child('prayerActivity').exists() || newData.child('prayerActivity').isBoolean()))",
+        "pushEnabled": { ".validate": "newData.isBoolean()" },
+        "ownContent": { ".validate": "newData.isBoolean()" },
+        "mentions": { ".validate": "newData.isBoolean()" },
+        "followedDiscussions": { ".validate": "newData.isBoolean()" },
+        "prayerActivity": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "pushTokens": {
+      "$uid": {
+        ".read": false,
+        "$tokenId": {
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.val() == null || (newData.child('token').isString() && newData.child('token').val().length <= 256 && (newData.child('platform').val() == 'android' || newData.child('platform').val() == 'ios') && newData.child('updatedAt').isString())",
+          "token": { ".validate": "newData.isString()" },
+          "platform": { ".validate": "newData.val() == 'android' || newData.val() == 'ios'" },
+          "updatedAt": { ".validate": "newData.isString()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
     "journalEntries": {
       "$uid": {
         ".indexOn": ["createdAt"],

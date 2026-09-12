@@ -1,4 +1,5 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
+import { useEffect } from "react";
 import { ActivityIndicator } from "react-native";
 
 import { FeedDetailScreen } from "@/features/feed-detail-screen";
@@ -13,11 +14,18 @@ function routeParam(value: string | string[] | undefined) {
 }
 
 export default function FeedDetailRoute() {
-  const { id, targetType } = useLocalSearchParams<{ id?: string | string[]; targetType?: string | string[] }>();
+  const { id, targetType, groupId } = useLocalSearchParams<{ id?: string | string[]; targetType?: string | string[]; groupId?: string | string[] }>();
   const routeId = routeParam(id);
   const routeTargetType = routeParam(targetType);
-  const { state } = useKoino();
+  const routeGroupId = routeParam(groupId);
+  const { state, dispatch } = useKoino();
   const currentGroupId = state.currentGroupId;
+  useEffect(() => {
+    if (routeGroupId && state.userGroupsReady && routeGroupId !== currentGroupId) {
+      void dispatch({ type: "switchGroup", id: routeGroupId });
+    }
+  }, [currentGroupId, dispatch, routeGroupId, state.userGroupsReady]);
+  const switchingGroup = Boolean(routeGroupId && routeGroupId !== currentGroupId);
   const waitingForPost =
     routeTargetType === "post" &&
     (!state.authReady ||
@@ -29,7 +37,7 @@ export default function FeedDetailRoute() {
           (state.communityFeedGroupId !== currentGroupId || !state.communityFeedReady),
       ));
 
-  if (waitingForPost) {
+  if (switchingGroup || waitingForPost) {
     return (
       <AppScreen>
         <Card style={{ alignItems: "center" }}>

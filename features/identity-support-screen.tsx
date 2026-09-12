@@ -32,7 +32,7 @@ import { SupportKoinoCard } from "@/features/donation-flow-screen";
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "language" | "account" | "help" | "security" | "privacy" | "terms";
 type IdentityPresentation = "screen" | "sheet";
-type RoomSheet = "members" | "notifications" | "rename" | "transfer";
+type RoomSheet = "members" | "rename" | "transfer";
 
 function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
   if (!roomId) return fallback;
@@ -460,7 +460,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
 
       <BottomSheet title={t("identity.account.title")} visible={activeSheet === "account"} onClose={() => setActiveSheet(undefined)}>
         <InfoLine label={t("identity.account.email")} value={state.authEmail ?? t("identity.account.noEmail")} />
-        <InfoLine label={t("identity.account.notifications")} value={t("identity.account.communityPrayerUpdates")} />
+        <InfoLine
+          label={t("identity.account.notifications")}
+          value={t(state.notificationPreferences.pushEnabled ? "notifications.preferences.enabled" : "notifications.preferences.disabled")}
+        />
         <SecondaryButton
           icon="log-out"
           onPress={() => {
@@ -712,8 +715,8 @@ export function RoomDetailsScreen() {
               <SettingsRow
                 icon="bell"
                 title={t("community.roomDetails.notifications")}
-                value={t("community.roomDetails.allActivity")}
-                onPress={() => setActiveSheet("notifications")}
+                value={t(state.notificationPreferences.pushEnabled ? "notifications.preferences.enabled" : "notifications.preferences.disabled")}
+                onPress={() => router.push("/notification-settings" as never)}
                 showDivider
               />
             </SettingsSection>
@@ -781,14 +784,6 @@ export function RoomDetailsScreen() {
           {t("community.management.rename")}
         </PrimaryButton>
       </BottomSheet>
-
-      <InfoSheet
-        title={t("community.roomDetails.notifications")}
-        visible={activeSheet === "notifications"}
-        onClose={() => setActiveSheet(undefined)}
-        body={t("community.roomDetails.notificationsBody")}
-        doneLabel={t("community.checkIn.done")}
-      />
 
       <BottomSheet title={t("community.management.transfer")} visible={activeSheet === "transfer"} onClose={() => setActiveSheet(undefined)}>
         <BodyText muted>{t("community.management.transferChoose")}</BodyText>

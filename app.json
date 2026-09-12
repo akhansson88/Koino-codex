@@ -47,6 +47,7 @@
         }
       ],
       "expo-web-browser",
+      "expo-notifications",
       "expo-font",
       [
         "expo-sqlite",

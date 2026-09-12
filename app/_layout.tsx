@@ -14,6 +14,7 @@ import { Platform } from "react-native";
 import { KoinoProvider, useKoino } from "@/state/koino-store";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { colors, statusBarStyle } from "@/ui/theme";
+import { NotificationRuntime } from "@/ui/notification-runtime";
 
 const enableNativeBackGesture = Platform.OS === "ios";
 
@@ -41,6 +42,7 @@ function RootNavigator() {
 
   return (
     <>
+      <NotificationRuntime />
       <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
@@ -72,6 +74,8 @@ function RootNavigator() {
         <Stack.Screen name="home/[groupId]/prayer" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
         <Stack.Screen name="community/[groupId]/prayers/[prayerRequestId]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
         <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
         <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
       </Stack>

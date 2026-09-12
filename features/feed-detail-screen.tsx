@@ -42,6 +42,7 @@ import { formatRelativeTime } from "@/ui/relative-time";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 
 const MAX_REPLY_LENGTH = 500;
 
@@ -111,6 +112,15 @@ export function FeedDetailScreen() {
             .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
         : [],
     [item, state.replies, targetType],
+  );
+  const followsDiscussion = Boolean(
+    item && targetType && state.discussionFollows.some((follow) => follow.targetType === targetType && follow.targetId === item.id),
+  );
+  const canManageDiscussionFollow = Boolean(
+    item &&
+      targetType &&
+      item.userId !== state.currentUserId &&
+      (followsDiscussion || replies.some((reply) => reply.userId === state.currentUserId)),
   );
   const prayer = useMemo(() => {
     if (!item || !targetType) return undefined;
@@ -536,6 +546,19 @@ export function FeedDetailScreen() {
             {encouragementInput}
           </View>
         ) : encouragementInput}
+        {canManageDiscussionFollow && item && targetType ? (
+          <DiscussionFollowButton
+            following={followsDiscussion}
+            onPress={() =>
+              void dispatch({
+                type: "setDiscussionFollow",
+                targetType,
+                targetId: item.id,
+                following: !followsDiscussion,
+              })
+            }
+          />
+        ) : null}
         {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
       <SharedComposer

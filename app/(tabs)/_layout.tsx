@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { AvatarButton } from "@/ui/app-components";
+import { AvatarButton, NotificationBellButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
@@ -169,6 +169,7 @@ function KoinoTabHeader() {
 function HeaderRightControls() {
   return (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+      <NotificationBellButton />
       <AvatarButton />
     </View>
   );

@@ -217,6 +217,35 @@ export type PrayerNotification = {
   createdAt: string;
 };
 
+export type ActivityNotification = {
+  id: Id;
+  type: "comment" | "mention" | "discussion_activity";
+  reason: "owner" | "participant" | "mention";
+  priority: "normal" | "high";
+  bundleKey: string;
+  actorUserId: Id;
+  actorName: string;
+  actorImage?: GroupImage;
+  targetOwnerName: string;
+  recipientUserId: Id;
+  groupId: Id;
+  targetType: ReplyTargetType;
+  targetId: Id;
+  replyId: Id;
+  contentLabel: "post" | "reflection" | "prayer request" | "prayer" | "praise" | "check-in" | "update" | "scripture reflection";
+  preview: string;
+  createdAt: string;
+  readAt?: string;
+};
+
+export type NotificationPreferences = {
+  pushEnabled: boolean;
+  ownContent: boolean;
+  mentions: boolean;
+  followedDiscussions: boolean;
+  prayerActivity: boolean;
+};
+
 export type PrayerReaction = {
   id: Id;
   userId: Id;
@@ -243,6 +272,14 @@ export type Reply = {
   targetType: ReplyTargetType;
   targetId: Id;
   body: string;
+  createdAt: string;
+};
+
+export type DiscussionFollow = {
+  id: Id;
+  userId: Id;
+  targetType: ReplyTargetType;
+  targetId: Id;
   createdAt: string;
 };
 
@@ -306,9 +343,12 @@ export type KoinoState = {
   posts: Post[];
   prayerSessions: PrayerSession[];
   prayerNotifications: PrayerNotification[];
+  activityNotifications: ActivityNotification[];
+  notificationPreferences: NotificationPreferences;
   prayerReactions: PrayerReaction[];
   postReactions: PostReaction[];
   replies: Reply[];
+  discussionFollows: DiscussionFollow[];
   journalEntries: JournalEntry[];
   savedVerses: SavedVerse[];
   bibleHighlights: BibleHighlight[];

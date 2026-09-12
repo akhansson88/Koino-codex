@@ -21,10 +21,12 @@ import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } f
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
+  ActivityNotification,
   BibleHighlight,
   BibleHighlightColor,
   BibleHighlightPaletteColor,
   CheckIn,
+  DiscussionFollow,
   BibleVerse,
   BiblePlan,
   BiblePlanRange,
@@ -37,6 +39,7 @@ import {
   JournalEntryType,
   KoinoState,
   Membership,
+  NotificationPreferences,
   Post,
   PostReaction,
   PostReactionKind,
@@ -158,6 +161,12 @@ type Action =
   | { type: "loadOlderCommunityContent" }
   | { type: "loadOlderJournalEntries" }
   | { type: "loadOlderPrayerNotifications" }
+  | { type: "markActivityNotificationRead"; id: Id }
+  | { type: "markActivityDiscussionRead"; groupId: Id; targetType: "post" | "check_in"; targetId: Id }
+  | { type: "markAllActivityNotificationsRead" }
+  | { type: "registerPushToken"; token: string; platform: "android" | "ios" }
+  | { type: "setDiscussionFollow"; targetType: "post" | "check_in"; targetId: Id; following: boolean }
+  | { type: "setNotificationPreference"; key: keyof NotificationPreferences; value: boolean }
   | { type: "setTheme"; theme: ThemeName };
 
 
@@ -181,6 +190,14 @@ const noCommunityPages: CommunityPageAvailability = {
   replies: false,
   prayerReactions: false,
   postReactions: false,
+};
+
+const defaultNotificationPreferences: NotificationPreferences = {
+  pushEnabled: true,
+  ownContent: true,
+  mentions: true,
+  followedDiscussions: true,
+  prayerActivity: true,
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -530,9 +547,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [posts, setPosts] = useState<KoinoState["posts"]>([]);
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerNotifications, setPrayerNotifications] = useState<PrayerNotification[]>([]);
+  const [activityNotifications, setActivityNotifications] = useState<ActivityNotification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(defaultNotificationPreferences);
   const [prayerReactions, setPrayerReactions] = useState<PrayerReaction[]>([]);
   const [postReactions, setPostReactions] = useState<PostReaction[]>([]);
   const [replies, setReplies] = useState<Reply[]>([]);
+  const [discussionFollows, setDiscussionFollows] = useState<DiscussionFollow[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
@@ -582,9 +602,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setPosts([]);
     setPrayerSessions([]);
     setPrayerNotifications([]);
+    setActivityNotifications([]);
+    setNotificationPreferences(defaultNotificationPreferences);
     setPrayerReactions([]);
     setPostReactions([]);
     setReplies([]);
+    setDiscussionFollows([]);
     setJournalEntries([]);
     setSavedVerses([]);
     setBibleHighlights([]);
@@ -805,6 +828,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
     const prayerNotificationsRef = ref(database, `prayerNotifications/${firebaseUser.uid}`);
+    const activityNotificationsRef = ref(database, `activityNotifications/${firebaseUser.uid}`);
+    const notificationPreferencesRef = ref(database, `notificationPreferences/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     const bibleHighlightColorsRef = ref(database, `bibleHighlightColors/${firebaseUser.uid}`);
@@ -836,6 +861,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         const recent = firebaseRecords<PrayerNotification>(snapshot.val());
         setPrayerNotifications(mergeFirebaseRecords(olderPrayerNotificationsRef.current, recent));
         setPrayerNotificationsHasMore(recent.length === FIREBASE_PAGE_SIZE);
+      }),
+      onValue(recentFirebaseQuery(activityNotificationsRef), (snapshot) => {
+        setActivityNotifications(firebaseRecords<ActivityNotification>(snapshot.val()));
+      }),
+      onValue(notificationPreferencesRef, (snapshot) => {
+        setNotificationPreferences({
+          ...defaultNotificationPreferences,
+          ...((snapshot.val() as Partial<NotificationPreferences> | null) ?? {}),
+        });
       }),
       onValue(savedVersesRef, (snapshot) => {
         const normalized = normalizeSavedVerseRecords(snapshot.val());
@@ -908,6 +942,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setCheckIns([]);
       setPosts([]);
       setReplies([]);
+      setDiscussionFollows([]);
       setPrayerReactions([]);
       setPostReactions([]);
       setCommunityPageAvailability(noCommunityPages);
@@ -939,6 +974,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setCheckIns([]);
     setPosts([]);
     setReplies([]);
+    setDiscussionFollows([]);
     setPrayerReactions([]);
     setPostReactions([]);
     setCommunityPageAvailability(noCommunityPages);
@@ -976,6 +1012,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const checkInsRef = ref(database, `checkIns/${groupId}`);
     const postsRef = ref(database, `posts/${groupId}`);
     const repliesRef = ref(database, `replies/${groupId}`);
+    const discussionFollowsRef = ref(database, `userDiscussionFollows/${firebaseUser.uid}/${groupId}`);
     const reactionsRef = ref(database, `prayerReactions/${groupId}`);
     const postReactionsRef = ref(database, `postReactions/${groupId}`);
     const planAnnouncementsRef = ref(database, `groupBiblePlanAnnouncements/${groupId}`);
@@ -1016,6 +1053,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         repliesReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
+      onValue(discussionFollowsRef, (snapshot) => {
+        if (!active) return;
+        setDiscussionFollows(asArray<DiscussionFollow>(snapshot.val()));
+      }),
       onValue(recentFirebaseQuery(reactionsRef), (snapshot) => {
         if (!active) return;
         const recent = firebaseRecords<PrayerReaction>(snapshot.val());
@@ -1093,9 +1134,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       posts,
       prayerSessions,
       prayerNotifications,
+      activityNotifications,
+      notificationPreferences,
       prayerReactions,
       postReactions,
       replies,
+      discussionFollows,
       journalEntries,
       savedVerses,
       bibleHighlights,
@@ -1108,6 +1152,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     };
   }, [
     authError,
+    activityNotifications,
+    notificationPreferences,
     communityFeedError,
     communityFeedGroupId,
     communityFeedOffline,
@@ -1136,6 +1182,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     profile,
     profileReady,
     replies,
+    discussionFollows,
     savedVerses,
     bibleHighlights,
     bibleHighlightColors,
@@ -2363,6 +2410,77 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
               return;
             }
+            case "markActivityNotificationRead": {
+              if (!firebaseUser) return;
+              const notification = activityNotifications.find((item) => item.id === action.id);
+              if (!notification || notification.readAt) return;
+              await update(ref(database, `activityNotifications/${firebaseUser.uid}/${action.id}`), { readAt: now() });
+              return;
+            }
+            case "markActivityDiscussionRead": {
+              if (!firebaseUser) return;
+              const readAt = now();
+              const matching = activityNotifications.filter(
+                (item) =>
+                  !item.readAt &&
+                  item.groupId === action.groupId &&
+                  item.targetType === action.targetType &&
+                  item.targetId === action.targetId &&
+                  item.priority === "normal",
+              );
+              if (matching.length === 0) return;
+              await update(
+                ref(database),
+                Object.fromEntries(matching.map((item) => [`activityNotifications/${firebaseUser.uid}/${item.id}/readAt`, readAt])),
+              );
+              return;
+            }
+            case "markAllActivityNotificationsRead": {
+              if (!firebaseUser) return;
+              const unread = activityNotifications.filter((item) => !item.readAt);
+              if (unread.length === 0) return;
+              const readAt = now();
+              await update(
+                ref(database),
+                Object.fromEntries(unread.map((item) => [`activityNotifications/${firebaseUser.uid}/${item.id}/readAt`, readAt])),
+              );
+              return;
+            }
+            case "registerPushToken": {
+              if (!firebaseUser || !action.token.trim()) return;
+              const tokenKey = action.token.replace(/[.#$\[\]\/]/g, "_");
+              await set(ref(database, `pushTokens/${firebaseUser.uid}/${tokenKey}`), {
+                token: action.token,
+                platform: action.platform,
+                updatedAt: now(),
+              });
+              return;
+            }
+            case "setDiscussionFollow": {
+              if (!firebaseUser || !profile?.currentGroupId) return;
+              const followId = `${action.targetType}_${action.targetId}`;
+              const existing = discussionFollows.find((item) => item.id === followId);
+              if (action.following === Boolean(existing)) return;
+              const follow: DiscussionFollow | null = action.following
+                ? {
+                    id: followId,
+                    userId: firebaseUser.uid,
+                    targetType: action.targetType,
+                    targetId: action.targetId,
+                    createdAt: now(),
+                  }
+                : null;
+              await update(ref(database), {
+                [`discussionFollowers/${profile.currentGroupId}/${action.targetType}/${action.targetId}/${firebaseUser.uid}`]: follow,
+                [`userDiscussionFollows/${firebaseUser.uid}/${profile.currentGroupId}/${followId}`]: follow,
+              });
+              return;
+            }
+            case "setNotificationPreference": {
+              if (!firebaseUser) return;
+              await update(ref(database, `notificationPreferences/${firebaseUser.uid}`), { [action.key]: action.value });
+              return;
+            }
             case "setTheme": {
               if (!firebaseUser) return;
               hasStoredThemeRef.current = true;
@@ -2416,6 +2534,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       clearUserSession,
       communityContentLoadingMore,
       communityPageAvailability,
+      discussionFollows,
       firebaseUser,
       groupBiblePlanAnnouncements,
       groupBiblePlanParticipantIds,
@@ -2431,6 +2550,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerNotifications,
       prayerNotificationsHasMore,
       prayerNotificationsLoadingMore,
+      activityNotifications,
       privateCheckIns,
       privateCheckInsHasMore,
       profile?.currentGroupId,

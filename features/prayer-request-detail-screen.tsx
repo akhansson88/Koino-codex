@@ -30,6 +30,7 @@ import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 
 const MAX_ANSWERED_UPDATE_LENGTH = 280;
 
@@ -64,8 +65,11 @@ export type PrayerRequestDetailScreenProps = {
   onOpenOwnerActions: () => void;
   onPray: () => void;
   onSendEncouragement: (body: string, replyId: string) => Promise<void>;
+  onToggleDiscussionFollow: () => void;
   ownsItem: boolean;
   prayer: PrayerRequestDetailPrayerState;
+  followsDiscussion: boolean;
+  showDiscussionFollow: boolean;
 };
 
 function routeParam(value: string | string[] | undefined) {
@@ -207,8 +211,11 @@ export function PrayerRequestDetailScreen({
   onOpenOwnerActions,
   onPray,
   onSendEncouragement,
+  onToggleDiscussionFollow,
   ownsItem,
   prayer,
+  followsDiscussion,
+  showDiscussionFollow,
 }: PrayerRequestDetailScreenProps) {
   const { language, t } = useAppTranslation();
 
@@ -324,6 +331,9 @@ export function PrayerRequestDetailScreen({
         placeholder={t("community.reply.encouragementPlaceholder")}
         value={encouragementDraft}
       />
+      {showDiscussionFollow ? (
+        <DiscussionFollowButton following={followsDiscussion} onPress={onToggleDiscussionFollow} />
+      ) : null}
       <PrayerActivity activity={activity} />
     </AppScreen>
   );
@@ -439,6 +449,10 @@ export function PrayerRequestDetailRouteScreen() {
         : [],
     [prayerRequest, state.currentUserId, state.replies, t, userById, userImageById],
   );
+  const followsDiscussion = Boolean(
+    prayerRequest && state.discussionFollows.some((follow) => follow.targetType === "post" && follow.targetId === prayerRequest.id),
+  );
+  const hasCommented = encouragements.some((encouragement) => encouragement.canDelete);
 
   function goBack() {
     if (router.canGoBack()) {
@@ -540,6 +554,16 @@ export function PrayerRequestDetailRouteScreen() {
             replyId,
           });
           setEncouragementDraft("");
+        }}
+        followsDiscussion={followsDiscussion}
+        showDiscussionFollow={activePrayerRequest.userId !== state.currentUserId && (followsDiscussion || hasCommented)}
+        onToggleDiscussionFollow={() => {
+          void dispatch({
+            type: "setDiscussionFollow",
+            targetType: "post",
+            targetId: activePrayerRequest.id,
+            following: !followsDiscussion,
+          });
         }}
         ownsItem={activePrayerRequest.userId === state.currentUserId}
         prayer={prayer}

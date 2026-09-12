@@ -115,6 +115,7 @@ export function AppHeader({
           <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+          <NotificationBellButton />
           <AvatarButton />
         </View>
       </View>
@@ -159,6 +160,51 @@ export function AvatarButton({ size = 38 }: { size?: number }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={t("shared.app.openIdentitySupport")} hitSlop={8} onPress={openIdentitySupport}>
       <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={size} tone="pink" />
+    </Pressable>
+  );
+}
+
+export function NotificationBellButton() {
+  const { state } = useKoino();
+  const { t } = useAppTranslation();
+  const pathname = usePathname();
+  const unreadCount = state.activityNotifications.filter((item) => !item.readAt).length;
+
+  if (!state.currentUserId) return null;
+
+  return (
+    <Pressable
+      accessibilityLabel={`${t("notifications.open")}${unreadCount ? ` (${unreadCount})` : ""}`}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={() => {
+        if (pathname !== "/notifications") router.push("/notifications" as never);
+      }}
+      style={{ alignItems: "center", height: 38, justifyContent: "center", position: "relative", width: 38 }}
+    >
+      <Feather color={colors.ink} name="bell" size={21} />
+      {unreadCount > 0 ? (
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: colors.rose,
+            borderColor: colors.cream,
+            borderRadius: 9,
+            borderWidth: 2,
+            justifyContent: "center",
+            minHeight: 18,
+            minWidth: 18,
+            paddingHorizontal: 3,
+            position: "absolute",
+            right: -1,
+            top: 0,
+          }}
+        >
+          <Text style={{ color: colors.ink, fontSize: 9, fontWeight: "700", lineHeight: 12 }}>
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
