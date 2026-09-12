@@ -390,7 +390,7 @@ function testamentForBook(bookName: string): TestamentFilter {
 }
 
 function bibleVersionShortLabel(versionId: BibleVersionId) {
-  if (versionId === "reformationsbibeln2026") return "RB26";
+  if (versionId === "reformationsbibeln2026") return "SRB16";
   return "KJV";
 }
 
