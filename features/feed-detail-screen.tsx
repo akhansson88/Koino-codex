@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -10,6 +11,7 @@ import {
   EntryVisibility,
   entryKindIcon,
   feedItemKind,
+  normalizeEntryKind,
   visibility,
 } from "@/state/product";
 import type { BibleVerse, EntryKind, FeedItem, GroupImage, PostReactionKind } from "@/state/types";
@@ -40,9 +42,10 @@ import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors, typography } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
+import { confirmAction } from "@/ui/confirm";
 
 const MAX_REPLY_LENGTH = 500;
 
@@ -66,7 +69,10 @@ export function FeedDetailScreen() {
   const { state, dispatch } = useKoino();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [replyDraft, setReplyDraft] = useState("");
+  const [ownerMenuVisible, setOwnerMenuVisible] = useState(false);
+  const [editingPost, setEditingPost] = useState(false);
   const [allowRemove, setAllowRemove] = useState(false);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [reflectionComposerVisible, setReflectionComposerVisible] = useState(false);
@@ -262,9 +268,25 @@ export function FeedDetailScreen() {
 
   function closeScriptureReflection() {
     setReflectionComposerVisible(false);
+    setEditingPost(false);
   }
 
   async function submitScriptureReflection() {
+    const currentItem = item;
+    if (editingPost && currentItem?.type === "post") {
+      const titleFreeKind = reflectionKind === "reflection" || reflectionKind === "praise" || reflectionKind === "scripture";
+      await dispatch({
+        type: "editPost",
+        id: currentItem.id,
+        kind: reflectionKind,
+        ...(titleFreeKind ? {} : { title: reflectionTitle }),
+        body: reflectionBody,
+        verse: primaryBibleVerse(reflectionVerses),
+        verses: reflectionVerses,
+      });
+      closeScriptureReflection();
+      return;
+    }
     if (!reflectionBody.trim()) return;
     await dispatch({
       type: "createJournalEntry",
@@ -279,6 +301,34 @@ export function FeedDetailScreen() {
     setReflectionTitle("");
     setReflectionBody("");
     setReflectionVerses([]);
+  }
+
+  function openPostEditor() {
+    const currentItem = item;
+    if (!currentItem || currentItem.type !== "post" || !ownsItem) return;
+    setOwnerMenuVisible(false);
+    setEditingPost(true);
+    setReflectionKind(normalizeEntryKind(currentItem.kind));
+    setReflectionVisibility(visibility.room);
+    setReflectionTitle(currentItem.title ?? "");
+    setReflectionBody(currentItem.body);
+    setReflectionVerses(normalizeBibleVerses(currentItem.verse, currentItem.verses));
+    setReflectionComposerVisible(true);
+  }
+
+  function deletePost() {
+    const currentItem = item;
+    if (!currentItem || currentItem.type !== "post" || !ownsItem) return;
+    setOwnerMenuVisible(false);
+    confirmAction({
+      title: t("community.card.deleteTitle"),
+      message: t("community.card.deleteBody"),
+      confirmText: t("common.delete"),
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "deletePost", id: currentItem.id }).then(() => router.back());
+      },
+    });
   }
 
   const replyList = replies.length > 0 ? (
@@ -369,9 +419,18 @@ export function FeedDetailScreen() {
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
-          <View style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
-            <Feather name="more-horizontal" size={22} color={colors.ink} />
-          </View>
+          {ownsItem && item.type === "post" ? (
+            <Pressable
+              accessibilityLabel={t("community.card.postOptions")}
+              accessibilityRole="button"
+              onPress={() => setOwnerMenuVisible((current) => !current)}
+              style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
+            >
+              <Feather name="more-horizontal" size={22} color={colors.ink} />
+            </Pressable>
+          ) : (
+            <View style={{ height: 44, width: 44 }} />
+          )}
         </View>
         {usesAlignedDetailFrame ? (
           <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
@@ -561,9 +620,62 @@ export function FeedDetailScreen() {
         ) : null}
         {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setOwnerMenuVisible(false)}
+        transparent
+        visible={ownerMenuVisible && ownsItem && item.type === "post"}
+      >
+        <Pressable
+          accessibilityLabel={t("common.close")}
+          onPress={() => setOwnerMenuVisible(false)}
+          style={{ backgroundColor: "transparent", flex: 1 }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.paper,
+              borderColor: colors.line,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              minWidth: 148,
+              paddingVertical: 4,
+              position: "absolute",
+              right: 16,
+              top: insets.top + 52,
+              ...platformShadow({
+                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+                elevation: 12,
+                offset: { width: 0, height: 10 },
+                opacity: 0.14,
+                radius: 24,
+              }),
+            }}
+          >
+            <Pressable
+              accessibilityLabel={t("common.edit")}
+              accessibilityRole="button"
+              onPress={openPostEditor}
+              style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
+            >
+              <Feather name="edit-2" size={15} color={colors.ink} />
+              <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel={t("common.delete")}
+              accessibilityRole="button"
+              onPress={deletePost}
+              style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
+            >
+              <Feather name="trash-2" size={15} color={colors.danger} />
+              <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
       <SharedComposer
         visible={reflectionComposerVisible}
-        context="journal"
+        context={editingPost ? "room" : "journal"}
+        editing={editingPost}
         kind={reflectionKind}
         entryVisibility={reflectionVisibility}
         title={reflectionTitle}
