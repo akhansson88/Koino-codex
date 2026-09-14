@@ -39,14 +39,16 @@ import {
   todayDateKey,
 } from "@/features/bible-plans";
 import {
-  bibleChapterVerses,
+  bibleChapter,
   bibleCrossReferences,
   bibleVerseFromReference,
   buildBibleVerse,
   bibleVersionFor,
   bibleVersions,
   type BibleCrossReference,
+  type BibleChapterSubtitle,
   type BibleChapterVerse,
+  type BibleFootnote,
   type BiblePosition,
   type BibleVersionId,
   hasBibleCrossReferences,
@@ -59,6 +61,7 @@ import {
   type BibleTextSearchResult,
   versesForChapter,
 } from "@/features/bible-kjv";
+import { bibleTextSegments } from "@/features/bible-footnotes";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import { useKoino } from "@/state/koino-store";
@@ -166,7 +169,7 @@ const defaultFontId: BibleReaderFontId = "serif";
 const defaultFontSize = 18;
 const defaultReaderTheme: BibleReaderThemeId = "light";
 const defaultShowVerseNumbers = true;
-const defaultShowFootnotes = false;
+const defaultShowFootnotes = true;
 const defaultShowCrossReferences = true;
 const defaultCompactMode = false;
 const oldTestamentBookCount = 39;
@@ -186,6 +189,12 @@ type PendingVerseComposerAction = {
 };
 
 type ChapterSwipeDirection = "idle" | "previous" | "next";
+
+type SelectedBibleFootnote = {
+  footnote: BibleFootnote;
+  marker: string;
+  position: BiblePosition;
+};
 
 type SelectedVerseRange = {
   end: number;
@@ -814,6 +823,7 @@ export function BibleScreen() {
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [reflectionText, setReflectionText] = useState("");
   const [crossReferencePosition, setCrossReferencePosition] = useState<BiblePosition | undefined>();
+  const [selectedFootnote, setSelectedFootnote] = useState<SelectedBibleFootnote | undefined>();
   const [topicsVisible, setTopicsVisible] = useState(false);
   const [topicDetailVisible, setTopicDetailVisible] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState("");
@@ -845,7 +855,8 @@ export function BibleScreen() {
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
   const readerPalette = readerPaletteFor(effectiveReaderTheme);
-  const chapterVerses = useMemo(() => bibleChapterVerses(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
+  const chapter = useMemo(() => bibleChapter(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
+  const chapterVerses = chapter.verses;
   const activeBiblePlans = useMemo(
     () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId),
     [state.biblePlans, state.currentUserId],
@@ -1056,7 +1067,12 @@ export function BibleScreen() {
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
+    setSelectedFootnote(undefined);
   }, [position.book, position.chapter]);
+
+  useEffect(() => {
+    setSelectedFootnote(undefined);
+  }, [bibleVersionId]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
     const offset = verseOffsetsRef.current[verse];
@@ -1746,10 +1762,18 @@ export function BibleScreen() {
               plans={activeBiblePlans}
             />
             <BibleText
+              chapterHeading={chapter.heading}
               chapterHighlightByVerse={chapterHighlightByVerse}
               compactMode={compactMode}
               crossReferenceAvailability={chapterCrossReferenceAvailability}
               highlightedPosition={highlightedPosition}
+              onFootnotePress={(marker, footnote, verse) => {
+                setSelectedFootnote({
+                  footnote,
+                  marker,
+                  position: { book: position.book, chapter: position.chapter, verse },
+                });
+              }}
               onVersePress={handleVersePress}
               onVersePressIn={handleVersePressIn}
               onVerseLayout={handleVerseLayout}
@@ -1765,7 +1789,9 @@ export function BibleScreen() {
               selectedVerseNumbers={selectedVerseNumbers}
               selectedVersePosition={selectedVersePosition}
               showCrossReferences={showCrossReferences}
+              showFootnotes={showFootnotes}
               showVerseNumbers={showVerseNumbers}
+              subtitles={chapter.subtitles}
               verses={chapterVerses}
             />
           </Animated.View>
@@ -1870,6 +1896,13 @@ export function BibleScreen() {
         readerTextStyle={readerTextStyle}
         references={selectedCrossReferences}
         visible={Boolean(crossReferencePosition)}
+      />
+      <FootnoteSheet
+        onClose={() => setSelectedFootnote(undefined)}
+        palette={readerPalette}
+        readerTextStyle={readerTextStyle}
+        selection={selectedFootnote}
+        visible={Boolean(selectedFootnote)}
       />
       <BibleDrawer
         biblePlanCount={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length}
@@ -2817,9 +2850,11 @@ function TopicVerseCard({
 }
 
 function BibleText({
+  chapterHeading,
   chapterHighlightByVerse,
   compactMode,
   highlightedPosition,
+  onFootnotePress,
   onVersePress,
   onVersePressIn,
   onVerseLayout,
@@ -2833,12 +2868,16 @@ function BibleText({
   selectedVerseNumbers,
   selectedVersePosition,
   showVerseNumbers,
+  showFootnotes,
+  subtitles,
   verses,
 }: {
+  chapterHeading?: string;
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   compactMode: boolean;
   crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
+  onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number) => void;
   onVersePress: (verse: number) => void;
   onVersePressIn: () => void;
   onVerseLayout: (verse: number, offset: number) => void;
@@ -2852,7 +2891,9 @@ function BibleText({
   selectedVerseNumbers: number[];
   selectedVersePosition?: BiblePosition;
   showCrossReferences: boolean;
+  showFootnotes: boolean;
   showVerseNumbers: boolean;
+  subtitles: BibleChapterSubtitle[];
   verses: BibleChapterVerse[];
 }) {
   const { language } = useAppTranslation();
@@ -2874,7 +2915,22 @@ function BibleText({
       }}
       style={{ gap: compactMode ? 4 : 7 }}
     >
+      {chapterHeading ? (
+        <Text
+          style={{
+            color: palette.text,
+            fontFamily: readerTextStyle.fontFamily,
+            fontSize: Math.max(18, Number(readerTextStyle.fontSize ?? defaultFontSize) + 2),
+            fontWeight: "700",
+            lineHeight: Math.round(readerLineHeight * 1.05),
+            marginBottom: compactMode ? 6 : 12,
+          }}
+        >
+          {chapterHeading}
+        </Text>
+      ) : null}
       {verses.map((item, index) => {
+        const subtitlesBefore = subtitles.filter((subtitle) => subtitle.beforeVerse === item.verse);
         const markersBefore = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "start");
         const markersAfter = planMarkers.filter((marker) => marker.verse === item.verse && marker.kind === "finish");
         const highlighted =
@@ -2901,6 +2957,22 @@ function BibleText({
             ref={(node) => onVerseRef(item.verse, node)}
             style={{ gap: 5 }}
           >
+          {subtitlesBefore.map((subtitle) => (
+            <Text
+              key={`${item.reference}-${subtitle.beforeVerse}-${subtitle.text}`}
+              style={{
+                color: palette.accent,
+                fontFamily: readerTextStyle.fontFamily,
+                fontSize: Math.max(15, Number(readerTextStyle.fontSize ?? defaultFontSize) - 1),
+                fontWeight: "800",
+                lineHeight: Math.round(readerLineHeight * 0.95),
+                paddingBottom: compactMode ? 2 : 5,
+                paddingTop: index === 0 ? 0 : compactMode ? 8 : 14,
+              }}
+            >
+              {subtitle.text}
+            </Text>
+          ))}
           {markersBefore.map((marker) => (
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
@@ -2947,13 +3019,31 @@ function BibleText({
                 </Text>
                 <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
                   {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                  <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
+                  <BibleVerseText
+                    footnotes={item.footnotes}
+                    onFootnotePress={(marker, footnote) => onFootnotePress(marker, footnote, item.verse)}
+                    palette={palette}
+                    persistedHighlightStyle={persistedHighlightStyle}
+                    readerTextStyle={readerTextStyle}
+                    reference={referenceLabel({ ...position, verse: item.verse }, language)}
+                    showFootnotes={showFootnotes}
+                    text={item.text}
+                  />
                 </View>
               </View>
             ) : (
               <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
                 {showVerseNumbers ? <Text style={[verseNumberStyle, bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.verse} </Text> : null}
-                <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}><Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>{item.text}</Text></Text>
+                <BibleVerseText
+                  footnotes={item.footnotes}
+                  onFootnotePress={(marker, footnote) => onFootnotePress(marker, footnote, item.verse)}
+                  palette={palette}
+                  persistedHighlightStyle={persistedHighlightStyle}
+                  readerTextStyle={readerTextStyle}
+                  reference={referenceLabel({ ...position, verse: item.verse }, language)}
+                  showFootnotes={showFootnotes}
+                  text={item.text}
+                />
               </View>
             )}
           </Pressable>
@@ -2964,6 +3054,60 @@ function BibleText({
         );
       })}
     </View>
+  );
+}
+
+function BibleVerseText({
+  footnotes,
+  onFootnotePress,
+  palette,
+  persistedHighlightStyle,
+  readerTextStyle,
+  reference,
+  showFootnotes,
+  text,
+}: {
+  footnotes: BibleFootnote[];
+  onFootnotePress: (marker: string, footnote: BibleFootnote) => void;
+  palette: ReaderPalette;
+  persistedHighlightStyle?: TextStyle;
+  readerTextStyle: TextStyle;
+  reference: string;
+  showFootnotes: boolean;
+  text: string;
+}) {
+  const { t } = useAppTranslation();
+  const segments = useMemo(() => bibleTextSegments(text, footnotes), [footnotes, text]);
+  const markerFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.66);
+
+  return (
+    <Text style={[readerTextStyle, bibleVerseWebInteractionStyle, { flex: 1 }]}>
+      <Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>
+        {segments.map((segment, index) => {
+          if (segment.kind === "text") return segment.text;
+          if (!showFootnotes) return null;
+          return (
+            <Text
+              accessibilityLabel={t("bible.footnote.open", { marker: segment.marker, reference })}
+              accessibilityRole="button"
+              key={`footnote-${index}-${segment.marker}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                onFootnotePress(segment.marker, segment.footnote);
+              }}
+              style={{
+                color: palette.accent,
+                fontSize: markerFontSize,
+                fontWeight: "900",
+                textDecorationLine: "underline",
+              }}
+            >
+              {segment.appended ? " " : ""}{segment.marker}
+            </Text>
+          );
+        })}
+      </Text>
+    </Text>
   );
 }
 
@@ -4702,6 +4846,84 @@ function NextChapterCard({
         <Feather name="arrow-right" size={22} color={palette.accent} />
       </View>
     </Pressable>
+  );
+}
+
+function FootnoteSheet({
+  onClose,
+  palette,
+  readerTextStyle,
+  selection,
+  visible,
+}: {
+  onClose: () => void;
+  palette: ReaderPalette;
+  readerTextStyle: TextStyle;
+  selection?: SelectedBibleFootnote;
+  visible: boolean;
+}) {
+  const { language, t } = useAppTranslation();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+
+  if (!visible || !selection) return null;
+
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <BibleSheetModalFrame accessibilityLabel={t("bible.footnote.close")} onBackdropPress={onClose}>
+        <BibleSheetBottomPositioner>
+          <BibleSheetShell
+            contentStyle={{ paddingBottom: Math.max(20, insets.bottom + 12) }}
+            palette={palette}
+            style={{ height: Math.min(Math.round(height * 0.55), 480) }}
+          >
+            <BibleSheetTop bordered palette={palette}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.footnote.title")}</Text>
+                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(selection.position, language)}</Text>
+                </View>
+                <ReaderCircleButton accessibilityLabel={t("bible.footnote.close")} icon="x" onPress={onClose} palette={palette} />
+              </View>
+            </BibleSheetTop>
+            <ScrollView
+              contentContainerStyle={{ gap: 16, paddingHorizontal: bibleSheetHorizontalPadding, paddingVertical: 20 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  backgroundColor: palette.peach,
+                  borderColor: palette.line,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  minHeight: 36,
+                  justifyContent: "center",
+                  minWidth: 44,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Text style={{ color: palette.accent, fontSize: 16, fontWeight: "900" }}>{selection.marker}</Text>
+              </View>
+              <Text
+                selectable
+                style={[
+                  readerTextStyle,
+                  {
+                    color: palette.text,
+                    fontSize: Math.max(16, Number(readerTextStyle.fontSize ?? defaultFontSize) - 1),
+                    lineHeight: Math.round(Math.max(16, Number(readerTextStyle.fontSize ?? defaultFontSize) - 1) * 1.55),
+                  },
+                ]}
+              >
+                {selection.footnote.text}
+              </Text>
+            </ScrollView>
+          </BibleSheetShell>
+        </BibleSheetBottomPositioner>
+      </BibleSheetModalFrame>
+    </Modal>
   );
 }
 

@@ -9,6 +9,26 @@ export type BibleDatabaseVerseRow = {
   verse: number;
 };
 
+export type BibleDatabaseFootnote = {
+  marker: string;
+  text: string;
+};
+
+export type BibleDatabaseChapterSubtitle = {
+  beforeVerse: number;
+  text: string;
+};
+
+export type BibleDatabaseChapterVerseRow = BibleDatabaseVerseRow & {
+  footnotes: BibleDatabaseFootnote[];
+};
+
+export type BibleDatabaseChapter = {
+  heading: string | null;
+  subtitles: BibleDatabaseChapterSubtitle[];
+  verses: BibleDatabaseChapterVerseRow[];
+};
+
 export type BibleDatabaseCrossReferenceRow = {
   target_book: string;
   target_chapter: number;
@@ -26,7 +46,7 @@ const CROSS_REFERENCE_CHAPTER_CACHE_LIMIT = 6;
 
 let database: BibleDatabaseConnection | undefined;
 const activeDatabases = new Map<BibleDatabaseConnection, number>();
-const chapterCache = new Map<string, BibleDatabaseVerseRow[]>();
+const chapterCache = new Map<string, BibleDatabaseChapter>();
 const crossReferenceChapterCache = new Map<string, Set<number>>();
 
 function cacheValue<Key, Value>(cache: Map<Key, Value>, key: Key, value: Value, limit: number) {
@@ -49,7 +69,7 @@ function requireDatabase() {
 
 export async function initializeBibleDatabase(nextDatabase: SQLiteDatabase) {
   const metadata = nextDatabase.getFirstSync<{ user_version: number }>("PRAGMA user_version");
-  if (metadata?.user_version !== 1) {
+  if (metadata?.user_version !== 2) {
     throw new Error(`Unsupported Bible database version: ${metadata?.user_version ?? "unknown"}`);
   }
   await nextDatabase.execAsync("PRAGMA query_only = ON");
@@ -93,8 +113,18 @@ export function queryBibleChapter(translation: string, book: string, chapter: nu
     return cached;
   }
 
-  const rows = requireDatabase().getAllSync<BibleDatabaseVerseRow>(
-    `SELECT books.name AS book, verses.chapter, verses.verse, verses.text
+  const chapterData = requireDatabase().getFirstSync<{ heading: string | null }>(
+    `SELECT chapters.heading
+       FROM chapters
+       JOIN translations ON translations.id = chapters.translation_id
+       JOIN books ON books.id = chapters.book_id
+      WHERE translations.code = ? AND books.name = ? AND chapters.chapter = ?`,
+    translation,
+    book,
+    chapter,
+  );
+  const rows = requireDatabase().getAllSync<BibleDatabaseVerseRow & { verse_id: number }>(
+    `SELECT verses.id AS verse_id, books.name AS book, verses.chapter, verses.verse, verses.text
        FROM verses
        JOIN translations ON translations.id = verses.translation_id
        JOIN books ON books.id = verses.book_id
@@ -104,7 +134,49 @@ export function queryBibleChapter(translation: string, book: string, chapter: nu
     book,
     chapter,
   );
-  return cacheValue(chapterCache, key, rows, CHAPTER_CACHE_LIMIT);
+  const subtitles = requireDatabase()
+    .getAllSync<{ before_verse: number; text: string }>(
+      `SELECT chapter_subtitles.before_verse, chapter_subtitles.text
+         FROM chapter_subtitles
+         JOIN chapters ON chapters.id = chapter_subtitles.chapter_id
+         JOIN translations ON translations.id = chapters.translation_id
+         JOIN books ON books.id = chapters.book_id
+        WHERE translations.code = ? AND books.name = ? AND chapters.chapter = ?
+        ORDER BY chapter_subtitles.before_verse, chapter_subtitles.display_order`,
+      translation,
+      book,
+      chapter,
+    )
+    .map((subtitle) => ({ beforeVerse: subtitle.before_verse, text: subtitle.text }));
+  const footnotesByVerse = new Map<number, BibleDatabaseFootnote[]>();
+  requireDatabase()
+    .getAllSync<{ marker: string; text: string; verse: number }>(
+      `SELECT verses.verse, verse_footnotes.marker, verse_footnotes.text
+         FROM verse_footnotes
+         JOIN verses ON verses.id = verse_footnotes.verse_id
+         JOIN translations ON translations.id = verses.translation_id
+         JOIN books ON books.id = verses.book_id
+        WHERE translations.code = ? AND books.name = ? AND verses.chapter = ?
+        ORDER BY verses.verse, verse_footnotes.display_order`,
+      translation,
+      book,
+      chapter,
+    )
+    .forEach((footnote) => {
+      const verseFootnotes = footnotesByVerse.get(footnote.verse) ?? [];
+      verseFootnotes.push({ marker: footnote.marker, text: footnote.text });
+      footnotesByVerse.set(footnote.verse, verseFootnotes);
+    });
+
+  const result: BibleDatabaseChapter = {
+    heading: chapterData?.heading ?? null,
+    subtitles,
+    verses: rows.map(({ verse_id: _verseId, ...row }) => ({
+      ...row,
+      footnotes: footnotesByVerse.get(row.verse) ?? [],
+    })),
+  };
+  return cacheValue(chapterCache, key, result, CHAPTER_CACHE_LIMIT);
 }
 
 export function bibleChapterHasCrossReference(book: string, chapter: number, verse: number) {

@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { build } from "esbuild";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
-const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v1.db");
+const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v2.db");
 
 try {
   await access(generatedBibleData);
@@ -22,6 +22,7 @@ const nativeDatabase = new DatabaseSync(generatedBibleData, { readOnly: true });
 
 try {
   assert.equal(nativeDatabase.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+  assert.equal(nativeDatabase.prepare("PRAGMA user_version").get().user_version, 2);
   assert.deepEqual(
     nativeDatabase
       .prepare("SELECT translations.code, COUNT(*) AS count FROM verses JOIN translations ON translations.id = verses.translation_id GROUP BY translations.code ORDER BY translations.id")
@@ -29,8 +30,18 @@ try {
       .map(({ code, count }) => ({ code, count })),
     [
       { code: "kjv", count: 31102 },
-      { code: "reformationsbibeln2026", count: 31053 },
+      { code: "reformationsbibeln2026", count: 31170 },
     ],
+  );
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapters").get().count, 2378);
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapters WHERE heading IS NOT NULL").get().count, 1162);
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapter_subtitles").get().count, 1288);
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM verse_footnotes").get().count, 3006);
+  assert.equal(
+    nativeDatabase
+      .prepare("SELECT COUNT(*) AS count FROM verses JOIN translations ON translations.id = verses.translation_id JOIN books ON books.id = verses.book_id WHERE translations.code = ? AND books.name = ?")
+      .get("reformationsbibeln2026", "Solomon's Song").count,
+    117,
   );
   assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM cross_references").get().count, 344799);
 
@@ -43,7 +54,8 @@ try {
     stdin: {
       contents: `
         export * from "./features/bible-search.ts";
-        export { bibleCrossReferences, hasBibleCrossReferences } from "./features/bible-kjv.ts";
+        export { bibleChapter, bibleCrossReferences, hasBibleCrossReferences } from "./features/bible-kjv.ts";
+        export { bibleTextSegments } from "./features/bible-footnotes.ts";
         export { setBibleDatabaseForTesting } from "./features/bible-database.ts";
       `,
       resolveDir: projectRoot,
@@ -53,8 +65,10 @@ try {
   });
 
   const {
+    bibleChapter,
     bibleCrossReferences,
     biblePositionFromSearchQuery,
+    bibleTextSegments,
     displayBibleBookName,
     displayBibleReference,
     hasBibleCrossReferences,
@@ -67,6 +81,46 @@ try {
     getAllAsync: async (source, ...params) => nativeDatabase.prepare(source).all(...params),
     getAllSync: (source, ...params) => nativeDatabase.prepare(source).all(...params),
     getFirstSync: (source, ...params) => nativeDatabase.prepare(source).get(...params),
+  });
+
+  const genesisOne = bibleChapter("Genesis", 1, "reformationsbibeln2026");
+  assert.equal(genesisOne.heading, "Skapelsen.");
+  assert.deepEqual(genesisOne.subtitles, [{ beforeVerse: 1, text: "Gud skapar världen" }]);
+  assert.deepEqual(genesisOne.verses[0].footnotes, [{ marker: "*", text: "Ordagrant: himlarna." }]);
+
+  const kjvGenesisOne = bibleChapter("Genesis", 1, "kjv");
+  assert.equal(kjvGenesisOne.heading, undefined);
+  assert.deepEqual(kjvGenesisOne.subtitles, []);
+  assert.ok(kjvGenesisOne.verses.every((verse) => verse.footnotes.length === 0));
+
+  const simpleSegments = bibleTextSegments(genesisOne.verses[0].text, genesisOne.verses[0].footnotes);
+  assert.equal(simpleSegments.find((segment) => segment.kind === "footnote")?.marker, "*");
+
+  const repeatedFootnote = { marker: "*", text: "Repeated note" };
+  const repeatedSegments = bibleTextSegments("word* and word*", [repeatedFootnote]).filter((segment) => segment.kind === "footnote");
+  assert.equal(repeatedSegments.length, 2);
+  assert.ok(repeatedSegments.every((segment) => segment.footnote === repeatedFootnote));
+
+  const markerNotes = [
+    { marker: "*", text: "First" },
+    { marker: "**", text: "Second" },
+    { marker: "***", text: "Third" },
+  ];
+  assert.deepEqual(
+    bibleTextSegments("one* two** three***", markerNotes)
+      .filter((segment) => segment.kind === "footnote")
+      .map((segment) => [segment.marker, segment.footnote.text]),
+    [["*", "First"], ["**", "Second"], ["***", "Third"]],
+  );
+
+  const mismatchedSegments = bibleTextSegments("word**", [{ marker: "*", text: "Only note" }]);
+  assert.equal(mismatchedSegments.find((segment) => segment.kind === "footnote")?.footnote.text, "Only note");
+  const appendedSegments = bibleTextSegments("No inline marker", [{ marker: "*", text: "Appended note" }]);
+  assert.deepEqual(appendedSegments.at(-1), {
+    appended: true,
+    footnote: { marker: "*", text: "Appended note" },
+    kind: "footnote",
+    marker: "*",
   });
 
   function assertReference(query, language, expectedReference, versionId = "kjv") {

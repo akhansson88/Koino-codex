@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v1.db"
+OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v2.db"
 TEMP_PATH = OUTPUT_PATH.with_suffix(".db.tmp")
 TRANSLATIONS = (
     (1, "kjv", "KJV", PROJECT_ROOT / "assets" / "bible" / "kjv-verses-1769.json"),
@@ -93,6 +93,35 @@ def create_schema(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX verses_chapter_idx
           ON verses (translation_id, book_id, chapter, verse);
+        CREATE TABLE chapters (
+          id INTEGER PRIMARY KEY,
+          translation_id INTEGER NOT NULL REFERENCES translations(id),
+          book_id INTEGER NOT NULL REFERENCES books(id),
+          chapter INTEGER NOT NULL,
+          heading TEXT,
+          UNIQUE (translation_id, book_id, chapter)
+        );
+        CREATE INDEX chapters_lookup_idx
+          ON chapters (translation_id, book_id, chapter);
+        CREATE TABLE chapter_subtitles (
+          id INTEGER PRIMARY KEY,
+          chapter_id INTEGER NOT NULL REFERENCES chapters(id),
+          before_verse INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          display_order INTEGER NOT NULL
+        );
+        CREATE INDEX chapter_subtitles_chapter_idx
+          ON chapter_subtitles (chapter_id, before_verse, display_order);
+        CREATE TABLE verse_footnotes (
+          id INTEGER PRIMARY KEY,
+          verse_id INTEGER NOT NULL REFERENCES verses(id),
+          marker TEXT NOT NULL,
+          text TEXT NOT NULL,
+          display_order INTEGER NOT NULL,
+          UNIQUE (verse_id, marker)
+        );
+        CREATE INDEX verse_footnotes_verse_idx
+          ON verse_footnotes (verse_id, display_order);
         CREATE VIRTUAL TABLE verse_search USING fts5(
           text,
           content='verses',
@@ -123,7 +152,10 @@ def insert_verses(connection: sqlite3.Connection) -> None:
         "INSERT INTO books (id, name, osis, canonical_order) VALUES (?, ?, ?, ?)",
         ((index + 1, name, osis, index) for index, (name, osis) in enumerate(BOOKS)),
     )
-    next_id = 1
+    next_verse_id = 1
+    next_chapter_id = 1
+    next_subtitle_id = 1
+    next_footnote_id = 1
     for translation_id, translation_code, label, source_path in TRANSLATIONS:
         connection.execute(
             "INSERT INTO translations (id, code, label) VALUES (?, ?, ?)",
@@ -132,28 +164,95 @@ def insert_verses(connection: sqlite3.Connection) -> None:
         with source_path.open(encoding="utf-8") as source_file:
             source = json.load(source_file)
 
-        rows = []
-        for reference, text in source.items():
-            match = VERSE_REFERENCE.match(reference)
-            if match is None or match.group(1) not in BOOK_ORDER:
-                continue
-            book = match.group(1)
-            chapter = int(match.group(2))
-            verse = int(match.group(3))
-            book_order = BOOK_ORDER[book]
-            canonical_order = book_order * 1_000_000 + chapter * 1_000 + verse
-            rows.append(
-                (
-                    next_id,
-                    translation_id,
-                    BOOK_ID[book],
-                    chapter,
-                    verse,
-                    clean_text(text),
-                    canonical_order,
+        verse_rows = []
+        chapter_rows = []
+        subtitle_rows = []
+        footnote_rows = []
+        if isinstance(source.get("books") if isinstance(source, dict) else None, list):
+            source_books = source["books"]
+            if len(source_books) != len(BOOKS):
+                raise ValueError(f"{source_path.name}: expected {len(BOOKS)} books, found {len(source_books)}")
+
+            for source_book in source_books:
+                book_number = int(source_book["number"])
+                if not 1 <= book_number <= len(BOOKS):
+                    raise ValueError(f"{source_path.name}: invalid book number {book_number}")
+                book, _ = BOOKS[book_number - 1]
+                book_id = BOOK_ID[book]
+                for source_chapter in source_book.get("chapters", []):
+                    chapter = int(source_chapter["number"])
+                    chapter_id = next_chapter_id
+                    next_chapter_id += 1
+                    heading = clean_text(source_chapter.get("heading", "")) or None
+                    chapter_rows.append((chapter_id, translation_id, book_id, chapter, heading))
+
+                    for display_order, subtitle in enumerate(source_chapter.get("subtitles", [])):
+                        subtitle_rows.append(
+                            (
+                                next_subtitle_id,
+                                chapter_id,
+                                int(subtitle["before_verse"]),
+                                clean_text(subtitle["text"]),
+                                display_order,
+                            )
+                        )
+                        next_subtitle_id += 1
+
+                    for source_verse in source_chapter.get("verses", []):
+                        verse = int(source_verse["number"])
+                        verse_id = next_verse_id
+                        next_verse_id += 1
+                        canonical_order = (book_number - 1) * 1_000_000 + chapter * 1_000 + verse
+                        verse_rows.append(
+                            (
+                                verse_id,
+                                translation_id,
+                                book_id,
+                                chapter,
+                                verse,
+                                clean_text(source_verse["text"]),
+                                canonical_order,
+                            )
+                        )
+                        for display_order, footnote in enumerate(source_verse.get("footnotes", [])):
+                            footnote_rows.append(
+                                (
+                                    next_footnote_id,
+                                    verse_id,
+                                    footnote["marker"].strip(),
+                                    clean_text(footnote["text"]),
+                                    display_order,
+                                )
+                            )
+                            next_footnote_id += 1
+        else:
+            seen_chapters = set()
+            for reference, text in source.items():
+                match = VERSE_REFERENCE.match(reference)
+                if match is None or match.group(1) not in BOOK_ORDER:
+                    continue
+                book = match.group(1)
+                chapter = int(match.group(2))
+                verse = int(match.group(3))
+                book_order = BOOK_ORDER[book]
+                canonical_order = book_order * 1_000_000 + chapter * 1_000 + verse
+                verse_rows.append(
+                    (
+                        next_verse_id,
+                        translation_id,
+                        BOOK_ID[book],
+                        chapter,
+                        verse,
+                        clean_text(text),
+                        canonical_order,
+                    )
                 )
-            )
-            next_id += 1
+                next_verse_id += 1
+                seen_chapters.add((BOOK_ID[book], chapter))
+
+            for book_id, chapter in sorted(seen_chapters):
+                chapter_rows.append((next_chapter_id, translation_id, book_id, chapter, None))
+                next_chapter_id += 1
 
         connection.executemany(
             """
@@ -161,7 +260,27 @@ def insert_verses(connection: sqlite3.Connection) -> None:
               (id, translation_id, book_id, chapter, verse, text, canonical_order)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            rows,
+            verse_rows,
+        )
+        connection.executemany(
+            "INSERT INTO chapters (id, translation_id, book_id, chapter, heading) VALUES (?, ?, ?, ?, ?)",
+            chapter_rows,
+        )
+        connection.executemany(
+            """
+            INSERT INTO chapter_subtitles
+              (id, chapter_id, before_verse, text, display_order)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            subtitle_rows,
+        )
+        connection.executemany(
+            """
+            INSERT INTO verse_footnotes
+              (id, verse_id, marker, text, display_order)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            footnote_rows,
         )
 
     connection.execute(
@@ -247,7 +366,7 @@ def main() -> None:
         create_schema(connection)
         insert_verses(connection)
         insert_cross_references(connection)
-        connection.execute("PRAGMA user_version = 1")
+        connection.execute("PRAGMA user_version = 2")
         connection.execute("ANALYZE")
         connection.execute("PRAGMA optimize")
         connection.commit()

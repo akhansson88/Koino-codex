@@ -23,9 +23,26 @@ export { bibleVersionFor, bibleVersions, isBibleVersionId };
 export type { BibleVersionId };
 
 export type BibleChapterVerse = {
+  footnotes: BibleFootnote[];
   reference: string;
   text: string;
   verse: number;
+};
+
+export type BibleFootnote = {
+  marker: string;
+  text: string;
+};
+
+export type BibleChapterSubtitle = {
+  beforeVerse: number;
+  text: string;
+};
+
+export type BibleChapter = {
+  heading?: string;
+  subtitles: BibleChapterSubtitle[];
+  verses: BibleChapterVerse[];
 };
 
 export type BibleCrossReference = {
@@ -75,13 +92,23 @@ export async function searchBibleText(query: string, versionId: BibleVersionId, 
   }));
 }
 
-export function bibleChapterVerses(book: string, chapter: number, versionId?: BibleVersionId): BibleChapterVerse[] {
+export function bibleChapter(book: string, chapter: number, versionId?: BibleVersionId): BibleChapter {
   const normalizedBook = normalizeBibleBookName(book);
-  return queryBibleChapter(bibleVersionFor(versionId).id, normalizedBook, chapter).map((row) => ({
-    reference: `${row.book} ${row.chapter}:${row.verse}`,
-    text: row.text,
-    verse: row.verse,
-  }));
+  const result = queryBibleChapter(bibleVersionFor(versionId).id, normalizedBook, chapter);
+  return {
+    heading: result.heading ?? undefined,
+    subtitles: result.subtitles,
+    verses: result.verses.map((row) => ({
+      footnotes: row.footnotes,
+      reference: `${row.book} ${row.chapter}:${row.verse}`,
+      text: row.text,
+      verse: row.verse,
+    })),
+  };
+}
+
+export function bibleChapterVerses(book: string, chapter: number, versionId?: BibleVersionId): BibleChapterVerse[] {
+  return bibleChapter(book, chapter, versionId).verses;
 }
 
 export function hasBibleCrossReferences(position: BiblePosition) {
@@ -136,7 +163,7 @@ export function buildBibleVerse(book: string, chapter: number, startVerse: numbe
   const firstVerse = Math.min(startVerse, endVerse);
   const lastVerse = Math.max(startVerse, endVerse);
   const version = bibleVersionFor(versionId);
-  const chapterRows = queryBibleChapter(version.id, normalizedBook, chapter);
+  const chapterRows = queryBibleChapter(version.id, normalizedBook, chapter).verses;
   const selectedRows = chapterRows.filter((row) => row.verse >= firstVerse && row.verse <= lastVerse);
   if (selectedRows.length !== lastVerse - firstVerse + 1) return undefined;
 

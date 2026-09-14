@@ -29,8 +29,8 @@ function BibleDatabaseLifetime({ children }: PropsWithChildren) {
 export function BibleDatabaseProvider({ children }: PropsWithChildren) {
   return (
     <SQLiteProvider
-      assetSource={{ assetId: require("../assets/bible/koino-bible-v1.db") }}
-      databaseName="koino-bible-v1.db"
+      assetSource={{ assetId: require("../assets/bible/koino-bible-v2.db") }}
+      databaseName="koino-bible-v2.db"
       onInit={initializeInstrumentedBibleDatabase}
     >
       <BibleDatabaseLifetime>{children}</BibleDatabaseLifetime>
