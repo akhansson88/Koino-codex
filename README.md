@@ -16,6 +16,10 @@ Scan the QR code with Expo Go on Android, or with the iPhone camera and open it
 in Expo Go. For devices on the same local network, `npm run start:lan` is also
 available.
 
+Remote push notifications on Android require a development, preview, or
+production build. Expo Go does not support Android remote notifications for
+this SDK, so use an EAS-built app when testing the notification flow.
+
 Useful checks:
 
 ```sh

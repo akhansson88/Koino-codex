@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
@@ -220,7 +220,8 @@ export function PrayerRequestDetailScreen({
   const { language, t } = useAppTranslation();
 
   return (
-    <AppScreen>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ backgroundColor: colors.cream, flex: 1 }}>
+      <AppScreen>
       <PrayerRequestHeader onBack={onBack} onOpenOptions={ownsItem ? onOpenOwnerActions : undefined} />
       <View style={{ alignItems: "center", gap: 8 }}>
         <Avatar image={authorImage} name={authorName} size={58} tone="green" />
@@ -335,7 +336,8 @@ export function PrayerRequestDetailScreen({
         <DiscussionFollowButton following={followsDiscussion} onPress={onToggleDiscussionFollow} />
       ) : null}
       <PrayerActivity activity={activity} />
-    </AppScreen>
+      </AppScreen>
+    </KeyboardAvoidingView>
   );
 }
 

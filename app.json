@@ -27,6 +27,7 @@
       "bundleIdentifier": "com.akhansson.koino"
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./koino-logo.png",
         "backgroundColor": "#F7EFE4"
