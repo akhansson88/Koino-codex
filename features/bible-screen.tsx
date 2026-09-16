@@ -2998,7 +2998,8 @@ function BibleText({
               borderColor: "transparent",
               borderRadius: radius.md,
               borderWidth: 1,
-              paddingHorizontal: temporarySelected ? 10 : 0,
+              marginHorizontal: -10,
+              paddingHorizontal: 10,
               paddingVertical: compactMode ? 5 : 8,
             }}
           >
