@@ -8,8 +8,11 @@
     "start:lan": "expo start --lan",
     "start:tunnel": "expo start --tunnel",
     "start:clear": "expo start --clear",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "android:dev": "adb reverse tcp:8081 tcp:8081 && cross-env APP_VARIANT=development REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 expo run:android --device",
+    "start:dev": "adb reverse tcp:8081 tcp:8081 && cross-env APP_VARIANT=development expo start --dev-client --localhost",
+    "android:logs": "adb logcat *:S ReactNative:V ReactNativeJS:V AndroidRuntime:E Expo:V",
+    "ios": "expo run:ios",
     "bible:build": "node scripts/generate-bible-data.mjs",
     "doctor": "npx expo-doctor",
     "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs",
@@ -31,6 +34,7 @@
     "expo-blur": "~15.0.8",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.14",
+    "expo-dev-client": "~6.0.21",
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-image-manipulator": "~14.0.8",
@@ -54,6 +58,7 @@
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.1.10",
+    "cross-env": "^10.1.0",
     "esbuild": "^0.28.2",
     "typescript": "~5.9.2"
   }

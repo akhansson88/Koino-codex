@@ -1,7 +1,45 @@
 # KOINO mobile app
 
-KOINO is an Expo Go app for iPhone and Android. The project only targets these
-two mobile platforms.
+KOINO is an Expo app for iPhone and Android. The project only targets these two
+mobile platforms.
+
+## Local Android development build
+
+The Android development build is a separate app named **KOINO Dev** with the
+package ID `com.akhansson.koinomvp.dev`. It can stay installed alongside the
+Google Play internal-test app (`com.akhansson.koinomvp`). Local builds do not
+use EAS cloud-build credits.
+
+Connect and unlock the phone, enable USB debugging, and accept the computer's
+RSA authorization prompt. Confirm that `adb devices` reports `device`, then run:
+
+```sh
+npm run android:dev
+```
+
+That first run generates the native Android project, compiles the debug app,
+installs it on the selected device, configures USB port forwarding, and starts
+Metro. For normal JavaScript or TypeScript changes after installation, only
+start Metro:
+
+```sh
+npm run start:dev
+```
+
+Press `j` in Expo CLI to open React Native DevTools. For focused Android crash
+and React Native logs, use `npm run android:logs`. Rebuild with
+`npm run android:dev` after changing native dependencies or Expo app config.
+
+The Play internal-test build remains a signed store build:
+
+```sh
+eas build --platform android --profile production
+eas submit --platform android --profile internal
+```
+
+Use EAS Update only for JavaScript and asset changes compatible with the
+installed native runtime. Native dependency or app-config changes require a new
+binary.
 
 ## Run in Expo Go
 
@@ -18,7 +56,7 @@ available.
 
 Remote push notifications on Android require a development, preview, or
 production build. Expo Go does not support Android remote notifications for
-this SDK, so use an EAS-built app when testing the notification flow.
+this SDK, so use the local KOINO Dev build when testing the notification flow.
 
 Useful checks:
 

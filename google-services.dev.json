@@ -1,0 +1,83 @@
+{
+  "project_info": {
+    "project_number": "181081151239",
+    "firebase_url": "https://koino-codex-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "koino-codex",
+    "storage_bucket": "koino-codex.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181081151239:android:f034e3618357774bac57a2",
+        "android_client_info": {
+          "package_name": "com.akhansson.koinomvp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "181081151239-lv8l4tp6rb4c5g173nun8o9r286v0bdf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDI4V6Qc1h16dYJjZwQGj5JX1Lsfis1xe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "181081151239-lv8l4tp6rb4c5g173nun8o9r286v0bdf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "181081151239-tfc89turqan0l5bbuf465mbe314nbgr6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.netqube.koino"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181081151239:android:bcac548b89ed544eac57a2",
+        "android_client_info": {
+          "package_name": "com.akhansson.koinomvp.dev"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "181081151239-lv8l4tp6rb4c5g173nun8o9r286v0bdf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDI4V6Qc1h16dYJjZwQGj5JX1Lsfis1xe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "181081151239-lv8l4tp6rb4c5g173nun8o9r286v0bdf.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "181081151239-tfc89turqan0l5bbuf465mbe314nbgr6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.netqube.koino"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

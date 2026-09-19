@@ -2,6 +2,8 @@ node_modules/
 functions/lib/
 functions/.secret.local
 .expo/
+/android/
+/ios/
 .codex-remote-attachments/
 dist/
 *.apk
