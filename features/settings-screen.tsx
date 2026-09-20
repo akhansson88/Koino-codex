@@ -73,7 +73,7 @@ import {
   PostCard,
 } from "@/ui/post-card";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors, typography } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
 type RoomView = "rooms" | "detail" | "prayer" | "prayerMomentDetail" | "checkins" | "members";
@@ -774,6 +774,19 @@ export function SettingsScreen() {
     });
   }
 
+  function deleteCheckIn(item: Extract<FeedItem, { type: "check_in" }>) {
+    if (item.userId !== state.currentUserId) return;
+    confirmAction({
+      title: t("community.card.deleteCheckInTitle"),
+      message: t("community.card.deleteCheckInBody"),
+      confirmText: t("common.delete"),
+      destructive: true,
+      onConfirm: () => {
+        dispatch({ type: "deleteCheckIn", id: item.id });
+      },
+    });
+  }
+
   function closeFeedEncouragement() {
     setFeedEncouragementTarget(undefined);
     setFeedEncouragementDraft("");
@@ -888,6 +901,8 @@ export function SettingsScreen() {
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
+          ownsItem={item.userId === state.currentUserId}
+          onDelete={() => deleteCheckIn(item)}
           onOpen={() => router.push(`/feed/${item.type}/${item.id}` as never)}
           onReact={() => togglePostAction(item)}
           reacted={reaction.reacted}
@@ -1102,6 +1117,8 @@ export function SettingsScreen() {
             communityName={group.name}
             onBack={goBackFromRoomView}
             onCheckIn={openCheckInComposer}
+            currentUserId={state.currentUserId}
+            onDelete={deleteCheckIn}
             onOpenCheckIn={(item) => router.push(`/feed/${item.type}/${item.id}` as never)}
             onReact={togglePostAction}
             reactionState={itemReactionState}
@@ -2229,6 +2246,7 @@ function CommunityCheckInsScreen({
   checkIns,
   checkedInToday,
   communityName,
+  currentUserId,
   feedError,
   feedLoading,
   feedOffline,
@@ -2236,6 +2254,7 @@ function CommunityCheckInsScreen({
   loadingMore,
   onBack,
   onCheckIn,
+  onDelete,
   onOpenCheckIn,
   onReact,
   onLoadMore,
@@ -2246,6 +2265,7 @@ function CommunityCheckInsScreen({
   checkIns: Extract<FeedItem, { type: "check_in" }>[];
   checkedInToday: boolean;
   communityName: string;
+  currentUserId?: Id;
   feedError?: string;
   feedLoading: boolean;
   feedOffline: boolean;
@@ -2253,6 +2273,7 @@ function CommunityCheckInsScreen({
   loadingMore: boolean;
   onBack: () => void;
   onCheckIn: () => void;
+  onDelete: (item: Extract<FeedItem, { type: "check_in" }>) => void;
   onOpenCheckIn: (item: Extract<FeedItem, { type: "check_in" }>) => void;
   onReact: (item: FeedItem) => void;
   onLoadMore: () => Promise<void>;
@@ -2301,6 +2322,8 @@ function CommunityCheckInsScreen({
               authorImage={userImageById.get(item.userId)}
               authorName={userById.get(item.userId) ?? t("common.someone")}
               item={item}
+              ownsItem={item.userId === currentUserId}
+              onDelete={() => onDelete(item)}
               onOpen={() => onOpenCheckIn(item)}
               onReact={() => onReact(item)}
               reacted={reaction.reacted}
@@ -2393,8 +2416,10 @@ function CheckInCard({
   authorImage,
   authorName,
   item,
+  onDelete,
   onOpen,
   onReact,
+  ownsItem,
   reacted,
   reactedBy,
   reactionCount,
@@ -2402,14 +2427,83 @@ function CheckInCard({
   authorImage?: GroupImage;
   authorName: string;
   item: Extract<FeedItem, { type: "check_in" }>;
+  onDelete?: () => void;
   onOpen: () => void;
   onReact: () => void;
+  ownsItem: boolean;
   reacted: boolean;
   reactedBy?: { name: string; image?: GroupImage }[];
   reactionCount: number;
 }) {
   const { t } = useAppTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const suppressOpenRef = useRef(false);
   const itemKind = feedItemKind(item);
+
+  function openDeleteConfirmation() {
+    if (!onDelete) return;
+    suppressOpenRef.current = true;
+    setMenuOpen(false);
+    onDelete();
+    setTimeout(() => {
+      suppressOpenRef.current = false;
+    }, 250);
+  }
+
+  const menuButton = ownsItem && onDelete ? (
+    <Pressable
+      accessibilityLabel={t("community.card.checkInOptions")}
+      accessibilityRole="button"
+      hitSlop={4}
+      onPressIn={(event) => event.stopPropagation()}
+      onPress={(event) => {
+        event.stopPropagation();
+        setMenuOpen((current) => !current);
+      }}
+      style={{ alignItems: "center", flexShrink: 0, height: 44, justifyContent: "center", width: 44 }}
+    >
+      <Feather name="more-horizontal" size={19} color={colors.ink} />
+    </Pressable>
+  ) : null;
+
+  const menu = ownsItem && onDelete && menuOpen ? (
+    <View
+      style={{
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        minWidth: 118,
+        paddingVertical: 4,
+        position: "absolute",
+        right: 14,
+        top: 54,
+        zIndex: 40,
+        ...platformShadow({
+          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+          elevation: 12,
+          offset: { width: 0, height: 10 },
+          opacity: 0.14,
+          radius: 24,
+        }),
+      }}
+    >
+      <Pressable
+        accessibilityLabel={t("common.delete")}
+        accessibilityRole="button"
+        onPressIn={(event) => event.stopPropagation()}
+        onPress={(event) => {
+          event.stopPropagation();
+          openDeleteConfirmation();
+        }}
+        style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
+      >
+        <Feather name="trash-2" size={14} color={colors.danger} />
+        <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
+      </Pressable>
+    </View>
+  ) : null;
+
   return (
     <CommunityFeedCard
       actions={
@@ -2440,8 +2534,16 @@ function CheckInCard({
           )}
         </LinkPreviewContent>
       ) : undefined}
+      headerAccessory={menuButton}
       item={item}
-      onOpen={onOpen}
+      onOpen={() => {
+        if (menuOpen || suppressOpenRef.current) {
+          setMenuOpen(false);
+          return;
+        }
+        onOpen();
+      }}
+      overlay={menu}
       responseSummary={
         reactedBy?.length ? (
           <CommunityCardResponseSummary
@@ -2451,6 +2553,7 @@ function CheckInCard({
           />
         ) : undefined
       }
+      style={{ zIndex: menuOpen ? 10 : 1 }}
     />
   );
 }

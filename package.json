@@ -17,6 +17,7 @@
     "doctor": "npx expo-doctor",
     "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs",
     "validate:bible-search": "node scripts/validate-bible-search.mjs",
+    "validate:bible-verse-selection": "node scripts/validate-bible-verse-selection.mjs",
     "validate:startup": "node scripts/validate-startup-dependencies.mjs",
     "validate:pagination": "node scripts/validate-firebase-pagination.mjs",
     "test:donations": "node --test scripts/donation-api.test.cjs",

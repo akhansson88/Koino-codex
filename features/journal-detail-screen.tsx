@@ -120,7 +120,7 @@ export function JournalDetailScreen() {
 
   function deleteEntry() {
     setDeleteConfirmVisible(false);
-    dispatch({ type: "deleteJournalEntry", id: currentEntry.id });
+    dispatch({ type: isSharedCheckIn ? "deleteCheckIn" : "deleteJournalEntry", id: currentEntry.id });
     router.back();
   }
 
@@ -139,20 +139,16 @@ export function JournalDetailScreen() {
           />
           <Text style={[typography.label, { color: colors.olive }]}>{presentation.typeLabel}</Text>
         </View>
-        {isSharedCheckIn ? (
-          <View style={{ width: 38 }} />
-        ) : (
-          <Pressable
-            accessibilityLabel={t("me.journey.detail.entryOptions")}
-            accessibilityRole="button"
-            hitSlop={6}
-            onPress={() => setEntryMenuVisible((current) => !current)}
-            style={{ alignItems: "center", height: 38, justifyContent: "center", width: 38 }}
-          >
-            <Feather name="more-horizontal" size={20} color={colors.ink} />
-          </Pressable>
-        )}
-        {!isSharedCheckIn && entryMenuVisible ? (
+        <Pressable
+          accessibilityLabel={t(isSharedCheckIn ? "community.card.checkInOptions" : "me.journey.detail.entryOptions")}
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={() => setEntryMenuVisible((current) => !current)}
+          style={{ alignItems: "center", height: 38, justifyContent: "center", width: 38 }}
+        >
+          <Feather name="more-horizontal" size={20} color={colors.ink} />
+        </Pressable>
+        {entryMenuVisible ? (
           <View
             style={{
               backgroundColor: colors.paper,
@@ -243,11 +239,11 @@ export function JournalDetailScreen() {
         roomImage={group?.image}
       />
       <BottomSheet
-        title={t("me.journey.detail.deleteTitle")}
+        title={t(isSharedCheckIn ? "community.card.deleteCheckInTitle" : "me.journey.detail.deleteTitle")}
         visible={deleteConfirmVisible}
         onClose={() => setDeleteConfirmVisible(false)}
       >
-        <BodyText muted>{t("me.journey.detail.deleteMessage")}</BodyText>
+        <BodyText muted>{t(isSharedCheckIn ? "community.card.deleteCheckInBody" : "me.journey.detail.deleteMessage")}</BodyText>
         <SecondaryButton
           accessibilityLabel={t("me.journey.detail.confirmDelete")}
           icon="trash-2"

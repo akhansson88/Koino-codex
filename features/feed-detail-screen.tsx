@@ -316,17 +316,20 @@ export function FeedDetailScreen() {
     setReflectionComposerVisible(true);
   }
 
-  function deletePost() {
+  function deleteOwnedItem() {
     const currentItem = item;
-    if (!currentItem || currentItem.type !== "post" || !ownsItem) return;
+    if (!currentItem || !ownsItem) return;
     setOwnerMenuVisible(false);
     confirmAction({
-      title: t("community.card.deleteTitle"),
-      message: t("community.card.deleteBody"),
+      title: t(currentItem.type === "check_in" ? "community.card.deleteCheckInTitle" : "community.card.deleteTitle"),
+      message: t(currentItem.type === "check_in" ? "community.card.deleteCheckInBody" : "community.card.deleteBody"),
       confirmText: t("common.delete"),
       destructive: true,
       onConfirm: () => {
-        void dispatch({ type: "deletePost", id: currentItem.id }).then(() => router.back());
+        const action = currentItem.type === "check_in"
+          ? { type: "deleteCheckIn" as const, id: currentItem.id }
+          : { type: "deletePost" as const, id: currentItem.id };
+        void dispatch(action).then(() => router.back());
       },
     });
   }
@@ -419,9 +422,9 @@ export function FeedDetailScreen() {
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
-          {ownsItem && item.type === "post" ? (
+          {ownsItem ? (
             <Pressable
-              accessibilityLabel={t("community.card.postOptions")}
+              accessibilityLabel={t(item.type === "check_in" ? "community.card.checkInOptions" : "community.card.postOptions")}
               accessibilityRole="button"
               onPress={() => setOwnerMenuVisible((current) => !current)}
               style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
@@ -624,7 +627,7 @@ export function FeedDetailScreen() {
         animationType="fade"
         onRequestClose={() => setOwnerMenuVisible(false)}
         transparent
-        visible={ownerMenuVisible && ownsItem && item.type === "post"}
+        visible={ownerMenuVisible && ownsItem}
       >
         <Pressable
           accessibilityLabel={t("common.close")}
@@ -651,19 +654,21 @@ export function FeedDetailScreen() {
               }),
             }}
           >
-            <Pressable
-              accessibilityLabel={t("common.edit")}
-              accessibilityRole="button"
-              onPress={openPostEditor}
-              style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
-            >
-              <Feather name="edit-2" size={15} color={colors.ink} />
-              <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
-            </Pressable>
+            {item.type === "post" ? (
+              <Pressable
+                accessibilityLabel={t("common.edit")}
+                accessibilityRole="button"
+                onPress={openPostEditor}
+                style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
+              >
+                <Feather name="edit-2" size={15} color={colors.ink} />
+                <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityLabel={t("common.delete")}
               accessibilityRole="button"
-              onPress={deletePost}
+              onPress={deleteOwnedItem}
               style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
             >
               <Feather name="trash-2" size={15} color={colors.danger} />
