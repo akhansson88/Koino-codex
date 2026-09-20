@@ -1,10 +1,11 @@
 import { router } from "expo-router";
-import { Switch, Text, View } from "react-native";
+import { Linking, Platform, Switch, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import type { NotificationPreferences } from "@/state/types";
-import { AppScreen, BodyText, Card, IconButton } from "@/ui/app-components";
+import { AppScreen, BodyText, Card, IconButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { retryNotificationRegistration, useNotificationRegistration } from "@/ui/notification-registration";
 import { colors, typography } from "@/ui/theme";
 
 type PreferenceKey = keyof NotificationPreferences;
@@ -45,7 +46,15 @@ function PreferenceRow({
 export default function NotificationSettingsScreen() {
   const { state } = useKoino();
   const { t } = useAppTranslation();
+  const registration = useNotificationRegistration();
   const pushDisabled = !state.notificationPreferences.pushEnabled;
+  const statusKey = registration.status === "ready"
+    ? "notifications.preferences.deviceReady"
+    : registration.status === "denied"
+      ? "notifications.preferences.deviceDenied"
+      : registration.status === "error"
+        ? "notifications.preferences.deviceError"
+        : "notifications.preferences.deviceChecking";
 
   return (
     <AppScreen>
@@ -57,6 +66,24 @@ export default function NotificationSettingsScreen() {
           </Text>
         </View>
         <BodyText muted>{t("notifications.preferences.description")}</BodyText>
+        {Platform.OS !== "web" ? (
+          <Card style={{ gap: 12 }}>
+            <Text style={[typography.cardTitle, { color: colors.textPrimary }]}>{t("notifications.preferences.deviceStatus")}</Text>
+            <BodyText muted>{t(statusKey)}</BodyText>
+            {registration.status === "error" ? (
+              <Text selectable style={[typography.label, { color: colors.textSecondary }]}>{registration.message}</Text>
+            ) : null}
+            {registration.status === "denied" ? (
+              <SecondaryButton icon="settings" onPress={() => void Linking.openSettings()}>
+                {t("notifications.preferences.openSystemSettings")}
+              </SecondaryButton>
+            ) : registration.status === "error" ? (
+              <SecondaryButton icon="refresh-cw" onPress={retryNotificationRegistration}>
+                {t("notifications.preferences.retry")}
+              </SecondaryButton>
+            ) : null}
+          </Card>
+        ) : null}
         <Card style={{ gap: 0 }}>
           <PreferenceRow
             preferenceKey="pushEnabled"

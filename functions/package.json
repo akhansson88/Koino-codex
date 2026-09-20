@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node lib/payments/payment-validation.test.js"
+    "test": "npm run build && node --test lib/payments/payment-validation.test.js lib/push-delivery.test.js"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",

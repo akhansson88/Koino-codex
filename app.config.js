@@ -30,7 +30,7 @@ const baseConfig = {
     },
     package: "com.akhansson.koinomvp",
     versionCode: 3,
-    permissions: ["android.permission.RECORD_AUDIO"],
+    permissions: ["android.permission.RECORD_AUDIO", "android.permission.POST_NOTIFICATIONS"],
   },
   plugins: [
     "expo-router",

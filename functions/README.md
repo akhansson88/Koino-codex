@@ -1,5 +1,23 @@
 # KOINO payment backend foundation
 
+## Push notification deployment
+
+`createCommentNotification` sends immediate pushes for owned-content replies,
+mentions, and followed discussions. `sendPrayerNotification` handles completed
+prayers, and `checkPushReceipts` checks Expo delivery receipts every five
+minutes. Rejected tickets and receipts are logged and recorded under
+`pushDeliveryDiagnostics`; `DeviceNotRegistered` tokens are deleted.
+
+Deploy Functions together with Realtime Database rules from the repository
+root:
+
+```sh
+npx firebase-tools deploy --only database,functions --project koino-codex
+```
+
+The EAS project must have FCM V1 credentials for
+`com.akhansson.koinomvp` and an APNs push key for `com.akhansson.koino`.
+
 Payments are **sandbox only** in this phase. The exported `createSupportPayment`
 callable requires Firebase Authentication, validates an integer amount in minor
 SEK units (10 kr through 100,000 kr), and writes a backend-owned `created`

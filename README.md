@@ -58,6 +58,22 @@ Remote push notifications on Android require a development, preview, or
 production build. Expo Go does not support Android remote notifications for
 this SDK, so use the local KOINO Dev build when testing the notification flow.
 
+Push setup is device- and backend-dependent. Before testing, deploy the Realtime
+Database rules and Functions, confirm the EAS project has an Android FCM V1 key
+and an iOS APNs push key, then install a newly built binary. The notification
+settings screen reports whether the current device granted permission and
+successfully registered an Expo push token.
+
+```sh
+npx firebase-tools deploy --only database,functions --project koino-codex
+eas build --platform android --profile production
+eas build --platform ios --profile production
+```
+
+Use two accounts on physical devices to test replies, mentions, followed
+discussions, and completed prayers. Delivery ticket and receipt failures are
+logged by Cloud Functions; invalid device tokens are removed automatically.
+
 Useful checks:
 
 ```sh

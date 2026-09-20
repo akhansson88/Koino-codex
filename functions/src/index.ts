@@ -1,2 +1,2 @@
 export { createSupportPayment } from "./payments";
-export { createCommentNotification, sendPendingNotificationBundles } from "./activity-notifications";
+export { checkPushReceipts, createCommentNotification, sendPrayerNotification } from "./activity-notifications";
