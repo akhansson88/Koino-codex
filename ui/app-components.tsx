@@ -1,3 +1,5 @@
+import { displayBibleReference } from "@/features/bible-book-names";
+import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, Ref } from "react";
@@ -710,13 +712,14 @@ export function VersePreviewCard({
   showOpenIndicator?: boolean;
   verse?: BibleVerse;
 }) {
+  const bookLanguage = useBibleBookLanguage(verse?.translation);
   const { state } = useKoino();
   const { t } = useAppTranslation();
   const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
   const displayVerse = verse;
   const previewLines = maxLines ?? (compact ? 3 : 5);
-  const cardOpenLabel = openAccessibilityLabel ?? t("shared.scripture.openReference", { reference: displayVerse.reference });
+  const cardOpenLabel = openAccessibilityLabel ?? t("shared.scripture.openReference", { reference: displayBibleReference(displayVerse.reference, bookLanguage) });
   const cardOpenText = openLabel ?? t("shared.scripture.open");
   const openDetail = () => {
     setDetailVisible(true);
@@ -741,7 +744,7 @@ export function VersePreviewCard({
   const header = (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
       <Text numberOfLines={1} style={[typography.label, { color: colors.ink, flex: 1, fontSize: compact ? 12 : 13 }]}>
-        {displayVerse.reference}
+        {displayBibleReference(displayVerse.reference, bookLanguage)}
       </Text>
       {displayVerse.translation ? <Text style={[typography.caption, { color: colors.muted, fontSize: 11 }]}>{displayVerse.translation}</Text> : null}
     </View>
@@ -818,7 +821,7 @@ export function VersePreviewCard({
           <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
             <IconButton accessibilityLabel={t("shared.scripture.closeDetail")} icon="arrow-left" onPress={closeDetail} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[typography.label, { color: colors.ink }]}>{displayVerse.reference}</Text>
+              <Text style={[typography.label, { color: colors.ink }]}>{displayBibleReference(displayVerse.reference, bookLanguage)}</Text>
               <Text style={[typography.caption, { color: colors.muted }]}>{displayVerse.translation ?? t("shared.scripture.bible")}</Text>
             </View>
           </View>
@@ -905,6 +908,7 @@ export function VerseDetailSheet({
   verse?: BibleVerse;
   visible: boolean;
 }) {
+  const bookLanguage = useBibleBookLanguage(verse?.translation);
   const { dispatch } = useKoino();
   const { t } = useAppTranslation();
   const [busy, setBusy] = useState(false);
@@ -926,10 +930,10 @@ export function VerseDetailSheet({
     }
     await dispatch({
       type: "createJournalEntry",
-      body: `Scripture note for ${currentVerse.reference}.`,
+      body: `Scripture note for ${displayBibleReference(currentVerse.reference, bookLanguage)}.`,
       entryKind: "scripture",
       journalType: "scripture_note",
-      title: currentVerse.reference,
+      title: displayBibleReference(currentVerse.reference, bookLanguage),
       verse: currentVerse,
       verses: [currentVerse],
       shareWithGroup: false,
@@ -947,7 +951,7 @@ export function VerseDetailSheet({
       type: "createPost",
       body: t("community.scripture.shareBody"),
       kind: "scripture",
-      title: currentVerse.reference,
+      title: displayBibleReference(currentVerse.reference, bookLanguage),
       verse: currentVerse,
       verses: [currentVerse],
     });
@@ -964,7 +968,7 @@ export function VerseDetailSheet({
   }
 
   return (
-    <BottomSheet title={verse.reference} visible={visible} onClose={onClose}>
+    <BottomSheet title={displayBibleReference(verse.reference, bookLanguage)} visible={visible} onClose={onClose}>
       <View style={{ gap: 6 }}>
         <Text style={[typography.sectionLabel, { color: colors.muted }]}>{verse.translation ?? t("shared.scripture.bible")}</Text>
         <Text selectable style={[typography.bodyMedium, { color: colors.ink, fontSize: 17, lineHeight: 26 }]}>

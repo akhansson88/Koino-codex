@@ -163,6 +163,13 @@ try {
   assert.deepEqual(biblePositionFromSearchQuery("Psaltaren 23", "sv", "kjv"), { book: "Psalms", chapter: 23, verse: 1 });
   assert.equal(biblePositionFromSearchQuery("Fakebook 3", "en", "kjv"), undefined);
   assert.equal(biblePositionFromSearchQuery("John 999", "en", "kjv"), undefined);
+  assert.equal(displayBibleBookName("John", "en", "reformationsbibeln2026"), "Johannesevangeliet");
+  assert.equal(displayBibleBookName("John", "en", "kjv"), "John");
+  assert.equal(displayBibleReference("1 John 2:1", "en", "Reformationsbibeln 2026"), "Första Johannesbrevet 2:1");
+  assert.equal(displayBibleReference("Genesis 50:26-Exodus 1:5", "en", "reformationsbibeln2026"), "Första Moseboken 50:26-Andra Moseboken 1:5");
+  assert.equal(displayBibleReference("Johannesevangeliet 3:16", "en", "reformationsbibeln2026"), "Johannesevangeliet 3:16");
+  assert.equal(biblePositionFromSearchQuery("Johannesevangeliet 3:16", "en", "reformationsbibeln2026")?.book, "John");
+  assert.equal(biblePositionFromSearchQuery("Första Moseboken 2", "en", "reformationsbibeln2026")?.chapter, 2);
   assert.equal(displayBibleBookName("John", "sv"), "Johannesevangeliet");
   assert.equal(displayBibleReference("John 3:16", "sv"), "Johannesevangeliet 3:16");
 

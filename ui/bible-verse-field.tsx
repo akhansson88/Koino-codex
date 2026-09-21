@@ -1,3 +1,4 @@
+import { displayBibleReference } from "@/features/bible-book-names";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -27,7 +28,7 @@ export function BibleVerseField({
   verses: BibleVerse[];
 }) {
   const { state } = useKoino();
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -79,14 +80,14 @@ export function BibleVerseField({
                   inlineDetail={attachedFromBible}
                   onDetailVisibilityChange={handleDetailVisibilityChange}
                   onOpenInBible={onOpenInBible}
-                  openAccessibilityLabel={attachedFromBible ? t("shared.scripture.viewReference", { reference: verse.reference }) : undefined}
+                  openAccessibilityLabel={attachedFromBible ? t("shared.scripture.viewReference", { reference: displayBibleReference(verse.reference, language, verse.translation ?? preferredBibleVersion) }) : undefined}
                   openLabel={attachedFromBible ? t("shared.scripture.openInBible") : undefined}
                   verse={verse}
                 />
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={t("shared.scripturePicker.removeReference", { reference: verse.reference })}
+                accessibilityLabel={t("shared.scripturePicker.removeReference", { reference: displayBibleReference(verse.reference, language, verse.translation ?? preferredBibleVersion) })}
                 accessibilityState={{ disabled: detailOpen }}
                 disabled={detailOpen}
                 onPress={() => removeVerse(verse.reference)}
@@ -111,27 +112,29 @@ export function BibleVerseField({
         <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("shared.scripturePicker.maxReferences")}</Text>
       ) : null}
       {canAddVerse && pickerVisible ? (
-        <Suspense
-          fallback={
-            <FullScreenModal animationType="slide" visible onRequestClose={() => setPickerVisible(false)}>
+        // Keep the native modal mounted while the lazy picker and database load.
+        // Replacing a loading modal with another modal races native presentation.
+        <FullScreenModal animationType="slide" visible onRequestClose={() => setPickerVisible(false)}>
+          <Suspense
+            fallback={
               <AppScreen>
                 <View style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
                   <ActivityIndicator color={colors.olive} />
                 </View>
               </AppScreen>
-            </FullScreenModal>
-          }
-        >
-          <LazyBibleVersePicker
-            bibleVersionId={preferredBibleVersion}
-            visible={pickerVisible}
-            onBack={() => setPickerVisible(false)}
-            onSelect={(nextVerse) => {
-              addVerse(nextVerse);
-              setPickerVisible(false);
-            }}
-          />
-        </Suspense>
+            }
+          >
+            <LazyBibleVersePicker
+              bibleVersionId={preferredBibleVersion}
+              visible={pickerVisible}
+              onBack={() => setPickerVisible(false)}
+              onSelect={(nextVerse) => {
+                addVerse(nextVerse);
+                setPickerVisible(false);
+              }}
+            />
+          </Suspense>
+        </FullScreenModal>
       ) : null}
     </View>
   );

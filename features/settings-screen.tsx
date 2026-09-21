@@ -1668,12 +1668,6 @@ function CommunityTransitionFrame({
   }, []);
 
   useEffect(() => {
-    if (reduceMotion === false) return;
-    translateX.stopAnimation();
-    translateX.setValue(0);
-  }, [reduceMotion, translateX]);
-
-  useEffect(() => {
     translateX.stopAnimation();
     if (reduceMotion !== false) {
       translateX.setValue(0);
@@ -1686,14 +1680,22 @@ function CommunityTransitionFrame({
       useNativeDriver: true,
     });
     animation.start();
-    return () => animation.stop();
-  }, [animationKey, direction, entryOffset, translateX]);
+    return () => {
+      animation.stop();
+      translateX.setValue(0);
+    };
+  }, [animationKey, direction, entryOffset, reduceMotion, translateX]);
 
-  const opacity = translateX.interpolate({
-    inputRange: [-entryOffset, 0, width],
-    outputRange: [0.9, 1, 0.72],
-    extrapolate: "clamp",
-  });
+  // Keep the native animation graph attached when feed/accessibility state rerenders.
+  // Replacing the interpolation mid-transition can leave the translation stranded.
+  const opacity = useMemo(
+    () => translateX.interpolate({
+      inputRange: [-entryOffset, 0, width],
+      outputRange: [0.9, 1, 0.72],
+      extrapolate: "clamp",
+    }),
+    [entryOffset, translateX, width],
+  );
 
   const panResponder = useMemo(
     () =>
@@ -1717,8 +1719,8 @@ function CommunityTransitionFrame({
               duration: 180,
               toValue: width,
               useNativeDriver: true,
-            }).start(() => {
-              onSwipeBack?.();
+            }).start(({ finished }) => {
+              if (finished) onSwipeBack?.();
             });
             return;
           }
@@ -1733,6 +1735,10 @@ function CommunityTransitionFrame({
             toValue: 0,
             useNativeDriver: true,
           }).start();
+        },
+        onPanResponderTerminate: () => {
+          translateX.stopAnimation();
+          translateX.setValue(0);
         },
       }),
     [canSwipeBack, onSwipeBack, reduceMotion, translateX, width],

@@ -1,3 +1,5 @@
+import { useBibleBookLanguage } from "@/features/use-bible-book-language";
+import { displayBibleBookName, displayBibleReference } from "@/features/bible-book-names";
 import { useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -27,79 +29,6 @@ type RangeDraft = {
   end: BiblePosition;
   start: BiblePosition;
 };
-
-const swedishBibleBookNames: Record<string, string> = {
-  Genesis: "Första Moseboken",
-  Exodus: "Andra Moseboken",
-  Leviticus: "Tredje Moseboken",
-  Numbers: "Fjärde Moseboken",
-  Deuteronomy: "Femte Moseboken",
-  Joshua: "Josua",
-  Judges: "Domarboken",
-  Ruth: "Rut",
-  "1 Samuel": "Första Samuelsboken",
-  "2 Samuel": "Andra Samuelsboken",
-  "1 Kings": "Första Kungaboken",
-  "2 Kings": "Andra Kungaboken",
-  "1 Chronicles": "Första Krönikeboken",
-  "2 Chronicles": "Andra Krönikeboken",
-  Ezra: "Esra",
-  Nehemiah: "Nehemja",
-  Esther: "Ester",
-  Job: "Job",
-  Psalms: "Psaltaren",
-  Proverbs: "Ordspråksboken",
-  Ecclesiastes: "Predikaren",
-  "Solomon's Song": "Höga Visan",
-  Isaiah: "Jesaja",
-  Jeremiah: "Jeremia",
-  Lamentations: "Klagovisorna",
-  Ezekiel: "Hesekiel",
-  Daniel: "Daniel",
-  Hosea: "Hosea",
-  Joel: "Joel",
-  Amos: "Amos",
-  Obadiah: "Obadja",
-  Jonah: "Jona",
-  Micah: "Mika",
-  Nahum: "Nahum",
-  Habakkuk: "Habackuk",
-  Zephaniah: "Sefanja",
-  Haggai: "Haggai",
-  Zechariah: "Sakarja",
-  Malachi: "Malaki",
-  Matthew: "Matteusevangeliet",
-  Mark: "Markusevangeliet",
-  Luke: "Lukasevangeliet",
-  John: "Johannesevangeliet",
-  Acts: "Apostlagärningarna",
-  Romans: "Romarbrevet",
-  "1 Corinthians": "Första Korinthierbrevet",
-  "2 Corinthians": "Andra Korinthierbrevet",
-  Galatians: "Galaterbrevet",
-  Ephesians: "Efesierbrevet",
-  Philippians: "Filipperbrevet",
-  Colossians: "Kolosserbrevet",
-  "1 Thessalonians": "Första Thessalonikerbrevet",
-  "2 Thessalonians": "Andra Thessalonikerbrevet",
-  "1 Timothy": "Första Timotheosbrevet",
-  "2 Timothy": "Andra Timotheosbrevet",
-  Titus: "Titusbrevet",
-  Philemon: "Filemonbrevet",
-  Hebrews: "Hebreerbrevet",
-  James: "Jakobsbrevet",
-  "1 Peter": "Första Petrusbrevet",
-  "2 Peter": "Andra Petrusbrevet",
-  "1 John": "Första Johannesbrevet",
-  "2 John": "Andra Johannesbrevet",
-  "3 John": "Tredje Johannesbrevet",
-  Jude: "Judasbrevet",
-  Revelation: "Uppenbarelseboken",
-};
-
-function displayBibleBookName(bookName: string, language: AppLanguage) {
-  return language === "sv" ? swedishBibleBookNames[bookName] ?? bookName : bookName;
-}
 
 function formatPlanDate(value: string, language: AppLanguage) {
   const date = new Date(`${value}T00:00:00`);
@@ -327,6 +256,7 @@ function CreatePlanCard({
   startDate: string;
   title: string;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   const { t } = useAppTranslation();
   const preview = useMemo(() => {
     const count = Number(dayCount);
@@ -373,7 +303,7 @@ function CreatePlanCard({
           <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
             {preview.map((day) => <View key={day.dayNumber} style={{ paddingVertical: 8, gap: 4 }}>
               <Text style={[typography.label, { color: colors.ink }]}>{t("bible.plans.checklist.day", { day: day.dayNumber })} · {dayKeyForPlanDay({ startDate }, day.dayNumber)}</Text>
-              <BodyText muted>{day.ranges.map((range) => range.displayReference).join("; ") || t("bible.plans.plan.noReading")}</BodyText>
+              <BodyText muted>{day.ranges.map((range) => displayBibleReference(range.displayReference, bookLanguage)).join("; ") || t("bible.plans.plan.noReading")}</BodyText>
             </View>)}
           </ScrollView>
         </>
@@ -415,7 +345,7 @@ function RangeEditor({
 }
 
 function PositionEditor({ label, onChange, position }: { label: string; onChange: (position: BiblePosition) => void; position: BiblePosition }) {
-  const { language } = useAppTranslation();
+  const bookLanguage = useBibleBookLanguage();
   const book = kjvBooks.find((item) => item.name === position.book) ?? kjvBooks[0];
   const verses = versesForChapter(position.book, position.chapter);
 
@@ -433,7 +363,7 @@ function PositionEditor({ label, onChange, position }: { label: string; onChange
     <View style={{ gap: 8 }}>
       <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
       <PickerRow
-        displayValue={(value) => displayBibleBookName(value, language)}
+        displayValue={(value) => displayBibleBookName(value, bookLanguage)}
         values={kjvBooks.map((item) => item.name)}
         selected={position.book}
         onSelect={setBook}
@@ -505,6 +435,7 @@ function PlanCard({
   onReschedule: (date: string) => Promise<void>;
   plan: BiblePlan;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   const { language, t } = useAppTranslation();
   const [saving, setSaving] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -587,7 +518,7 @@ function PlanCard({
               <Text style={[typography.label, { color: colors.ink }]}>
                 {t("bible.plans.checklist.day", { day: day.dayNumber })} · {formatPlanDate(dayKeyForPlanDay(plan, day.dayNumber), language)}
               </Text>
-              {day.ranges.map((range) => <BodyText muted key={range.id}>{range.displayReference}</BodyText>)}
+              {day.ranges.map((range) => <BodyText muted key={range.id}>{displayBibleReference(range.displayReference, bookLanguage)}</BodyText>)}
               {!day.ranges.length ? <BodyText muted>{t("bible.plans.plan.noReading")}</BodyText> : null}
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <SecondaryButton disabled={!day.ranges.length} icon="book-open" onPress={() => onJump(day.dayNumber)} style={{ flex: 1 }}>

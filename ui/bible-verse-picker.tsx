@@ -1,3 +1,4 @@
+import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
 /* Hallmark · component: scripture picker · genre: editorial · theme: Koino
  * states: default · hover · focus · active · disabled · loading · error · success
  * contrast: pass (46–50) · pre-emit critique: P5 H5 E4 S5 R5 V4
@@ -26,7 +27,7 @@ import {
 } from "@/features/bible-kjv";
 import { nextBibleVerseSelection } from "@/features/bible-verse-selection";
 import type { BibleVerse } from "@/state/types";
-import { FullScreenModal, IconButton, PrimaryButton, TextInputField } from "@/ui/app-components";
+import { IconButton, PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, typography } from "@/ui/theme";
 
@@ -46,13 +47,16 @@ type BibleVersePickerProps = {
 
 export function BibleVersePicker(props: BibleVersePickerProps) {
   return (
-    <BibleDatabaseProvider>
-      <BibleVersePickerContent {...props} />
-    </BibleDatabaseProvider>
+    <BibleBookVersionContext.Provider value={props.bibleVersionId}>
+      <BibleDatabaseProvider>
+        <BibleVersePickerContent {...props} />
+      </BibleDatabaseProvider>
+    </BibleBookVersionContext.Provider>
   );
 }
 
 function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: BibleVersePickerProps) {
+  const bookLanguage = useBibleBookLanguage(bibleVersionId);
   const insets = useSafeAreaInsets();
   const { language, t } = useAppTranslation();
   const firstBook = kjvBooks[0];
@@ -99,10 +103,10 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
     const query = bookQuery.trim().toLocaleLowerCase(locale);
     if (!query) return kjvBooks;
     return kjvBooks.filter((item) => {
-      const localized = displayBibleBookName(item.name, language).toLocaleLowerCase(locale);
+      const localized = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(locale);
       return localized.includes(query) || item.name.toLowerCase().includes(query);
     });
-  }, [bookQuery, language]);
+  }, [bookQuery, language, bookLanguage]);
 
   useEffect(() => {
     if (visible) return;
@@ -228,10 +232,9 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
     setSelectionEnd(undefined);
   }
 
-  const displayReference = preview ? displayBibleReference(preview.reference, language) : undefined;
+  const displayReference = preview ? displayBibleReference(preview.reference, bookLanguage) : undefined;
 
   return (
-    <FullScreenModal animationType="slide" visible={visible} onRequestClose={onBack}>
       <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: insets.top }}>
         <View style={{ backgroundColor: colors.cream, gap: 14, paddingHorizontal: 18, paddingBottom: 14, paddingTop: 14 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
@@ -285,7 +288,7 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
           {!isShowingSearch ? (
             <BrowseTrail
               browseStep={browseStep}
-              bookName={displayBibleBookName(selectedBook, language)}
+              bookName={displayBibleBookName(selectedBook, bookLanguage)}
               chapter={selectedChapter}
               onBooks={goToBooks}
               onChapters={goToChapters}
@@ -359,7 +362,6 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
           </View>
         ) : null}
       </View>
-    </FullScreenModal>
   );
 }
 
@@ -450,6 +452,7 @@ function BookSection({ books, label, language, onSelect }: {
   language: "en" | "sv";
   onSelect: (book: string) => void;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   if (books.length === 0) return null;
   return (
     <View style={{ gap: 8 }}>
@@ -470,7 +473,7 @@ function BookSection({ books, label, language, onSelect }: {
               paddingHorizontal: 14,
             })}
           >
-            <Text numberOfLines={1} style={[typography.bodyMedium, { color: colors.ink, flex: 1 }]}>{displayBibleBookName(item.name, language)}</Text>
+            <Text numberOfLines={1} style={[typography.bodyMedium, { color: colors.ink, flex: 1 }]}>{displayBibleBookName(item.name, bookLanguage)}</Text>
             <Feather color={colors.muted} name="chevron-right" size={17} />
           </Pressable>
         ))}
@@ -581,6 +584,7 @@ function SearchResults({ canSearch, hasCompleted, hasError, isSearching, languag
   results: ScriptureSearchResult[];
   t: ReturnType<typeof useAppTranslation>["t"];
 }) {
+  const bookLanguage = useBibleBookLanguage();
   return (
     <ScrollView contentContainerStyle={{ gap: 10, padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       {!canSearch ? (
@@ -597,14 +601,14 @@ function SearchResults({ canSearch, hasCompleted, hasError, isSearching, languag
       ) : null}
       {results.map((result) => (
         <Pressable
-          accessibilityLabel={t("shared.scripturePicker.resultAccessibility", { reference: displayBibleReference(result.verse.reference, language), text: result.verse.text })}
+          accessibilityLabel={t("shared.scripturePicker.resultAccessibility", { reference: displayBibleReference(result.verse.reference, bookLanguage), text: result.verse.text })}
           accessibilityRole="button"
           key={`${result.verse.reference}-${result.verse.text}`}
           onPress={() => onSelect(result)}
           style={({ pressed }) => ({ backgroundColor: pressed ? colors.accentSubtle : colors.paper, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 6, minHeight: 78, paddingHorizontal: 14, paddingVertical: 12 })}
         >
           <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <Text numberOfLines={1} style={[typography.label, { color: colors.olive, flex: 1 }]}>{displayBibleReference(result.verse.reference, language)}</Text>
+            <Text numberOfLines={1} style={[typography.label, { color: colors.olive, flex: 1 }]}>{displayBibleReference(result.verse.reference, bookLanguage)}</Text>
             <Feather color={colors.muted} name="chevron-right" size={17} />
           </View>
           <Text numberOfLines={3} style={[typography.body, { color: colors.ink, fontSize: 14, lineHeight: 21 }]}>{result.verse.text}</Text>

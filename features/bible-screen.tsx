@@ -1,3 +1,4 @@
+import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -783,7 +784,7 @@ export function BibleScreen() {
   const handledPlanJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
   const { state, dispatch } = useKoino();
-  const { language, t } = useAppTranslation();
+  const { t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -804,6 +805,8 @@ export function BibleScreen() {
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
+
+  const bookLanguage = useBibleBookLanguage(bibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
   const [readerThemePreference, setReaderThemePreference] = useState<BibleReaderThemePreference>({
@@ -1366,7 +1369,7 @@ export function BibleScreen() {
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
     setScriptureComposerVisibility(context === "room" ? visibility.room : visibility.private);
-    setScriptureComposerTitle(context === "room" ? "" : verse.reference);
+    setScriptureComposerTitle(context === "room" ? "" : displayBibleReference(verse.reference, bookLanguage, verse.translation));
     setScriptureComposerBody("");
     setScriptureComposerVerses([verse]);
     setScriptureComposerVisible(true);
@@ -1405,7 +1408,7 @@ export function BibleScreen() {
       return;
     }
     if (action === "copy") {
-      void Clipboard.setStringAsync(`${selectedVerse.text}\n${selectedVerse.reference} (${selectedVerse.translation ?? bibleVersion.translation})`).then(() => {
+      void Clipboard.setStringAsync(`${selectedVerse.text}\n${displayBibleReference(selectedVerse.reference, bookLanguage)} (${selectedVerse.translation ?? bibleVersion.translation})`).then(() => {
         setReaderToast({ message: "Verse copied", tone: "success" });
       });
       return;
@@ -1699,6 +1702,7 @@ export function BibleScreen() {
   };
 
   return (
+    <BibleBookVersionContext.Provider value={bibleVersionId}>
     <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
       <BibleReaderHeader
         canGoBack={readerCanGoBack}
@@ -1714,7 +1718,7 @@ export function BibleScreen() {
         onOpenSettings={() => setSettingsVisible(true)}
         onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}
-        title={chapterLabel(position, language)}
+        title={chapterLabel(position, bookLanguage)}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={insets.top}
       />
@@ -1832,7 +1836,7 @@ export function BibleScreen() {
           onManageColors={() => setHighlightColorManagerVisible(true)}
           onSave={handleSaveSelectedVerses}
           palette={readerPalette}
-          reference={displayBibleReference(selectedVerseReference, language)}
+          reference={displayBibleReference(selectedVerseReference, bookLanguage)}
           saved={selectedPassagesAreSaved}
           saving={selectionSaving}
           verseCount={selectedVerseNumbers.length}
@@ -1992,6 +1996,7 @@ export function BibleScreen() {
         roomImage={group?.image}
       />
     </View>
+    </BibleBookVersionContext.Provider>
   );
 }
 
@@ -2745,8 +2750,9 @@ function TopicVerseCard({
   userVote?: BibleTopicVoteValue;
   voting: boolean;
 }) {
-  const { language, t } = useAppTranslation();
-  const displayedReference = displayBibleReference(item.reference, language);
+  const bookLanguage = useBibleBookLanguage(item.verse?.translation);
+  const { t } = useAppTranslation();
+  const displayedReference = displayBibleReference(item.reference, bookLanguage);
   return (
     <View
       style={{
@@ -2800,7 +2806,7 @@ function TopicVerseCard({
             {t("bible.topics.helpfulVotes", { count: item.votes.toLocaleString() })}
           </Text>
         </View>
-        <View accessibilityLabel={t("bible.topics.ratePassage", { reference: item.reference })} style={{ flexDirection: "row", gap: 7 }}>
+        <View accessibilityLabel={t("bible.topics.ratePassage", { reference: displayedReference })} style={{ flexDirection: "row", gap: 7 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: !item.voteId || Boolean(userVote) || voting, selected: userVote === 1 }}
@@ -2896,7 +2902,7 @@ function BibleText({
   subtitles: BibleChapterSubtitle[];
   verses: BibleChapterVerse[];
 }) {
-  const { language } = useAppTranslation();
+  const bookLanguage = useBibleBookLanguage();
   const textOffsetRef = useRef(0);
   const verseFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.7);
   const verseNumberStyle: TextStyle = {
@@ -2977,7 +2983,7 @@ function BibleText({
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
           <Pressable
-            accessibilityLabel={referenceLabel({ ...position, verse: item.verse }, language)}
+            accessibilityLabel={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             delayLongPress={1000}
@@ -3026,7 +3032,7 @@ function BibleText({
                     palette={palette}
                     persistedHighlightStyle={persistedHighlightStyle}
                     readerTextStyle={readerTextStyle}
-                    reference={referenceLabel({ ...position, verse: item.verse }, language)}
+                    reference={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
                     showFootnotes={showFootnotes}
                     text={item.text}
                   />
@@ -3041,7 +3047,7 @@ function BibleText({
                   palette={palette}
                   persistedHighlightStyle={persistedHighlightStyle}
                   readerTextStyle={readerTextStyle}
-                  reference={referenceLabel({ ...position, verse: item.verse }, language)}
+                  reference={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
                   showFootnotes={showFootnotes}
                   text={item.text}
                 />
@@ -3958,7 +3964,8 @@ function VerseActionSheet({
   saved: boolean;
   visible: boolean;
 }) {
-  const { language, t } = useAppTranslation();
+  const bookLanguage = useBibleBookLanguage(bibleVersionId);
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const slideProgress = useRef(new Animated.Value(0)).current;
@@ -4055,7 +4062,7 @@ function VerseActionSheet({
                   <ReaderCircleButton accessibilityLabel={t("bible.actions.back")} icon="chevron-left" onPress={() => setView("actions")} palette={palette} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
-                    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, language)}</Text>
+                    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, bookLanguage)}</Text>
                   </View>
                 </View>
                 <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
@@ -4072,7 +4079,7 @@ function VerseActionSheet({
                         }}
                       >
                         <Pressable
-                          accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                          accessibilityLabel={`Read ${displayBibleBookName(reference.startPosition.book, bookLanguage)} ${reference.startPosition.chapter}`}
                           accessibilityRole="button"
                           onPress={() => {
                             onClose();
@@ -4081,7 +4088,7 @@ function VerseActionSheet({
                           style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
                         >
                           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                            <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{reference.reference}</Text>
+                            <Text style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>{displayBibleReference(reference.reference, bookLanguage)}</Text>
                             <Feather name="arrow-right" size={17} color={palette.accent} />
                           </View>
                           <Text numberOfLines={3} style={[readerTextStyle, { color: palette.muted, fontSize: sheetVerseFontSize, lineHeight: sheetVerseLineHeight }]}>
@@ -4169,7 +4176,8 @@ function SavedVerseActionSheet({
   palette: ReaderPalette;
   verse?: SavedVerse;
 }) {
-  const { language, t } = useAppTranslation();
+  const bookLanguage = useBibleBookLanguage();
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   if (!verse) return null;
@@ -4198,7 +4206,7 @@ function SavedVerseActionSheet({
             <BibleSheetTop palette={palette} />
             <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
               <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", lineHeight: titleLineHeight, paddingBottom: 8 }}>
-                {displayBibleReference(verse.reference, language)}
+                {displayBibleReference(verse.reference, bookLanguage, verse.translation)}
               </Text>
               <VerseSheetAction
                 icon="book-open"
@@ -4809,6 +4817,7 @@ function NextChapterCard({
   onPress: () => void;
   palette: ReaderPalette;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   return (
     <Pressable
       accessibilityRole="button"
@@ -4830,7 +4839,7 @@ function NextChapterCard({
     >
       <View style={{ flex: 1, gap: 4 }}>
         <Text style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>Nästa kapitel</Text>
-        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{nextChapter ? chapterLabel(nextChapter) : "Slutet"}</Text>
+        <Text style={{ color: palette.text, fontSize: 16, fontWeight: "900" }}>{nextChapter ? chapterLabel(nextChapter, bookLanguage) : "Slutet"}</Text>
       </View>
       <View
         style={{
@@ -4863,7 +4872,8 @@ function FootnoteSheet({
   selection?: SelectedBibleFootnote;
   visible: boolean;
 }) {
-  const { language, t } = useAppTranslation();
+  const bookLanguage = useBibleBookLanguage();
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
@@ -4882,7 +4892,7 @@ function FootnoteSheet({
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.footnote.title")}</Text>
-                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(selection.position, language)}</Text>
+                  <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(selection.position, bookLanguage)}</Text>
                 </View>
                 <ReaderCircleButton accessibilityLabel={t("bible.footnote.close")} icon="x" onPress={onClose} palette={palette} />
               </View>
@@ -4945,6 +4955,7 @@ function CrossReferenceSheet({
   references: BibleCrossReference[];
   visible: boolean;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
@@ -5018,7 +5029,7 @@ function CrossReferenceSheet({
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
-                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(position)}</Text>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(position, bookLanguage)}</Text>
               </View>
               <ReaderCircleButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} palette={palette} />
             </View>
@@ -5038,14 +5049,14 @@ function CrossReferenceSheet({
                   }}
                 >
                   <Pressable
-                    accessibilityLabel={`Read ${reference.startPosition.book} ${reference.startPosition.chapter}`}
+                    accessibilityLabel={`Read ${displayBibleBookName(reference.startPosition.book, bookLanguage)} ${reference.startPosition.chapter}`}
                     accessibilityRole="button"
                     onPress={() => closeWithAnimation(() => onReadChapter(reference.startPosition))}
                     style={{ gap: 7, minHeight: 54, justifyContent: "center" }}
                   >
                     <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                       <Text selectable style={{ color: palette.text, flex: 1, fontSize: 17, fontWeight: "900" }}>
-                        {reference.reference}
+                        {displayBibleReference(reference.reference, bookLanguage)}
                       </Text>
                       <Feather name="arrow-right" size={17} color={palette.accent} />
                     </View>
@@ -5176,6 +5187,7 @@ function BibleDrawer({
   versionLabel: string;
   visible: boolean;
 }) {
+  const bookLanguage = useBibleBookLanguage(bibleVersionId);
   const { language, t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -5303,7 +5315,7 @@ function BibleDrawer({
   const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
   const searchPosition = biblePositionFromSearchQuery(bookQuery, language, bibleVersionId);
   const selectableBooks = kjvBooks.filter((item) => {
-    const displayName = displayBibleBookName(item.name, language).toLocaleLowerCase(language);
+    const displayName = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language);
     const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
     const matchesTestament = testament === "all" || testamentForBook(item.name) === testament;
     return matchesQuery && matchesTestament;
@@ -5373,7 +5385,7 @@ function BibleDrawer({
           ? t("bible.navigator.oldTestament")
           : t("bible.navigator.newTestament")
         : stage === "chapter"
-          ? displayBibleBookName(selectedBook, language)
+          ? displayBibleBookName(selectedBook, bookLanguage)
             : stage === "saved"
               ? t("bible.navigator.saved")
               : stage === "highlights"
@@ -5441,7 +5453,7 @@ function BibleDrawer({
               />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text numberOfLines={2} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{title}</Text>
-                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition, language)} - ${versionLabel}` : versionLabel}</Text>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition, bookLanguage)} - ${versionLabel}` : versionLabel}</Text>
               </View>
             </View>
           </BibleSheetTop>
@@ -5484,7 +5496,7 @@ function BibleDrawer({
                     icon="play-circle"
                     onPress={() => onSelect(initialPosition)}
                     palette={palette}
-                    subtitle={referenceLabel(initialPosition, language)}
+                    subtitle={referenceLabel(initialPosition, bookLanguage)}
                     title={t("bible.navigator.continue")}
                   />
                   <DrawerRow
@@ -5562,7 +5574,7 @@ function BibleDrawer({
                     onPress={() => onSelect(searchPosition)}
                     palette={palette}
                     subtitle={t("bible.navigator.openPassageSubtitle")}
-                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition, language) })}
+                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition, bookLanguage) })}
                   />
                 ) : null}
                 {normalizedQuery && !searchPosition && selectableBooks.length ? (
@@ -5610,7 +5622,7 @@ function BibleDrawer({
                         meta={versionLabel}
                         onPress={() => onSelect(result.position)}
                         palette={palette}
-                        reference={displayBibleReference(result.reference, language)}
+                        reference={displayBibleReference(result.reference, bookLanguage)}
                         text={result.text}
                       />
                     ))}
@@ -5670,7 +5682,7 @@ function BibleDrawer({
                     <DrawerVerseRow
                       action={(
                         <Pressable
-                          accessibilityLabel={t("bible.saved.actions.more", { reference: displayBibleReference(verse.reference, language) })}
+                          accessibilityLabel={t("bible.saved.actions.more", { reference: displayBibleReference(verse.reference, bookLanguage, verse.translation) })}
                           accessibilityRole="button"
                           onPress={() => setSavedVerseMenu(verse)}
                           style={{
@@ -5690,7 +5702,7 @@ function BibleDrawer({
                       key={verse.id}
                       onPress={() => openSavedVerse(verse)}
                       palette={palette}
-                      reference={displayBibleReference(verse.reference, language)}
+                      reference={displayBibleReference(verse.reference, bookLanguage, verse.translation)}
                       showArrow={false}
                       meta={verse.translation && verse.translation !== versionLabel ? verse.translation : undefined}
                       text={verse.text}
@@ -5713,7 +5725,7 @@ function BibleDrawer({
                         key={highlight.id}
                         onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
                         palette={palette}
-                        reference={displayBibleReference(highlight.reference, language)}
+                        reference={displayBibleReference(highlight.reference, bookLanguage)}
                         meta={highlight.translation && highlight.translation !== versionLabel ? highlight.translation : undefined}
                         text={preview}
                       />
@@ -5735,7 +5747,7 @@ function BibleDrawer({
                         key={entry.id}
                         onPress={() => onOpenReflection(entry.id)}
                         palette={palette}
-                        reference={displayBibleReference(verse?.reference ?? entry.passage?.reference ?? entry.title ?? t("bible.navigator.reflectionFallback"), language)}
+                        reference={displayBibleReference(verse?.reference ?? entry.passage?.reference ?? entry.title ?? t("bible.navigator.reflectionFallback"), bookLanguage)}
                         text={entry.body}
                       />
                     );
@@ -5894,6 +5906,7 @@ function DrawerBookRow({
   selected: boolean;
   t: TranslationFunction;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   const chapterCount = book.chapters.length;
   return (
     <Pressable
@@ -5914,7 +5927,7 @@ function DrawerBookRow({
     >
       <View style={{ flex: 1, gap: 2 }}>
         <Text numberOfLines={2} style={{ color: palette.text, fontSize: 16, fontWeight: "900", lineHeight: 21 }}>
-          {displayBibleBookName(book.name, language)}
+          {displayBibleBookName(book.name, bookLanguage)}
         </Text>
         <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
           {chapterCount === 1

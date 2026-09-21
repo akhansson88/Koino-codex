@@ -1,3 +1,5 @@
+import { displayBibleReference } from "@/features/bible-book-names";
+import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -68,6 +70,7 @@ function journalTypeForKind(kind: EntryKind): JournalEntryType {
 }
 
 export function JournalScreen() {
+  const bookLanguage = useBibleBookLanguage();
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();
@@ -102,7 +105,7 @@ export function JournalScreen() {
     setJournalType(type);
     setEntryKind(kind);
     setEntryVisibility(share);
-    setTitle(attachedVerse ? attachedVerse.reference : "");
+    setTitle(attachedVerse ? displayBibleReference(attachedVerse.reference, bookLanguage, attachedVerse.translation) : "");
     setBody(initialBody);
     setVerses(attachedVerse ? [attachedVerse] : []);
     setEditingEntry(undefined);
@@ -356,9 +359,10 @@ function JournalEntryCard({
   entry: JournalEntry;
   onOpen: () => void;
 }) {
+  const bookLanguage = useBibleBookLanguage();
   const { language, t } = useAppTranslation();
   const presentation = journalEntryPresentation(entry, t);
-  const references = normalizeBibleVerses(entry.verse, entry.verses).map((verse) => verse.reference);
+  const references = normalizeBibleVerses(entry.verse, entry.verses).map((verse) => displayBibleReference(verse.reference, bookLanguage, verse.translation));
   const date = formatDate(entry.createdAt, language);
 
   return (
