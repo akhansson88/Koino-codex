@@ -11,7 +11,7 @@ export function KoinoTabHeader() {
         backgroundColor: colors.cream,
         paddingBottom: 14,
         paddingHorizontal: 18,
-        paddingTop: insets.top + 12,
+        paddingTop: insets.top,
         ...platformShadow({
           boxShadow: "0 4px 12px rgba(11, 18, 32, 0.04)",
           offset: { width: 0, height: 4 },
