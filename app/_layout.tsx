@@ -1,20 +1,22 @@
+import { useReducedMotion } from "@/ui/use-reduced-motion";
 import "@/features/startup-performance";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useFonts } from "expo-font";
 import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
 import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
 import { Montserrat_300Light } from "@expo-google-fonts/montserrat/300Light";
 import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular";
 import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
 import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 
 import { KoinoProvider, useKoino } from "@/state/koino-store";
 import { AppLanguageProvider } from "@/ui/app-language";
-import { colors, statusBarStyle } from "@/ui/theme";
 import { NotificationRuntime } from "@/ui/notification-runtime";
+import { colors, statusBarStyle } from "@/ui/theme";
 
 const enableNativeBackGesture = Platform.OS === "ios";
 
@@ -29,15 +31,16 @@ export default function RootLayout() {
   });
 
   return (
-    <AppLanguageProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}><AppLanguageProvider>
       <KoinoProvider>
         <RootNavigator />
       </KoinoProvider>
-    </AppLanguageProvider>
+    </AppLanguageProvider></GestureHandlerRootView>
   );
 }
 
 function RootNavigator() {
+  const reducedMotion = useReducedMotion();
   const { state } = useKoino();
 
   return (
@@ -46,6 +49,7 @@ function RootNavigator() {
       <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
+          animation: reducedMotion ? "none" : "default",
           headerStyle: { backgroundColor: colors.cream },
           headerTintColor: colors.ink,
           headerShadowVisible: false,
@@ -83,4 +87,4 @@ function RootNavigator() {
   );
 }
 
- 
+

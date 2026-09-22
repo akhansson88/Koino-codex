@@ -13,7 +13,7 @@ const baseConfig = {
   },
   ios: {
     supportsTablet: false,
-    buildNumber: "2",
+    buildNumber: "3",
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoadsInWebContent: true,
@@ -29,7 +29,7 @@ const baseConfig = {
       backgroundColor: "#F7EFE4",
     },
     package: "com.akhansson.koinomvp",
-    versionCode: 3,
+    versionCode: 4,
     permissions: ["android.permission.RECORD_AUDIO", "android.permission.POST_NOTIFICATIONS"],
   },
   plugins: [
@@ -57,7 +57,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "1.0.0",
+  runtimeVersion: "1.1.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

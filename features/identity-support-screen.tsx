@@ -1,33 +1,33 @@
-import type { ComponentProps, PropsWithChildren } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Animated, Easing, Image, KeyboardAvoidingView, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
 import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ComponentProps, PropsWithChildren } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Image, Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
 
+import { SupportKoinoCard } from "@/features/donation-flow-screen";
 import { useKoino } from "@/state/koino-store";
 import type { Group, Id, Membership } from "@/state/types";
 import {
-  AppHeader,
-  AppScreen,
-  Avatar,
-  BodyText,
-  BottomSheet,
-  Card,
-  PrimaryButton,
-  RoomImage,
-  SecondaryButton,
-  TextInputField,
+AppHeader,
+AppScreen,
+Avatar,
+BodyText,
+BottomSheet,
+Card,
+PrimaryButton,
+RoomImage,
+SecondaryButton,
+TextInputField,
 } from "@/ui/app-components";
-import { confirmAction } from "@/ui/confirm";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount, communitySystemError } from "@/ui/community-copy";
+import { confirmAction } from "@/ui/confirm";
 import type { TranslationFunction } from "@/ui/localization";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
-import { SupportKoinoCard } from "@/features/donation-flow-screen";
+import { colors, radius } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type IdentitySheet = "profile" | "language" | "account" | "help" | "security" | "privacy" | "terms";
@@ -69,180 +69,20 @@ async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {
   });
 }
 
-function IdentityRouteSheet({ children, onDismiss }: PropsWithChildren<{ onDismiss: () => void }>) {
+function IdentityRouteSheet({ children, onDismiss, sheetRef }: PropsWithChildren<{ onDismiss: () => void; sheetRef: React.RefObject<AppSheetHandle | null> }>) {
   const { t } = useAppTranslation();
-  const insets = useSafeAreaInsets();
-  const { height, width } = useWindowDimensions();
-  const entrance = useRef(new Animated.Value(1)).current;
-  const dragY = useRef(new Animated.Value(0)).current;
-  const closingRef = useRef(false);
-  const exitDistance = height + 64;
-  const topGap = Math.max(insets.top + 26, 58);
-  const sheetWidth = width >= 760 ? Math.min(width - 48, 680) : "100%";
-
-  const dismiss = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-
-    Animated.timing(entrance, {
-      duration: 240,
-      easing: Easing.in(Easing.cubic),
-      toValue: 1,
-      useNativeDriver: true,
-    }).start(() => onDismiss());
-  }, [entrance, onDismiss]);
-
-  useEffect(() => {
-    Animated.timing(entrance, {
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [entrance]);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderMove: (_event, gesture) => dragY.setValue(Math.max(0, gesture.dy)),
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 86 || gesture.vy > 0.85) {
-            dismiss();
-            return;
-          }
-
-          Animated.spring(dragY, {
-            damping: 24,
-            mass: 0.8,
-            stiffness: 220,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(dragY, {
-            damping: 24,
-            mass: 0.8,
-            stiffness: 220,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-        onStartShouldSetPanResponder: () => false,
-      }),
-    [dismiss, dragY],
-  );
-  const translateY = Animated.add(
-    entrance.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, exitDistance],
-    }),
-    dragY,
-  );
-
-  return (
-    <View style={{ backgroundColor: "rgba(11, 18, 32, 0.24)", flex: 1 }}>
-      <Pressable
-        accessibilityLabel={t("identity.close")}
-        accessibilityRole="button"
-        onPress={dismiss}
-        style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        pointerEvents="box-none"
-        style={{ flex: 1, justifyContent: "flex-end", paddingTop: topGap }}
-      >
-        <Animated.View
-          style={{
-            alignSelf: "center",
-            backgroundColor: colors.cream,
-            borderTopLeftRadius: 36,
-            borderTopRightRadius: 36,
-            height: "100%",
-            overflow: "hidden",
-            transform: [{ translateY }],
-            width: sheetWidth,
-            ...platformShadow({
-              boxShadow: "0 -22px 54px rgba(11, 18, 32, 0.24)",
-              elevation: 22,
-              offset: { width: 0, height: -16 },
-              opacity: 0.22,
-              radius: 34,
-            }),
-          }}
-        >
-          <View {...panResponder.panHandlers} style={{ gap: 18, paddingBottom: 12, paddingHorizontal: 22, paddingTop: 12 }}>
-            <View style={{ alignItems: "center" }}>
-              <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 48 }} />
-            </View>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.paper,
-                  borderColor: colors.line,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  height: 36,
-                  justifyContent: "center",
-                  width: 36,
-                }}
-              >
-                <Feather name="user" size={17} color={colors.ink} />
-              </View>
-              <Text style={{ color: colors.ink, flex: 1, fontSize: 25, fontWeight: "900", lineHeight: 31 }}>{t("identity.title")}</Text>
-              <Pressable
-                accessibilityLabel={t("identity.close")}
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={dismiss}
-                style={({ pressed }) => ({
-                  alignItems: "center",
-                  backgroundColor: colors.paper,
-                  borderColor: "rgba(255,255,255,0.7)",
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  height: 58,
-                  justifyContent: "center",
-                  opacity: pressed ? 0.72 : 1,
-                  width: 58,
-                  ...platformShadow({
-                    boxShadow: "0 12px 28px rgba(11, 18, 32, 0.16)",
-                    elevation: 10,
-                    offset: { width: 0, height: 10 },
-                    opacity: 0.16,
-                    radius: 24,
-                  }),
-                })}
-              >
-                <Feather name="x" size={34} color={colors.ink} />
-              </Pressable>
-            </View>
-          </View>
-          <ScrollView
-            contentContainerStyle={{
-              gap: 16,
-              paddingBottom: Math.max(36, insets.bottom + 24),
-              paddingHorizontal: 18,
-              paddingTop: 4,
-            }}
-            contentInsetAdjustmentBehavior="never"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {children}
-          </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </View>
-  );
+  const { height } = useWindowDimensions();
+  return <AppSheet ref={sheetRef} visible onClose={onDismiss} title={t("identity.title")} height={height * 0.92} backgroundColor={colors.cream} scroll>{children}</AppSheet>;
 }
 
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
   const { language, setLanguage, t } = useAppTranslation();
+  const identitySheetRef = useRef<AppSheetHandle>(null);
+  const navigateFromIdentity = (path: "/room-details" | "/donation-amount") => {
+    if (presentation === "sheet") identitySheetRef.current?.dismiss(() => router.push(path));
+    else router.push(path);
+  };
   const [activeSheet, setActiveSheet] = useState<IdentitySheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [avatarCropSource, setAvatarCropSource] = useState<RoomImageCropSource>();
@@ -369,7 +209,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
 
       <View style={{ gap: 10 }}>
         <SectionLabel>{t("community.page.community")}</SectionLabel>
-        <RoomSummaryCard group={group} memberCount={memberCount} onDetails={() => router.push("/room-details" as never)} />
+        <RoomSummaryCard group={group} memberCount={memberCount} onDetails={() => navigateFromIdentity("/room-details")} />
         <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
           <SettingsRow
             icon="repeat"
@@ -399,14 +239,14 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         />
       </SettingsSection>
 
-      <SupportKoinoCard onPress={() => router.replace("/donation-amount" as never)} />
+      <SupportKoinoCard onPress={() => navigateFromIdentity("/donation-amount")} />
     </>
   );
 
   return (
     <>
       {presentation === "sheet" ? (
-        <IdentityRouteSheet onDismiss={() => router.back()}>{content}</IdentityRouteSheet>
+        <IdentityRouteSheet sheetRef={identitySheetRef} onDismiss={() => router.back()}>{content}</IdentityRouteSheet>
       ) : (
         <AppScreen>
           <AppHeader showBack onBack={() => router.back()} />

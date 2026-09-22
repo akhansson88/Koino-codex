@@ -1,16 +1,18 @@
-import { Tabs } from "expo-router";
-import { BlurView } from "expo-blur";
+import { tabBarHeight } from "@/ui/navigation-layout";
+import { KoinoTabHeader } from "@/ui/tab-header";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { Tabs } from "expo-router";
+import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoino } from "@/state/koino-store";
-import { AvatarButton, NotificationBellButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   const { state } = useKoino();
   const { t } = useAppTranslation();
 
@@ -20,6 +22,9 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      // Android can detach the nested Community stack during a push and leave
+      // its content blank until the tab is reselected. Keep the tab host attached.
+      detachInactiveScreens={Platform.OS !== "android"}
       screenOptions={{
         header: () => <KoinoTabHeader />,
         headerTintColor: colors.ink,
@@ -37,10 +42,10 @@ export default function TabLayout() {
           borderRadius: 0,
           borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
           borderTopWidth: 1,
-          bottom: -10,
-          height: 86,
+          bottom: 0,
+          height: tabBarHeight(insets.bottom),
           left: 0,
-          paddingBottom: 22,
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,
           position: "absolute",
           right: 0,
@@ -102,6 +107,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
+          headerShown: false,
           title: t("tabs.community"),
           tabBarLabel: t("tabs.community"),
           tabBarIcon: ({ color, focused, size }) => (
@@ -138,39 +144,5 @@ function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
         }}
       />
     </BlurView>
-  );
-}
-function KoinoTabHeader() {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View
-      style={{
-        backgroundColor: colors.cream,
-        paddingBottom: 14,
-        paddingHorizontal: 18,
-        paddingTop: insets.top + 12,
-        ...platformShadow({
-          boxShadow: "0 4px 12px rgba(11, 18, 32, 0.04)",
-          offset: { width: 0, height: 4 },
-          opacity: 0.04,
-          radius: 12,
-        }),
-      }}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={[typography.title, { color: colors.textPrimary, fontSize: 24, lineHeight: 30 }]}>KOINO</Text>
-        <HeaderRightControls />
-      </View>
-    </View>
-  );
-}
-
-function HeaderRightControls() {
-  return (
-    <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-      <NotificationBellButton />
-      <AvatarButton />
-    </View>
   );
 }

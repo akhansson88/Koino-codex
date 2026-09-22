@@ -1,12 +1,14 @@
 import { displayBibleReference } from "@/features/bible-book-names";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
-import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
+import { AppSheet, SheetTextInput } from "@/ui/app-sheet";
+import { tabContentClearance } from "@/ui/navigation-layout";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import type { ComponentProps, Ref } from "react";
-import { Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
-import type { ModalProps } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, usePathname } from "expo-router";
+import type { ComponentProps, Ref } from "react";
+import { PropsWithChildren, ReactNode, useEffect, useRef, useState } from "react";
+import type { ModalProps } from "react-native";
+import { Animated, Image, Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInputProps, TextProps, TextStyle, View, ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { bibleVerseIdentity, normalizeBibleVerses } from "@/features/bible-verse-utils";
 import { useKoino } from "@/state/koino-store";
@@ -64,7 +66,7 @@ export function AppScreen({
         ref={scrollRef}
         scrollEventThrottle={scrollEventThrottle}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: (topInset ? insets.top : 0) + 18 }}
+        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: tabContentClearance(insets.bottom), paddingTop: (topInset ? insets.top : 0) + 18 }}
       >
         {children}
       </ScrollView>
@@ -441,7 +443,7 @@ export function SecondaryButton({
 
 export function TextInputField(props: TextInputProps) {
   return (
-    <TextInput
+    <SheetTextInput
       placeholderTextColor={colors.muted}
       {...props}
       style={[
@@ -1168,45 +1170,6 @@ export function Row({
   );
 }
 
-export function BottomSheet({
-  children,
-  onClose,
-  reducedMotion = false,
-  title,
-  visible,
-}: PropsWithChildren<{ onClose: () => void; reducedMotion?: boolean; title: string; visible: boolean }>) {
-  const insets = useSafeAreaInsets();
-  const { t } = useAppTranslation();
-  return (
-    <Modal animationType={reducedMotion ? "none" : "fade"} transparent visible={visible} onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <View style={{ backgroundColor: "rgba(11, 18, 32, 0.45)", flex: 1, justifyContent: "flex-end" }}>
-          <Pressable accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" onPress={onClose} style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }} />
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderTopLeftRadius: radius.xxl,
-              borderTopRightRadius: radius.xxl,
-              gap: 16,
-              maxHeight: "88%",
-              padding: 18,
-              paddingBottom: Math.max(24, insets.bottom + 14),
-              ...platformShadow({
-                boxShadow: "0 -12px 30px rgba(11, 18, 32, 0.18)",
-                offset: { width: 0, height: -12 },
-                opacity: 0.18,
-                radius: 30,
-              }),
-            }}
-          >
-            <View style={{ alignItems: "center" }}>
-              <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
-            </View>
-            <Text style={[typography.heading, { color: colors.ink, fontSize: 20, lineHeight: 26 }]}>{title}</Text>
-            {children}
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
+export function BottomSheet(props: import("@/ui/app-sheet").AppSheetProps) {
+  return <AppSheet {...props} scroll />;
 }

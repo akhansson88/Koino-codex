@@ -24,12 +24,15 @@
     "test:donations": "node --test scripts/donation-api.test.cjs",
     "typecheck": "tsc --noEmit",
     "typecheck:functions": "npm --prefix functions run build",
-    "test:functions": "npm --prefix functions test"
+    "test:functions": "npm --prefix functions test",
+    "validate:interactions": "node scripts/validate-native-interactions.mjs",
+    "validate:community-navigation": "node scripts/validate-community-navigation.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/montserrat": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.37",
     "expo-asset": "~12.0.13",
@@ -53,10 +56,13 @@
     "firebase": "^12.12.1",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
-    "react-native-webview": "13.15.0"
+    "react-native-webview": "13.15.0",
+    "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

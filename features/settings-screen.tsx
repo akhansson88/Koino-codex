@@ -1,78 +1,76 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useFocusEffect, useNavigation } from "expo-router";
-import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, PanResponder, Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 
-import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
+import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
+import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
-import {
-  EntryVisibility,
-  feedItemKind,
-  normalizeEntryKind,
-  prayerFilters,
-  roomTabs,
-  visibility,
-} from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
-  selectCommunityContent,
-  selectCommunityPostById,
-  selectPrayerRequests,
+EntryVisibility,
+feedItemKind,
+normalizeEntryKind,
+prayerFilters,
+roomTabs,
+visibility,
+} from "@/state/product";
+import {
+selectCommunityContent,
+selectCommunityPostById,
+selectPrayerRequests,
 } from "@/state/selectors/community-content";
 import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, Reply } from "@/state/types";
 import {
-  AppScreen,
-  Avatar,
-  BodyText,
-  BottomSheet,
-  Card,
-  ExpandableBodyText,
-  HeartPromptCard,
-  FullScreenModal,
-  IconButton,
-  PrimaryButton,
-  RoomImage,
-  Row,
-  SecondaryButton,
-  SectionHeading,
-  StatusPill,
-  TextInputField,
-  VerseList,
+AppScreen,
+Avatar,
+BodyText,
+BottomSheet,
+Card,
+ExpandableBodyText,
+FullScreenModal,
+IconButton,
+PrimaryButton,
+RoomImage,
+Row,
+SecondaryButton,
+SectionHeading,
+StatusPill,
+TextInputField,
+VerseList
 } from "@/ui/app-components";
-import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
-import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { useAppTranslation } from "@/ui/app-language";
+import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import {
-  communityActionLabel,
-  communityDefaultFeedTitle,
-  communityMemberCount,
-  communityMoodScaleLabel,
-  communityPrayerMomentDisplayCopy,
-  communityPrayerFilterLabel,
-  communityPrayerNoun,
-  communityResponseNoun,
-  communityRoomTabLabel,
-  communitySystemError,
+communityActionLabel,
+communityDefaultFeedTitle,
+communityMemberCount,
+communityMoodScaleLabel,
+communityPrayerFilterLabel,
+communityPrayerMomentDisplayCopy,
+communityPrayerNoun,
+communityResponseNoun,
+communityRoomTabLabel,
+communitySystemError,
 } from "@/ui/community-copy";
 import { confirmAction } from "@/ui/confirm";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import type { TranslationFunction } from "@/ui/localization";
+import {
+CommunityCardAction,
+CommunityCardResponseSummary,
+CommunityCheckInMood,
+CommunityFeedCard,
+PostCard,
+} from "@/ui/post-card";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
+import { formatRelativeTime } from "@/ui/relative-time";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { SharedComposer } from "@/ui/shared-composer";
-import {
-  CommunityCardAction,
-  CommunityCardResponseSummary,
-  CommunityCheckInMood,
-  CommunityFeedCard,
-  PostCard,
-} from "@/ui/post-card";
-import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
@@ -81,7 +79,6 @@ type RoomDetailTab = (typeof roomTabs)[number]["value"];
 type PrayerFilter = (typeof prayerFilters)[number]["value"];
 type TransitionDirection = "forward" | "back";
 type ComposerContext = "journal" | "room";
-const COMMUNITY_CHECK_INS_HISTORY_KEY = "__koinoCommunityCheckIns";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>>>;
@@ -162,15 +159,12 @@ function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
   return { earlier, recent };
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
-  const [roomView, setRoomView] = useState<RoomView>("detail");
-  const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("forward");
-  const roomViewRef = useRef<RoomView>("detail");
-  const checkInsHistoryBackPendingRef = useRef(false);
-  const preserveRoomViewOnNextFocusRef = useRef(false);
+  const { prayerMomentId } = useLocalSearchParams<{ prayerMomentId?: string }>();
+  const [roomView, setRoomView] = useState<RoomView>(routeRoomView);
   const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
@@ -185,8 +179,7 @@ export function SettingsScreen() {
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
-  const [selectedPrayerMomentId, setSelectedPrayerMomentId] = useState<Id>();
-  const [prayerMomentDetailReturnView, setPrayerMomentDetailReturnView] = useState<"detail" | "prayer">("prayer");
+  const selectedPrayerMomentId = prayerMomentId;
   const [prayerMomentEncouragementDraft, setPrayerMomentEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
@@ -281,6 +274,10 @@ export function SettingsScreen() {
   const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
 
+  useEffect(() => {
+    setRoomView(routeRoomView);
+  }, [routeRoomView]);
+
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: roomView !== "prayer" && roomView !== "checkins" });
   }, [navigation, roomView]);
@@ -330,25 +327,6 @@ export function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (preserveRoomViewOnNextFocusRef.current) {
-        preserveRoomViewOnNextFocusRef.current = false;
-        return;
-      }
-      if (roomViewRef.current !== "detail") {
-        setTransitionDirection("back");
-      }
-      setRoomView("detail");
-      setMemberSelectVisible(false);
-      setDirectPrayerResult(undefined);
-    }, []),
-  );
-
-  useEffect(() => {
-    roomViewRef.current = roomView;
-  }, [roomView]);
-
-  useFocusEffect(
-    useCallback(() => {
       if (roomView !== "detail" || !communityScrollKey || !communityFeedReadyForGroup || communityFeedError) return;
 
       pendingCommunityScrollRestoreRef.current = {
@@ -361,73 +339,33 @@ export function SettingsScreen() {
   );
 
   const navigateToRoomView = useCallback((nextView: RoomView, direction: TransitionDirection = "forward") => {
-    setTransitionDirection(direction);
-    setRoomView(nextView);
-  }, []);
-
-  const openCheckInsView = useCallback(() => {
-    if (Platform.OS === "web" && window.history.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] !== true) {
-      const currentHistoryState = window.history.state;
-      window.history.pushState(
-        currentHistoryState && typeof currentHistoryState === "object"
-          ? { ...currentHistoryState, [COMMUNITY_CHECK_INS_HISTORY_KEY]: true }
-          : { [COMMUNITY_CHECK_INS_HISTORY_KEY]: true },
-        "",
-        window.location.href,
-      );
+    // Prayer and check-ins stay in the mounted overview screen. On Android,
+    // pushing either view onto the nested native stack can leave its view tree
+    // present but its drawing surface blank until the tab is reselected.
+    if (routeRoomView === "detail" && (nextView === "detail" || nextView === "prayer" || nextView === "checkins")) {
+      setRoomView(nextView);
+    } else if (nextView === "detail") {
+      router.dismissTo("/(tabs)/community" as never);
+    } else if (direction === "back" && navigation.canGoBack()) {
+      router.back();
+    } else if (nextView !== roomView) {
+      router.navigate(`/(tabs)/community/${nextView}` as never);
     }
-    navigateToRoomView("checkins");
-  }, [navigateToRoomView]);
-
-  useEffect(() => {
-    if (Platform.OS !== "web") return undefined;
-
-    const handlePopState = (event: PopStateEvent) => {
-      const returnsToCheckIns = event.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] === true;
-      const wasReturningToCommunity = checkInsHistoryBackPendingRef.current || roomViewRef.current === "checkins";
-      checkInsHistoryBackPendingRef.current = false;
-
-      if (returnsToCheckIns) {
-        setTransitionDirection("forward");
-        setRoomView("checkins");
-      } else if (wasReturningToCommunity) {
-        setTransitionDirection("back");
-        setRoomView("detail");
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
+  }, [navigation, roomView, routeRoomView]);
+  const openCheckInsView = useCallback(() => navigateToRoomView("checkins"), [navigateToRoomView]);
   const goBackFromRoomView = useCallback(() => {
-    if (roomView === "prayerMomentDetail") {
-      navigateToRoomView(prayerMomentDetailReturnView, "back");
-      return true;
-    }
-    if (roomView === "checkins") {
-      if (Platform.OS === "web" && window.history.state?.[COMMUNITY_CHECK_INS_HISTORY_KEY] === true) {
-        if (!checkInsHistoryBackPendingRef.current) {
-          checkInsHistoryBackPendingRef.current = true;
-          window.history.back();
-        }
-        return true;
-      }
-      navigateToRoomView("detail", "back");
-      return true;
-    }
-    if (roomView === "prayer" || roomView === "members" || roomView === "rooms") {
-      navigateToRoomView("detail", "back");
-      return true;
-    }
-    return false;
-  }, [navigateToRoomView, prayerMomentDetailReturnView, roomView]);
+    if (routeRoomView === "detail" && (roomView === "prayer" || roomView === "checkins")) {
+      setRoomView("detail");
+    } else if (navigation.canGoBack()) router.back();
+    else router.replace("/(tabs)/community" as never);
+    return true;
+  }, [navigation, roomView, routeRoomView]);
 
   useEffect(() => {
-    if (Platform.OS === "web") return undefined;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => goBackFromRoomView());
+    if (Platform.OS === "web" || routeRoomView !== "detail" || (roomView !== "prayer" && roomView !== "checkins")) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", goBackFromRoomView);
     return () => subscription.remove();
-  }, [goBackFromRoomView]);
+  }, [goBackFromRoomView, roomView, routeRoomView]);
 
   function openComposer(kind: EntryKind = "reflection") {
     setEditingPost(undefined);
@@ -584,13 +522,11 @@ export function SettingsScreen() {
 
   function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
     if (isPrayerMomentKind(item.kind)) {
-      setSelectedPrayerMomentId(item.id);
-      setPrayerMomentDetailReturnView(returnView);
+
       setPrayerMomentEncouragementDraft("");
-      navigateToRoomView("prayerMomentDetail");
+      router.navigate({ pathname: "/(tabs)/community/prayerMomentDetail", params: { prayerMomentId: item.id } } as never);
       return;
     }
-    preserveRoomViewOnNextFocusRef.current = true;
     router.push({
       pathname: "/community/[groupId]/prayers/[prayerRequestId]",
       params: { groupId: item.groupId, prayerRequestId: item.id },
@@ -1019,20 +955,20 @@ export function SettingsScreen() {
   if (roomView === "prayerMomentDetail" && group) {
     if (!selectedPrayerMoment) {
       return (
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <View style={{ flex: 1, backgroundColor: colors.cream }}>
           <AppScreen topInset={false}>
             <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.page.prayer")} />
             <Card>
               <BodyText muted>{t("community.prayer.unavailable")}</BodyText>
             </Card>
           </AppScreen>
-        </CommunityTransitionFrame>
+        </View>
       );
     }
 
     return (
       <>
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <View style={{ flex: 1, backgroundColor: colors.cream }}>
           <CommunityPrayerMomentDetailScreen
             activity={itemPrayerActivity(selectedPrayerMoment)}
             authorImage={userImageById.get(selectedPrayerMoment.userId)}
@@ -1046,7 +982,7 @@ export function SettingsScreen() {
             userById={userById}
             userImageById={userImageById}
           />
-        </CommunityTransitionFrame>
+        </View>
         <PrayerMoment target={prayerTarget} onClose={closePrayerMoment} onFinish={finishPrayerMoment} />
       </>
     );
@@ -1055,7 +991,7 @@ export function SettingsScreen() {
   if (roomView === "prayer" && group) {
     return (
       <>
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <View style={{ flex: 1, backgroundColor: colors.cream }}>
           <CommunityPrayerScreen
             communityName={group.name}
             filter={prayerFilter}
@@ -1076,7 +1012,7 @@ export function SettingsScreen() {
             userById={userById}
             userImageById={userImageById}
           />
-        </CommunityTransitionFrame>
+        </View>
         <SharedComposer
           visible={composerVisible}
           context={composerContext}
@@ -1110,7 +1046,7 @@ export function SettingsScreen() {
   if (roomView === "checkins" && group) {
     return (
       <>
-        <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+        <View style={{ flex: 1, backgroundColor: colors.cream }}>
           <CommunityCheckInsScreen
             checkIns={sharedCheckIns}
             checkedInToday={todaysCheckIn}
@@ -1131,7 +1067,7 @@ export function SettingsScreen() {
             userById={userById}
             userImageById={userImageById}
           />
-        </CommunityTransitionFrame>
+        </View>
         {communityCheckInModal}
         {feedEncouragementSheet}
       </>
@@ -1140,7 +1076,7 @@ export function SettingsScreen() {
 
   if (roomView === "members" && group) {
     return (
-      <CommunityTransitionFrame animationKey={roomView} canSwipeBack direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+      <View style={{ flex: 1, backgroundColor: colors.cream }}>
         <AppScreen topInset={false}>
           <FocusedScreenHeader onBack={goBackFromRoomView} title={t("community.members.title")} />
           <MembersPanel
@@ -1153,14 +1089,14 @@ export function SettingsScreen() {
             onSwitchRoom={openRoomOverview}
           />
         </AppScreen>
-      </CommunityTransitionFrame>
+      </View>
     );
   }
 
   if (roomView === "detail" && group) {
     return (
       <>
-        <CommunityTransitionFrame animationKey={roomView} direction={transitionDirection}>
+        <View style={{ flex: 1, backgroundColor: colors.cream }}>
           <AppScreen
             onContentSizeChange={restorePendingCommunityScroll}
             onScroll={handleCommunityScroll}
@@ -1276,7 +1212,7 @@ export function SettingsScreen() {
               )}
             </View>
           </AppScreen>
-        </CommunityTransitionFrame>
+        </View>
         <SharedComposer
           visible={composerVisible}
           context={composerContext}
@@ -1311,7 +1247,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <CommunityTransitionFrame animationKey={roomView} canSwipeBack={roomView === "rooms"} direction={transitionDirection} onSwipeBack={goBackFromRoomView}>
+      <View style={{ flex: 1, backgroundColor: colors.cream }}>
         <AppScreen topInset={false}>
           <View style={{ gap: 8 }}>
         <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>{t("community.page.community")}</Text>
@@ -1450,7 +1386,7 @@ export function SettingsScreen() {
       </BottomSheet>
 
         </AppScreen>
-      </CommunityTransitionFrame>
+      </View>
     </>
   );
 }
@@ -1629,128 +1565,6 @@ function CommunityEarlierActivityAction({ loading = false, onPress }: { loading?
       <Text style={[typography.label, { color: colors.olive }]}>{t(loading ? "community.feed.loadingEarlier" : "common.viewMore")}</Text>
       {loading ? <ActivityIndicator color={colors.olive} size="small" /> : <Feather name="chevron-down" size={16} color={colors.olive} />}
     </Pressable>
-  );
-}
-
-function CommunityTransitionFrame({
-  animationKey,
-  canSwipeBack = false,
-  children,
-  direction,
-  onSwipeBack,
-}: {
-  animationKey?: string;
-  canSwipeBack?: boolean;
-  children: ReactNode;
-  direction: TransitionDirection;
-  onSwipeBack?: () => boolean | void;
-}) {
-  const { width } = useWindowDimensions();
-  const translateX = useRef(new Animated.Value(0)).current;
-  const entryOffset = Math.min(width * 0.18, 92);
-  const [reduceMotion, setReduceMotion] = useState<boolean | undefined>(() => {
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    }
-    return undefined;
-  });
-
-  useEffect(() => {
-    let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReduceMotion(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    translateX.stopAnimation();
-    if (reduceMotion !== false) {
-      translateX.setValue(0);
-      return undefined;
-    }
-    translateX.setValue(direction === "forward" ? entryOffset : -entryOffset);
-    const animation = Animated.timing(translateX, {
-      duration: 220,
-      toValue: 0,
-      useNativeDriver: true,
-    });
-    animation.start();
-    return () => {
-      animation.stop();
-      translateX.setValue(0);
-    };
-  }, [animationKey, direction, entryOffset, reduceMotion, translateX]);
-
-  // Keep the native animation graph attached when feed/accessibility state rerenders.
-  // Replacing the interpolation mid-transition can leave the translation stranded.
-  const opacity = useMemo(
-    () => translateX.interpolate({
-      inputRange: [-entryOffset, 0, width],
-      outputRange: [0.9, 1, 0.72],
-      extrapolate: "clamp",
-    }),
-    [entryOffset, translateX, width],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          canSwipeBack && gesture.moveX < 42 && gesture.dx > 10 && Math.abs(gesture.dy) < 24,
-        onPanResponderMove: (_, gesture) => {
-          if (!canSwipeBack) return;
-          translateX.setValue(Math.max(0, gesture.dx));
-        },
-        onPanResponderRelease: (_, gesture) => {
-          if (!canSwipeBack) return;
-          const shouldGoBack = gesture.dx > Math.min(width * 0.28, 120) || gesture.vx > 0.75;
-          if (shouldGoBack) {
-            if (reduceMotion !== false) {
-              translateX.setValue(0);
-              onSwipeBack?.();
-              return;
-            }
-            Animated.timing(translateX, {
-              duration: 180,
-              toValue: width,
-              useNativeDriver: true,
-            }).start(({ finished }) => {
-              if (finished) onSwipeBack?.();
-            });
-            return;
-          }
-          if (reduceMotion !== false) {
-            translateX.setValue(0);
-            return;
-          }
-          Animated.spring(translateX, {
-            damping: 22,
-            mass: 0.8,
-            stiffness: 220,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-        onPanResponderTerminate: () => {
-          translateX.stopAnimation();
-          translateX.setValue(0);
-        },
-      }),
-    [canSwipeBack, onSwipeBack, reduceMotion, translateX, width],
-  );
-
-  return (
-    <Animated.View
-      {...(canSwipeBack ? panResponder.panHandlers : {})}
-      style={{ backgroundColor: colors.cream, flex: 1, opacity, transform: [{ translateX }] }}
-    >
-      {children}
-    </Animated.View>
   );
 }
 

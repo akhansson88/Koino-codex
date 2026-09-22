@@ -1,80 +1,80 @@
 import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppSheet, SheetActionRow, SheetScrollView, SheetTextInput, type AppSheetHandle } from "@/ui/app-sheet";
+import { NativePressable } from "@/ui/native-pressable";
+import { tabBarHeight } from "@/ui/navigation-layout";
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
-import { router, useNavigation, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  Easing,
-  KeyboardAvoidingView,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  TextStyle,
-  useWindowDimensions,
-  View,
-  ViewStyle,
+ActivityIndicator,
+Animated,
+Easing,
+Modal,
+NativeScrollEvent,
+NativeSyntheticEvent,
+PanResponder,
+Platform,
+Pressable,
+ScrollView,
+Text,
+TextStyle,
+useWindowDimensions,
+View,
+ViewStyle
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import bibleTopicIndexData from "@/assets/bible/topics-index.json";
-import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
-import {
-  currentPlanDay,
-  biblePlanDayRegionLabel,
-  firstPositionForPlanDay,
-  planMarkersForChapter,
-  type BiblePlanMarker,
-  type BiblePlanMarkerKind,
-  type BiblePlanCurrentDay,
-  completionPercent,
-  dayKeyForPlanDay,
-  todayDateKey,
-} from "@/features/bible-plans";
-import {
-  bibleChapter,
-  bibleCrossReferences,
-  bibleVerseFromReference,
-  buildBibleVerse,
-  bibleVersionFor,
-  bibleVersions,
-  type BibleCrossReference,
-  type BibleChapterSubtitle,
-  type BibleChapterVerse,
-  type BibleFootnote,
-  type BiblePosition,
-  type BibleVersionId,
-  hasBibleCrossReferences,
-  isBibleVersionId,
-  kjvBooks,
-  nextBibleChapter,
-  normalizeBiblePosition,
-  previousBibleChapter,
-  searchBibleText,
-  type BibleTextSearchResult,
-  versesForChapter,
-} from "@/features/bible-kjv";
 import { bibleTextSegments } from "@/features/bible-footnotes";
+import {
+bibleChapter,
+bibleCrossReferences,
+bibleVerseFromReference,
+bibleVersionFor,
+bibleVersions,
+buildBibleVerse,
+hasBibleCrossReferences,
+isBibleVersionId,
+kjvBooks,
+nextBibleChapter,
+normalizeBiblePosition,
+previousBibleChapter,
+searchBibleText,
+type BibleChapterSubtitle,
+type BibleChapterVerse,
+type BibleCrossReference,
+type BibleFootnote,
+type BiblePosition,
+type BibleTextSearchResult,
+type BibleVersionId
+} from "@/features/bible-kjv";
+import {
+biblePlanDayRegionLabel,
+completionPercent,
+currentPlanDay,
+dayKeyForPlanDay,
+firstPositionForPlanDay,
+planMarkersForChapter,
+todayDateKey,
+type BiblePlanCurrentDay,
+type BiblePlanMarker,
+type BiblePlanMarkerKind,
+} from "@/features/bible-plans";
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
+import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
 import { useKoino } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
-import { BodyText, Card, IconButton, PrimaryButton, SecondaryButton, SectionHeading, TextInputField } from "@/ui/app-components";
-import { confirmAction } from "@/ui/confirm";
+import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
+import { PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { confirmAction } from "@/ui/confirm";
 import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
 import { colors, platformShadow, radius, themes, type ThemeName } from "@/ui/theme";
-import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -202,9 +202,7 @@ type SelectedVerseRange = {
   start: number;
 };
 
-type MeasurableView = {
-  measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void;
-};
+type MeasurableView = View;
 
 const colorWheelColors = [
   "#FF5252",
@@ -646,137 +644,9 @@ const bibleVersionListTopPadding = 18;
 const bibleVersionRowGap = 10;
 const bibleVersionRowMinHeight = 68;
 
-function BibleSheetShell({
-  animatedStyle,
-  children,
-  contentStyle,
-  palette,
-  style,
-}: {
-  animatedStyle?: ComponentProps<typeof Animated.View>["style"];
-  children: ReactNode;
-  contentStyle?: ComponentProps<typeof View>["style"];
-  palette: ReaderPalette;
-  style?: ComponentProps<typeof Animated.View>["style"];
-}) {
-  return (
-    <Animated.View
-      style={[
-        {
-          backgroundColor: "transparent",
-          borderTopLeftRadius: radius.xxl,
-          borderTopRightRadius: radius.xxl,
-          flexShrink: 1,
-          zIndex: 1,
-          ...platformShadow({
-            boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
-            color: palette.shadow,
-            offset: { width: 0, height: -12 },
-            opacity: 0.15,
-            radius: 34,
-          }),
-        },
-        style,
-        animatedStyle,
-      ]}
-    >
-      <View
-        style={[
-          {
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
-            flex: 1,
-            overflow: "hidden",
-          },
-          contentStyle,
-        ]}
-      >
-        {children}
-      </View>
-    </Animated.View>
-  );
-}
-
-function BibleSheetModalFrame({
-  accessibilityLabel,
-  children,
-  onBackdropPress,
-}: {
-  accessibilityLabel?: string;
-  children: ReactNode;
-  onBackdropPress: () => void;
-}) {
-  return (
-    <View style={{ backgroundColor: "transparent", bottom: 0, justifyContent: "flex-end", left: 0, position: "absolute", right: 0, top: 0 }}>
-      <Pressable
-        accessible={Boolean(accessibilityLabel)}
-        accessibilityElementsHidden={!accessibilityLabel}
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole={accessibilityLabel ? "button" : "none"}
-        importantForAccessibility={accessibilityLabel ? "auto" : "no"}
-        onPress={onBackdropPress}
-        style={{ backgroundColor: "transparent", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
-      />
-      {children}
-    </View>
-  );
-}
-
-function BibleSheetBottomPositioner({ children }: { children: ReactNode }) {
-  return (
-    <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
-      <View pointerEvents="box-none" style={{ bottom: 0, left: 0, position: "absolute", right: 0 }}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function BibleSheetTop({
-  bordered = false,
-  children,
-  handleProps,
-  palette,
-  topProps,
-}: {
-  bordered?: boolean;
-  children?: ReactNode;
-  handleProps?: ComponentProps<typeof View>;
-  palette: ReaderPalette;
-  topProps?: ComponentProps<typeof View>;
-}) {
-  return (
-    <View
-      {...topProps}
-      style={[
-        {
-          borderBottomColor: bordered ? palette.line : "transparent",
-          borderBottomWidth: bordered ? 1 : 0,
-          paddingHorizontal: bibleSheetHorizontalPadding,
-          paddingTop: bibleSheetTopPadding,
-        },
-        topProps?.style,
-      ]}
-    >
-      <View
-        {...handleProps}
-        style={[
-          {
-            alignItems: "center",
-            alignSelf: "center",
-            height: bibleSheetHandleHeight,
-            justifyContent: "center",
-            width: 150,
-          },
-          handleProps?.style,
-        ]}
-      >
-        <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 52 }} />
-      </View>
-      {children ? <View style={{ paddingBottom: bibleSheetHeaderBottomPadding }}>{children}</View> : null}
-    </View>
-  );
+function BibleSheetTop({ bordered = false, children, palette }: { bordered?: boolean; children?: ReactNode; palette: ReaderPalette }) {
+  if (!children) return null;
+  return <View style={{ borderBottomColor: palette.line, borderBottomWidth: bordered ? 1 : 0, paddingHorizontal: bibleSheetHorizontalPadding, paddingBottom: bibleSheetHeaderBottomPadding }}>{children}</View>;
 }
 
 export function BibleScreen() {
@@ -790,6 +660,7 @@ export function BibleScreen() {
   const { height, width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const verseOffsetsRef = useRef<Record<number, number>>({});
+  const actionReturnFocusRef = useRef<View | null>(null);
   const verseRowsRef = useRef<Record<number, MeasurableView | null>>({});
   const readerScrollOffsetRef = useRef(0);
   const pendingScrollVerseRef = useRef<number | undefined>(undefined);
@@ -951,7 +822,7 @@ export function BibleScreen() {
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
   const chapterControlsVisible = !selectedVerseBarVisible;
-  const floatingControlsBottom = Math.max(92, insets.bottom + 72);
+  const floatingControlsBottom = tabBarHeight(insets.bottom) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
     : chapterControlsHeight;
@@ -1256,6 +1127,7 @@ export function BibleScreen() {
   }, []);
 
   const handleVerseLongPress = useCallback((verse: number) => {
+    actionReturnFocusRef.current = verseRowsRef.current[verse] ?? null;
     verseLongPressActiveRef.current = true;
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
     positionRef.current = nextPosition;
@@ -1855,6 +1727,7 @@ export function BibleScreen() {
       />
 
       <VerseActionSheet
+        returnFocusRef={actionReturnFocusRef}
         onAction={handleVerseAction}
         bibleVersionId={bibleVersionId}
         onClose={() => setSelectedVersePosition(undefined)}
@@ -2307,7 +2180,7 @@ function BibleTopicsModal({
             }}
           >
             <Feather name="search" size={16} color={palette.muted} />
-            <TextInput
+            <SheetTextInput
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={(value) => {
@@ -2982,19 +2855,10 @@ function BibleText({
           {markersBefore.map((marker) => (
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
-          <Pressable
+          <NativePressable
             accessibilityLabel={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            delayLongPress={1000}
-            {...(Platform.OS === "web"
-              ? {
-                  onContextMenu: (event: { preventDefault: () => void }) => {
-                    event.preventDefault();
-                    onVerseLongPress(item.verse);
-                  },
-                }
-              : {})}
             onLongPress={() => onVerseLongPress(item.verse)}
             onPress={() => onVersePress(item.verse)}
             onPressIn={onVersePressIn}
@@ -3053,7 +2917,7 @@ function BibleText({
                 />
               </View>
             )}
-          </Pressable>
+          </NativePressable>
           {markersAfter.map((marker) => (
             <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
           ))}
@@ -3570,7 +3434,7 @@ function HighlightColorManagerSheet({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
-  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  const sheetRef = useRef<AppSheetHandle>(null);
   const [editingColor, setEditingColor] = useState<BibleHighlightPaletteColor | undefined>();
   const [pickerVisible, setPickerVisible] = useState(false);
   const [draftHex, setDraftHex] = useState("#FFF200");
@@ -3589,50 +3453,7 @@ function HighlightColorManagerSheet({
   const normalizedDraftHex = normalizeHexColor(draftHex);
   const draftValid = isHexColor(draftHex);
 
-  const closeWithAnimation = useCallback(() => {
-    Animated.timing(translateY, {
-      duration: 190,
-      easing: Easing.out(Easing.cubic),
-      toValue: sheetHeight,
-      useNativeDriver: true,
-    }).start(() => onClose());
-  }, [onClose, sheetHeight, translateY]);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 5,
-        onPanResponderMove: (_event, gesture) => {
-          translateY.setValue(Math.max(0, gesture.dy));
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 90 || gesture.vy > 0.7) {
-            closeWithAnimation();
-            return;
-          }
-
-          Animated.spring(translateY, {
-            damping: 22,
-            stiffness: 220,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-        onStartShouldSetPanResponder: () => true,
-      }),
-    [closeWithAnimation, translateY],
-  );
-
-  useEffect(() => {
-    if (!visible) return;
-    translateY.setValue(sheetHeight);
-    Animated.timing(translateY, {
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [sheetHeight, translateY, visible]);
+  const closeWithAnimation = useCallback((afterClose?: () => void) => sheetRef.current?.dismiss(afterClose), []);
 
   function openCreate() {
     setEditingColor(undefined);
@@ -3674,44 +3495,11 @@ function HighlightColorManagerSheet({
     });
   }
 
-  if (!visible) return null;
 
   return (
-    <Modal transparent visible={visible} onRequestClose={closeWithAnimation}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable accessibilityLabel="Close highlight colors" accessibilityRole="button" onPress={closeWithAnimation} style={{ backgroundColor: palette.dim, flex: 1 }} />
-        <Animated.View
-          style={{
-            backgroundColor: palette.sheet,
-            borderTopLeftRadius: radius.xl,
-            borderTopRightRadius: radius.xl,
-            height: sheetHeight,
-            overflow: "hidden",
-            paddingBottom: insets.bottom,
-            transform: [{ translateY }],
-            ...platformShadow({
-              boxShadow: "0 -16px 34px rgba(11, 18, 32, 0.18)",
-              color: palette.shadow,
-              offset: { width: 0, height: -10 },
-              opacity: 0.14,
-              radius: 26,
-            }),
-          }}
-        >
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-            <View
-            style={{
-              flex: 1,
-              paddingHorizontal: 18,
-            }}
-          >
-            <View style={{ alignItems: "center", borderBottomColor: palette.line, borderBottomWidth: 1, gap: 10, paddingTop: 8 }}>
-              <View {...panResponder.panHandlers} style={{ alignItems: "center", height: 22, justifyContent: "center", width: 120 }}>
-                <View style={{ backgroundColor: palette.line, borderRadius: 999, height: 5, width: 56 }} />
-              </View>
-            </View>
-
-            <ScrollView
+    <AppSheet ref={sheetRef} visible={visible} onClose={onClose} dismissible={!busy} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+      <View style={{ flex: 1, paddingHorizontal: 18, paddingBottom: insets.bottom }}>
+            <SheetScrollView
               contentInsetAdjustmentBehavior="automatic"
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -3721,7 +3509,7 @@ function HighlightColorManagerSheet({
                 <ReaderCircleButton
                   accessibilityLabel={pickerVisible ? "Back to highlight colors" : "Close highlight colors"}
                   icon={pickerVisible ? "arrow-left" : "x"}
-                  onPress={pickerVisible ? () => setPickerVisible(false) : closeWithAnimation}
+                  onPress={pickerVisible ? () => setPickerVisible(false) : () => closeWithAnimation()}
                   palette={palette}
                 />
                 <View style={{ flex: 1, gap: 3 }}>
@@ -3799,14 +3587,12 @@ function HighlightColorManagerSheet({
                   )}
                 </View>
               )}
-            </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Animated.View>
+            </SheetScrollView>
       </View>
-    </Modal>
+    </AppSheet>
   );
 }
+
 
 function HighlightColorWheel({
   color,
@@ -3942,6 +3728,7 @@ function ReaderToastMessage({ bottom, palette, toast }: { bottom: number; palett
 }
 
 function VerseActionSheet({
+  returnFocusRef,
   onAction,
   bibleVersionId,
   onClose,
@@ -3953,6 +3740,7 @@ function VerseActionSheet({
   saved,
   visible,
 }: {
+  returnFocusRef: React.RefObject<View | null>;
   onAction: (action: VerseQuickAction) => void;
   bibleVersionId: BibleVersionId;
   onClose: () => void;
@@ -3968,8 +3756,8 @@ function VerseActionSheet({
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const slideProgress = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = useState(visible);
+  const sheetRef = useRef<AppSheetHandle>(null);
+
   const [displayedPosition, setDisplayedPosition] = useState(position);
   const [view, setView] = useState<"actions" | "references">("actions");
   const references = useMemo(() => (displayedPosition ? bibleCrossReferences(displayedPosition, bibleVersionId) : []), [bibleVersionId, displayedPosition]);
@@ -3980,64 +3768,17 @@ function VerseActionSheet({
   const sheetHeight = Math.min(height * 0.78, contentHeight);
 
   useEffect(() => {
-    if (visible && position) {
-      setDisplayedPosition(position);
-      setView("actions");
-      setMounted(true);
-      slideProgress.stopAnimation();
-      slideProgress.setValue(0);
-      requestAnimationFrame(() => {
-        Animated.timing(slideProgress, {
-          duration: 220,
-          easing: Easing.out(Easing.cubic),
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-      });
-      return;
-    }
-
-    if (!mounted) return;
-    slideProgress.stopAnimation();
-    Animated.timing(slideProgress, {
-      duration: 190,
-      easing: Easing.in(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) return;
-      setMounted(false);
-      setDisplayedPosition(undefined);
-      onClosed();
-    });
-  }, [mounted, onClosed, position, slideProgress, visible]);
-
-  if (!mounted || !displayedPosition) return null;
-
-  const sheetTranslateY = slideProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [height, 0],
-  });
+    if (visible && position) { setDisplayedPosition(position); setView("actions"); }
+  }, [visible, position]);
+  if (!displayedPosition) return null;
 
   return (
-    <Modal transparent visible={mounted} onRequestClose={onClose}>
-      <BibleSheetModalFrame accessibilityLabel={t("bible.actions.close")} onBackdropPress={onClose}>
-        <BibleSheetBottomPositioner>
-          <BibleSheetShell
-            animatedStyle={{
-              elevation: 2,
-              transform: [{ translateY: sheetTranslateY }],
-            }}
-            contentStyle={{
-              gap: 2,
-              paddingBottom: bottomPadding,
-            }}
-            palette={palette}
-            style={{ height: sheetHeight }}
-          >
+    <AppSheet returnFocusRef={returnFocusRef} ref={sheetRef} title={referenceLabel(displayedPosition, bookLanguage)} onDismiss={onClosed} visible={visible} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
             <BibleSheetTop palette={palette} />
             {view === "actions" ? (
-              <ScrollView
+              <SheetScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding }}
                 style={{ flex: 1, minHeight: 0 }}
@@ -4055,7 +3796,7 @@ function VerseActionSheet({
                 <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
                 <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
                 <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
-              </ScrollView>
+              </SheetScrollView>
             ) : (
               <View style={{ flex: 1, gap: 14, minHeight: 0, paddingHorizontal: bibleSheetHorizontalPadding }}>
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
@@ -4065,7 +3806,7 @@ function VerseActionSheet({
                     <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(displayedPosition, bookLanguage)}</Text>
                   </View>
                 </View>
-                <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
+                <SheetScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 8 }}>
                   {references.length > 0 ? (
                     references.map((reference, index) => (
                       <View
@@ -4082,8 +3823,7 @@ function VerseActionSheet({
                           accessibilityLabel={`Read ${displayBibleBookName(reference.startPosition.book, bookLanguage)} ${reference.startPosition.chapter}`}
                           accessibilityRole="button"
                           onPress={() => {
-                            onClose();
-                            onReadChapter(reference.startPosition);
+                            sheetRef.current?.dismiss(() => onReadChapter(reference.startPosition));
                           }}
                           style={{ gap: 7, justifyContent: "center", minHeight: 54 }}
                         >
@@ -4102,13 +3842,13 @@ function VerseActionSheet({
                       <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
                     </View>
                   )}
-                </ScrollView>
+                </SheetScrollView>
               </View>
             )}
-          </BibleSheetShell>
-        </BibleSheetBottomPositioner>
-      </BibleSheetModalFrame>
-    </Modal>
+          </View>
+
+
+    </AppSheet>
   );
 }
 
@@ -4128,39 +3868,7 @@ function VerseSheetAction({
   tone?: "danger" | "default";
 }) {
   const destructive = tone === "danger";
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        alignItems: "center",
-        borderBottomColor: palette.line,
-        borderBottomWidth: 1,
-        flexDirection: "row",
-        gap: 14,
-        minHeight: 72,
-      }}
-    >
-      <View
-        style={{
-          alignItems: "center",
-          backgroundColor: palette.peach,
-          borderColor: palette.line,
-          borderRadius: 999,
-          borderWidth: 1,
-          height: 46,
-          justifyContent: "center",
-          width: 46,
-        }}
-      >
-        <Feather name={icon} size={21} color={destructive ? colors.danger : palette.accent} />
-      </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: destructive ? colors.danger : palette.text, fontSize: 16, fontWeight: "900" }}>{title}</Text>
-        <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "600" }}>{subtitle}</Text>
-      </View>
-    </Pressable>
-  );
+  return <SheetActionRow icon={icon} onPress={onPress} title={title} subtitle={subtitle} destructive={tone === "danger"} color={palette.text} />;
 }
 
 function SavedVerseActionSheet({
@@ -4176,6 +3884,7 @@ function SavedVerseActionSheet({
   palette: ReaderPalette;
   verse?: SavedVerse;
 }) {
+  const sheetRef = useRef<AppSheetHandle>(null);
   const bookLanguage = useBibleBookLanguage();
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
@@ -4195,14 +3904,9 @@ function SavedVerseActionSheet({
   const sheetHeight = Math.min(height * 0.92, contentHeight);
 
   return (
-    <Modal transparent visible onRequestClose={onClose}>
-      <BibleSheetModalFrame accessibilityLabel={t("bible.saved.actions.close")} onBackdropPress={onClose}>
-        <BibleSheetBottomPositioner>
-          <BibleSheetShell
-            contentStyle={{ gap: 2, paddingBottom: bottomPadding }}
-            palette={palette}
-            style={{ height: sheetHeight }}
-          >
+    <AppSheet ref={sheetRef} title={displayBibleReference(verse.reference, bookLanguage, verse.translation)} visible={Boolean(verse)} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
             <BibleSheetTop palette={palette} />
             <View style={{ paddingHorizontal: bibleSheetHorizontalPadding }}>
               <Text numberOfLines={1} style={{ color: palette.text, fontSize: 18, fontWeight: "900", lineHeight: titleLineHeight, paddingBottom: 8 }}>
@@ -4210,24 +3914,24 @@ function SavedVerseActionSheet({
               </Text>
               <VerseSheetAction
                 icon="book-open"
-                onPress={() => onOpen(verse)}
+                onPress={() => sheetRef.current?.dismiss(() => onOpen(verse))}
                 palette={palette}
                 subtitle={t("bible.saved.actions.openSubtitle")}
                 title={t("bible.saved.actions.open")}
               />
               <VerseSheetAction
                 icon="trash-2"
-                onPress={() => onRemove(verse)}
+                onPress={() => sheetRef.current?.dismiss(() => onRemove(verse))}
                 palette={palette}
                 subtitle={t("bible.saved.actions.removeSubtitle")}
                 title={t("bible.saved.actions.remove")}
                 tone="danger"
               />
             </View>
-          </BibleSheetShell>
-        </BibleSheetBottomPositioner>
-      </BibleSheetModalFrame>
-    </Modal>
+          </View>
+
+
+    </AppSheet>
   );
 }
 
@@ -4240,7 +3944,7 @@ function ReadingSettingsSheet({
   onChangeShowCrossReferences,
   onChangeShowFootnotes,
   onChangeShowVerseNumbers,
-  onClose,
+  onClose: notifyClose,
   onCompactModeChange,
   onFontSizeChange,
   palette,
@@ -4268,20 +3972,17 @@ function ReadingSettingsSheet({
   showVerseNumbers: boolean;
   visible: boolean;
 }) {
+  const sheetRef = useRef<AppSheetHandle>(null);
+  const onClose = useCallback(() => sheetRef.current?.dismiss(), []);
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
   const { height } = useWindowDimensions();
   const sheetHeight = height * 0.92;
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <BibleSheetModalFrame accessibilityLabel={t("bible.settings.close")} onBackdropPress={onClose}>
-        <BibleSheetBottomPositioner>
-          <BibleSheetShell
-            contentStyle={{ paddingBottom: Math.max(26, insets.bottom + 18) }}
-            palette={palette}
-            style={{ height: sheetHeight }}
-          >
+    <AppSheet ref={sheetRef} visible={visible} onClose={notifyClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
             <BibleSheetTop palette={palette}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
                 <Text style={{ color: palette.text, flex: 1, fontSize: 20, fontWeight: "900" }}>{t("bible.settings.title")}</Text>
@@ -4289,7 +3990,7 @@ function ReadingSettingsSheet({
               </View>
             </BibleSheetTop>
 
-            <ScrollView
+            <SheetScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ gap: 24, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 24 }}
               style={{ flex: 1 }}
@@ -4355,18 +4056,18 @@ function ReadingSettingsSheet({
                 <SettingsToggle label={t("bible.settings.compactMode")} onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
             </SettingsGroup>
-            </ScrollView>
-          </BibleSheetShell>
-        </BibleSheetBottomPositioner>
-      </BibleSheetModalFrame>
-    </Modal>
+            </SheetScrollView>
+          </View>
+
+
+    </AppSheet>
   );
 }
 
 function BibleVersionSheet({
   bibleVersionId,
   onChangeBibleVersion,
-  onClose,
+  onClose: notifyClose,
   palette,
   visible,
 }: {
@@ -4376,6 +4077,8 @@ function BibleVersionSheet({
   palette: ReaderPalette;
   visible: boolean;
 }) {
+  const sheetRef = useRef<AppSheetHandle>(null);
+  const onClose = useCallback(() => sheetRef.current?.dismiss(), []);
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
   const { height } = useWindowDimensions();
@@ -4397,10 +4100,9 @@ function BibleVersionSheet({
   }
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <BibleSheetModalFrame accessibilityLabel={t("bible.version.close")} onBackdropPress={onClose}>
-        <BibleSheetBottomPositioner>
-          <BibleSheetShell contentStyle={{ paddingBottom: bottomPadding }} palette={palette} style={{ height: sheetHeight }}>
+    <AppSheet ref={sheetRef} visible={visible} onClose={notifyClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
             <BibleSheetTop palette={palette}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: bibleSheetHeaderMinHeight }}>
                 <View style={{ flex: 1, gap: 3 }}>
@@ -4411,7 +4113,7 @@ function BibleVersionSheet({
               </View>
             </BibleSheetTop>
 
-            <ScrollView
+            <SheetScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ gap: bibleVersionRowGap, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: bibleVersionListTopPadding }}
               style={{ flex: 1 }}
@@ -4427,11 +4129,11 @@ function BibleVersionSheet({
                   shortLabel={bibleVersionShortLabel(version.id)}
                 />
               ))}
-            </ScrollView>
-          </BibleSheetShell>
-        </BibleSheetBottomPositioner>
-      </BibleSheetModalFrame>
-    </Modal>
+            </SheetScrollView>
+          </View>
+
+
+    </AppSheet>
   );
 }
 
@@ -4725,7 +4427,7 @@ function ChapterReflectionCard({
       }}
     >
       <Text style={{ color: palette.text, fontSize: 17, fontWeight: "900" }}>Vad stannade hos dig?</Text>
-      <TextInput
+      <SheetTextInput
         multiline
         onChangeText={onChangeText}
         onSubmitEditing={() => onAction("save")}
@@ -4860,7 +4562,7 @@ function NextChapterCard({
 }
 
 function FootnoteSheet({
-  onClose,
+  onClose: notifyClose,
   palette,
   readerTextStyle,
   selection,
@@ -4874,20 +4576,17 @@ function FootnoteSheet({
 }) {
   const bookLanguage = useBibleBookLanguage();
   const { t } = useAppTranslation();
+  const sheetRef = useRef<AppSheetHandle>(null);
+  const onClose = useCallback(() => sheetRef.current?.dismiss(), []);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
-  if (!visible || !selection) return null;
+  if (!selection) return null;
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <BibleSheetModalFrame accessibilityLabel={t("bible.footnote.close")} onBackdropPress={onClose}>
-        <BibleSheetBottomPositioner>
-          <BibleSheetShell
-            contentStyle={{ paddingBottom: Math.max(20, insets.bottom + 12) }}
-            palette={palette}
-            style={{ height: Math.min(Math.round(height * 0.55), 480) }}
-          >
+    <AppSheet ref={sheetRef} visible={visible} onClose={notifyClose} height={Math.min(Math.round(height * 0.55), 480)} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+
+          <View style={{ flex: 1, paddingBottom: insets.bottom }}>
             <BibleSheetTop bordered palette={palette}>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
                 <View style={{ flex: 1, gap: 3 }}>
@@ -4897,7 +4596,7 @@ function FootnoteSheet({
                 <ReaderCircleButton accessibilityLabel={t("bible.footnote.close")} icon="x" onPress={onClose} palette={palette} />
               </View>
             </BibleSheetTop>
-            <ScrollView
+            <SheetScrollView
               contentContainerStyle={{ gap: 16, paddingHorizontal: bibleSheetHorizontalPadding, paddingVertical: 20 }}
               showsVerticalScrollIndicator={false}
             >
@@ -4930,11 +4629,11 @@ function FootnoteSheet({
               >
                 {selection.footnote.text}
               </Text>
-            </ScrollView>
-          </BibleSheetShell>
-        </BibleSheetBottomPositioner>
-      </BibleSheetModalFrame>
-    </Modal>
+            </SheetScrollView>
+          </View>
+
+
+    </AppSheet>
   );
 }
 
@@ -4959,73 +4658,18 @@ function CrossReferenceSheet({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
-  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  const sheetRef = useRef<AppSheetHandle>(null);
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
 
-  const closeWithAnimation = useCallback(
-    (afterClose?: () => void) => {
-      Animated.timing(translateY, {
-        duration: 190,
-        easing: Easing.out(Easing.cubic),
-        toValue: sheetHeight,
-        useNativeDriver: true,
-      }).start(() => {
-        onClose();
-        afterClose?.();
-      });
-    },
-    [onClose, sheetHeight, translateY],
-  );
+  const closeWithAnimation = useCallback((afterClose?: () => void) => sheetRef.current?.dismiss(afterClose), []);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 5,
-        onPanResponderMove: (_event, gesture) => {
-          translateY.setValue(Math.max(0, gesture.dy));
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 90 || gesture.vy > 0.7) {
-            closeWithAnimation();
-            return;
-          }
-
-          Animated.spring(translateY, {
-            damping: 22,
-            stiffness: 220,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-        onStartShouldSetPanResponder: () => true,
-      }),
-    [closeWithAnimation, translateY],
-  );
-
-  useEffect(() => {
-    if (!visible) return;
-    translateY.setValue(sheetHeight);
-    Animated.timing(translateY, {
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [sheetHeight, translateY, visible]);
-
-  if (!visible || !position) return null;
+  if (!position) return null;
 
   return (
-    <Modal transparent visible={visible} onRequestClose={() => closeWithAnimation()}>
-      <BibleSheetModalFrame accessibilityLabel="Close cross references" onBackdropPress={() => closeWithAnimation()}>
-        <BibleSheetShell
-          animatedStyle={{ transform: [{ translateY }] }}
-          contentStyle={{ paddingBottom: insets.bottom }}
-          palette={palette}
-          style={{ height: sheetHeight }}
-        >
-          <BibleSheetTop bordered handleProps={panResponder.panHandlers} palette={palette}>
+    <AppSheet ref={sheetRef} visible={visible} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+              <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          <BibleSheetTop bordered  palette={palette}>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
@@ -5035,7 +4679,7 @@ function CrossReferenceSheet({
             </View>
           </BibleSheetTop>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding, paddingVertical: 18 }}>
+          <SheetScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: bibleSheetHorizontalPadding, paddingVertical: 18 }}>
             {references.length > 0 ? (
               references.map((reference, index) => (
                 <View
@@ -5071,10 +4715,10 @@ function CrossReferenceSheet({
                 <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>Inga korsreferenser för denna vers ännu</Text>
               </View>
             )}
-          </ScrollView>
-        </BibleSheetShell>
-      </BibleSheetModalFrame>
-    </Modal>
+          </SheetScrollView>
+        </View>
+
+    </AppSheet>
   );
 }
 
@@ -5160,11 +4804,11 @@ function BibleDrawer({
   initialPosition,
   journalEntries,
   onClose,
-  onOpenPlans,
-  onOpenReflection,
-  onOpenTopic,
+  onOpenPlans: openPlans,
+  onOpenReflection: openReflection,
+  onOpenTopic: openTopic,
   onRemoveSavedVerse,
-  onSelect,
+  onSelect: selectPosition,
   palette,
   savedVerses,
   versionLabel,
@@ -5192,7 +4836,7 @@ function BibleDrawer({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
-  const translateY = useRef(new Animated.Value(sheetHeight)).current;
+  const sheetRef = useRef<AppSheetHandle>(null);
   const drawerScrollRef = useRef<ScrollView>(null);
   const phraseSearchRequestRef = useRef(0);
   const [stage, setStage] = useState<PickerStage>(initialStage);
@@ -5208,62 +4852,12 @@ function BibleDrawer({
     () => savedVerses.filter((verse) => !hiddenSavedVerseIds.includes(verse.id)),
     [hiddenSavedVerseIds, savedVerses],
   );
-  const closeWithAnimation = useCallback(() => {
-    Animated.timing(translateY, {
-      duration: 190,
-      easing: Easing.out(Easing.cubic),
-      toValue: sheetHeight,
-      useNativeDriver: true,
-    }).start(() => onClose());
-  }, [onClose, sheetHeight, translateY]);
+  const closeWithAnimation = useCallback((afterClose?: () => void) => sheetRef.current?.dismiss(afterClose), []);
+  const onSelect = useCallback((position: BiblePosition) => sheetRef.current?.dismiss(() => selectPosition(position)), [selectPosition]);
+  const onOpenPlans = () => sheetRef.current?.dismiss(openPlans);
+  const onOpenReflection = (id: string) => sheetRef.current?.dismiss(() => openReflection(id));
+  const onOpenTopic = (topic?: string) => sheetRef.current?.dismiss(() => openTopic(topic));
 
-  const settleOpen = useCallback(() => {
-    Animated.spring(translateY, {
-      damping: 24,
-      stiffness: 240,
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [translateY]);
-
-  const topPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderMove: (_event, gesture) => {
-          translateY.setValue(Math.max(0, gesture.dy));
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 70 || gesture.vy > 0.45) {
-            closeWithAnimation();
-            return;
-          }
-          settleOpen();
-        },
-        onPanResponderTerminate: settleOpen,
-      }),
-    [closeWithAnimation, settleOpen, translateY],
-  );
-
-  const handlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (_event, gesture) => {
-          translateY.setValue(Math.max(0, gesture.dy));
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 50 || gesture.vy > 0.35) {
-            closeWithAnimation();
-            return;
-          }
-          settleOpen();
-        },
-        onPanResponderTerminate: settleOpen,
-      }),
-    [closeWithAnimation, settleOpen, translateY],
-  );
 
   useEffect(() => {
     if (!visible) return;
@@ -5295,16 +4889,6 @@ function BibleDrawer({
     });
   }, [onRemoveSavedVerse]);
 
-  useEffect(() => {
-    if (!visible) return;
-    translateY.setValue(sheetHeight);
-    Animated.timing(translateY, {
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [sheetHeight, translateY, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -5430,19 +5014,13 @@ function BibleDrawer({
   }
 
   return (
-    <Modal transparent visible={visible} onRequestClose={goBack}>
-      <BibleSheetModalFrame onBackdropPress={closeWithAnimation}>
-        <BibleSheetShell
-          animatedStyle={{ transform: [{ translateY }] }}
-          contentStyle={{ paddingBottom: insets.bottom }}
-          palette={palette}
-          style={{ height: sheetHeight }}
-        >
+    <AppSheet ref={sheetRef} onBack={goBack} visible={visible} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+              <View style={{ flex: 1, paddingBottom: insets.bottom }}>
           <BibleSheetTop
             bordered
-            handleProps={handlePanResponder.panHandlers}
+
             palette={palette}
-            topProps={topPanResponder.panHandlers}
+
           >
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <ReaderCircleButton
@@ -5458,7 +5036,7 @@ function BibleDrawer({
             </View>
           </BibleSheetTop>
 
-          <ScrollView
+          <SheetScrollView
             ref={drawerScrollRef}
             contentInsetAdjustmentBehavior="never"
             keyboardShouldPersistTaps="handled"
@@ -5757,9 +5335,9 @@ function BibleDrawer({
                 )}
               </View>
             ) : null}
-          </ScrollView>
-        </BibleSheetShell>
-      </BibleSheetModalFrame>
+          </SheetScrollView>
+        </View>
+
       <SavedVerseActionSheet
         onClose={() => setSavedVerseMenu(undefined)}
         onOpen={openSavedVerse}
@@ -5767,7 +5345,7 @@ function BibleDrawer({
         palette={palette}
         verse={savedVerseMenu}
       />
-    </Modal>
+    </AppSheet>
   );
 }
 
@@ -5799,7 +5377,7 @@ function DrawerSearchBox({
       }}
     >
       <Feather name="search" size={18} color={palette.muted} />
-      <TextInput
+      <SheetTextInput
         autoCapitalize="words"
         autoCorrect={false}
         onChangeText={onChangeText}

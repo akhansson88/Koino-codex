@@ -1,36 +1,36 @@
-import { useMemo, useState } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
-import { normalizeEntryKind } from "@/state/product";
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
+import { normalizeEntryKind } from "@/state/product";
 import type { GroupImage, Id, Post } from "@/state/types";
 import {
-  AppScreen,
-  Avatar,
-  AvatarStack,
-  BodyText,
-  BottomSheet,
-  Card,
-  IconButton,
-  PrimaryButton,
-  SecondaryButton,
-  SectionHeading,
-  StatusPill,
-  TextInputField,
-  VerseList,
+AppScreen,
+Avatar,
+AvatarStack,
+BodyText,
+BottomSheet,
+Card,
+IconButton,
+PrimaryButton,
+SecondaryButton,
+SectionHeading,
+StatusPill,
+TextInputField,
+VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityActionLabel, communityPrayerNoun } from "@/ui/community-copy";
+import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
-import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 
 const MAX_ANSWERED_UPDATE_LENGTH = 280;
 
@@ -114,7 +114,7 @@ function AnsweredPrayerEditorSheet({
   const editing = mode === "edit";
   return (
     <BottomSheet
-      onClose={saving ? () => undefined : onClose}
+      dismissible={!saving} onClose={onClose}
       title={t(editing ? "community.prayer.editAnswer" : "community.prayer.answerTitle")}
       visible={Boolean(mode)}
     >
@@ -162,7 +162,7 @@ function PrayerOwnerActionsSheet({
 }) {
   const { t } = useAppTranslation();
   return (
-    <BottomSheet onClose={saving ? () => undefined : onClose} title={t("community.prayer.ownerActions")} visible={visible}>
+    <BottomSheet dismissible={!saving} onClose={onClose} title={t("community.prayer.ownerActions")} visible={visible}>
       {answered ? (
         <>
           <SecondaryButton disabled={saving} icon="edit-2" onPress={onEditAnswer}>

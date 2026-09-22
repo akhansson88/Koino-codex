@@ -1,26 +1,21 @@
+import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
 import {
-  createContext,
-  type PropsWithChildren,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+createContext,
+type PropsWithChildren,
+useCallback,
+useContext,
+useEffect,
+useRef,
+useState
 } from "react";
 import {
-  Alert,
-  Animated,
-  Easing,
-  Linking,
-  Modal,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+Alert,
+Linking,
+Pressable,
+Text,
+useWindowDimensions,
+View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
@@ -28,7 +23,7 @@ import { WebView } from "react-native-webview";
 import { useAppTranslation } from "@/ui/app-language";
 import { normalizeUrl } from "@/ui/link-utils";
 import { openLinkInApp } from "@/ui/open-link";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 type OpenExternalLink = (url: string) => void;
 
@@ -188,109 +183,15 @@ function InAppBrowserSheet({
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
-  const translateY = useRef(new Animated.Value(height)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const sheetRef = useRef<AppSheetHandle>(null);
   const activeDocumentUrlRef = useRef(currentUrl || session?.url || "");
-  const closingRef = useRef(false);
-  const topGap = Math.max(insets.top + 26, 58);
-  const sheetHeight = Math.max(320, height - topGap);
-  const sheetWidth = width >= 760 ? Math.min(width - 48, 760) : width;
+  const sheetHeight = height - Math.max(insets.top + 26, 58);
   const visible = Boolean(session);
-
-  const closeWithAnimation = useCallback(() => {
-    if (!visible || closingRef.current) return;
-    closingRef.current = true;
-
-    Animated.parallel([
-      Animated.timing(translateY, {
-        duration: 240,
-        easing: Easing.in(Easing.cubic),
-        toValue: sheetHeight,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        duration: 200,
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      closingRef.current = false;
-      onClose();
-    });
-  }, [backdropOpacity, onClose, sheetHeight, translateY, visible]);
-
-  const settleOpen = useCallback(() => {
-    Animated.spring(translateY, {
-      damping: 24,
-      mass: 0.8,
-      stiffness: 220,
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
-  }, [translateY]);
-
-  const headerPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderGrant: () => translateY.stopAnimation(),
-        onPanResponderMove: (_event, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 70 || gesture.vy > 0.45) {
-            closeWithAnimation();
-            return;
-          }
-          settleOpen();
-        },
-        onPanResponderTerminate: settleOpen,
-      }),
-    [closeWithAnimation, settleOpen, translateY],
-  );
-
-  const handlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => translateY.stopAnimation(),
-        onPanResponderMove: (_event, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dy > 50 || gesture.vy > 0.35) {
-            closeWithAnimation();
-            return;
-          }
-          settleOpen();
-        },
-        onPanResponderTerminate: settleOpen,
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [closeWithAnimation, settleOpen, translateY],
-  );
+  const closeWithAnimation = useCallback(() => sheetRef.current?.dismiss(), []);
 
   useEffect(() => {
     activeDocumentUrlRef.current = currentUrl || session?.url || "";
   }, [currentUrl, session?.url]);
-
-  useEffect(() => {
-    if (!session) return;
-    closingRef.current = false;
-    translateY.setValue(sheetHeight);
-    backdropOpacity.setValue(0);
-
-    Animated.parallel([
-      Animated.timing(translateY, {
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        toValue: 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        duration: 220,
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [backdropOpacity, session?.id, sheetHeight, translateY]);
 
   const displayedUrl = currentUrl || session?.url || "";
   const domain = domainForExternalUrl(displayedUrl, t("shared.browser.website"));
@@ -311,61 +212,8 @@ function InAppBrowserSheet({
   }
 
   return (
-    <Modal
-      animationType="none"
-      hardwareAccelerated
-      navigationBarTranslucent
-      onRequestClose={closeWithAnimation}
-      statusBarTranslucent
-      transparent
-      visible={visible}
-    >
-      <View accessibilityViewIsModal style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Animated.View
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(11, 18, 32, 0.24)", opacity: backdropOpacity, pointerEvents: "none" }]}
-        />
-        <Pressable
-          accessibilityLabel={t("shared.browser.dismiss")}
-          accessibilityRole="button"
-          onPress={closeWithAnimation}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <Animated.View
-          style={{
-            alignSelf: "center",
-            backgroundColor: colors.paper,
-            borderTopLeftRadius: radius.xxl,
-            borderTopRightRadius: radius.xxl,
-            height: sheetHeight,
-            overflow: "hidden",
-            transform: [{ translateY }],
-            width: sheetWidth,
-            ...platformShadow({
-              boxShadow: "0 -18px 44px rgba(11, 18, 32, 0.18)",
-              elevation: 18,
-              offset: { width: 0, height: -12 },
-              opacity: 0.16,
-              radius: 34,
-            }),
-          }}
-        >
-          <View
-            {...headerPanResponder.panHandlers}
-            style={{
-              backgroundColor: colors.paper,
-              borderBottomColor: colors.line,
-              borderBottomWidth: 1,
-              paddingHorizontal: 14,
-              paddingTop: 6,
-            }}
-          >
-            <View
-              {...handlePanResponder.panHandlers}
-              accessibilityLabel={t("shared.browser.swipeToClose")}
-              style={{ alignItems: "center", alignSelf: "center", height: 22, justifyContent: "center", width: 150 }}
-            >
-              <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 4, width: 44 }} />
-            </View>
+    <AppSheet ref={sheetRef} visible={visible} onClose={onClose} height={sheetHeight} contentPanning={false}
+      header={<View style={{ paddingHorizontal: 14, backgroundColor: colors.paper, borderBottomColor: colors.line, borderBottomWidth: 1 }}>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 54, paddingBottom: 4 }}>
               <BrowserIconButton accessibilityLabel={t("shared.browser.close")} icon="x" onPress={closeWithAnimation} />
               <View style={{ alignItems: "center", flex: 1, justifyContent: "center", pointerEvents: "none" }}>
@@ -380,8 +228,8 @@ function InAppBrowserSheet({
                 <View style={{ backgroundColor: colors.gold, borderRadius: 999, height: 2, width: progressWidth }} />
               ) : null}
             </View>
-          </View>
-
+          </View>}
+    >
           <View style={{ backgroundColor: colors.paper, flex: 1 }}>
             {session && loadUrl && !loadError ? (
               <WebView
@@ -418,9 +266,7 @@ function InAppBrowserSheet({
             {loadError ? <BrowserErrorState domain={domain} onRetry={onRetry} /> : null}
           </View>
           <View style={{ backgroundColor: colors.paper, height: insets.bottom }} />
-        </Animated.View>
-      </View>
-    </Modal>
+    </AppSheet>
   );
 }
 
