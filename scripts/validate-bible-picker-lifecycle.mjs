@@ -30,7 +30,7 @@ const mocks = {
     export const BibleBookVersionContext = createContext("kjv");
     export const useBibleBookLanguage = () => "en";
   `,
-  "@/state/koino-store": `export const useKoino = () => ({ state: { currentUserId: "test" } });`,
+  "@/state/koino-store": `export const useKoinoSelector = selector => selector({ currentUserId: "test" });`,
   "@/ui/app-language": `export const useAppTranslation = () => ({ language: "en", t: key => key });`,
   "@/ui/app-components": `
     import React, { useEffect } from "react";

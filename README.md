@@ -3,6 +3,22 @@
 KOINO is an Expo app for iPhone and Android. The project only targets these two
 mobile platforms.
 
+## Code organization
+
+Existing screen and shared UI entry points retain their exports. Their supporting
+implementations are grouped by responsibility:
+
+- `features/bible-reader`, `features/community`, `features/donation`, and
+  `features/identity` contain feature-specific components, types, and helpers.
+- `state/store` contains Firebase initialization and standalone store operations;
+  `state/koino-store.tsx` owns provider state, subscriptions, dispatch, and hooks.
+- `ui/app-components` contains shared UI primitives, and `ui/translations` contains
+  the English and Swedish dictionaries and translation types.
+
+Within these folders, import sibling implementations directly instead of going
+through their public entry point to avoid circular dependencies. Keep Bible
+reader dependencies out of Home's eager imports (`npm run validate:startup`).
+
 ## Local Android development build
 
 The Android development build is a separate app named **KOINO Dev** with the

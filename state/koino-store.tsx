@@ -1,10 +1,29 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { FirebaseError, initializeApp, getApp, getApps } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
-import type { Auth, User as FirebaseUser } from "@firebase/auth";
-import { equalTo, get, getDatabase, onValue, orderByChild, query, ref, remove, runTransaction, set, update } from "firebase/database";
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-
+import type { User as FirebaseUser } from "@firebase/auth";
+import {
+  equalTo,
+  get,
+  onValue,
+  orderByChild,
+  query,
+  ref,
+  remove,
+  runTransaction,
+  set,
+  update,
+} from "firebase/database";
+import {
+  createContext,
+  PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
   fetchOlderFirebasePage,
@@ -19,31 +38,25 @@ import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
-import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
-import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
+import { roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
+import { applyTheme, normalizeTheme, ThemeName } from "@/ui/theme";
 import {
   ActivityNotification,
   BibleHighlight,
-  BibleHighlightColor,
   BibleHighlightPaletteColor,
   CheckIn,
   DiscussionFollow,
-  BibleVerse,
   BiblePlan,
-  BiblePlanRange,
-  EntryKind,
   GroupBiblePlanAnnouncement,
   GroupBiblePlanParticipation,
   Group,
   Id,
   JournalEntry,
-  JournalEntryType,
   KoinoState,
   Membership,
   NotificationPreferences,
   Post,
   PostReaction,
-  PostReactionKind,
   PrayerNotification,
   PrayerReaction,
   PrayerSession,
@@ -51,139 +64,46 @@ import {
   SavedVerse,
   SupportIntent,
   User,
-  HeartMood,
 } from "@/state/types";
+import { type CommunityPageAvailability, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
+import { auth, database } from "@/state/store/firebase";
+import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
+import {
+  authMessage,
+  asArray,
+  now,
+  defaultBibleHighlightColors,
+  localDayKey,
+  actionVerses,
+  id,
+  validPostContent,
+  postSupportsTitle,
+  prayerReactionId,
+  isMatchingPrayerReaction,
+  prayerSessionFromReaction,
+  isBibleHighlightColor,
+  normalizeHighlightColor,
+  bibleReferenceStorageId,
+  highlightColorLabel,
+} from "@/state/store/helpers";
+import {
+  syncUserMembershipImage,
+  localUriToArrayBuffer,
+  deleteRoomStoragePath,
+  profileAndMembershipImageUpdates,
+  deleteUserAvatarStoragePath,
+} from "@/state/store/image-operations";
+import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
 
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCLLSGBYogHq7YqUx6an4JRTWRhU9Y950s",
-  authDomain: "koino-codex.firebaseapp.com",
-  databaseURL: "https://koino-codex-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "koino-codex",
-  storageBucket: "koino-codex.firebasestorage.app",
-  messagingSenderId: "181081151239",
-  appId: "1:181081151239:web:e598ebe4e6e4493eac57a2",
-  measurementId: "G-66WFNQ6Z29",
-};
-
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-let authInstance: Auth;
-try {
-  authInstance = FirebaseAuth.getReactNativePersistence
-    ? FirebaseAuth.initializeAuth(app, {
-        persistence: FirebaseAuth.getReactNativePersistence(AsyncStorage),
-      })
-    : FirebaseAuth.getAuth(app);
-} catch {
-  authInstance = FirebaseAuth.getAuth(app);
-}
-
-const auth = authInstance;
-const database = getDatabase(app);
 const pendingCheckInKeys = new Set<string>();
+
 const pendingPrayerCompletionKeys = new Set<string>();
+
 const pendingSavedVerseDedupKeys = new Set<string>();
+
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
+
 const themeStorageKey = "koino.theme";
-
-
-type Profile = User & {
-  email?: string | null;
-  currentGroupId?: Id | null;
-  theme?: StoredThemeName;
-};
-
-
-type CreatePostKind = EntryKind;
-
-type Action =
-  | { type: "signIn"; email: string; password: string }
-  | { type: "signUp"; email: string; password: string; name: string }
-  | { type: "signOut" }
-  | { type: "requestPasswordReset"; email: string }
-  | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
-  | { type: "changePassword"; currentPassword: string; newPassword: string }
-  | { type: "createSession"; name: string; groupName?: string; inviteCode?: string }
-  | { type: "createGroup"; name: string }
-  | { type: "joinGroup"; inviteCode: string }
-  | { type: "switchGroup"; id: Id }
-  | { type: "leaveGroup"; id: Id }
-  | { type: "removeGroupMember"; groupId: Id; userId: Id }
-  | { type: "transferGroupOwnership"; groupId: Id; userId: Id }
-  | { type: "updateGroup"; id: Id; name: string }
-  | { type: "uploadGroupImage"; id: Id; localUri: string }
-  | { type: "deleteGroupImage"; id: Id }
-  | { type: "uploadUserAvatar"; localUri: string }
-  | { type: "deleteUserAvatar" }
-  | { type: "deleteGroup"; id: Id }
-  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[] }
-  | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
-  | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
-  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
-  | { type: "deletePost"; id: Id }
-  | { type: "markPrayerAnswered"; id: Id; answeredUpdate?: string }
-  | { type: "updatePrayerAnswer"; id: Id; answeredUpdate?: string }
-  | { type: "unmarkPrayerAnswered"; id: Id }
-  | {
-      type: "finishPrayer";
-      targetType: PrayerSession["targetType"];
-      targetId: Id;
-      status: PrayerSession["status"];
-      startedAt: string;
-      recipientUserId?: Id;
-      throwOnError?: boolean;
-    }
-  | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
-  | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }
-  | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; replyId?: Id }
-  | { type: "deleteReply"; id: Id }
-
-  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
-  | { type: "deleteJournalEntry"; id: Id }
-  | { type: "saveVerse"; verse: BibleVerse }
-  | { type: "removeSavedVerse"; id: Id }
-  | { type: "highlightVerses"; color: BibleHighlightColor; colorId?: Id; verses: BibleVerse[] }
-  | { type: "removeBibleHighlight"; id: Id }
-  | { type: "saveBibleHighlightColor"; hex: BibleHighlightColor; id?: Id; label?: string }
-  | { type: "deleteBibleHighlightColor"; id: Id }
-  | { type: "createBiblePlan"; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
-  | { type: "updateBiblePlan"; id: Id; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
-  | { type: "deleteBiblePlan"; id: Id }
-  | { type: "markBiblePlanDay"; planId: Id; dayNumber: number; read: boolean }
-  | { type: "pauseBiblePlan"; planId: Id }
-  | { type: "rescheduleBiblePlan"; planId: Id; startDate: string }
-  | { type: "announceBiblePlan"; planId: Id }
-  | { type: "unannounceBiblePlan"; announcementId: Id }
-  | { type: "joinGroupBiblePlan"; announcementId: Id }
-  | { type: "createSupportIntent"; amount: number }
-  | { type: "loadOlderCommunityContent" }
-  | { type: "loadOlderJournalEntries" }
-  | { type: "loadOlderPrayerNotifications" }
-  | { type: "markActivityNotificationRead"; id: Id }
-  | { type: "markActivityDiscussionRead"; groupId: Id; targetType: "post" | "check_in"; targetId: Id }
-  | { type: "markAllActivityNotificationsRead" }
-  | { type: "registerPushToken"; token: string; platform: "android" | "ios" }
-  | { type: "setDiscussionFollow"; targetType: "post" | "check_in"; targetId: Id; following: boolean }
-  | { type: "setNotificationPreference"; key: keyof NotificationPreferences; value: boolean }
-  | { type: "setTheme"; theme: ThemeName };
-
-
-type KoinoContextValue = {
-  state: KoinoState;
-  dispatch: (action: Action) => Promise<void>;
-  getAuthToken: () => Promise<string | null>;
-};
-
-type CommunityPageAvailability = {
-  checkIns: boolean;
-  posts: boolean;
-  replies: boolean;
-  prayerReactions: boolean;
-  postReactions: boolean;
-};
 
 const noCommunityPages: CommunityPageAvailability = {
   checkIns: false,
@@ -202,7 +122,9 @@ const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
+
 const KoinoSnapshotContext = createContext<SnapshotStore<KoinoState> | null>(null);
+
 const KoinoActionsContext = createContext<Pick<KoinoContextValue, "dispatch" | "getAuthToken"> | null>(null);
 
 export function useKoinoSelector<Value>(selector: (state: KoinoState) => Value): Value {
@@ -229,336 +151,6 @@ export function useKoinoFields<const Keys extends readonly (keyof KoinoState)[]>
     return next;
   }, [key]);
   return useKoinoSelector(selector);
-}
-
-function now() {
-  return new Date().toISOString();
-}
-
-function localDayKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function id(prefix: string) {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function prayerReactionId(userId: Id, targetType: PrayerReaction["targetType"], targetId: Id) {
-  return `${userId}_${targetType}_${targetId}`;
-}
-
-function isMatchingPrayerReaction(
-  reaction: PrayerReaction,
-  userId: Id,
-  targetType: PrayerReaction["targetType"],
-  targetId: Id,
-) {
-  return reaction.userId === userId && reaction.targetType === targetType && reaction.targetId === targetId;
-}
-
-function prayerSessionFromReaction(reaction: PrayerReaction, recipientUserId?: Id): PrayerSession {
-  return {
-    id: reaction.id,
-    userId: reaction.userId,
-    targetType: reaction.targetType,
-    targetId: reaction.targetId,
-    ...(recipientUserId ? { recipientUserId } : {}),
-    startedAt: reaction.startedAt ?? reaction.createdAt,
-    completedAt: reaction.completedAt ?? reaction.createdAt,
-    status: "completed",
-  };
-}
-
-function inviteCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-function asArray<T extends { id: string }>(value: unknown): T[] {
-  if (!value || typeof value !== "object") return [];
-  return Object.entries(value as Record<string, T>).map(([key, item]) => ({ ...item, id: item.id ?? key }));
-}
-
-function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[] }) {
-  if (action.verses?.length) return action.verses.slice(0, 5);
-  return action.verse ? [action.verse] : [];
-}
-
-function postSupportsTitle(kind: CreatePostKind) {
-  return kind === "prayer_request" || kind === "prayer_moment" || kind === "update";
-}
-
-function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse[]) {
-  return kind === "scripture" ? verses.length > 0 : Boolean(body.trim());
-}
-
-function bibleReferenceStorageId(verse: Pick<BibleVerse, "reference" | "translation">) {
-  return `${verse.reference}_${verse.translation ?? "default"}`
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-const defaultBibleHighlightColors: BibleHighlightPaletteColor[] = [
-  { id: "default_yellow", hex: "#FFF200", label: "Yellow", createdAt: "", updatedAt: "" },
-  { id: "default_green", hex: "#4DF06A", label: "Green", createdAt: "", updatedAt: "" },
-  { id: "default_cyan", hex: "#09C6DF", label: "Cyan", createdAt: "", updatedAt: "" },
-  { id: "default_peach", hex: "#FFC166", label: "Peach", createdAt: "", updatedAt: "" },
-];
-
-function isBibleHighlightColor(value: unknown): value is BibleHighlightColor {
-  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value);
-}
-
-function normalizeHighlightColor(value: string) {
-  return value.trim().toUpperCase();
-}
-
-function highlightColorLabel(value: string) {
-  return value.trim().toUpperCase();
-}
-
-function authMessage(error: unknown) {
-  if (!(error instanceof FirebaseError)) {
-    return error instanceof Error ? error.message : "Something went wrong. Please try again.";
-  }
-
-  switch (error.code) {
-    case "auth/email-already-in-use":
-      return "That email already has an account. Try signing in instead.";
-    case "auth/invalid-email":
-      return "Enter a valid email address.";
-    case "auth/invalid-credential":
-    case "auth/wrong-password":
-    case "auth/user-not-found":
-      return "The email or password did not match.";
-    case "auth/weak-password":
-      return "Use a password with at least 6 characters.";
-    case "auth/expired-action-code":
-      return "That reset link has expired. Request a new one from sign in.";
-    case "auth/invalid-action-code":
-      return "That reset link is invalid or has already been used. Request a new one from sign in.";
-    case "auth/too-many-requests":
-      return "Too many attempts. Please wait a bit and try again.";
-    case "auth/invalid-continue-uri":
-    case "auth/unauthorized-continue-uri":
-      return "The reset link URL needs to be authorized in Firebase.";
-    case "auth/requires-recent-login":
-      return "Please sign out and back in, then try changing your password again.";
-    case "permission-denied":
-      return "Firebase blocked that change. Check the database rules for this project.";
-    default:
-      return error.message;
-  }
-}
-
-async function ensureProfile(user: FirebaseUser, name?: string) {
-  const timestamp = now();
-  const profileRef = ref(database, `profiles/${user.uid}`);
-  const snapshot = await get(profileRef);
-  const existing = snapshot.val() as Profile | null;
-  const resolvedName = name?.trim() || existing?.name || user.displayName || user.email?.split("@")[0] || "KOINO member";
-
-  await update(profileRef, {
-    id: user.uid,
-    name: resolvedName,
-    email: user.email ?? null,
-    createdAt: existing?.createdAt ?? timestamp,
-    theme: normalizeTheme(existing?.theme),
-  });
-
-  if (name?.trim() && user.displayName !== resolvedName) {
-    await FirebaseAuth.updateProfile(user, { displayName: resolvedName });
-  }
-
-  return {
-    ...existing,
-    id: user.uid,
-    name: resolvedName,
-    email: user.email ?? null,
-    createdAt: existing?.createdAt ?? timestamp,
-    theme: normalizeTheme(existing?.theme),
-  } satisfies Profile;
-}
-
-async function createGroupForUser(user: FirebaseUser, name: string, userName?: string) {
-  if (!name.trim()) return;
-
-  const userProfile = await ensureProfile(user, userName);
-
-  const timestamp = now();
-  const groupId = id("group");
-  const code = inviteCode();
-  const group: Group = {
-    id: groupId,
-    name: name.trim(),
-    inviteCode: code,
-    ownerId: user.uid,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-  const membership: Membership = {
-    id: id("membership"),
-    userId: user.uid,
-    groupId,
-    role: "owner",
-    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
-    ...(userProfile.image ? { image: userProfile.image } : {}),
-    createdAt: timestamp,
-  };
-
-  await set(ref(database, `groups/${groupId}`), group);
-  await set(ref(database, `inviteCodes/${code}`), { groupId, createdAt: timestamp });
-  await update(ref(database), {
-    [`groupMembers/${groupId}/${user.uid}`]: membership,
-    [`userGroups/${user.uid}/${groupId}`]: membership,
-    [`profiles/${user.uid}/currentGroupId`]: groupId,
-  });
-}
-
-async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: string) {
-  const normalizedCode = code.trim().toUpperCase();
-  if (!normalizedCode) throw new Error("Enter a community invite code.");
-
-  const userProfile = await ensureProfile(user, userName);
-
-  const inviteSnapshot = await get(ref(database, `inviteCodes/${normalizedCode}`));
-  const invite = inviteSnapshot.val() as { groupId?: string } | null;
-  if (!invite?.groupId) throw new Error("No community exists for that invite code.");
-
-  const timestamp = now();
-  const membership: Membership = {
-    id: id("membership"),
-    userId: user.uid,
-    groupId: invite.groupId,
-    role: "member",
-    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
-    ...(userProfile.image ? { image: userProfile.image } : {}),
-    createdAt: timestamp,
-  };
-
-  await update(ref(database), {
-    [`groupMembers/${invite.groupId}/${user.uid}`]: membership,
-    [`userGroups/${user.uid}/${invite.groupId}`]: membership,
-    [`profiles/${user.uid}/currentGroupId`]: invite.groupId,
-  });
-}
-
-async function localUriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error("Could not read the selected image.");
-  }
-  return response.arrayBuffer();
-}
-
-async function deleteRoomStoragePath(path?: string) {
-  if (!path) return;
-  try {
-    await deleteRoomImage(path);
-  } catch {
-    // Storage cleanup should never undo the community image metadata update.
-  }
-}
-
-async function deleteUserAvatarStoragePath(path?: string) {
-  if (!path) return;
-  try {
-    await deleteUserAvatar(path);
-  } catch {
-    // Storage cleanup should never undo the profile metadata update.
-  }
-}
-
-async function userMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
-  const userGroupsSnapshot = await get(ref(database, `userGroups/${userId}`));
-  return asArray<Membership>(userGroupsSnapshot.val()).reduce<Record<string, Profile["image"] | null>>((updates, membership) => {
-    if (membership.image?.url === image?.url) return updates;
-
-    updates[`groupMembers/${membership.groupId}/${userId}/image`] = image;
-    updates[`userGroups/${userId}/${membership.groupId}/image`] = image;
-    return updates;
-  }, {});
-}
-
-async function syncUserMembershipImage(userId: Id, image: Profile["image"] | null) {
-  const updates = await userMembershipImageUpdates(userId, image);
-  if (Object.keys(updates).length > 0) {
-    await update(ref(database), updates);
-  }
-}
-
-async function profileAndMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
-  return {
-    [`profiles/${userId}/image`]: image,
-    ...(await userMembershipImageUpdates(userId, image)),
-  };
-}
-
-async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, ownerId: Id) {
-  const [replySnapshot, reactionSnapshot, postReactionSnapshot] = await Promise.all([
-    get(ref(database, `replies/${groupId}`)),
-    get(ref(database, `prayerReactions/${groupId}`)),
-    get(ref(database, `postReactions/${groupId}`)),
-  ]);
-  const childDeletes: Record<string, null> = {};
-  const ownedChildDeletes: Record<string, null> = {};
-  const childReplyIds = new Set<string>();
-
-  asArray<Reply>(replySnapshot.val())
-    .filter((reply) => reply.targetType === targetType && reply.targetId === targetId)
-    .forEach((reply) => {
-      childReplyIds.add(reply.id);
-      childDeletes[`replies/${groupId}/${reply.id}`] = null;
-      if (reply.userId === ownerId) {
-        ownedChildDeletes[`replies/${groupId}/${reply.id}`] = null;
-      }
-    });
-
-  asArray<PrayerReaction>(reactionSnapshot.val())
-    .filter((reaction) => reaction.targetType === "reply" && childReplyIds.has(reaction.targetId))
-    .forEach((reaction) => {
-      childDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
-      if (reaction.userId === ownerId) {
-        ownedChildDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
-      }
-    });
-
-  asArray<PrayerReaction>(reactionSnapshot.val())
-    .filter((reaction) => reaction.targetType === targetType && reaction.targetId === targetId)
-    .forEach((reaction) => {
-      childDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
-      if (reaction.userId === ownerId) {
-        ownedChildDeletes[`prayerReactions/${groupId}/${reaction.id}`] = null;
-      }
-    });
-
-  asArray<PostReaction>(postReactionSnapshot.val())
-    .filter((reaction) => reaction.targetType === targetType && reaction.targetId === targetId)
-    .forEach((reaction) => {
-      childDeletes[`postReactions/${groupId}/${reaction.id}`] = null;
-      if (reaction.userId === ownerId) {
-        ownedChildDeletes[`postReactions/${groupId}/${reaction.id}`] = null;
-      }
-    });
-
-  if (Object.keys(childDeletes).length > 0) {
-    try {
-      await update(ref(database), childDeletes);
-    } catch (error) {
-      if (Object.keys(ownedChildDeletes).length === 0) {
-        throw error;
-      }
-      await update(ref(database), ownedChildDeletes);
-    }
-  }
-
-  await remove(ref(database, `${targetType === "post" ? "posts" : "checkIns"}/${groupId}/${targetId}`));
 }
 
 export function KoinoProvider({ children }: PropsWithChildren) {

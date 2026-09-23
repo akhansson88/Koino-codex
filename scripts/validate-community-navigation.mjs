@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -64,7 +64,11 @@ const mocks = {
 };
 
 // Keep screen logic and selectors real while replacing leaf UI dependencies.
-for (const file of ["features/settings-screen.tsx", "app/(tabs)/_layout.tsx"]) {
+const communityModules = (await readdir("features/community"))
+  .filter(file => /\.tsx?$/.test(file))
+  .map(file => `features/community/${file}`);
+const leafUiImports = new Map();
+for (const file of ["features/settings-screen.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
@@ -72,14 +76,18 @@ for (const file of ["features/settings-screen.tsx", "app/(tabs)/_layout.tsx"]) {
     if (!module.startsWith("@/ui/") || mocks[module] || ["@/ui/community-copy", "@/ui/relative-time", "@/ui/navigation-layout"].includes(module)) continue;
     const imports = statement.importClause?.namedBindings;
     if (!imports || !ts.isNamedImports(imports)) continue;
-    mocks[module] = imports.elements.filter(item => !item.isTypeOnly).map(item => {
-      const name = (item.propertyName ?? item.name).text;
-      if (name === "PrayerMoment" || name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
-      if (/^[A-Z]/.test(name)) return `export function ${name}(props) { return props.visible === false ? null : React.createElement("${name}", props); }`;
-      return `export const ${name} = () => undefined;`;
-    }).join("\n");
-    mocks[module] = 'import React from "react";\n' + mocks[module];
+    const names = leafUiImports.get(module) ?? new Set();
+    for (const item of imports.elements.filter(item => !item.isTypeOnly)) names.add((item.propertyName ?? item.name).text);
+    leafUiImports.set(module, names);
   }
+}
+for (const [module, names] of leafUiImports) {
+  mocks[module] = [...names].map(name => {
+    if (name === "PrayerMoment" || name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
+    if (/^[A-Z]/.test(name)) return `export function ${name}(props) { return props.visible === false ? null : React.createElement("${name}", props); }`;
+    return `export const ${name} = () => undefined;`;
+  }).join("\n");
+  mocks[module] = 'import React from "react";\n' + mocks[module];
 }
 
 let tree;

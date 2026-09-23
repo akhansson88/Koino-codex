@@ -1,0 +1,17 @@
+export const donationColors = {
+  deepNavy: "#0B1220",
+  warmPersika: "#FFC79A",
+  warmCanvas: "#FAF8F4",
+  surfaceWhite: "#FFFFFF",
+  softBorder: "#E9E4DC",
+  stone: "#6F6B64",
+  mutedNavy: "#27324F",
+  blushRosa: "#F3AFC8",
+  lavenderHaze: "#C8BCE7",
+  softCyan: "#8ED6DA",
+  warmTint: "rgba(255, 199, 154, 0.18)",
+  warmTintStrong: "rgba(255, 199, 154, 0.42)",
+  blushTint: "rgba(243, 175, 200, 0.22)",
+  lavenderTint: "rgba(200, 188, 231, 0.24)",
+  cyanTint: "rgba(142, 214, 218, 0.22)",
+} as const;

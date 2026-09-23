@@ -41,6 +41,7 @@ assert.ok(homeOutput, "Home entry output was not generated");
 
 const forbiddenHomeInputs = Object.keys(homeOutput.inputs).filter((input) =>
   /(^|\/)features\/bible-(database|database-provider|kjv|screen|search)\.[jt]sx?$/.test(input.replaceAll("\\", "/")) ||
+  /(^|\/)features\/bible-reader\//.test(input.replaceAll("\\", "/")) ||
   /(^|\/)ui\/bible-verse-picker\.tsx$/.test(input.replaceAll("\\", "/")),
 );
 assert.deepEqual(
