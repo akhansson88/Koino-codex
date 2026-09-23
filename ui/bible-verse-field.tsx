@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoSelector } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
 import { AppScreen, FullScreenModal, SectionHeading, SecondaryButton, VersePreviewCard } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
@@ -27,9 +27,9 @@ export function BibleVerseField({
   onOpenInBible?: (verse: BibleVerse) => void;
   verses: BibleVerse[];
 }) {
-  const { state } = useKoino();
+  const currentUserId = useKoinoSelector((state) => state.currentUserId);
   const { language, t } = useAppTranslation();
-  const preferredBibleVersion = usePreferredBibleVersion(state.currentUserId);
+  const preferredBibleVersion = usePreferredBibleVersion(currentUserId);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const detailOpenRef = useRef(false);

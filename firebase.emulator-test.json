@@ -1,0 +1,8 @@
+{
+  "database": { "rules": "firebase.rules.json" },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "database": { "port": 9001 },
+    "ui": { "enabled": false }
+  }
+}

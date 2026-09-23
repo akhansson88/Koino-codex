@@ -9,7 +9,7 @@ import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { markStartupMilestone } from "@/features/startup-performance";
 import { activePrivateCheckIns } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
   selectCommunityContent,
@@ -64,7 +64,8 @@ function localDayKey(value: string | Date) {
 }
 
 export function HomeScreen() {
-  const { state, dispatch } = useKoino();
+  const state = useKoinoFields(["authError", "checkIns", "communityFeedError", "communityFeedGroupId", "communityFeedReady", "currentGroupId", "currentUserId", "groups", "journalEntries", "memberships", "posts", "prayerReactions", "privateCheckIns", "profileReady", "userGroupsReady", "users"]);
+  const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ checkIn?: string }>();

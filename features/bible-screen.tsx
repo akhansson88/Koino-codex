@@ -28,14 +28,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import bibleTopicIndexData from "@/assets/bible/topics-index.json";
 import { bibleTextSegments } from "@/features/bible-footnotes";
+import { initialBibleHistory, moveBibleHistory, readBibleHistory, updateBibleHistoryPosition, visitBiblePosition, type BibleHistory } from "@/features/bible-history";
 import {
-bibleChapter,
+bibleChapterAsync,
 bibleCrossReferences,
+bibleCrossReferenceVersesAsync,
 bibleVerseFromReference,
 bibleVersionFor,
 bibleVersions,
 buildBibleVerse,
-hasBibleCrossReferences,
 isBibleVersionId,
 kjvBooks,
 nextBibleChapter,
@@ -43,6 +44,7 @@ normalizeBiblePosition,
 previousBibleChapter,
 searchBibleText,
 type BibleChapterSubtitle,
+type BibleChapter,
 type BibleChapterVerse,
 type BibleCrossReference,
 type BibleFootnote,
@@ -65,7 +67,7 @@ type BiblePlanMarkerKind,
 import { defaultBibleVersionId, notifyBibleVersionPreferenceChanged, readerStorageKey } from "@/features/bible-preferences";
 import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields, useKoinoSelector } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
 import type { BibleHighlight, BibleHighlightColor, BibleHighlightPaletteColor, BiblePlan, BibleVerse, EntryKind, JournalEntry, SavedVerse } from "@/state/types";
@@ -113,6 +115,7 @@ type BibleReaderPreferences = {
   fontId: BibleReaderFontId;
   fontSize: number;
   position: BiblePosition;
+  history: BibleHistory;
   readerTheme: BibleReaderThemeId;
   showCrossReferences: boolean;
   showFootnotes: boolean;
@@ -310,6 +313,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
+      history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
       showCrossReferences: defaultShowCrossReferences,
       showFootnotes: defaultShowFootnotes,
@@ -320,13 +324,15 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
   try {
     const parsed = JSON.parse(value) as Partial<BibleReaderPreferences> | null;
     const position = normalizeBiblePosition(parsed?.position);
+    const history = readBibleHistory(parsed?.history, position);
     return {
       appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
       bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
       compactMode: typeof parsed?.compactMode === "boolean" ? parsed.compactMode : defaultCompactMode,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
-      position,
+      position: history.entries[history.index],
+      history,
       readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
       showCrossReferences: typeof parsed?.showCrossReferences === "boolean" ? parsed.showCrossReferences : defaultShowCrossReferences,
       showFootnotes: typeof parsed?.showFootnotes === "boolean" ? parsed.showFootnotes : defaultShowFootnotes,
@@ -339,6 +345,7 @@ function parsePreferences(value: string | null): BibleReaderPreferences {
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
+      history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
       showCrossReferences: defaultShowCrossReferences,
       showFootnotes: defaultShowFootnotes,
@@ -653,8 +660,9 @@ export function BibleScreen() {
   const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
   const handledPlanJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
-  const { state, dispatch } = useKoino();
-  const { t } = useAppTranslation();
+  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "savedVerses", "theme"]);
+  const { dispatch } = useKoinoActions();
+  const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -664,7 +672,9 @@ export function BibleScreen() {
   const verseRowsRef = useRef<Record<number, MeasurableView | null>>({});
   const readerScrollOffsetRef = useRef(0);
   const pendingScrollVerseRef = useRef<number | undefined>(undefined);
+  const programmaticScrollVerseRef = useRef<number | undefined>(undefined);
   const positionRef = useRef<BiblePosition>(defaultPosition);
+  const historyRef = useRef<BibleHistory>(initialBibleHistory(defaultPosition));
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const topicRequestRef = useRef(0);
@@ -674,6 +684,7 @@ export function BibleScreen() {
   const verseLongPressActiveRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
+  const [history, setHistory] = useState<BibleHistory>(() => initialBibleHistory(defaultPosition));
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
 
@@ -729,7 +740,22 @@ export function BibleScreen() {
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
   const readerPalette = readerPaletteFor(effectiveReaderTheme);
-  const chapter = useMemo(() => bibleChapter(position.book, position.chapter, bibleVersionId), [bibleVersionId, position.book, position.chapter]);
+  const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
+  const [loadedChapter, setLoadedChapter] = useState<{ key: string; value: BibleChapter }>();
+  const [chapterLoadError, setChapterLoadError] = useState(false);
+  const [chapterLoadAttempt, setChapterLoadAttempt] = useState(0);
+  const chapter = loadedChapter?.key === chapterKey ? loadedChapter.value : { heading: undefined, subtitles: [], verses: [] };
+  useEffect(() => {
+    let active = true;
+    setChapterLoadError(false);
+    void bibleChapterAsync(position.book, position.chapter, bibleVersionId).then((value) => {
+      if (active) setLoadedChapter({ key: chapterKey, value });
+    }).catch((error) => {
+      if (active) setChapterLoadError(true);
+      console.error("[bible] Could not load chapter", error);
+    });
+    return () => { active = false; };
+  }, [chapterKey, chapterLoadAttempt]);
   const chapterVerses = chapter.verses;
   const activeBiblePlans = useMemo(
     () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId),
@@ -799,21 +825,31 @@ export function BibleScreen() {
       )
       .map((highlight) => highlight.id);
   }, [bibleVersion.translation, position.book, position.chapter, selectedVerseRanges, state.bibleHighlights]);
-  const chapterCrossReferenceAvailability = useMemo(
-    () =>
-      Object.fromEntries(
-        chapterVerses.map((item) => [
-          item.verse,
-          hasBibleCrossReferences({
-            book: position.book,
-            chapter: position.chapter,
-            verse: item.verse,
-          }),
-        ]),
-      ) as Record<number, boolean>,
-    [chapterVerses, position.book, position.chapter],
-  );
-  const selectedCrossReferences = useMemo(() => (crossReferencePosition ? bibleCrossReferences(crossReferencePosition, bibleVersionId) : []), [bibleVersionId, crossReferencePosition]);
+  const [crossReferenceVerseSet, setCrossReferenceVerseSet] = useState<{ key: string; verses: Set<number> }>();
+  const crossReferenceChapterKey = `${position.book}:${position.chapter}`;
+  useEffect(() => {
+    let active = true;
+    void bibleCrossReferenceVersesAsync(position.book, position.chapter).then((verses) => {
+      if (active) setCrossReferenceVerseSet({ key: crossReferenceChapterKey, verses });
+    }).catch((error) => console.error("[bible] Could not load cross-reference markers", error));
+    return () => { active = false; };
+  }, [crossReferenceChapterKey]);
+  const chapterCrossReferenceAvailability = useMemo(() => Object.fromEntries(
+    chapterVerses.map((item) => [item.verse, crossReferenceVerseSet?.key === crossReferenceChapterKey && crossReferenceVerseSet.verses.has(item.verse)]),
+  ) as Record<number, boolean>, [chapterVerses, crossReferenceChapterKey, crossReferenceVerseSet]);
+  const crossReferenceKey = crossReferencePosition
+    ? `${bibleVersionId}:${crossReferencePosition.book}:${crossReferencePosition.chapter}:${crossReferencePosition.verse}` : "";
+  const [loadedCrossReferences, setLoadedCrossReferences] = useState<{ key: string; references: BibleCrossReference[] }>();
+  const selectedCrossReferences = loadedCrossReferences?.key === crossReferenceKey ? loadedCrossReferences.references : [];
+  useEffect(() => {
+    if (!crossReferencePosition) return;
+    let active = true;
+    const frame = requestAnimationFrame(() => {
+      const results = bibleCrossReferences(crossReferencePosition, bibleVersionId);
+      if (active) setLoadedCrossReferences({ key: crossReferenceKey, references: results });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [crossReferenceKey]);
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
@@ -888,6 +924,8 @@ export function BibleScreen() {
         verseOffsetsRef.current = {};
         pendingScrollVerseRef.current = nextPreferences.position.verse;
         positionRef.current = nextPreferences.position;
+        historyRef.current = nextPreferences.history;
+        setHistory(nextPreferences.history);
         setPosition(nextPreferences.position);
         setBibleVersionId(nextPreferences.bibleVersionId);
         notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
@@ -920,6 +958,7 @@ export function BibleScreen() {
         fontId,
         fontSize,
         position,
+        history,
         readerTheme: nextReaderTheme,
         showCrossReferences,
         showFootnotes,
@@ -937,7 +976,7 @@ export function BibleScreen() {
     const timeout = setTimeout(persistPreferences, 250);
 
     return () => clearTimeout(timeout);
-  }, [bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
+  }, [bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, history, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -952,6 +991,7 @@ export function BibleScreen() {
     const offset = verseOffsetsRef.current[verse];
     if (typeof offset !== "number") return false;
     pendingScrollVerseRef.current = undefined;
+    programmaticScrollVerseRef.current = verse;
     scrollRef.current?.scrollTo({ animated, y: Math.max(0, offset - 18) });
     return true;
   }, []);
@@ -982,6 +1022,12 @@ export function BibleScreen() {
     (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = false) => {
       const normalized = normalizeBiblePosition(nextPosition);
       const current = positionRef.current;
+      programmaticScrollVerseRef.current = undefined;
+      const nextHistory = visitBiblePosition(historyRef.current, normalized);
+      if (nextHistory !== historyRef.current) {
+        historyRef.current = nextHistory;
+        setHistory(nextHistory);
+      }
       const sameChapter = current.book === normalized.book && current.chapter === normalized.chapter;
 
       if (!sameChapter) {
@@ -1005,6 +1051,26 @@ export function BibleScreen() {
     },
     [showTemporaryHighlight, tryScrollToVerse],
   );
+
+  const travelHistory = useCallback((direction: -1 | 1) => {
+    const nextHistory = moveBibleHistory(historyRef.current, direction);
+    if (nextHistory === historyRef.current) return;
+    historyRef.current = nextHistory;
+    setHistory(nextHistory);
+    const destination = nextHistory.entries[nextHistory.index];
+    const current = positionRef.current;
+    programmaticScrollVerseRef.current = undefined;
+    const sameChapter = current.book === destination.book && current.chapter === destination.chapter;
+    if (!sameChapter) {
+      verseOffsetsRef.current = {};
+      verseRowsRef.current = {};
+      setSelectedVerseNumbers([]);
+    }
+    pendingScrollVerseRef.current = destination.verse;
+    if (sameChapter) requestAnimationFrame(() => tryScrollToVerse(destination.verse, true));
+    positionRef.current = destination;
+    setPosition(destination);
+  }, [tryScrollToVerse]);
 
   useEffect(() => {
     if (!preferencesReady || !planParams.planId || !planParams.planJump || handledPlanJump.current === planParams.planJump) return;
@@ -1086,6 +1152,11 @@ export function BibleScreen() {
         break;
       }
 
+      if (programmaticScrollVerseRef.current !== undefined) {
+        if (visibleVerse !== programmaticScrollVerseRef.current) return;
+        programmaticScrollVerseRef.current = undefined;
+      }
+
       const current = positionRef.current;
       if (!visibleVerse || visibleVerse === current.verse) return;
 
@@ -1093,6 +1164,9 @@ export function BibleScreen() {
       const nextPosition = { ...current, verse: visibleVerse };
       positionRef.current = nextPosition;
       setPosition(nextPosition);
+      const nextHistory = updateBibleHistoryPosition(historyRef.current, nextPosition);
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
     },
     [chapterVerses],
   );
@@ -1116,6 +1190,9 @@ export function BibleScreen() {
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
     positionRef.current = nextPosition;
     setPosition(nextPosition);
+    const nextHistory = updateBibleHistoryPosition(historyRef.current, nextPosition);
+    historyRef.current = nextHistory;
+    setHistory(nextHistory);
     setSelectedVersePosition(undefined);
     setSelectedVerseNumbers((current) => {
       if (current.includes(verse)) {
@@ -1132,6 +1209,9 @@ export function BibleScreen() {
     const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
     positionRef.current = nextPosition;
     setPosition(nextPosition);
+    const nextHistory = updateBibleHistoryPosition(historyRef.current, nextPosition);
+    historyRef.current = nextHistory;
+    setHistory(nextHistory);
     setSelectedVerseNumbers([]);
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
@@ -1372,6 +1452,7 @@ export function BibleScreen() {
 
   const handleReaderScrollBeginDrag = useCallback(() => {
     chapterSwipeBlockedByScrollRef.current = true;
+    programmaticScrollVerseRef.current = undefined;
   }, []);
 
   const resetChapterSwipe = useCallback(() => {
@@ -1578,7 +1659,11 @@ export function BibleScreen() {
     <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
       <BibleReaderHeader
         canGoBack={readerCanGoBack}
+        canGoHistoryBack={history.index > 0}
+        canGoHistoryForward={history.index < history.entries.length - 1}
         onBack={handleReaderBack}
+        onHistoryBack={() => travelHistory(-1)}
+        onHistoryForward={() => travelHistory(1)}
         onOpenPicker={() => {
           setPickerInitialStage("home");
           setPickerVisible(true);
@@ -1637,7 +1722,7 @@ export function BibleScreen() {
               plan={selectedPlan}
               plans={activeBiblePlans}
             />
-            <BibleText
+            {loadedChapter?.key === chapterKey ? <BibleText
               chapterHeading={chapter.heading}
               chapterHighlightByVerse={chapterHighlightByVerse}
               compactMode={compactMode}
@@ -1669,7 +1754,9 @@ export function BibleScreen() {
               showVerseNumbers={showVerseNumbers}
               subtitles={chapter.subtitles}
               verses={chapterVerses}
-            />
+            /> : chapterLoadError ? <Pressable onPress={() => setChapterLoadAttempt((attempt) => attempt + 1)} style={{ alignItems: "center", justifyContent: "center", minHeight: 180 }}>
+              <Text style={{ color: readerPalette.text }}>{language === "sv" ? "Kapitlet kunde inte läsas in. Tryck för att försöka igen." : "Could not load chapter. Tap to try again."}</Text>
+            </Pressable> : <ActivityIndicator color={readerPalette.text} style={{ minHeight: 180 }} />}
           </Animated.View>
         </ScrollView>
       </View>
@@ -1916,7 +2003,11 @@ function ReaderCircleButton({
 
 function BibleReaderHeader({
   canGoBack,
+  canGoHistoryBack,
+  canGoHistoryForward,
   onBack,
+  onHistoryBack,
+  onHistoryForward,
   onOpenPicker,
   onOpenSearch,
   onOpenSettings,
@@ -1927,7 +2018,11 @@ function BibleReaderHeader({
   topInset,
 }: {
   canGoBack: boolean;
+  canGoHistoryBack: boolean;
+  canGoHistoryForward: boolean;
   onBack: () => void;
+  onHistoryBack: () => void;
+  onHistoryForward: () => void;
   onOpenPicker: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
@@ -1944,7 +2039,7 @@ function BibleReaderHeader({
         backgroundColor: palette.background,
         paddingBottom: 10,
         paddingHorizontal: 12,
-        paddingTop: topInset + 10,
+        paddingTop: topInset + 2,
         position: "relative",
         zIndex: 20,
       }}
@@ -1993,6 +2088,14 @@ function BibleReaderHeader({
           <ReaderCircleButton accessibilityLabel={t("bible.accessibility.search")} icon="search" onPress={onOpenSearch} palette={palette} />
           <ReaderCircleButton accessibilityLabel={t("bible.accessibility.readingSettings")} onPress={onOpenSettings} palette={palette} text="Aa" />
         </View>
+      </View>
+      <View style={{ alignItems: "center", flexDirection: "row", marginTop: 2 }}>
+        <Pressable accessibilityLabel={t("bible.accessibility.historyBack")} accessibilityRole="button" accessibilityState={{ disabled: !canGoHistoryBack }} disabled={!canGoHistoryBack} onPress={onHistoryBack} style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
+          <Feather name="chevron-left" size={20} color={palette.muted} style={{ opacity: canGoHistoryBack ? 1 : 0.42 }} />
+        </Pressable>
+        <Pressable accessibilityLabel={t("bible.accessibility.historyForward")} accessibilityRole="button" accessibilityState={{ disabled: !canGoHistoryForward }} disabled={!canGoHistoryForward} onPress={onHistoryForward} style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
+          <Feather name="chevron-right" size={20} color={palette.muted} style={{ opacity: canGoHistoryForward ? 1 : 0.42 }} />
+        </Pressable>
       </View>
     </View>
   );
@@ -3004,7 +3107,7 @@ function BiblePlanReaderPanel({
   plans: BiblePlan[];
 }) {
   const { t } = useAppTranslation();
-  const { state } = useKoino();
+  const authError = useKoinoSelector((state) => state.authError);
   const [saving, setSaving] = useState(false);
   if (!plan || plans.length === 0) return null;
 
@@ -3138,7 +3241,7 @@ function BiblePlanReaderPanel({
           <Text style={{ color: dayCompleted ? palette.accent : palette.surface, fontSize: 12, fontWeight: "900" }}>{t(dayCompleted ? "bible.plans.markUnread" : "bible.plans.markRead")}</Text>
         </Pressable>
       </View>
-      {state.authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{state.authError}</Text> : null}
+      {authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{authError}</Text> : null}
     </View>
   );
 }
@@ -3760,7 +3863,19 @@ function VerseActionSheet({
 
   const [displayedPosition, setDisplayedPosition] = useState(position);
   const [view, setView] = useState<"actions" | "references">("actions");
-  const references = useMemo(() => (displayedPosition ? bibleCrossReferences(displayedPosition, bibleVersionId) : []), [bibleVersionId, displayedPosition]);
+  const referencesKey = displayedPosition && visible
+    ? `${bibleVersionId}:${displayedPosition.book}:${displayedPosition.chapter}:${displayedPosition.verse}` : "";
+  const [loadedReferences, setLoadedReferences] = useState<{ key: string; references: BibleCrossReference[] }>();
+  const references = loadedReferences?.key === referencesKey ? loadedReferences.references : [];
+  useEffect(() => {
+    if (!displayedPosition || !visible) return;
+    let active = true;
+    const frame = requestAnimationFrame(() => {
+      const results = bibleCrossReferences(displayedPosition, bibleVersionId);
+      if (active) setLoadedReferences({ key: referencesKey, references: results });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [referencesKey]);
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
   const bottomPadding = Math.max(28, insets.bottom + 20);

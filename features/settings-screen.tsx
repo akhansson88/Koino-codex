@@ -1,13 +1,14 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, BackHandler, FlatList, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { activePrivateCheckIns } from "@/state/check-ins";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import {
 EntryVisibility,
@@ -22,7 +23,7 @@ selectCommunityContent,
 selectCommunityPostById,
 selectPrayerRequests,
 } from "@/state/selectors/community-content";
-import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, Reply } from "@/state/types";
+import type { BibleVerse, EntryKind, FeedItem, Group, GroupImage, HeartMood, Id, PostReactionKind, PrayerReaction, PostReaction, Reply } from "@/state/types";
 import {
 AppScreen,
 Avatar,
@@ -58,6 +59,7 @@ communitySystemError,
 import { confirmAction } from "@/ui/confirm";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { LinkPreviewContent } from "@/ui/link-preview";
+import { tabContentClearance } from "@/ui/navigation-layout";
 import type { TranslationFunction } from "@/ui/localization";
 import {
 CommunityCardAction,
@@ -82,6 +84,19 @@ type ComposerContext = "journal" | "room";
 type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
 type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 type CommunityFeedRevealState = Record<Id, Partial<Record<RoomDetailTab, number>>>;
+type CommunityFeedRow =
+  | { type: "item"; item: FeedItem }
+  | { type: "endpoint" | "earlierDivider" | "earlierEnd" };
+
+const MemoCommunityFeedCard = memo(function MemoCommunityFeedCard({
+  item, renderRef, version: _version,
+}: {
+  item: FeedItem;
+  renderRef: { current: (item: FeedItem) => ReactNode };
+  version: object;
+}) {
+  return <>{renderRef.current(item)}</>;
+});
 
 const COMMUNITY_RECENT_DAYS = 30;
 const COMMUNITY_RECENT_ITEM_LIMIT = 20;
@@ -160,7 +175,9 @@ function partitionCommunityFeed(items: FeedItem[], now = Date.now()) {
 }
 
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
-  const { state, dispatch } = useKoino();
+  const insets = useSafeAreaInsets();
+  const state = useKoinoFields(["authError", "checkIns", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "replies", "users"]);
+  const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
   const { prayerMomentId } = useLocalSearchParams<{ prayerMomentId?: string }>();
@@ -202,7 +219,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [submittedCheckInKey, setSubmittedCheckInKey] = useState<string>();
   const [communityFeedRevealState, setCommunityFeedRevealState] = useState<CommunityFeedRevealState>({});
   const [communityFeedClock, setCommunityFeedClock] = useState(Date.now);
-  const communityScrollRef = useRef<ScrollView | null>(null);
+  const communityScrollRef = useRef<FlatList<CommunityFeedRow> | null>(null);
   const communityScrollOffsetsRef = useRef<Record<string, number>>({});
   const pendingCommunityScrollRestoreRef = useRef<{ key: string; offset: number } | undefined>(undefined);
   const communityFeedGroupIdRef = useRef(state.currentGroupId);
@@ -219,6 +236,36 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   ) || submittedCheckInKey === currentCheckInKey;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
+  const prayerReactionsByTarget = useMemo(() => {
+    const byTarget = new Map<string, PrayerReaction[]>();
+    state.prayerReactions.forEach((reaction) => {
+      const key = `${reaction.targetType}:${reaction.targetId}`;
+      const items = byTarget.get(key) ?? [];
+      items.push(reaction);
+      byTarget.set(key, items);
+    });
+    return byTarget;
+  }, [state.prayerReactions]);
+  const postReactionsByTarget = useMemo(() => {
+    const byTarget = new Map<string, PostReaction[]>();
+    state.postReactions.forEach((reaction) => {
+      const key = `${reaction.targetType}:${reaction.targetId}:${reaction.kind}`;
+      const items = byTarget.get(key) ?? [];
+      items.push(reaction);
+      byTarget.set(key, items);
+    });
+    return byTarget;
+  }, [state.postReactions]);
+  const repliesByTarget = useMemo(() => {
+    const byTarget = new Map<string, Reply[]>();
+    state.replies.forEach((reply) => {
+      const key = `${reply.targetType}:${reply.targetId}`;
+      const items = byTarget.get(key) ?? [];
+      items.push(reply);
+      byTarget.set(key, items);
+    });
+    return byTarget;
+  }, [state.replies]);
   const communityMembers = useMemo(
     () =>
       state.memberships.map((membership) => {
@@ -253,6 +300,15 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const communityFeedError = communityFeedStatusMatchesGroup ? state.communityFeedError : undefined;
   const communityFeedOffline = Boolean(communityFeedStatusMatchesGroup && state.communityFeedOffline);
   const communityFeedLoading = Boolean(group && !communityFeedReadyForGroup && !communityFeedError);
+  const communityFeedRows = useMemo<CommunityFeedRow[]>(() => communityFeedLoading || communityFeedError || visibleFeedItems.length === 0 ? [] : [
+    ...recentFeedItems.map((item): CommunityFeedRow => ({ type: "item", item })),
+    { type: "endpoint" },
+    ...(visibleEarlierFeedItems.length > 0 ? [
+      { type: "earlierDivider" } as CommunityFeedRow,
+      ...visibleEarlierFeedItems.map((item): CommunityFeedRow => ({ type: "item", item })),
+      { type: "earlierEnd" } as CommunityFeedRow,
+    ] : []),
+  ], [communityFeedLoading, communityFeedError, visibleFeedItems, communityFeedClock, revealedEarlierCount]);
   const communityScrollKey = group ? `${group.id}:${detailTab}` : undefined;
   const prayerPosts = selectPrayerRequests(feedItems);
   const visiblePrayerPosts = prayerPosts.filter((item) => {
@@ -440,7 +496,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     const pendingRestore = pendingCommunityScrollRestoreRef.current;
     if (!pendingRestore || pendingRestore.key !== communityScrollKey) return;
 
-    communityScrollRef.current?.scrollTo({ animated: false, y: Math.max(0, pendingRestore.offset) });
+    communityScrollRef.current?.scrollToOffset({ animated: false, offset: Math.max(0, pendingRestore.offset) });
   }
 
   function handleCommunityScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -535,7 +591,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function itemPrayerState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const reactions = prayerReactionsForTarget(state.prayerReactions, targetType, item.id);
+    const reactions = prayerReactionsByTarget.get(`${targetType}:${item.id}`) ?? [];
     return {
       prayed: reactions.some((reaction) => reaction.userId === state.currentUserId),
       count: reactions.length,
@@ -551,7 +607,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
     const itemReactionKind = feedItemKind(item);
     const kind = (itemReactionKind === "prayer_request" || itemReactionKind === "prayer_moment" ? "reflection" : itemReactionKind) as PostReactionKind;
-    const reactions = state.postReactions.filter((reaction) => reaction.targetType === targetType && reaction.targetId === item.id && reaction.kind === kind);
+    const reactions = postReactionsByTarget.get(`${targetType}:${item.id}:${kind}`) ?? [];
     const reactedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
       reacted: reactions.some((reaction) => reaction.userId === state.currentUserId),
@@ -564,7 +620,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function itemReplies(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    return state.replies.filter((reply) => reply.targetType === targetType && reply.targetId === item.id);
+    return repliesByTarget.get(`${targetType}:${item.id}`) ?? [];
   }
 
   function prayForItem(item: FeedItem) {
@@ -890,6 +946,13 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     );
   }
 
+  const communityFeedCardRenderer = useRef<(item: FeedItem) => ReactNode>(renderCommunityFeedItem);
+  communityFeedCardRenderer.current = renderCommunityFeedItem;
+  const communityFeedCardVersion = useMemo(() => ({}), [
+    state.currentGroupId, state.currentUserId, state.postReactions, state.prayerReactions,
+    state.replies, state.users, t,
+  ]);
+
   const communityCheckInModal = group ? (
     <CheckInModal
       visible={checkInVisible}
@@ -1097,15 +1160,34 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return (
       <>
         <View style={{ flex: 1, backgroundColor: colors.cream }}>
-          <AppScreen
+          <FlatList
+            data={communityFeedRows}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            keyExtractor={(row) => row.type === "item" ? communityFeedItemKey(row.item) : row.type}
+            renderItem={({ item: row }) => <View style={{ marginBottom: 12 }}>
+              {row.type === "item" ? <MemoCommunityFeedCard item={row.item} renderRef={communityFeedCardRenderer} version={communityFeedCardVersion} />
+                : row.type === "endpoint" ? <CommunityFeedEndpoint
+                    communityName={group.name}
+                    detailTab={detailTab}
+                    onViewEarlier={(earlierFeedItems.length > 0 || state.communityContentHasMore) && visibleEarlierFeedItems.length === 0 ? revealEarlierActivity : undefined}
+                    variant={recentFeedItems.length > 0 ? "caught-up" : "no-recent"}
+                  />
+                : row.type === "earlierDivider" ? <CommunityActivityDivider label={t("community.feed.earlierActivity")} />
+                : hasMoreEarlierFeedItems || state.communityContentHasMore
+                  ? <CommunityEarlierActivityAction loading={state.communityContentLoadingMore} onPress={revealEarlierActivity} />
+                  : <CommunityActivityDivider label={t("community.feed.beginning")} />}
+            </View>}
+            contentContainerStyle={{ gap: 0, padding: 18, paddingBottom: tabContentClearance(insets.bottom) }}
+            showsVerticalScrollIndicator={false}
             onContentSizeChange={restorePendingCommunityScroll}
             onScroll={handleCommunityScroll}
             onScrollBeginDrag={handleCommunityScrollBeginDrag}
             scrollEventThrottle={16}
-            scrollRef={communityScrollRef}
-            topInset={false}
-          >
-            <View style={{ gap: 12 }}>
+            ref={communityScrollRef}
+            ListHeaderComponent={<>
+            <View style={{ gap: 12, marginBottom: 16 }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t("community.detail.openCommunityDetails", {
@@ -1170,7 +1252,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
               />
             </View>
 
-            <View style={{ gap: 12 }}>
+            <View style={{ gap: 12, marginBottom: 12 }}>
               {communityFeedOffline && !communityFeedError ? <CommunityFeedOfflineState /> : null}
               {communityFeedLoading ? (
                 <CommunityFeedLoadingState />
@@ -1188,30 +1270,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                           : t("community.empty.reflections")}
                   </BodyText>
                 </Card>
-              ) : (
-                <>
-                  {recentFeedItems.map(renderCommunityFeedItem)}
-                  <CommunityFeedEndpoint
-                    communityName={group.name}
-                    detailTab={detailTab}
-                    onViewEarlier={(earlierFeedItems.length > 0 || state.communityContentHasMore) && visibleEarlierFeedItems.length === 0 ? revealEarlierActivity : undefined}
-                    variant={recentFeedItems.length > 0 ? "caught-up" : "no-recent"}
-                  />
-                  {visibleEarlierFeedItems.length > 0 ? (
-                    <>
-                      <CommunityActivityDivider label={t("community.feed.earlierActivity")} />
-                      {visibleEarlierFeedItems.map(renderCommunityFeedItem)}
-                      {hasMoreEarlierFeedItems || state.communityContentHasMore ? (
-                        <CommunityEarlierActivityAction loading={state.communityContentLoadingMore} onPress={revealEarlierActivity} />
-                      ) : (
-                        <CommunityActivityDivider label={t("community.feed.beginning")} />
-                      )}
-                    </>
-                  ) : null}
-                </>
-              )}
+              ) : null}
             </View>
-          </AppScreen>
+            </>}
+          />
         </View>
         <SharedComposer
           visible={composerVisible}

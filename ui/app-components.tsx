@@ -11,7 +11,7 @@ import { Animated, Image, Pressable, ScrollView, StyleProp, StyleSheet, Text, Te
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { bibleVerseIdentity, normalizeBibleVerses } from "@/features/bible-verse-utils";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields, useKoinoSelector } from "@/state/koino-store";
 import type { BibleVerse, GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount } from "@/ui/community-copy";
@@ -149,7 +149,7 @@ export function AppHeader({
 }
 
 export function AvatarButton({ size = 38 }: { size?: number }) {
-  const { state } = useKoino();
+  const state = useKoinoFields(["users", "currentUserId", "authEmail"]);
   const { t } = useAppTranslation();
   const pathname = usePathname();
   const user = state.users.find((item) => item.id === state.currentUserId);
@@ -169,7 +169,7 @@ export function AvatarButton({ size = 38 }: { size?: number }) {
 }
 
 export function NotificationBellButton() {
-  const { state } = useKoino();
+  const state = useKoinoFields(["activityNotifications", "currentUserId"]);
   const { t } = useAppTranslation();
   const pathname = usePathname();
   const unreadCount = state.activityNotifications.filter((item) => !item.readAt).length;
@@ -214,7 +214,7 @@ export function NotificationBellButton() {
 }
 
 export function CurrentRoomHeader() {
-  const { state } = useKoino();
+  const state = useKoinoFields(["currentGroupId", "groups", "groupMemberCounts", "memberships"]);
   const { t } = useAppTranslation();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? state.groupMemberCounts[group.id] || state.memberships.length || 4 : 0;
@@ -715,7 +715,7 @@ export function VersePreviewCard({
   verse?: BibleVerse;
 }) {
   const bookLanguage = useBibleBookLanguage(verse?.translation);
-  const { state } = useKoino();
+  const savedVerses = useKoinoSelector((state) => state.savedVerses);
   const { t } = useAppTranslation();
   const [detailVisible, setDetailVisible] = useState(false);
   if (!verse) return null;
@@ -731,7 +731,7 @@ export function VersePreviewCard({
     setDetailVisible(false);
     onDetailVisibilityChange?.(false);
   };
-  const saved = state.savedVerses.some((item) => bibleVerseIdentity(item) === bibleVerseIdentity(displayVerse));
+  const saved = savedVerses.some((item) => bibleVerseIdentity(item) === bibleVerseIdentity(displayVerse));
   const verseTextStyle: TextStyle = { ...typography.bodyMedium, color: colors.ink, fontSize: compact ? 13 : 14, lineHeight: compact ? 18 : 20 };
   const previewCardStyle: ViewStyle = {
     alignItems: compact ? "flex-start" : "center",
@@ -911,7 +911,7 @@ export function VerseDetailSheet({
   visible: boolean;
 }) {
   const bookLanguage = useBibleBookLanguage(verse?.translation);
-  const { dispatch } = useKoino();
+  const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const [busy, setBusy] = useState(false);
   if (!verse) return null;

@@ -7,6 +7,7 @@ import type { ActivityNotification } from "@/state/types";
 import { AppScreen, Avatar, IconButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { formatRelativeTime } from "@/ui/relative-time";
+import { navigateThenMarkRead } from "@/ui/notification-navigation";
 import { colors, radius, typography } from "@/ui/theme";
 
 const swedishContentLabels: Record<ActivityNotification["contentLabel"], string> = {
@@ -41,16 +42,17 @@ export default function NotificationsScreen() {
   );
   const hasUnread = notifications.some((item) => !item.readAt);
 
-  const openNotification = async (notification: ActivityNotification) => {
-    await dispatch({ type: "markActivityNotificationRead", id: notification.id });
-    router.push({
+  const openNotification = (notification: ActivityNotification) => {
+    navigateThenMarkRead(() => router.push({
       pathname: "/feed/[targetType]/[id]",
       params: {
         targetType: notification.targetType,
         id: notification.targetId,
         groupId: notification.groupId,
       },
-    } as never);
+    } as never),
+    () => dispatch({ type: "markActivityNotificationRead", id: notification.id }),
+    (error) => console.error("[notifications] Could not mark notification read", error));
   };
 
   return (

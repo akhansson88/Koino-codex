@@ -2,11 +2,11 @@ import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoFields } from "@/state/koino-store";
 import { colors } from "@/ui/theme";
 
 export default function Index() {
-  const { state } = useKoino();
+  const state = useKoinoFields(["authReady", "currentUserId"]);
 
   if (!state.authReady) {
     return (

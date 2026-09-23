@@ -13,7 +13,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 
-import { KoinoProvider, useKoino } from "@/state/koino-store";
+import { KoinoProvider, useKoinoSelector } from "@/state/koino-store";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
 import { colors, statusBarStyle } from "@/ui/theme";
@@ -41,12 +41,12 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const reducedMotion = useReducedMotion();
-  const { state } = useKoino();
+  const theme = useKoinoSelector((state) => state.theme);
 
   return (
     <>
       <NotificationRuntime />
-      <StatusBar style={statusBarStyle(state.theme)} backgroundColor={colors.cream} />
+      <StatusBar style={statusBarStyle(theme)} backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
           animation: reducedMotion ? "none" : "default",

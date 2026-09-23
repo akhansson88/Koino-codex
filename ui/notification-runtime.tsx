@@ -4,8 +4,9 @@ import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoSelector } from "@/state/koino-store";
 import { setNotificationRegistrationState, useNotificationRegistrationRetryVersion } from "@/ui/notification-registration";
+import { navigateThenMarkRead } from "@/ui/notification-navigation";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -30,7 +31,9 @@ function validTargetType(value: unknown): value is "post" | "check_in" {
 }
 
 export function NotificationRuntime() {
-  const { state, dispatch } = useKoino();
+  const currentUserId = useKoinoSelector((state) => state.currentUserId);
+  const activityNotifications = useKoinoSelector((state) => state.activityNotifications);
+  const { dispatch } = useKoinoActions();
   const handledResponseId = useRef<string | undefined>(undefined);
   const dispatchRef = useRef(dispatch);
   const retryVersion = useNotificationRegistrationRetryVersion();
@@ -41,13 +44,13 @@ export function NotificationRuntime() {
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const unreadCount = state.activityNotifications.filter((item) => !item.readAt).length;
+    const unreadCount = activityNotifications.filter((item) => !item.readAt).length;
     void Notifications.setBadgeCountAsync(unreadCount).catch(() => undefined);
-  }, [state.activityNotifications]);
+  }, [activityNotifications]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    if (!state.currentUserId) {
+    if (!currentUserId) {
       setNotificationRegistrationState({ status: "idle" });
       return;
     }
@@ -109,50 +112,55 @@ export function NotificationRuntime() {
       active = false;
       tokenSubscription.remove();
     };
-  }, [retryVersion, state.currentUserId]);
+  }, [retryVersion, currentUserId]);
 
   useEffect(() => {
-    if (!state.currentUserId || Platform.OS === "web") return;
+    if (!currentUserId || Platform.OS === "web") return;
 
-    const openResponse = async (response: Notifications.NotificationResponse | null) => {
+    const openResponse = (response: Notifications.NotificationResponse | null) => {
       if (!response || handledResponseId.current === response.notification.request.identifier) return;
       handledResponseId.current = response.notification.request.identifier;
       const data = response.notification.request.content.data as NotificationData;
-      if (
+      const markRead =
         data.bundled === true &&
         typeof data.groupId === "string" &&
         validTargetType(data.targetType) &&
         typeof data.targetId === "string"
-      ) {
-        await dispatch({
+          ? () => dispatch({
           type: "markActivityDiscussionRead",
-          groupId: data.groupId,
-          targetType: data.targetType,
-          targetId: data.targetId,
-        });
-      } else if (typeof data.notificationId === "string") {
-        await dispatch({ type: "markActivityNotificationRead", id: data.notificationId });
-      }
-      if (validTargetType(data.targetType) && typeof data.targetId === "string") {
-        router.push({
+          groupId: data.groupId as string,
+          targetType: data.targetType as "post" | "check_in",
+          targetId: data.targetId as string,
+        })
+          : typeof data.notificationId === "string"
+            ? () => dispatch({ type: "markActivityNotificationRead", id: data.notificationId as string })
+            : undefined;
+      const navigate = () => {
+        if (validTargetType(data.targetType) && typeof data.targetId === "string") {
+          router.push({
           pathname: "/feed/[targetType]/[id]",
           params: {
             targetType: data.targetType,
             id: data.targetId,
             ...(typeof data.groupId === "string" ? { groupId: data.groupId } : {}),
           },
-        } as never);
-      } else if (typeof data.prayerNotificationId === "string") {
-        router.replace("/(tabs)" as never);
-      }
+          } as never);
+        } else if (typeof data.prayerNotificationId === "string") {
+          router.replace("/(tabs)" as never);
+        }
+      };
+      if (markRead) navigateThenMarkRead(navigate, markRead,
+        (error) => console.error("[notifications] Could not mark response read", error));
+      else navigate();
     };
 
-    void Notifications.getLastNotificationResponseAsync().then(openResponse);
+    void Notifications.getLastNotificationResponseAsync().then(openResponse)
+      .catch((error) => console.error("[notifications] Could not read last response", error));
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       void openResponse(response);
     });
     return () => subscription.remove();
-  }, [dispatch, state.currentUserId]);
+  }, [dispatch, currentUserId]);
 
   return null;
 }

@@ -25,4 +25,6 @@ expo-env.d.ts
 
 # Local Codex/Expo navigation test logs
 community-nav-expo*.log
+database-debug.log
+firebase-debug.log
 features/.generated/

@@ -10,7 +10,9 @@ import {
 } from "@/features/bible-canon";
 import {
   bibleChapterHasCrossReference,
+  bibleChapterCrossReferenceVersesAsync,
   queryBibleChapter,
+  queryBibleChapterAsync,
   queryBibleCrossReferences,
   queryBibleText,
 } from "@/features/bible-database";
@@ -95,6 +97,15 @@ export async function searchBibleText(query: string, versionId: BibleVersionId, 
 export function bibleChapter(book: string, chapter: number, versionId?: BibleVersionId): BibleChapter {
   const normalizedBook = normalizeBibleBookName(book);
   const result = queryBibleChapter(bibleVersionFor(versionId).id, normalizedBook, chapter);
+  return bibleChapterFromRows(result);
+}
+
+export async function bibleChapterAsync(book: string, chapter: number, versionId?: BibleVersionId): Promise<BibleChapter> {
+  const normalizedBook = normalizeBibleBookName(book);
+  return bibleChapterFromRows(await queryBibleChapterAsync(bibleVersionFor(versionId).id, normalizedBook, chapter));
+}
+
+function bibleChapterFromRows(result: ReturnType<typeof queryBibleChapter>): BibleChapter {
   return {
     heading: result.heading ?? undefined,
     subtitles: result.subtitles,
@@ -113,6 +124,10 @@ export function bibleChapterVerses(book: string, chapter: number, versionId?: Bi
 
 export function hasBibleCrossReferences(position: BiblePosition) {
   return bibleChapterHasCrossReference(position.book, position.chapter, position.verse);
+}
+
+export function bibleCrossReferenceVersesAsync(book: string, chapter: number) {
+  return bibleChapterCrossReferenceVersesAsync(book, chapter);
 }
 
 export function bibleCrossReferences(position: BiblePosition, versionId?: BibleVersionId): BibleCrossReference[] {

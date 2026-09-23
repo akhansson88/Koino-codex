@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const store = readFileSync(new URL("../state/koino-store.tsx", import.meta.url), "utf8");
 const pagination = readFileSync(new URL("../state/firebase-pagination.ts", import.meta.url), "utf8");
 const rules = JSON.parse(readFileSync(new URL("../firebase.rules.json", import.meta.url), "utf8"));
+const { firebaseRecords, mergeFirebaseRecords } = await import("../state/firebase-pagination.ts");
 
 const subscribedRefs = [
   "journalRef",
@@ -45,11 +46,22 @@ const indexedCollections = [
 ];
 
 for (const [collection, scope] of indexedCollections) {
-  assert.deepEqual(
-    rules.rules[collection][scope][".indexOn"],
-    ["createdAt"],
+  assert.ok(
+    rules.rules[collection][scope][".indexOn"].includes("createdAt"),
     `${collection}/${scope} must index the pagination cursor`,
   );
 }
+
+const older = [{ id: "older", createdAt: "2026-01-01T00:00:00Z", body: "old" }];
+const recent = firebaseRecords({
+  b: { id: "b", createdAt: "2026-01-02T00:00:00Z", body: "original" },
+  a: { id: "a", createdAt: "2026-01-02T00:00:00Z", body: "same timestamp" },
+});
+assert.deepEqual(recent.map((item) => item.id), ["b", "a"], "equal timestamps need stable ID ordering");
+assert.deepEqual(mergeFirebaseRecords(older, recent, [{ ...recent[0], body: "updated" }]).map((item) => item.id),
+  ["b", "a", "older"], "pages must merge by record identity without duplicates");
+assert.equal(mergeFirebaseRecords(older, recent, [{ ...recent[0], body: "updated" }])[0].body, "updated");
+assert.deepEqual(mergeFirebaseRecords(older, recent.filter((item) => item.id !== "b")).map((item) => item.id),
+  ["a", "older"], "removed records must disappear from the current live page");
 
 console.log("Firebase pagination validation passed: eight streams are bounded to 50 records with indexed older-page cursors.");

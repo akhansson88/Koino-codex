@@ -48,6 +48,7 @@ let database: BibleDatabaseConnection | undefined;
 const activeDatabases = new Map<BibleDatabaseConnection, number>();
 const chapterCache = new Map<string, BibleDatabaseChapter>();
 const crossReferenceChapterCache = new Map<string, Set<number>>();
+const pendingChapters = new Map<string, Promise<BibleDatabaseChapter>>();
 
 function cacheValue<Key, Value>(cache: Map<Key, Value>, key: Key, value: Value, limit: number) {
   cache.delete(key);
@@ -76,6 +77,7 @@ export async function initializeBibleDatabase(nextDatabase: SQLiteDatabase) {
   database = nextDatabase;
   chapterCache.clear();
   crossReferenceChapterCache.clear();
+  pendingChapters.clear();
 }
 
 export function retainBibleDatabase(retainedDatabase: BibleDatabaseConnection) {
@@ -94,6 +96,7 @@ export function releaseBibleDatabase(releasedDatabase: BibleDatabaseConnection) 
     database = Array.from(activeDatabases.keys()).at(-1);
     chapterCache.clear();
     crossReferenceChapterCache.clear();
+    pendingChapters.clear();
   }
 }
 
@@ -103,6 +106,45 @@ export function setBibleDatabaseForTesting(nextDatabase: BibleDatabaseConnection
   database = nextDatabase;
   chapterCache.clear();
   crossReferenceChapterCache.clear();
+  pendingChapters.clear();
+}
+
+export function queryBibleChapterAsync(translation: string, book: string, chapter: number): Promise<BibleDatabaseChapter> {
+  const key = `${translation}|${book}|${chapter}`;
+  const cached = chapterCache.get(key);
+  if (cached) return Promise.resolve(cacheValue(chapterCache, key, cached, CHAPTER_CACHE_LIMIT));
+  const pending = pendingChapters.get(key);
+  if (pending) return pending;
+  const connection = requireDatabase();
+  const args = [translation, book, chapter] as const;
+  const load = (async () => {
+    const [headings, rows, subtitles, footnotes] = await Promise.all([
+      connection.getAllAsync<{ heading: string | null }>(
+        `SELECT chapters.heading FROM chapters JOIN translations ON translations.id = chapters.translation_id JOIN books ON books.id = chapters.book_id WHERE translations.code = ? AND books.name = ? AND chapters.chapter = ? LIMIT 1`, ...args),
+      connection.getAllAsync<BibleDatabaseVerseRow>(
+        `SELECT books.name AS book, verses.chapter, verses.verse, verses.text FROM verses JOIN translations ON translations.id = verses.translation_id JOIN books ON books.id = verses.book_id WHERE translations.code = ? AND books.name = ? AND verses.chapter = ? ORDER BY verses.verse`, ...args),
+      connection.getAllAsync<{ before_verse: number; text: string }>(
+        `SELECT chapter_subtitles.before_verse, chapter_subtitles.text FROM chapter_subtitles JOIN chapters ON chapters.id = chapter_subtitles.chapter_id JOIN translations ON translations.id = chapters.translation_id JOIN books ON books.id = chapters.book_id WHERE translations.code = ? AND books.name = ? AND chapters.chapter = ? ORDER BY chapter_subtitles.before_verse, chapter_subtitles.display_order`, ...args),
+      connection.getAllAsync<{ marker: string; text: string; verse: number }>(
+        `SELECT verses.verse, verse_footnotes.marker, verse_footnotes.text FROM verse_footnotes JOIN verses ON verses.id = verse_footnotes.verse_id JOIN translations ON translations.id = verses.translation_id JOIN books ON books.id = verses.book_id WHERE translations.code = ? AND books.name = ? AND verses.chapter = ? ORDER BY verses.verse, verse_footnotes.display_order`, ...args),
+    ]);
+    const footnotesByVerse = new Map<number, BibleDatabaseFootnote[]>();
+    footnotes.forEach((footnote) => {
+      const items = footnotesByVerse.get(footnote.verse) ?? [];
+      items.push({ marker: footnote.marker, text: footnote.text });
+      footnotesByVerse.set(footnote.verse, items);
+    });
+    const result: BibleDatabaseChapter = {
+      heading: headings[0]?.heading ?? null,
+      subtitles: subtitles.map((item) => ({ beforeVerse: item.before_verse, text: item.text })),
+      verses: rows.map((row) => ({ ...row, footnotes: footnotesByVerse.get(row.verse) ?? [] })),
+    };
+    if (database === connection) cacheValue(chapterCache, key, result, CHAPTER_CACHE_LIMIT);
+    return result;
+  })();
+  pendingChapters.set(key, load);
+  void load.finally(() => { if (pendingChapters.get(key) === load) pendingChapters.delete(key); }).catch(() => undefined);
+  return load;
 }
 
 export function queryBibleChapter(translation: string, book: string, chapter: number) {
@@ -201,6 +243,20 @@ export function bibleChapterHasCrossReference(book: string, chapter: number, ver
     cacheValue(crossReferenceChapterCache, key, verses, CROSS_REFERENCE_CHAPTER_CACHE_LIMIT);
   }
   return verses.has(verse);
+}
+
+export async function bibleChapterCrossReferenceVersesAsync(book: string, chapter: number): Promise<Set<number>> {
+  const key = `${book}|${chapter}`;
+  const cached = crossReferenceChapterCache.get(key);
+  if (cached) return cacheValue(crossReferenceChapterCache, key, cached, CROSS_REFERENCE_CHAPTER_CACHE_LIMIT);
+  const connection = requireDatabase();
+  const rows = await connection.getAllAsync<{ source_verse: number }>(
+    `SELECT DISTINCT cross_references.source_verse FROM cross_references JOIN books ON books.id = cross_references.source_book_id WHERE books.name = ? AND cross_references.source_chapter = ?`,
+    book, chapter,
+  );
+  const verses = new Set(rows.map((row) => row.source_verse));
+  if (database === connection) cacheValue(crossReferenceChapterCache, key, verses, CROSS_REFERENCE_CHAPTER_CACHE_LIMIT);
+  return verses;
 }
 
 export function queryBibleCrossReferences(book: string, chapter: number, verse: number) {

@@ -93,8 +93,9 @@ export async function pushAllowed(database: Database, recipientUserId: string, c
 }
 
 export async function activityUnreadCount(database: Database, recipientUserId: string) {
-  const snapshot = await database.ref(`activityNotifications/${recipientUserId}`).get();
-  return Object.values((snapshot.val() ?? {}) as Record<string, { readAt?: string }>).filter((item) => !item.readAt).length;
+  const snapshot = await database.ref(`activityNotifications/${recipientUserId}`)
+    .orderByChild("readAt").equalTo(null).get();
+  return snapshot.numChildren();
 }
 
 export async function sendExpoPush(

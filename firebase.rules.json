@@ -301,7 +301,7 @@
 
     "prayerReactions": {
       "$groupId": {
-        ".indexOn": ["createdAt"],
+        ".indexOn": ["createdAt", "targetId"],
         ".read": "auth != null && root.child('groupMembers').child($groupId).child(auth.uid).exists()",
         ".write": "auth != null && !newData.exists() && (!data.exists() || root.child('groups').child($groupId).child('ownerId').val() == auth.uid)",
         "$reactionId": {
@@ -417,7 +417,7 @@
 
     "activityNotifications": {
       "$uid": {
-        ".indexOn": ["createdAt"],
+        ".indexOn": ["createdAt", "readAt"],
         ".read": "auth != null && auth.uid == $uid",
         "$notificationId": {
           ".write": "auth != null && auth.uid == $uid && data.exists() && newData.exists() && newData.child('readAt').isString()",

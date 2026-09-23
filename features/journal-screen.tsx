@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import {
   AppScreen,
@@ -71,7 +71,8 @@ function journalTypeForKind(kind: EntryKind): JournalEntryType {
 
 export function JournalScreen() {
   const bookLanguage = useBibleBookLanguage();
-  const { state, dispatch } = useKoino();
+  const state = useKoinoFields(["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalEntriesHasMore", "journalEntriesLoadingMore"]);
+  const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();
   const [composerVisible, setComposerVisible] = useState(false);

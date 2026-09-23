@@ -2,7 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-messages";
-import { isDeviceNotRegistered, preferenceAllows } from "./push-delivery";
+import { activityUnreadCount, isDeviceNotRegistered, preferenceAllows } from "./push-delivery";
+import type { Database } from "firebase-admin/database";
+
+test("badge query counts only unread notification children", async () => {
+  const calls: string[] = [];
+  const database = {
+    ref(path: string) {
+      calls.push(path);
+      return {
+        orderByChild(field: string) {
+          calls.push(`order:${field}`);
+          return {
+            equalTo(value: null) {
+              calls.push(`equal:${value}`);
+              return { get: async () => ({ numChildren: () => 3 }) };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as Database;
+  assert.equal(await activityUnreadCount(database, "user-1"), 3);
+  assert.deepEqual(calls, ["activityNotifications/user-1", "order:readAt", "equal:null"]);
+});
 
 test("global and category preferences independently gate pushes", () => {
   assert.equal(preferenceAllows({}, "ownContent"), true);

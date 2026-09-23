@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useKoino } from "@/state/koino-store";
+import { useKoinoSelector } from "@/state/koino-store";
 import type { GroupImage, PrayerSessionTargetType } from "@/state/types";
 import { Avatar } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
@@ -215,7 +215,7 @@ export function PrayerMoment({
   onClose: () => void;
   onFinish: (status: "completed" | "skipped", startedAt: string, completedAt: string) => void;
 }) {
-  const { state } = useKoino();
+  const users = useKoinoSelector((state) => state.users);
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -231,8 +231,8 @@ export function PrayerMoment({
   const [{ known: motionPreferenceKnown, reduced: reduceMotion }, setMotionPreference] = useState(initialMotionPreference);
 
   const recipient = useMemo(
-    () => state.users.find((user) => user.id === target?.recipientUserId),
-    [state.users, target?.recipientUserId],
+    () => users.find((user) => user.id === target?.recipientUserId),
+    [users, target?.recipientUserId],
   );
   const someone = t("community.prayerMoment.someone");
   const displayName = target?.recipientName?.trim() || recipient?.name?.trim() || someone;

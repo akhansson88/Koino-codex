@@ -7,16 +7,18 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
-import { useKoino } from "@/state/koino-store";
+import { useKoinoSelector } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { state } = useKoino();
+  const authReady = useKoinoSelector((state) => state.authReady);
+  const currentUserId = useKoinoSelector((state) => state.currentUserId);
+  const theme = useKoinoSelector((state) => state.theme);
   const { t } = useAppTranslation();
 
-  if (state.authReady && !state.currentUserId) {
+  if (authReady && !currentUserId) {
     return <OnboardingScreen />;
   }
 
@@ -31,16 +33,16 @@ export default function TabLayout() {
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
-        tabBarBackground: () => <TabBarGlassBackground theme={state.theme} />,
+        tabBarBackground: () => <TabBarGlassBackground theme={theme} />,
         tabBarStyle: {
           backgroundColor:
             Platform.OS === "web"
-              ? state.theme === "dark"
+              ? theme === "dark"
                 ? "rgba(17, 26, 44, 0.28)"
                 : "rgba(255, 255, 255, 0.22)"
               : "transparent",
           borderRadius: 0,
-          borderTopColor: state.theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
+          borderTopColor: theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
           borderTopWidth: 1,
           bottom: 0,
           height: tabBarHeight(insets.bottom),
@@ -51,12 +53,12 @@ export default function TabLayout() {
           right: 0,
           ...platformShadow({
             boxShadow:
-              state.theme === "dark"
+              theme === "dark"
                 ? "0 18px 42px rgba(0, 0, 0, 0.36)"
                 : "0 18px 42px rgba(11, 18, 32, 0.16)",
             elevation: 12,
             offset: { width: 0, height: 12 },
-            opacity: state.theme === "dark" ? 0.34 : 0.16,
+            opacity: theme === "dark" ? 0.34 : 0.16,
             radius: 26,
           }),
           ...(Platform.OS === "web"
@@ -64,7 +66,7 @@ export default function TabLayout() {
                 WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
                 backdropFilter: "blur(34px) saturate(220%) contrast(115%)",
                 boxShadow:
-                  state.theme === "dark"
+                  theme === "dark"
                     ? "inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.36)"
                     : "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
               }

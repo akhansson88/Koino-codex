@@ -29,10 +29,14 @@ const populatedState = {
 };
 const mocks = {
   "react-native": `
+    import React from "react";
     export const Platform = { get OS() { return globalThis.__communityNavigation.os; } };
     export const AccessibilityInfo = { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) };
     export const BackHandler = { addEventListener: () => ({ remove() {} }) };
     export const ActivityIndicator = "ActivityIndicator", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View", Share = {};
+    export function FlatList(props) { return React.createElement("FlatList", props,
+      props.ListHeaderComponent, ...(props.data ?? []).map((item, index) => props.renderItem({ item, index })));
+    }
     export const StyleSheet = { absoluteFillObject: {} };
   `,
   "expo-router": `
@@ -44,7 +48,12 @@ const mocks = {
     export const useFocusEffect = callback => React.useEffect(callback, [callback]);
     export const Tabs = Object.assign(props => React.createElement("Tabs", props), { Screen: () => null });
   `,
-  "@/state/koino-store": `export const useKoino = () => ({ state: globalThis.__communityNavigation.state, dispatch() {} });`,
+  "@/state/koino-store": `
+    export const useKoino = () => ({ state: globalThis.__communityNavigation.state, dispatch() {} });
+    export const useKoinoSelector = selector => selector(globalThis.__communityNavigation.state);
+    export const useKoinoFields = keys => Object.fromEntries(keys.map(key => [key, globalThis.__communityNavigation.state[key]]));
+    export const useKoinoActions = () => ({ dispatch() {} });
+  `,
   "@/ui/app-language": `export const useAppTranslation = () => ({ t: key => key });`,
   "@/ui/theme": `export const colors = {}, typography = {}, radius = {}; export const platformShadow = () => ({});`,
   "react-native-safe-area-context": `export const useSafeAreaInsets = () => ({ top: 24, bottom: 24 });`,

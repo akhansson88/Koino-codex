@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FirebaseError, initializeApp, getApp, getApps } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
 import type { Auth, User as FirebaseUser } from "@firebase/auth";
-import { get, getDatabase, onValue, ref, remove, runTransaction, set, update } from "firebase/database";
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { equalTo, get, getDatabase, onValue, orderByChild, query, ref, remove, runTransaction, set, update } from "firebase/database";
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { activePrivateCheckIns } from "@/state/check-ins";
 import {
@@ -18,6 +18,7 @@ import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bib
 import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
+import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { deleteRoomImage, deleteUserAvatar, roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, StoredThemeName, ThemeName } from "@/ui/theme";
 import {
@@ -201,6 +202,34 @@ const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
+const KoinoSnapshotContext = createContext<SnapshotStore<KoinoState> | null>(null);
+const KoinoActionsContext = createContext<Pick<KoinoContextValue, "dispatch" | "getAuthToken"> | null>(null);
+
+export function useKoinoSelector<Value>(selector: (state: KoinoState) => Value): Value {
+  const store = useContext(KoinoSnapshotContext);
+  if (!store) throw new Error("useKoinoSelector must be used inside KoinoProvider");
+  return useSelectedSnapshot(store, selector);
+}
+
+export function useKoinoActions() {
+  const actions = useContext(KoinoActionsContext);
+  if (!actions) throw new Error("useKoinoActions must be used inside KoinoProvider");
+  return actions;
+}
+
+export function useKoinoFields<const Keys extends readonly (keyof KoinoState)[]>(keys: Keys): Pick<KoinoState, Keys[number]> {
+  const key = keys.join("|");
+  const previous = useRef<Pick<KoinoState, Keys[number]> | null>(null);
+  const selector = useCallback((state: KoinoState) => {
+    if (previous.current && keys.every((field) => Object.is((previous.current as KoinoState)[field], state[field]))) {
+      return previous.current;
+    }
+    const next = Object.fromEntries(keys.map((field) => [field, state[field]])) as Pick<KoinoState, Keys[number]>;
+    previous.current = next;
+    return next;
+  }, [key]);
+  return useKoinoSelector(selector);
+}
 
 function now() {
   return new Date().toISOString();
@@ -583,6 +612,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const olderPrayerReactionsRef = useRef<PrayerReaction[]>([]);
   const olderPostReactionsRef = useRef<PostReaction[]>([]);
   const [theme, setTheme] = useState<ThemeName>("light");
+  const membershipGroupIds = useMemo(() => [...new Set(userMemberships.map((item) => item.groupId))].sort(), [userMemberships]);
+  const membershipGroupKey = JSON.stringify(membershipGroupIds);
   const [themeReady, setThemeReady] = useState(false);
   const themeRef = useRef<ThemeName>("light");
   const hasStoredThemeRef = useRef(false);
@@ -680,14 +711,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     setProfileReady(false);
     setProfile(null);
+    let active = true;
     const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
     const unsubscribe = onValue(
       profileRef,
       async (snapshot) => {
+        if (!active) return;
         if (!snapshot.exists()) {
           try {
             await ensureProfile(firebaseUser);
           } catch (error) {
+            if (!active) return;
             setAuthError(authMessage(error));
             setProfileReady(true);
             markStartupMilestone("profileReady", "error");
@@ -708,13 +742,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         markStartupMilestone("profileReady");
       },
       (error) => {
+        if (!active) return;
         setAuthError(authMessage(error));
         setProfileReady(true);
         markStartupMilestone("profileReady", "error");
       },
     );
 
-    return unsubscribe;
+    return () => { active = false; unsubscribe(); };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -722,33 +757,37 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     setUserGroupsReady(false);
     setUserMemberships([]);
+    let active = true;
     const userGroupsRef = ref(database, `userGroups/${firebaseUser.uid}`);
     const unsubscribe = onValue(
       userGroupsRef,
       (snapshot) => {
+        if (!active) return;
         setUserMemberships(asArray<Membership>(snapshot.val()));
         setUserGroupsReady(true);
         markStartupMilestone("userGroupsReady");
       },
       (error) => {
+        if (!active) return;
         setAuthError(authMessage(error));
         setUserGroupsReady(true);
         markStartupMilestone("userGroupsReady", "error");
       },
     );
 
-    return unsubscribe;
+    return () => { active = false; unsubscribe(); };
   }, [firebaseUser]);
 
   useEffect(() => {
     if (!firebaseUser) return;
 
-    if (userMemberships.length === 0) {
+    if (membershipGroupIds.length === 0) {
       setGroups([]);
       return;
     }
 
     const groupById = new Map<Id, Group>();
+    let active = true;
     const syncGroups = () => {
       setGroups(
         Array.from(groupById.values()).sort((a, b) => {
@@ -758,44 +797,53 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       );
     };
 
-    const unsubs = userMemberships.map((membership) =>
-      onValue(ref(database, `groups/${membership.groupId}`), (snapshot) => {
+    const unsubs = membershipGroupIds.map((groupId) =>
+      onValue(ref(database, `groups/${groupId}`), (snapshot) => {
+        if (!active) return;
         if (snapshot.exists()) {
-          groupById.set(membership.groupId, snapshot.val() as Group);
+          groupById.set(groupId, snapshot.val() as Group);
         } else {
-          groupById.delete(membership.groupId);
+          groupById.delete(groupId);
         }
         syncGroups();
       }),
     );
 
-    return () => unsubs.forEach((unsubscribe) => unsubscribe());
-  }, [firebaseUser, userMemberships]);
+    return () => { active = false; unsubs.forEach((unsubscribe) => unsubscribe()); };
+  }, [firebaseUser?.uid, membershipGroupKey]);
 
   useEffect(() => {
     if (!firebaseUser) return;
 
-    if (userMemberships.length === 0) {
+    if (membershipGroupIds.length === 0) {
       setGroupMemberCounts({});
       return;
     }
 
-    const counts = Object.fromEntries(userMemberships.map((membership) => [membership.groupId, 0])) as Record<Id, number>;
-    setGroupMemberCounts(counts);
+    const counts = Object.fromEntries(membershipGroupIds.filter((groupId) => groupId !== profile?.currentGroupId).map((groupId) => [groupId, 0])) as Record<Id, number>;
+    let active = true;
 
     const syncCounts = () => {
-      setGroupMemberCounts({ ...counts });
+      setGroupMemberCounts((current) => {
+        const next = Object.fromEntries(membershipGroupIds.map((groupId) =>
+          [groupId, groupId === profile?.currentGroupId ? current[groupId] ?? 0 : counts[groupId]],
+        ));
+        return Object.keys(current).length === membershipGroupIds.length &&
+          membershipGroupIds.every((groupId) => current[groupId] === next[groupId]) ? current : next;
+      });
     };
+    syncCounts();
 
-    const unsubs = userMemberships.map((membership) =>
-      onValue(ref(database, `groupMembers/${membership.groupId}`), (snapshot) => {
-        counts[membership.groupId] = asArray<Membership>(snapshot.val()).length;
+    const unsubs = membershipGroupIds.filter((groupId) => groupId !== profile?.currentGroupId).map((groupId) =>
+      onValue(ref(database, `groupMembers/${groupId}`), (snapshot) => {
+        if (!active) return;
+        counts[groupId] = Object.keys(snapshot.val() ?? {}).length;
         syncCounts();
       }),
     );
 
-    return () => unsubs.forEach((unsubscribe) => unsubscribe());
-  }, [firebaseUser, userMemberships]);
+    return () => { active = false; unsubs.forEach((unsubscribe) => unsubscribe()); };
+  }, [firebaseUser?.uid, membershipGroupKey, profile?.currentGroupId]);
 
   useEffect(() => {
     if (!firebaseUser || !profileReady || !userGroupsReady) return;
@@ -1025,7 +1073,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }),
       onValue(membersRef, (snapshot) => {
         if (!active) return;
-        setMemberships(asArray<Membership>(snapshot.val()));
+        const nextMembers = asArray<Membership>(snapshot.val());
+        setMemberships(nextMembers);
+        setGroupMemberCounts((current) => current[groupId] === nextMembers.length
+          ? current : { ...current, [groupId]: nextMembers.length });
         membersReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
@@ -1719,7 +1770,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
                 let reactionCommitted = false;
                 try {
-                  const persistedSnapshot = await get(ref(database, `prayerReactions/${groupId}`));
+                  const persistedSnapshot = await get(query(
+                    ref(database, `prayerReactions/${groupId}`),
+                    orderByChild("targetId"),
+                    equalTo(action.targetId),
+                  ));
                   const persistedReaction = asArray<PrayerReaction>(persistedSnapshot.val()).find((item) =>
                     isMatchingPrayerReaction(item, firebaseUser.uid, reactionTargetType, action.targetId),
                   );
@@ -2560,9 +2615,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  const getAuthToken = useCallback(() => firebaseUser?.getIdToken(true) ?? Promise.resolve(null), [firebaseUser]);
+  const getAuthToken = useCallback(() => firebaseUser?.getIdToken() ?? Promise.resolve(null), [firebaseUser]);
+  const snapshotStore = useMemo(() => createSnapshotStore(state), []);
+  useLayoutEffect(() => snapshotStore.publish(state), [snapshotStore, state]);
+  const dispatchRef = useRef(dispatch);
+  const authTokenRef = useRef(getAuthToken);
+  dispatchRef.current = dispatch;
+  authTokenRef.current = getAuthToken;
+  const actions = useMemo(() => ({
+    dispatch: (action: Action) => dispatchRef.current(action),
+    getAuthToken: () => authTokenRef.current(),
+  }), []);
+  const contextValue = useMemo(() => ({ state, ...actions }), [state, actions]);
 
-  return <KoinoContext.Provider value={{ state, dispatch, getAuthToken }}>{children}</KoinoContext.Provider>;
+  return <KoinoSnapshotContext.Provider value={snapshotStore}>
+    <KoinoActionsContext.Provider value={actions}>
+      <KoinoContext.Provider value={contextValue}>{children}</KoinoContext.Provider>
+    </KoinoActionsContext.Provider>
+  </KoinoSnapshotContext.Provider>;
 }
 
 export function useKoino() {
