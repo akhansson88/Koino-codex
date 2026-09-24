@@ -77,6 +77,16 @@ import {
   parsePreferences,
   normalizeFontSize,
 } from "@/features/bible-reader/preferences";
+import {
+  fetchCloudBibleReaderPreferences,
+  listenForCloudBibleReaderPreferences,
+  listenForDatabaseConnection,
+  readStoredBibleReaderPreferences,
+  readerPreferencesSignature,
+  saveCloudBibleReaderPreferences,
+  serializeStoredBibleReaderPreferences,
+  type StoredBibleReaderPreferences,
+} from "@/features/bible-reader/preferences-sync";
 import { readerPaletteFor } from "@/features/bible-reader/palette";
 import {
   selectedVerseRangesFor,
@@ -111,6 +121,22 @@ import { BibleTopicsModal } from "@/features/bible-reader/topics-modal";
 function isChapterSwipeGesture(dx: number, dy: number) {
   return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
 }
+
+type BibleReaderPreferenceSyncStatus = {
+  userId?: string;
+  connectionKnown: boolean;
+  connected: boolean;
+  cloudResolved: boolean;
+  updatedAt: number;
+  lastSignature: string;
+  localSnapshot?: StoredBibleReaderPreferences;
+};
+
+type PendingBibleReaderCloudSave = {
+  userId: string;
+  snapshot: StoredBibleReaderPreferences;
+  sync: BibleReaderPreferenceSyncStatus;
+};
 
 const chapterSwipeActivationDistance = 12;
 
@@ -198,6 +224,16 @@ export function BibleScreen() {
   const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
   const persistedAppThemeRef = useRef<ThemeName | undefined>(undefined);
+  const appThemeRef = useRef(state.theme);
+  appThemeRef.current = state.theme;
+  const readerPreferencesSyncRef = useRef<BibleReaderPreferenceSyncStatus>({
+    connectionKnown: false,
+    connected: false,
+    cloudResolved: false,
+    updatedAt: 0,
+    lastSignature: "",
+  });
+  const pendingReaderCloudSaveRef = useRef<PendingBibleReaderCloudSave | undefined>(undefined);
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
@@ -359,68 +395,255 @@ export function BibleScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!storageKey) {
+    if (!storageKey || !state.currentUserId) {
       setPreferencesReady(true);
       return () => {
         active = false;
       };
     }
 
+    const sync: BibleReaderPreferenceSyncStatus = {
+      userId: state.currentUserId,
+      connectionKnown: false,
+      connected: false,
+      cloudResolved: false,
+      updatedAt: 0,
+      lastSignature: "",
+    };
+    readerPreferencesSyncRef.current = sync;
     setPreferencesReady(false);
-    void AsyncStorage.getItem(storageKey)
-      .then((value) => {
-        if (!active) return;
-        const nextPreferences = parsePreferences(value);
-        verseOffsetsRef.current = {};
-        pendingScrollVerseRef.current = nextPreferences.position.verse;
-        positionRef.current = nextPreferences.position;
-        historyRef.current = nextPreferences.history;
-        setHistory(nextPreferences.history);
-        setPosition(nextPreferences.position);
-        setBibleVersionId(nextPreferences.bibleVersionId);
-        notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
-        setFontId(nextPreferences.fontId);
-        setFontSize(nextPreferences.fontSize);
-        persistedAppThemeRef.current = nextPreferences.appTheme;
-        setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
-        setShowVerseNumbers(nextPreferences.showVerseNumbers);
-      })
-      .finally(() => {
-        if (active) setPreferencesReady(true);
-      });
+    let localLoaded = false;
+    let didHydrate = false;
+    let confirmedCloudRead = false;
+    let reconciliationQueue = Promise.resolve();
+    const fallbackTimeout = setTimeout(() => {
+      if (active && localLoaded && !didHydrate) applyLocalFallback();
+    }, 3000);
+
+    const applySnapshot = (snapshot: StoredBibleReaderPreferences, source: "local" | "cloud") => {
+      if (!active) return;
+      if (source === "cloud" && sync.localSnapshot && sync.localSnapshot.updatedAt > snapshot.updatedAt) return;
+      const nextPreferences: BibleReaderPreferences = source === "cloud"
+        ? { ...snapshot.preferences, appTheme: appThemeRef.current }
+        : snapshot.preferences;
+      const appliedSnapshot = { preferences: nextPreferences, updatedAt: snapshot.updatedAt };
+      const pendingSave = pendingReaderCloudSaveRef.current;
+      if (pendingSave?.sync === sync && pendingSave.snapshot.updatedAt <= snapshot.updatedAt) {
+        pendingReaderCloudSaveRef.current = undefined;
+      }
+      sync.localSnapshot = appliedSnapshot;
+      sync.updatedAt = snapshot.updatedAt;
+      sync.lastSignature = readerPreferencesSignature(nextPreferences);
+      didHydrate = true;
+      clearTimeout(fallbackTimeout);
+      void AsyncStorage.setItem(storageKey, serializeStoredBibleReaderPreferences(appliedSnapshot));
+
+      verseOffsetsRef.current = {};
+      pendingScrollVerseRef.current = nextPreferences.position.verse;
+      positionRef.current = nextPreferences.position;
+      historyRef.current = nextPreferences.history;
+      setHistory(nextPreferences.history);
+      setPosition(nextPreferences.position);
+      setBibleVersionId(nextPreferences.bibleVersionId);
+      notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
+      setFontId(nextPreferences.fontId);
+      setFontSize(nextPreferences.fontSize);
+      persistedAppThemeRef.current = nextPreferences.appTheme;
+      setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
+      setShowVerseNumbers(nextPreferences.showVerseNumbers);
+      setPreferencesReady(true);
+    };
+
+    function applyLocalFallback() {
+      if (!active || !localLoaded || didHydrate) return;
+      applySnapshot(sync.localSnapshot ?? { preferences: parsePreferences(null), updatedAt: 0 }, "local");
+    }
+
+    async function reconcileCloudSnapshot(cloudSnapshot: StoredBibleReaderPreferences | null) {
+      if (!active || !sync.connected) return;
+
+      const localSnapshot = sync.localSnapshot;
+      if (cloudSnapshot && localSnapshot && localSnapshot.updatedAt > cloudSnapshot.updatedAt) {
+        try {
+          const savedSnapshot = await saveCloudBibleReaderPreferences(state.currentUserId as string, localSnapshot);
+          if (!active) return;
+          sync.cloudResolved = true;
+          applySnapshot(savedSnapshot ?? localSnapshot, savedSnapshot ? "cloud" : "local");
+        } catch {
+          sync.cloudResolved = false;
+          applyLocalFallback();
+        }
+        return;
+      }
+
+      if (cloudSnapshot) {
+        sync.cloudResolved = true;
+        applySnapshot(cloudSnapshot, "cloud");
+        return;
+      }
+
+      if (localSnapshot) {
+        const migrationSnapshot = {
+          preferences: localSnapshot.preferences,
+          updatedAt: Math.max(localSnapshot.updatedAt, Date.now()),
+        };
+        try {
+          const savedSnapshot = await saveCloudBibleReaderPreferences(state.currentUserId as string, migrationSnapshot);
+          if (!active) return;
+          sync.cloudResolved = true;
+          applySnapshot(savedSnapshot ?? migrationSnapshot, savedSnapshot ? "cloud" : "local");
+        } catch {
+          sync.cloudResolved = false;
+          applyLocalFallback();
+        }
+        return;
+      }
+
+      sync.cloudResolved = true;
+      applySnapshot({ preferences: parsePreferences(null), updatedAt: 0 }, "local");
+    }
+
+    function enqueueReconciliation(snapshot: StoredBibleReaderPreferences | null) {
+      reconciliationQueue = reconciliationQueue
+        .then(() => reconcileCloudSnapshot(snapshot))
+        .catch(() => applyLocalFallback());
+    }
+
+    async function refreshFromCloud() {
+      if (!active || !localLoaded || !sync.connected) return;
+      try {
+        const cloudSnapshot = await fetchCloudBibleReaderPreferences(state.currentUserId as string);
+        if (!active || !sync.connected) return;
+        confirmedCloudRead = true;
+        enqueueReconciliation(cloudSnapshot);
+      } catch {
+        if (!didHydrate) applyLocalFallback();
+      }
+    }
+
+    const stopCloudListener = listenForCloudBibleReaderPreferences(
+      state.currentUserId,
+      (snapshot) => {
+        if (active && sync.connected && confirmedCloudRead) enqueueReconciliation(snapshot);
+      },
+      () => {
+        if (!didHydrate) applyLocalFallback();
+      },
+    );
+    const stopConnectionListener = listenForDatabaseConnection(
+      (connected) => {
+        sync.connectionKnown = true;
+        sync.connected = connected;
+        if (!connected) {
+          sync.cloudResolved = false;
+          confirmedCloudRead = false;
+          applyLocalFallback();
+          return;
+        }
+        void refreshFromCloud();
+      },
+      () => {
+        sync.connectionKnown = true;
+        sync.connected = false;
+        sync.cloudResolved = false;
+        applyLocalFallback();
+      },
+    );
+
+    void AsyncStorage.getItem(storageKey).then((value) => {
+      if (!active) return;
+      sync.localSnapshot = readStoredBibleReaderPreferences(value) ?? undefined;
+      sync.updatedAt = sync.localSnapshot?.updatedAt ?? 0;
+      localLoaded = true;
+      if (sync.connected) void refreshFromCloud();
+      else if (sync.connectionKnown) applyLocalFallback();
+    }).catch(() => {
+      if (!active) return;
+      localLoaded = true;
+      if (sync.connected) void refreshFromCloud();
+      else if (sync.connectionKnown) applyLocalFallback();
+    });
 
     return () => {
       active = false;
+      clearTimeout(fallbackTimeout);
+      stopCloudListener();
+      stopConnectionListener();
     };
-  }, [showTemporaryHighlight, storageKey]);
+  }, [state.currentUserId, storageKey]);
 
   useEffect(() => {
     if (!storageKey || !preferencesReady) return;
 
-    const persistPreferences = (nextReaderTheme = effectiveReaderTheme) => {
-      const payload: BibleReaderPreferences = {
-        appTheme: state.theme,
-        bibleVersionId,
-        fontId,
-        fontSize,
-        position,
-        history,
-        readerTheme: nextReaderTheme,
-        showVerseNumbers,
-      };
-      persistedAppThemeRef.current = state.theme;
-      void AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+    const sync = readerPreferencesSyncRef.current;
+    if (sync.userId !== state.currentUserId) return;
+    const payload: BibleReaderPreferences = {
+      appTheme: state.theme,
+      bibleVersionId,
+      fontId,
+      fontSize,
+      position,
+      history,
+      readerTheme: effectiveReaderTheme,
+      showVerseNumbers,
     };
+    const signature = readerPreferencesSignature(payload);
+    persistedAppThemeRef.current = state.theme;
 
-    if (persistedAppThemeRef.current !== state.theme) {
-      persistPreferences(state.theme);
+    const scheduleCloudSave = (pending: PendingBibleReaderCloudSave) => setTimeout(() => {
+      if (pendingReaderCloudSaveRef.current !== pending) return;
+      pendingReaderCloudSaveRef.current = undefined;
+      const currentSync = readerPreferencesSyncRef.current;
+      if (currentSync !== pending.sync || !currentSync.connected || !currentSync.cloudResolved) return;
+      void saveCloudBibleReaderPreferences(pending.userId, pending.snapshot).catch(() => {
+        currentSync.cloudResolved = false;
+      });
+    }, 700);
+
+    if (sync.lastSignature === signature) {
+      if (sync.localSnapshot && sync.localSnapshot.preferences.appTheme !== state.theme) {
+        const localSnapshot = {
+          preferences: { ...sync.localSnapshot.preferences, appTheme: state.theme },
+          updatedAt: sync.localSnapshot.updatedAt,
+        };
+        sync.localSnapshot = localSnapshot;
+        void AsyncStorage.setItem(storageKey, serializeStoredBibleReaderPreferences(localSnapshot));
+      }
+      const pendingSave = pendingReaderCloudSaveRef.current;
+      if (pendingSave?.sync === sync && sync.connected && sync.cloudResolved) {
+        const timeout = scheduleCloudSave(pendingSave);
+        return () => clearTimeout(timeout);
+      }
       return;
     }
 
-    const timeout = setTimeout(persistPreferences, 250);
+    const candidate: StoredBibleReaderPreferences = {
+      preferences: payload,
+      updatedAt: Math.max(Date.now(), sync.updatedAt + 1),
+    };
+    sync.localSnapshot = candidate;
+    sync.updatedAt = candidate.updatedAt;
+    sync.lastSignature = signature;
+    void AsyncStorage.setItem(storageKey, serializeStoredBibleReaderPreferences(candidate));
+    if (!sync.connected || !sync.cloudResolved || !state.currentUserId) return;
+
+    const pendingSave = { userId: state.currentUserId, snapshot: candidate, sync };
+    pendingReaderCloudSaveRef.current = pendingSave;
+    const timeout = scheduleCloudSave(pendingSave);
 
     return () => clearTimeout(timeout);
-  }, [bibleVersionId, effectiveReaderTheme, fontId, fontSize, history, position, preferencesReady, showVerseNumbers, state.theme, storageKey]);
+  }, [bibleVersionId, effectiveReaderTheme, fontId, fontSize, history, position, preferencesReady, showVerseNumbers, state.currentUserId, state.theme, storageKey]);
+
+  useEffect(() => {
+    return () => {
+      const pendingSave = pendingReaderCloudSaveRef.current;
+      pendingReaderCloudSaveRef.current = undefined;
+      if (!pendingSave || !pendingSave.sync.connected || !pendingSave.sync.cloudResolved) return;
+      void saveCloudBibleReaderPreferences(pendingSave.userId, pendingSave.snapshot).catch(() => {
+        pendingSave.sync.cloudResolved = false;
+      });
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -1093,14 +1316,14 @@ export function BibleScreen() {
   const readerTextStyle: TextStyle = {
     color: readerPalette.text,
     fontFamily: readerFontFamily,
-    fontSize: effectiveFontSize,
+    fontSize,
     fontWeight: "400",
     lineHeight: readerLineHeight,
   };
 
   return (
     <BibleBookVersionContext.Provider value={bibleVersionId}>
-    <View style={{ backgroundColor: readerPalette.background, flex: 1 }}>
+    <View pointerEvents={preferencesReady ? "auto" : "none"} style={{ backgroundColor: readerPalette.background, flex: 1 }}>
       <BibleReaderHeader
         canGoBack={readerCanGoBack}
         canGoHistoryBack={history.index > 0}

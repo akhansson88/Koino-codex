@@ -458,6 +458,42 @@
       }
     },
 
+    "bibleReaderPreferences": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.val() == null || ((newData.child('bibleVersionId').val() == 'kjv' || newData.child('bibleVersionId').val() == 'reformationsbibeln2026') && (newData.child('fontId').val() == 'serif' || newData.child('fontId').val() == 'classic' || newData.child('fontId').val() == 'humanist' || newData.child('fontId').val() == 'system') && (newData.child('fontSize').val() == 16 || newData.child('fontSize').val() == 18 || newData.child('fontSize').val() == 20 || newData.child('fontSize').val() == 22 || newData.child('fontSize').val() == 24 || newData.child('fontSize').val() == 26 || newData.child('fontSize').val() == 28) && (newData.child('readerTheme').val() == 'light' || newData.child('readerTheme').val() == 'sepia' || newData.child('readerTheme').val() == 'dark') && newData.child('showVerseNumbers').isBoolean() && newData.child('updatedAt').isNumber() && newData.child('position').hasChildren(['book', 'chapter', 'verse']) && newData.child('position').child('book').isString() && newData.child('position').child('chapter').isNumber() && newData.child('position').child('chapter').val() > 0 && newData.child('position').child('verse').isNumber() && newData.child('position').child('verse').val() > 0 && newData.child('history').hasChildren(['entries', 'index']) && newData.child('history').child('entries').hasChildren() && newData.child('history').child('index').isNumber() && newData.child('history').child('index').val() >= 0 && newData.child('history').child('index').val() <= 9)",
+        "bibleVersionId": { ".validate": "newData.val() == 'kjv' || newData.val() == 'reformationsbibeln2026'" },
+        "fontId": { ".validate": "newData.val() == 'serif' || newData.val() == 'classic' || newData.val() == 'humanist' || newData.val() == 'system'" },
+        "fontSize": { ".validate": "newData.val() == 16 || newData.val() == 18 || newData.val() == 20 || newData.val() == 22 || newData.val() == 24 || newData.val() == 26 || newData.val() == 28" },
+        "readerTheme": { ".validate": "newData.val() == 'light' || newData.val() == 'sepia' || newData.val() == 'dark'" },
+        "showVerseNumbers": { ".validate": "newData.isBoolean()" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "position": {
+          ".validate": "newData.val() == null || newData.hasChildren(['book', 'chapter', 'verse'])",
+          "book": { ".validate": "newData.isString()" },
+          "chapter": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "verse": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$other": { ".validate": false }
+        },
+        "history": {
+          ".validate": "newData.val() == null || (newData.hasChildren(['entries', 'index']) && newData.child('entries').hasChildren() && newData.child('index').isNumber() && newData.child('index').val() >= 0 && newData.child('index').val() <= 9)",
+          "entries": {
+            "$entryIndex": {
+              ".validate": "newData.val() == null || ($entryIndex.matches(/^(0|1|2|3|4|5|6|7|8|9)$/) && newData.hasChildren(['book', 'chapter', 'verse']) && newData.child('book').isString() && newData.child('chapter').isNumber() && newData.child('chapter').val() > 0 && newData.child('verse').isNumber() && newData.child('verse').val() > 0)",
+              "book": { ".validate": "newData.isString()" },
+              "chapter": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "verse": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "$other": { ".validate": false }
+            }
+          },
+          "index": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "$other": { ".validate": false }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
     "pushTokens": {
       "$uid": {
         ".read": false,
