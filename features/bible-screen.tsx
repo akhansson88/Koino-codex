@@ -29,7 +29,6 @@ import {
 import {
   bibleChapterAsync,
   bibleCrossReferences,
-  bibleCrossReferenceVersesAsync,
   bibleVersionFor,
   buildBibleVerse,
   nextBibleChapter,
@@ -74,11 +73,7 @@ import {
   defaultFontId,
   defaultFontSize,
   defaultShowVerseNumbers,
-  defaultShowFootnotes,
-  defaultShowCrossReferences,
-  defaultCompactMode,
   fontFamilyFor,
-  minFontSize,
   parsePreferences,
   normalizeFontSize,
 } from "@/features/bible-reader/preferences";
@@ -167,9 +162,6 @@ export function BibleScreen() {
     readerTheme: state.theme,
   });
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
-  const [showFootnotes, setShowFootnotes] = useState(defaultShowFootnotes);
-  const [showCrossReferences, setShowCrossReferences] = useState(defaultShowCrossReferences);
-  const [compactMode, setCompactMode] = useState(defaultCompactMode);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerInitialStage, setPickerInitialStage] = useState<"home" | "search">("home");
@@ -296,18 +288,6 @@ export function BibleScreen() {
       )
       .map((highlight) => highlight.id);
   }, [bibleVersion.translation, position.book, position.chapter, selectedVerseRanges, state.bibleHighlights]);
-  const [crossReferenceVerseSet, setCrossReferenceVerseSet] = useState<{ key: string; verses: Set<number> }>();
-  const crossReferenceChapterKey = `${position.book}:${position.chapter}`;
-  useEffect(() => {
-    let active = true;
-    void bibleCrossReferenceVersesAsync(position.book, position.chapter).then((verses) => {
-      if (active) setCrossReferenceVerseSet({ key: crossReferenceChapterKey, verses });
-    }).catch((error) => console.error("[bible] Could not load cross-reference markers", error));
-    return () => { active = false; };
-  }, [crossReferenceChapterKey]);
-  const chapterCrossReferenceAvailability = useMemo(() => Object.fromEntries(
-    chapterVerses.map((item) => [item.verse, crossReferenceVerseSet?.key === crossReferenceChapterKey && crossReferenceVerseSet.verses.has(item.verse)]),
-  ) as Record<number, boolean>, [chapterVerses, crossReferenceChapterKey, crossReferenceVerseSet]);
   const crossReferenceKey = crossReferencePosition
     ? `${bibleVersionId}:${crossReferencePosition.book}:${crossReferencePosition.chapter}:${crossReferencePosition.verse}` : "";
   const [loadedCrossReferences, setLoadedCrossReferences] = useState<{ key: string; references: BibleCrossReference[] }>();
@@ -324,8 +304,7 @@ export function BibleScreen() {
   const previousChapter = useMemo(() => previousBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const nextChapter = useMemo(() => nextBibleChapter(position.book, position.chapter), [position.book, position.chapter]);
   const readerFontFamily = fontFamilyFor(fontId);
-  const effectiveFontSize = compactMode ? Math.max(minFontSize, fontSize - 1) : fontSize;
-  const readerLineHeight = Math.round(effectiveFontSize * (compactMode ? 1.48 : 1.62));
+  const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
   const chapterControlsVisible = !selectedVerseBarVisible;
@@ -405,9 +384,6 @@ export function BibleScreen() {
         persistedAppThemeRef.current = nextPreferences.appTheme;
         setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
         setShowVerseNumbers(nextPreferences.showVerseNumbers);
-        setShowFootnotes(nextPreferences.showFootnotes);
-        setShowCrossReferences(nextPreferences.showCrossReferences);
-        setCompactMode(nextPreferences.compactMode);
       })
       .finally(() => {
         if (active) setPreferencesReady(true);
@@ -425,14 +401,11 @@ export function BibleScreen() {
       const payload: BibleReaderPreferences = {
         appTheme: state.theme,
         bibleVersionId,
-        compactMode,
         fontId,
         fontSize,
         position,
         history,
         readerTheme: nextReaderTheme,
-        showCrossReferences,
-        showFootnotes,
         showVerseNumbers,
       };
       persistedAppThemeRef.current = state.theme;
@@ -447,7 +420,7 @@ export function BibleScreen() {
     const timeout = setTimeout(persistPreferences, 250);
 
     return () => clearTimeout(timeout);
-  }, [bibleVersionId, compactMode, effectiveReaderTheme, fontId, fontSize, history, position, preferencesReady, showCrossReferences, showFootnotes, showVerseNumbers, state.theme, storageKey]);
+  }, [bibleVersionId, effectiveReaderTheme, fontId, fontSize, history, position, preferencesReady, showVerseNumbers, state.theme, storageKey]);
 
   useEffect(() => {
     setSelectedVerseNumbers([]);
@@ -1172,11 +1145,11 @@ export function BibleScreen() {
             alignSelf: "stretch",
             paddingBottom: readerBottomPadding,
             paddingHorizontal: 22,
-            paddingTop: compactMode ? 12 : 18,
+            paddingTop: 18,
           }}
         >
           <Animated.View
-            style={{ alignSelf: "center", gap: compactMode ? 20 : 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
+            style={{ alignSelf: "center", gap: 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
           >
             <BiblePlanReaderPanel
               currentDay={selectedPlanCurrentDay}
@@ -1196,8 +1169,6 @@ export function BibleScreen() {
             {loadedChapter?.key === chapterKey ? <BibleText
               chapterHeading={chapter.heading}
               chapterHighlightByVerse={chapterHighlightByVerse}
-              compactMode={compactMode}
-              crossReferenceAvailability={chapterCrossReferenceAvailability}
               highlightedPosition={highlightedPosition}
               onFootnotePress={(marker, footnote, verse) => {
                 setSelectedFootnote({
@@ -1220,8 +1191,6 @@ export function BibleScreen() {
               planMarkers={selectedPlanMarkers}
               selectedVerseNumbers={selectedVerseNumbers}
               selectedVersePosition={selectedVersePosition}
-              showCrossReferences={showCrossReferences}
-              showFootnotes={showFootnotes}
               showVerseNumbers={showVerseNumbers}
               subtitles={chapter.subtitles}
               verses={chapterVerses}
@@ -1298,21 +1267,15 @@ export function BibleScreen() {
         visible={Boolean(selectedVersePosition)}
       />
       <ReadingSettingsSheet
-        compactMode={compactMode}
         fontId={fontId}
         fontSize={fontSize}
         onChangeFont={setFontId}
         onChangeReaderTheme={(readerTheme) => setReaderThemePreference({ appTheme: state.theme, readerTheme })}
-        onChangeShowCrossReferences={setShowCrossReferences}
-        onChangeShowFootnotes={setShowFootnotes}
         onChangeShowVerseNumbers={setShowVerseNumbers}
         onClose={() => setSettingsVisible(false)}
-        onCompactModeChange={setCompactMode}
         onFontSizeChange={changeFontSize}
         palette={readerPalette}
         readerTheme={effectiveReaderTheme}
-        showCrossReferences={showCrossReferences}
-        showFootnotes={showFootnotes}
         showVerseNumbers={showVerseNumbers}
         visible={settingsVisible}
       />

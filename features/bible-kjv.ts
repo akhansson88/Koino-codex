@@ -9,8 +9,6 @@ import {
   type BiblePosition,
 } from "@/features/bible-canon";
 import {
-  bibleChapterHasCrossReference,
-  bibleChapterCrossReferenceVersesAsync,
   queryBibleChapter,
   queryBibleChapterAsync,
   queryBibleCrossReferences,
@@ -120,14 +118,6 @@ function bibleChapterFromRows(result: ReturnType<typeof queryBibleChapter>): Bib
 
 export function bibleChapterVerses(book: string, chapter: number, versionId?: BibleVersionId): BibleChapterVerse[] {
   return bibleChapter(book, chapter, versionId).verses;
-}
-
-export function hasBibleCrossReferences(position: BiblePosition) {
-  return bibleChapterHasCrossReference(position.book, position.chapter, position.verse);
-}
-
-export function bibleCrossReferenceVersesAsync(book: string, chapter: number) {
-  return bibleChapterCrossReferenceVersesAsync(book, chapter);
 }
 
 export function bibleCrossReferences(position: BiblePosition, versionId?: BibleVersionId): BibleCrossReference[] {

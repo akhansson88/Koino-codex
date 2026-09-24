@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 import { prayerFilters } from "@/state/product";
@@ -27,7 +28,7 @@ import { LinkPreviewContent } from "@/ui/link-preview";
 import { CommunityCardAction, CommunityCardResponseSummary, CommunityFeedCard } from "@/ui/post-card";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { type PrayerFilter } from "@/features/community/types";
 import { FocusedCommunityScreenIntro, FocusedScreenHeader } from "@/features/community/focused-header";
 import {
@@ -49,6 +50,8 @@ export function CommunityPrayerScreen({
   filter,
   onBack,
   onCreatePrayer,
+  onDeletePrayer,
+  onEditPrayer,
   onFilter,
   onOpenPrayer,
   onPray,
@@ -56,6 +59,7 @@ export function CommunityPrayerScreen({
   onLoadMore,
   prayerPosts,
   prayerState,
+  currentUserId,
   userById,
   userImageById,
 }: {
@@ -68,6 +72,8 @@ export function CommunityPrayerScreen({
   filter: PrayerFilter;
   onBack: () => void;
   onCreatePrayer: () => void;
+  onDeletePrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
+  onEditPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
   onFilter: (filter: PrayerFilter) => void;
   onOpenPrayer: (item: Extract<FeedItem, { type: "post" }>) => void;
   onPray: (item: FeedItem) => void;
@@ -75,6 +81,7 @@ export function CommunityPrayerScreen({
   onLoadMore: () => Promise<void>;
   prayerPosts: Extract<FeedItem, { type: "post" }>[];
   prayerState: (item: FeedItem) => { prayed: boolean; count: number; prayedBy: { name: string; image?: GroupImage }[] };
+  currentUserId?: Id;
   userById: Map<Id, string>;
   userImageById: Map<Id, GroupImage | undefined>;
 }) {
@@ -140,11 +147,14 @@ export function CommunityPrayerScreen({
               authorImage={userImageById.get(item.userId)}
               authorName={userById.get(item.userId) ?? t("common.someone")}
               item={item}
+              ownsItem={item.userId === currentUserId}
               prayed={prayer.prayed}
               prayedBy={prayer.prayedBy}
               prayerCount={prayer.count}
               onOpen={() => onOpenPrayer(item)}
               onPray={() => onPray(item)}
+              onEdit={() => onEditPrayer(item)}
+              onDelete={() => onDeletePrayer(item)}
             />
           );
         })
@@ -303,8 +313,11 @@ export function PrayerRequestCard({
   authorImage,
   authorName,
   item,
+  onDelete,
+  onEdit,
   onOpen,
   onPray,
+  ownsItem,
   prayed,
   prayedBy,
   prayerCount,
@@ -312,16 +325,102 @@ export function PrayerRequestCard({
   authorImage?: GroupImage;
   authorName: string;
   item: Extract<FeedItem, { type: "post" }>;
+  onDelete?: () => void;
+  onEdit?: () => void;
   onOpen: () => void;
   onPray: () => void;
+  ownsItem: boolean;
   prayed: boolean;
   prayedBy?: { name: string; image?: GroupImage }[];
   prayerCount: number;
 }) {
   const { t } = useAppTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const suppressOpenRef = useRef(false);
   const answered = Boolean(item.answeredAt);
   const prayerMoment = isPrayerMomentKind(item.kind);
   const displayCopy = communityPrayerMomentDisplayCopy(item, t);
+
+  function runMenuAction(action: () => void) {
+    suppressOpenRef.current = true;
+    setMenuOpen(false);
+    action();
+    setTimeout(() => {
+      suppressOpenRef.current = false;
+    }, 250);
+  }
+
+  const menuButton = ownsItem && (onEdit || onDelete) ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t("community.card.postOptions")}
+      hitSlop={4}
+      onPressIn={(event) => event.stopPropagation()}
+      onPress={(event) => {
+        event.stopPropagation();
+        setMenuOpen((current) => !current);
+      }}
+      style={{ alignItems: "center", flexShrink: 0, height: 44, justifyContent: "center", width: 44 }}
+    >
+      <Feather name="more-horizontal" size={19} color={colors.ink} />
+    </Pressable>
+  ) : null;
+
+  const menu = ownsItem && menuOpen ? (
+    <View
+      style={{
+        backgroundColor: colors.paper,
+        borderColor: colors.line,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        minWidth: 118,
+        paddingVertical: 4,
+        position: "absolute",
+        right: 14,
+        top: 54,
+        zIndex: 40,
+        ...platformShadow({
+          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
+          elevation: 12,
+          offset: { width: 0, height: 10 },
+          opacity: 0.14,
+          radius: 24,
+        }),
+      }}
+    >
+      {onEdit ? (
+        <Pressable
+          accessibilityLabel={t("common.edit")}
+          accessibilityRole="button"
+          onPressIn={(event) => event.stopPropagation()}
+          onPress={(event) => {
+            event.stopPropagation();
+            runMenuAction(onEdit);
+          }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
+        >
+          <Feather name="edit-2" size={14} color={colors.ink} />
+          <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
+        </Pressable>
+      ) : null}
+      {onDelete ? (
+        <Pressable
+          accessibilityLabel={t("common.delete")}
+          accessibilityRole="button"
+          onPressIn={(event) => event.stopPropagation()}
+          onPress={(event) => {
+            event.stopPropagation();
+            runMenuAction(onDelete);
+          }}
+          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
+        >
+          <Feather name="trash-2" size={14} color={colors.danger} />
+          <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  ) : null;
+
   return (
     <CommunityFeedCard
       actions={
@@ -355,7 +454,15 @@ export function PrayerRequestCard({
       }
       bodyFallback={t("community.card.noWords")}
       item={item}
-      onOpen={onOpen}
+      headerAccessory={menuButton}
+      onOpen={() => {
+        if (menuOpen || suppressOpenRef.current) {
+          setMenuOpen(false);
+          return;
+        }
+        onOpen();
+      }}
+      overlay={menu}
       responseSummary={
         prayerMoment ? undefined : (
           <CommunityCardResponseSummary
@@ -367,6 +474,7 @@ export function PrayerRequestCard({
         )
       }
       status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
+      style={{ zIndex: menuOpen ? 10 : 1 }}
     />
   );
 }

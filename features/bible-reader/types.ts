@@ -23,14 +23,11 @@ export type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save
 export type BibleReaderPreferences = {
   appTheme?: ThemeName;
   bibleVersionId: BibleVersionId;
-  compactMode: boolean;
   fontId: BibleReaderFontId;
   fontSize: number;
   position: BiblePosition;
   history: BibleHistory;
   readerTheme: BibleReaderThemeId;
-  showCrossReferences: boolean;
-  showFootnotes: boolean;
   showVerseNumbers: boolean;
 };
 

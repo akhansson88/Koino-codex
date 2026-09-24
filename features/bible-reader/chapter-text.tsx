@@ -30,7 +30,6 @@ const bibleVerseWebInteractionStyle =
 export function BibleText({
   chapterHeading,
   chapterHighlightByVerse,
-  compactMode,
   highlightedPosition,
   onFootnotePress,
   onVersePress,
@@ -46,14 +45,11 @@ export function BibleText({
   selectedVerseNumbers,
   selectedVersePosition,
   showVerseNumbers,
-  showFootnotes,
   subtitles,
   verses,
 }: {
   chapterHeading?: string;
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
-  compactMode: boolean;
-  crossReferenceAvailability: Record<number, boolean>;
   highlightedPosition?: BiblePosition;
   onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number) => void;
   onVersePress: (verse: number) => void;
@@ -68,8 +64,6 @@ export function BibleText({
   readerTextStyle: TextStyle;
   selectedVerseNumbers: number[];
   selectedVersePosition?: BiblePosition;
-  showCrossReferences: boolean;
-  showFootnotes: boolean;
   showVerseNumbers: boolean;
   subtitles: BibleChapterSubtitle[];
   verses: BibleChapterVerse[];
@@ -91,7 +85,7 @@ export function BibleText({
       onLayout={(event) => {
         textOffsetRef.current = event.nativeEvent.layout.y;
       }}
-      style={{ gap: compactMode ? 4 : 7 }}
+      style={{ gap: 7 }}
     >
       {chapterHeading ? (
         <Text
@@ -101,7 +95,7 @@ export function BibleText({
             fontSize: Math.max(18, Number(readerTextStyle.fontSize ?? defaultFontSize) + 2),
             fontWeight: "700",
             lineHeight: Math.round(readerLineHeight * 1.05),
-            marginBottom: compactMode ? 6 : 12,
+            marginBottom: 12,
           }}
         >
           {chapterHeading}
@@ -144,8 +138,8 @@ export function BibleText({
                 fontSize: Math.max(15, Number(readerTextStyle.fontSize ?? defaultFontSize) - 1),
                 fontWeight: "800",
                 lineHeight: Math.round(readerLineHeight * 0.95),
-                paddingBottom: compactMode ? 2 : 5,
-                paddingTop: index === 0 ? 0 : compactMode ? 8 : 14,
+                paddingBottom: 5,
+                paddingTop: index === 0 ? 0 : 14,
               }}
             >
               {subtitle.text}
@@ -169,7 +163,7 @@ export function BibleText({
               borderWidth: 1,
               marginHorizontal: -10,
               paddingHorizontal: 10,
-              paddingVertical: compactMode ? 5 : 8,
+              paddingVertical: 8,
             }}
           >
             {isFirstVerse ? (
@@ -196,7 +190,6 @@ export function BibleText({
                     persistedHighlightStyle={persistedHighlightStyle}
                     readerTextStyle={readerTextStyle}
                     reference={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
-                    showFootnotes={showFootnotes}
                     text={item.text}
                   />
                 </View>
@@ -211,7 +204,6 @@ export function BibleText({
                   persistedHighlightStyle={persistedHighlightStyle}
                   readerTextStyle={readerTextStyle}
                   reference={referenceLabel({ ...position, verse: item.verse }, bookLanguage)}
-                  showFootnotes={showFootnotes}
                   text={item.text}
                 />
               </View>
@@ -234,7 +226,6 @@ function BibleVerseText({
   persistedHighlightStyle,
   readerTextStyle,
   reference,
-  showFootnotes,
   text,
 }: {
   footnotes: BibleFootnote[];
@@ -243,7 +234,6 @@ function BibleVerseText({
   persistedHighlightStyle?: TextStyle;
   readerTextStyle: TextStyle;
   reference: string;
-  showFootnotes: boolean;
   text: string;
 }) {
   const { t } = useAppTranslation();
@@ -255,7 +245,6 @@ function BibleVerseText({
       <Text style={[bibleVerseWebInteractionStyle, persistedHighlightStyle]}>
         {segments.map((segment, index) => {
           if (segment.kind === "text") return segment.text;
-          if (!showFootnotes) return null;
           return (
             <Text
               accessibilityLabel={t("bible.footnote.open", { marker: segment.marker, reference })}

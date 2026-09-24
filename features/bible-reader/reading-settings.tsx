@@ -23,39 +23,27 @@ import {
 } from "@/features/bible-reader/preferences";
 
 export function ReadingSettingsSheet({
-  compactMode,
   fontId,
   fontSize,
   onChangeFont,
   onChangeReaderTheme,
-  onChangeShowCrossReferences,
-  onChangeShowFootnotes,
   onChangeShowVerseNumbers,
   onClose: notifyClose,
-  onCompactModeChange,
   onFontSizeChange,
   palette,
   readerTheme,
-  showCrossReferences,
-  showFootnotes,
   showVerseNumbers,
   visible,
 }: {
-  compactMode: boolean;
   fontId: BibleReaderFontId;
   fontSize: number;
   onChangeFont: (fontId: BibleReaderFontId) => void;
   onChangeReaderTheme: (theme: BibleReaderThemeId) => void;
-  onChangeShowCrossReferences: (value: boolean) => void;
-  onChangeShowFootnotes: (value: boolean) => void;
   onChangeShowVerseNumbers: (value: boolean) => void;
   onClose: () => void;
-  onCompactModeChange: (value: boolean) => void;
   onFontSizeChange: (delta: number) => void;
   palette: ReaderPalette;
   readerTheme: BibleReaderThemeId;
-  showCrossReferences: boolean;
-  showFootnotes: boolean;
   showVerseNumbers: boolean;
   visible: boolean;
 }) {
@@ -138,9 +126,6 @@ export function ReadingSettingsSheet({
             <SettingsGroup palette={palette} title={t("bible.settings.options")}>
               <View style={{ gap: 2 }}>
                 <SettingsToggle label={t("bible.settings.showVerseNumbers")} onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
-                <SettingsToggle label={t("bible.settings.showCrossReferences")} onChange={onChangeShowCrossReferences} palette={palette} value={showCrossReferences} />
-                <SettingsToggle label={t("bible.settings.showFootnotes")} onChange={onChangeShowFootnotes} palette={palette} value={showFootnotes} />
-                <SettingsToggle label={t("bible.settings.compactMode")} onChange={onCompactModeChange} palette={palette} value={compactMode} />
               </View>
             </SettingsGroup>
             </SheetScrollView>

@@ -33,12 +33,6 @@ const defaultReaderTheme: BibleReaderThemeId = "light";
 
 export const defaultShowVerseNumbers = true;
 
-export const defaultShowFootnotes = true;
-
-export const defaultShowCrossReferences = true;
-
-export const defaultCompactMode = false;
-
 export const minFontSize = 16;
 
 export const maxFontSize = 28;
@@ -67,14 +61,11 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
   if (!value) {
     return {
       bibleVersionId: defaultBibleVersionId,
-      compactMode: defaultCompactMode,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
       history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
-      showCrossReferences: defaultShowCrossReferences,
-      showFootnotes: defaultShowFootnotes,
       showVerseNumbers: defaultShowVerseNumbers,
     };
   }
@@ -86,27 +77,21 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
     return {
       appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
       bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
-      compactMode: typeof parsed?.compactMode === "boolean" ? parsed.compactMode : defaultCompactMode,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position: history.entries[history.index],
       history,
       readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
-      showCrossReferences: typeof parsed?.showCrossReferences === "boolean" ? parsed.showCrossReferences : defaultShowCrossReferences,
-      showFootnotes: typeof parsed?.showFootnotes === "boolean" ? parsed.showFootnotes : defaultShowFootnotes,
       showVerseNumbers: typeof parsed?.showVerseNumbers === "boolean" ? parsed.showVerseNumbers : defaultShowVerseNumbers,
     };
   } catch {
     return {
       bibleVersionId: defaultBibleVersionId,
-      compactMode: defaultCompactMode,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
       history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
-      showCrossReferences: defaultShowCrossReferences,
-      showFootnotes: defaultShowFootnotes,
       showVerseNumbers: defaultShowVerseNumbers,
     };
   }

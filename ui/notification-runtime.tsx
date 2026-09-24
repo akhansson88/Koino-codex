@@ -56,39 +56,49 @@ export function NotificationRuntime() {
     }
 
     let active = true;
+    let registering = false;
+    let lastAttemptAt = 0;
+    const refreshCooldownMs = 60_000;
     const register = async () => {
-      setNotificationRegistrationState({ status: "checking" });
-      if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("comments", {
-          name: "Comments",
-          importance: Notifications.AndroidImportance.HIGH,
-        });
-        await Notifications.setNotificationChannelAsync("mentions", {
-          name: "Mentions",
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 150, 250],
-        });
-        await Notifications.setNotificationChannelAsync("prayer-activity", {
-          name: "Prayer activity",
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 150, 250],
-        });
-      }
+      if (registering) return;
+      registering = true;
+      lastAttemptAt = Date.now();
+      try {
+        setNotificationRegistrationState({ status: "checking" });
+        if (Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("comments", {
+            name: "Comments",
+            importance: Notifications.AndroidImportance.HIGH,
+          });
+          await Notifications.setNotificationChannelAsync("mentions", {
+            name: "Mentions",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 150, 250],
+          });
+          await Notifications.setNotificationChannelAsync("prayer-activity", {
+            name: "Prayer activity",
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 150, 250],
+          });
+        }
 
-      const existing = await Notifications.getPermissionsAsync();
-      const permission = existing.status === "granted" ? existing : await Notifications.requestPermissionsAsync();
-      if (!active) return;
-      if (permission.status !== "granted") {
-        setNotificationRegistrationState({ status: "denied" });
-        return;
-      }
+        const existing = await Notifications.getPermissionsAsync();
+        const permission = existing.status === "granted" ? existing : await Notifications.requestPermissionsAsync();
+        if (!active) return;
+        if (permission.status !== "granted") {
+          setNotificationRegistrationState({ status: "denied" });
+          return;
+        }
 
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-      if (!projectId) throw new Error("The Expo project ID is missing from this build.");
-      const token = await Notifications.getExpoPushTokenAsync({ projectId });
-      if (active) {
-        await dispatchRef.current({ type: "registerPushToken", token: token.data, platform: Platform.OS as "android" | "ios" });
-        setNotificationRegistrationState({ status: "ready", tokenUpdatedAt: new Date().toISOString() });
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        if (!projectId) throw new Error("The Expo project ID is missing from this build.");
+        const token = await Notifications.getExpoPushTokenAsync({ projectId });
+        if (active) {
+          await dispatchRef.current({ type: "registerPushToken", token: token.data, platform: Platform.OS as "android" | "ios" });
+          setNotificationRegistrationState({ status: "ready", tokenUpdatedAt: new Date().toISOString() });
+        }
+      } finally {
+        registering = false;
       }
     };
 
@@ -100,6 +110,7 @@ export function NotificationRuntime() {
     });
 
     const tokenSubscription = Notifications.addPushTokenListener(() => {
+      if (registering || Date.now() - lastAttemptAt < refreshCooldownMs) return;
       void register().catch((error: unknown) => {
         if (!active) return;
         const message = error instanceof Error ? error.message : "Push token refresh failed.";

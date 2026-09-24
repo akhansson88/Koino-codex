@@ -836,11 +836,14 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
+          ownsItem={item.userId === state.currentUserId}
           prayed={prayer.prayed}
           prayedBy={prayer.prayedBy}
           prayerCount={prayer.count}
           onOpen={() => openPrayerDetail(item, "detail")}
           onPray={() => prayForItem(item)}
+          onEdit={() => editPost(item)}
+          onDelete={() => deletePost(item)}
         />
       );
     }
@@ -984,12 +987,15 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             filter={prayerFilter}
             onBack={goBackFromRoomView}
             onCreatePrayer={() => openComposer("prayer_request")}
+            onEditPrayer={editPost}
+            onDeletePrayer={deletePost}
             onFilter={setPrayerFilter}
             onOpenPrayer={openPrayerDetail}
             onPray={prayForItem}
             onPrayForSomeone={() => setMemberSelectVisible(true)}
             prayerPosts={visiblePrayerPosts}
             prayerState={itemPrayerState}
+            currentUserId={state.currentUserId}
             feedError={communityFeedError}
             feedLoading={communityFeedLoading}
             feedOffline={communityFeedOffline}
