@@ -24,7 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { activePrivateCheckIns } from "@/state/check-ins";
+import { CheckInSubmissionError, checkInExistsForDay } from "@/state/check-ins";
 import {
   fetchOlderFirebasePage,
   FIREBASE_PAGE_SIZE,
@@ -45,6 +45,7 @@ import {
   BibleHighlight,
   BibleHighlightPaletteColor,
   CheckIn,
+  CheckInDailyClaim,
   DiscussionFollow,
   BiblePlan,
   GroupBiblePlanAnnouncement,
@@ -96,6 +97,94 @@ import {
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
 
 const pendingCheckInKeys = new Set<string>();
+
+const CHECK_IN_CLAIM_RECOVERY_MS = 2 * 60 * 1000;
+
+function checkInClaimPath(userId: string, groupId: string, dayKey: string) {
+  return `checkInDailyClaims/${userId}/${groupId}/${dayKey}`;
+}
+
+async function releaseCheckInClaim(userId: string, groupId: string, dayKey: string, checkInId: string) {
+  await runTransaction(
+    ref(database, checkInClaimPath(userId, groupId, dayKey)),
+    (current: CheckInDailyClaim | null) => current?.checkInId === checkInId && current.status === "pending" ? null : undefined,
+  );
+}
+
+function releaseDeletedCheckInClaim(userId: string, groupId: string, dayKey: string, checkInId: string) {
+  return runTransaction(
+    ref(database, checkInClaimPath(userId, groupId, dayKey)),
+    (current: CheckInDailyClaim | null) => current?.checkInId === checkInId ? null : undefined,
+  );
+}
+
+async function commitCheckInClaim(userId: string, groupId: string, dayKey: string, checkInId: string) {
+  const claimRef = ref(database, checkInClaimPath(userId, groupId, dayKey));
+  const claim = (await get(claimRef)).val() as CheckInDailyClaim | null;
+  if (claim?.checkInId !== checkInId || claim.status === "committed") return;
+  if (claim.status !== "pending") return;
+
+  try {
+    await set(claimRef, { ...claim, status: "committed" });
+  } catch (error) {
+    const latest = (await get(claimRef)).val() as CheckInDailyClaim | null;
+    if (latest?.checkInId !== checkInId || latest.status !== "committed") throw error;
+  }
+}
+
+async function claimCheckInDay(
+  userId: string,
+  groupId: string,
+  dayKey: string,
+  claim: CheckInDailyClaim,
+) {
+  const claimRef = ref(database, checkInClaimPath(userId, groupId, dayKey));
+  const create = await runTransaction(
+    claimRef,
+    (current: CheckInDailyClaim | null) => current ? undefined : claim,
+  );
+  if (create.committed) return;
+
+  const existing = create.snapshot.val() as CheckInDailyClaim | null;
+  if (!existing) throw new CheckInSubmissionError("in_progress");
+
+  const existingPath = existing.visibility === "group"
+    ? `checkIns/${groupId}/${existing.checkInId}`
+    : `privateCheckIns/${userId}/${existing.checkInId}`;
+  const existingRecord = await get(ref(database, existingPath));
+  if (existingRecord.exists()) {
+    if (existing.status === "pending") {
+      await commitCheckInClaim(userId, groupId, dayKey, existing.checkInId).catch(() => undefined);
+    }
+    throw new CheckInSubmissionError("already_submitted");
+  }
+  if (existing.status === "committed") {
+    const cleanup = await releaseDeletedCheckInClaim(userId, groupId, dayKey, existing.checkInId);
+    if (!cleanup.committed) throw new CheckInSubmissionError("in_progress");
+    const retry = await runTransaction(claimRef, (current: CheckInDailyClaim | null) => current ? undefined : claim);
+    if (!retry.committed) throw new CheckInSubmissionError("in_progress");
+    return;
+  }
+  if (existing.status !== "pending") throw new CheckInSubmissionError("in_progress");
+
+  const claimAge = Date.now() - existing.createdAt;
+  if (Number.isFinite(claimAge) && claimAge < CHECK_IN_CLAIM_RECOVERY_MS) {
+    throw new CheckInSubmissionError("in_progress");
+  }
+
+  const cleanup = await runTransaction(
+    claimRef,
+    (current: CheckInDailyClaim | null) =>
+      current?.checkInId === existing.checkInId && current.status === "pending" && current.createdAt === existing.createdAt ? null : undefined,
+  );
+  if (!cleanup.committed) throw new CheckInSubmissionError("in_progress");
+
+  const retry = await runTransaction(
+    claimRef,
+    (current: CheckInDailyClaim | null) => current ? undefined : claim,
+  );
+  if (!retry.committed) throw new CheckInSubmissionError("in_progress");
+}
 
 const pendingPrayerCompletionKeys = new Set<string>();
 
@@ -165,6 +254,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [privateCheckIns, setPrivateCheckIns] = useState<CheckIn[]>([]);
+  const [privateCheckInsReady, setPrivateCheckInsReady] = useState(false);
+  const [checkInDailyClaims, setCheckInDailyClaims] = useState<CheckInDailyClaim[]>([]);
+  const [checkInDailyClaimsReady, setCheckInDailyClaimsReady] = useState(false);
   const [posts, setPosts] = useState<KoinoState["posts"]>([]);
   const [prayerSessions, setPrayerSessions] = useState<PrayerSession[]>([]);
   const [prayerNotifications, setPrayerNotifications] = useState<PrayerNotification[]>([]);
@@ -222,6 +314,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setMemberships([]);
     setCheckIns([]);
     setPrivateCheckIns([]);
+    setPrivateCheckInsReady(true);
+    setCheckInDailyClaims([]);
+    setCheckInDailyClaimsReady(true);
     setPosts([]);
     setPrayerSessions([]);
     setPrayerNotifications([]);
@@ -480,6 +575,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     olderJournalEntriesRef.current = [];
     olderPrivateCheckInsRef.current = [];
+    setPrivateCheckInsReady(false);
     olderPrayerNotificationsRef.current = [];
     setJournalEntriesHasMore(false);
     setPrivateCheckInsHasMore(false);
@@ -495,6 +591,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         const recent = firebaseRecords<CheckIn>(snapshot.val());
         setPrivateCheckIns(mergeFirebaseRecords(olderPrivateCheckInsRef.current, recent));
         setPrivateCheckInsHasMore(recent.length === FIREBASE_PAGE_SIZE);
+        setPrivateCheckInsReady(true);
+      }, (error) => {
+        setAuthError(authMessage(error));
       }),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
       onValue(recentFirebaseQuery(prayerNotificationsRef), (snapshot) => {
@@ -580,6 +679,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setCommunityFeedReady(true);
       setMemberships([]);
       setCheckIns([]);
+      setCheckInDailyClaims([]);
+      setCheckInDailyClaimsReady(true);
       setPosts([]);
       setReplies([]);
       setDiscussionFollows([]);
@@ -612,6 +713,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setCommunityFeedReady(false);
     setMemberships([]);
     setCheckIns([]);
+    setCheckInDailyClaims([]);
+    setCheckInDailyClaimsReady(false);
     setPosts([]);
     setReplies([]);
     setDiscussionFollows([]);
@@ -650,6 +753,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const connectedRef = ref(database, ".info/connected");
     const membersRef = ref(database, `groupMembers/${groupId}`);
     const checkInsRef = ref(database, `checkIns/${groupId}`);
+    const checkInDailyClaimsRef = ref(database, `checkInDailyClaims/${firebaseUser.uid}/${groupId}`);
     const postsRef = ref(database, `posts/${groupId}`);
     const repliesRef = ref(database, `replies/${groupId}`);
     const discussionFollowsRef = ref(database, `userDiscussionFollows/${firebaseUser.uid}/${groupId}`);
@@ -680,6 +784,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         checkInsReady = true;
         markCommunityFeedReady();
       }, handleCommunityFeedError),
+      onValue(checkInDailyClaimsRef, (snapshot) => {
+        if (!active) return;
+        const claims = snapshot.val() as Record<string, Omit<CheckInDailyClaim, "dayKey">> | null;
+        setCheckInDailyClaims(Object.entries(claims ?? {}).map(([dayKey, claim]) => ({ ...claim, dayKey })));
+        setCheckInDailyClaimsReady(true);
+      }, (error) => {
+        if (!active) return;
+        setAuthError(authMessage(error));
+      }),
       onValue(recentFirebaseQuery(postsRef), (snapshot) => {
         if (!active) return;
         const recent = firebaseRecords<Post>(snapshot.val());
@@ -765,6 +878,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       communityContentLoadingMore,
       journalEntriesHasMore: journalEntriesHasMore || privateCheckInsHasMore,
       journalEntriesLoadingMore,
+      privateCheckInsReady,
+      checkInDailyClaims,
+      checkInDailyClaimsReady,
       prayerNotificationsHasMore,
       prayerNotificationsLoadingMore,
       theme,
@@ -819,6 +935,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     prayerNotificationsHasMore,
     prayerNotificationsLoadingMore,
     privateCheckInsHasMore,
+    privateCheckInsReady,
+    checkInDailyClaims,
+    checkInDailyClaimsReady,
     privateCheckIns,
     prayerReactions,
     prayerSessions,
@@ -1080,19 +1199,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "submitCheckIn": {
-              if (!firebaseUser || !profile?.currentGroupId) return;
+              if (!firebaseUser || !profile?.currentGroupId) throw new CheckInSubmissionError("unavailable");
               const timestamp = now();
               const todayKey = localDayKey(timestamp);
               const pendingKey = `${firebaseUser.uid}:${profile.currentGroupId}:${todayKey}`;
-              if (pendingCheckInKeys.has(pendingKey)) return;
+              if (pendingCheckInKeys.has(pendingKey)) throw new CheckInSubmissionError("in_progress");
 
-              const hasCheckInToday = [...checkIns, ...activePrivateCheckIns(privateCheckIns, journalEntries)].some(
-                (item) =>
-                  item.userId === firebaseUser.uid &&
-                  item.groupId === profile.currentGroupId &&
-                  localDayKey(item.createdAt) === todayKey,
-              );
-              if (hasCheckInToday) return;
+              if (checkInExistsForDay([...checkIns, ...privateCheckIns], firebaseUser.uid, profile.currentGroupId, todayKey)) {
+                throw new CheckInSubmissionError("already_submitted");
+              }
               pendingCheckInKeys.add(pendingKey);
 
               try {
@@ -1101,6 +1216,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   id: id("checkin"),
                   userId: firebaseUser.uid,
                   groupId: profile.currentGroupId,
+                  dayKey: todayKey,
                   mood: action.mood,
                   readToday: action.readToday,
                   reflectionText: action.reflectionText.trim(),
@@ -1109,28 +1225,48 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   createdAt: timestamp,
                 };
 
-                if (action.visibility === "group") {
-                  await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
-                } else {
-                  const entry: JournalEntry = {
-                    id: id("journal"),
-                    userId: firebaseUser.uid,
-                    journalType: "heart_checkin",
-                    body: action.reflectionText.trim() || "Private check-in",
-                    source: "private_check_in",
-                    entryKind: "reflection",
-                    mood: action.mood,
-                    ...(action.heartMood ? { heartMood: action.heartMood } : {}),
-                    isPrivate: true,
-                    ...(verses[0] ? { verse: verses[0], verses } : {}),
-                    createdAt: timestamp,
-                    updatedAt: timestamp,
-                  };
-                  await update(ref(database), {
-                    [`privateCheckIns/${firebaseUser.uid}/${checkIn.id}`]: checkIn,
-                    [`journalEntries/${firebaseUser.uid}/${entry.id}`]: entry,
-                  });
+                await claimCheckInDay(firebaseUser.uid, profile.currentGroupId, todayKey, {
+                  dayKey: todayKey,
+                  checkInId: checkIn.id,
+                  visibility: action.visibility,
+                  status: "pending",
+                  createdAt: Date.now(),
+                });
+
+                try {
+                  if (action.visibility === "group") {
+                    await set(ref(database, `checkIns/${profile.currentGroupId}/${checkIn.id}`), checkIn);
+                    setCheckIns((current) => current.some((item) => item.id === checkIn.id) ? current : [...current, checkIn]);
+                    olderCheckInsRef.current = mergeFirebaseRecords(olderCheckInsRef.current, [checkIn]);
+                  } else {
+                    const entry: JournalEntry = {
+                      id: id("journal"),
+                      userId: firebaseUser.uid,
+                      journalType: "heart_checkin",
+                      body: action.reflectionText.trim() || "Private check-in",
+                      source: "private_check_in",
+                      entryKind: "reflection",
+                      mood: action.mood,
+                      ...(action.heartMood ? { heartMood: action.heartMood } : {}),
+                      isPrivate: true,
+                      ...(verses[0] ? { verse: verses[0], verses } : {}),
+                      createdAt: timestamp,
+                      updatedAt: timestamp,
+                    };
+                    await update(ref(database), {
+                      [`privateCheckIns/${firebaseUser.uid}/${checkIn.id}`]: checkIn,
+                      [`journalEntries/${firebaseUser.uid}/${entry.id}`]: entry,
+                    });
+                    setPrivateCheckIns((current) => current.some((item) => item.id === checkIn.id) ? current : [...current, checkIn]);
+                    olderPrivateCheckInsRef.current = mergeFirebaseRecords(olderPrivateCheckInsRef.current, [checkIn]);
+                    setJournalEntries((current) => current.some((item) => item.id === entry.id) ? current : [...current, entry]);
+                    olderJournalEntriesRef.current = mergeFirebaseRecords(olderJournalEntriesRef.current, [entry]);
+                  }
+                } catch (error) {
+                  await releaseCheckInClaim(firebaseUser.uid, profile.currentGroupId, todayKey, checkIn.id).catch(() => undefined);
+                  throw error;
                 }
+                await commitCheckInClaim(firebaseUser.uid, profile.currentGroupId, todayKey, checkIn.id).catch(() => undefined);
                } finally {
                  pendingCheckInKeys.delete(pendingKey);
                }
@@ -1289,6 +1425,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await deleteFeedItemWithChildren(profile.currentGroupId, "check_in", action.id, firebaseUser.uid);
               setCheckIns((current) => current.filter((item) => item.id !== action.id));
               olderCheckInsRef.current = olderCheckInsRef.current.filter((item) => item.id !== action.id);
+              const dayKey = checkIn.dayKey ?? localDayKey(checkIn.createdAt);
+              if (dayKey) await releaseDeletedCheckInClaim(firebaseUser.uid, checkIn.groupId, dayKey, checkIn.id);
               return;
             }
             case "deletePost": {
@@ -1629,6 +1767,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "deleteJournalEntry": {
               if (!firebaseUser) return;
               const entry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
+              let deletedCheckIn: CheckIn | undefined;
               const updates: Record<string, null> = {
                 [`journalEntries/${firebaseUser.uid}/${action.id}`]: null,
               };
@@ -1639,6 +1778,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 )?.id;
 
                 if (checkInId) {
+                  deletedCheckIn = privateCheckIns.find((item) => item.id === checkInId);
                   updates[`privateCheckIns/${firebaseUser.uid}/${checkInId}`] = null;
                 }
               }
@@ -1649,6 +1789,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (entry?.source === "private_check_in") {
                 setPrivateCheckIns((current) => current.filter((checkIn) => checkIn.createdAt !== entry.createdAt));
                 olderPrivateCheckInsRef.current = olderPrivateCheckInsRef.current.filter((checkIn) => checkIn.createdAt !== entry.createdAt);
+              }
+              if (deletedCheckIn) {
+                const dayKey = deletedCheckIn.dayKey ?? localDayKey(deletedCheckIn.createdAt);
+                if (dayKey) {
+                  await releaseDeletedCheckInClaim(firebaseUser.uid, deletedCheckIn.groupId, dayKey, deletedCheckIn.id);
+                }
               }
               return;
             }
@@ -2162,6 +2308,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "deleteGroupImage" ||
           action.type === "uploadUserAvatar" ||
           action.type === "deleteUserAvatar" ||
+          action.type === "submitCheckIn" ||
           (action.type === "togglePostReaction" && action.mode === "ensure") ||
           (action.type === "createReply" && Boolean(action.replyId)) ||
           action.type === "markPrayerAnswered" ||

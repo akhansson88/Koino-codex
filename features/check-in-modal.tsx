@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { heartMoods } from "@/state/product";
+import { CheckInSubmissionError } from "@/state/check-ins";
 import type { BibleVerse, GroupImage, HeartMood } from "@/state/types";
 import {
   AppScreen,
@@ -95,19 +97,49 @@ export function CheckInModal({
   onMood: (value: HeartMood) => void;
   onNote: (value: string) => void;
   onShare: (value: boolean) => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
   onVerses: (verses: BibleVerse[]) => void;
 }) {
   const { t } = useAppTranslation();
   const selectedMood = heartMoods.find((option) => option.value === mood);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string>();
+
+  useEffect(() => {
+    if (!visible || step !== "details") {
+      setSubmitting(false);
+      setSubmitError(undefined);
+    }
+  }, [step, visible]);
+
+  async function submit() {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(undefined);
+    try {
+      await onSubmit();
+    } catch (error) {
+      if (error instanceof CheckInSubmissionError && error.code === "already_submitted") {
+        setSubmitError(t("community.checkIn.alreadySubmitted"));
+      } else if (error instanceof CheckInSubmissionError && error.code === "in_progress") {
+        setSubmitError(t("community.checkIn.inProgress"));
+      } else if (error instanceof CheckInSubmissionError && error.code === "unavailable") {
+        setSubmitError(t("community.checkIn.unavailable"));
+      } else {
+        setSubmitError(t("community.checkIn.saveFailed"));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <FullScreenModal animationType="slide" presentationStyle="pageSheet" visible={visible} onRequestClose={step === "details" ? onBack : onClose}>
+    <FullScreenModal animationType="slide" presentationStyle="pageSheet" visible={visible} onRequestClose={submitting ? () => {} : step === "details" ? onBack : onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ backgroundColor: colors.cream, flex: 1 }}>
         <AppScreen topInset>
           {step !== "thanks" ? (
             <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <IconButton accessibilityLabel={t("community.checkIn.back")} icon="arrow-left" onPress={step === "choose" ? onClose : onBack} />
+              <IconButton accessibilityLabel={t("community.checkIn.back")} icon="arrow-left" onPress={submitting ? () => {} : step === "choose" ? onClose : onBack} />
             </View>
           ) : null}
 
@@ -133,7 +165,7 @@ export function CheckInModal({
                   />
                 ))}
               </View>
-              <SecondaryButton onPress={onClose}>{t("community.checkIn.skip")}</SecondaryButton>
+              <SecondaryButton disabled={submitting} onPress={onClose}>{t("community.checkIn.skip")}</SecondaryButton>
             </>
           ) : null}
 
@@ -149,7 +181,7 @@ export function CheckInModal({
                   maxLength={350}
                   value={note}
                   onChangeText={(value) => onNote(value.slice(0, 350))}
-                  onSubmitEditing={onSubmit}
+                  onSubmitEditing={submit}
                   placeholder={t("community.checkIn.notePlaceholder")}
                   returnKeyType="send"
                   style={{ minHeight: 210 }}
@@ -179,8 +211,13 @@ export function CheckInModal({
                   </Card>
                 </Pressable>
               </View>
-              <PrimaryButton icon="send" onPress={onSubmit} style={{ minHeight: 58 }}>
-                {share ? t("community.checkIn.shareAction") : t("community.checkIn.savePrivateAction")}
+              {submitError ? <BodyText style={{ color: colors.danger }}>{submitError}</BodyText> : null}
+              <PrimaryButton disabled={submitting} icon="send" onPress={submit} style={{ minHeight: 58 }}>
+                {submitting
+                  ? t("community.checkIn.saving")
+                  : share
+                    ? t("community.checkIn.shareAction")
+                    : t("community.checkIn.savePrivateAction")}
               </PrimaryButton>
               <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
                 <Feather name="lock" size={13} color={colors.muted} />

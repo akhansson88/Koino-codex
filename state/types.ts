@@ -166,6 +166,7 @@ export type CheckIn = {
   id: Id;
   userId: Id;
   groupId: Id;
+  dayKey?: string;
   mood: number;
   readToday: boolean;
   reflectionText: string;
@@ -304,6 +305,14 @@ export type JournalEntry = {
   updatedAt: string;
 };
 
+export type CheckInDailyClaim = {
+  dayKey: string;
+  checkInId: Id;
+  visibility: CheckIn["visibility"];
+  status: "pending" | "committed";
+  createdAt: number;
+};
+
 export type SupportIntent = {
   id: Id;
   userId: Id;
@@ -331,6 +340,9 @@ export type KoinoState = {
   communityContentLoadingMore: boolean;
   journalEntriesHasMore: boolean;
   journalEntriesLoadingMore: boolean;
+  privateCheckInsReady: boolean;
+  checkInDailyClaims: CheckInDailyClaim[];
+  checkInDailyClaimsReady: boolean;
   prayerNotificationsHasMore: boolean;
   prayerNotificationsLoadingMore: boolean;
   theme: ThemeName;

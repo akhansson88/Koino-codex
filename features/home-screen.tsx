@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { markStartupMilestone } from "@/features/startup-performance";
-import { activePrivateCheckIns } from "@/state/check-ins";
+import { checkInExistsForDay } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -64,7 +64,7 @@ function localDayKey(value: string | Date) {
 }
 
 export function HomeScreen() {
-  const state = useKoinoFields(["authError", "checkIns", "communityFeedError", "communityFeedGroupId", "communityFeedReady", "currentGroupId", "currentUserId", "groups", "journalEntries", "memberships", "posts", "prayerReactions", "privateCheckIns", "profileReady", "userGroupsReady", "users"]);
+  const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError", "communityFeedGroupId", "communityFeedReady", "currentGroupId", "currentUserId", "groups", "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "profileReady", "userGroupsReady", "users"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
@@ -89,9 +89,7 @@ export function HomeScreen() {
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
-  const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
-    (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
-  );
+  const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const communityMembers = useMemo(
@@ -117,6 +115,16 @@ export function HomeScreen() {
     profileLoading ||
     !state.userGroupsReady ||
     Boolean(state.currentGroupId && !state.communityFeedError && !communityFeedReadyForGroup);
+  const checkInStatusReady = Boolean(
+    state.currentUserId &&
+    state.currentGroupId &&
+    state.profileReady &&
+    state.userGroupsReady &&
+    state.privateCheckInsReady &&
+    state.checkInDailyClaimsReady &&
+    !state.communityFeedError &&
+    communityFeedReadyForGroup,
+  );
   const communityContent = useMemo(() => {
     return selectCommunityContent({
       checkIns: state.checkIns,
@@ -162,15 +170,16 @@ export function HomeScreen() {
   }
 
   function openCheckIn() {
+    if (!checkInStatusReady || todaysCheckIn) return;
     resetCheckIn();
     setCheckInVisible(true);
   }
 
   useEffect(() => {
-    if (!params.checkIn || params.checkIn === lastCheckInParamRef.current) return;
+    if (!params.checkIn || params.checkIn === lastCheckInParamRef.current || !checkInStatusReady) return;
     lastCheckInParamRef.current = params.checkIn;
     openCheckIn();
-  }, [params.checkIn]);
+  }, [params.checkIn, checkInStatusReady, todaysCheckIn]);
 
   function openPrayerSurface() {
     if (communityContentLoading) return;
@@ -271,7 +280,7 @@ export function HomeScreen() {
           </View>
         )}
 
-        <HeartCheckInCard checkedIn={todaysCheckIn} loading={communityContentLoading} onPress={openCheckIn} />
+        {checkInStatusReady && !todaysCheckIn ? <HeartCheckInCard onPress={openCheckIn} /> : null}
 
         <PrayerPreviewCard
           members={communityMembers}
@@ -415,16 +424,14 @@ function ProfileGreetingSkeleton() {
   );
 }
 
-function HeartCheckInCard({ checkedIn, loading, onPress }: { checkedIn: boolean; loading: boolean; onPress: () => void }) {
+function HeartCheckInCard({ onPress }: { onPress: () => void }) {
   const { t } = useAppTranslation();
-  const hintKey = loading ? "home.checkIn.loading" : checkedIn ? "home.checkIn.completedHint" : "home.checkIn.promptHint";
+  const hintKey = "home.checkIn.promptHint";
   return (
     <Pressable
       accessibilityHint={t(hintKey)}
       accessibilityLabel={t("community.checkIn.promptTitle")}
       accessibilityRole="button"
-      accessibilityState={{ busy: loading, disabled: loading }}
-      disabled={loading}
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
     >
@@ -439,18 +446,14 @@ function HeartCheckInCard({ checkedIn, loading, onPress }: { checkedIn: boolean;
           importantForAccessibility="no-hide-descendants"
           style={{
             alignItems: "center",
-            backgroundColor: checkedIn ? colors.mossSurface : colors.accentSubtle,
+            backgroundColor: colors.accentSubtle,
             borderRadius: radius.lg,
             height: 56,
             justifyContent: "center",
             width: 56,
           }}
         >
-          {loading ? (
-            <ActivityIndicator color={colors.olive} />
-          ) : (
-            <Feather name={checkedIn ? "check" : "plus"} size={25} color={colors.olive} />
-          )}
+          <Feather name="plus" size={25} color={colors.olive} />
         </View>
       </Card>
     </Pressable>

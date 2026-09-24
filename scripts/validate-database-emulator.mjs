@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { initializeApp, deleteApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { connectDatabaseEmulator, equalTo, get, getDatabase, goOffline, goOnline, limitToLast, onValue, orderByChild, query, ref, set } from "firebase/database";
+import { connectDatabaseEmulator, equalTo, get, getDatabase, goOffline, goOnline, limitToLast, onValue, orderByChild, query, ref, remove, runTransaction, set } from "firebase/database";
 
 const projectId = "demo-koino";
 const namespace = "demo-koino-default-rtdb";
@@ -51,6 +51,98 @@ try {
       read1: { id: "read1", readAt: "2026-01-01T00:02:00Z", createdAt: "2026-01-01T00:00:00Z" },
     } },
   });
+
+  const checkInDay = "2026-02-10";
+  const checkIn = (uid, id, dayKey, visibility = "group") => ({
+    id, userId: uid, groupId: "group1", dayKey, mood: 3, readToday: true,
+    reflectionText: "A test check-in", visibility, createdAt: "2026-02-10T09:00:00.000Z",
+  });
+  const dailyClaim = (dayKey, checkInId, visibility = "group") => ({
+    dayKey, checkInId, visibility, status: "pending", createdAt: Date.now(),
+  });
+  const firstCheckIn = checkIn(member.uid, "daily-first", checkInDay);
+  await assert.rejects(
+    () => set(ref(member.database, `checkIns/group1/${firstCheckIn.id}`), firstCheckIn),
+    /permission_denied|Permission denied/i,
+    "A shared check-in must have a matching daily claim",
+  );
+  await assert.rejects(
+    () => set(ref(outsider.database, `checkInDailyClaims/${outsider.uid}/group1/${checkInDay}`), dailyClaim(checkInDay, "outsider-checkin")),
+    /permission_denied|Permission denied/i,
+    "A non-member cannot reserve a community check-in day",
+  );
+
+  const firstClaimRef = ref(member.database, `checkInDailyClaims/${member.uid}/group1/${checkInDay}`);
+  const reservedFirstDay = await runTransaction(firstClaimRef, (current) => current ? undefined : dailyClaim(checkInDay, firstCheckIn.id));
+  assert.equal(reservedFirstDay.committed, true);
+  const competingClaim = await runTransaction(
+    ref(memberDevice.database, `checkInDailyClaims/${member.uid}/group1/${checkInDay}`),
+    (current) => current ? undefined : dailyClaim(checkInDay, "daily-second"),
+  );
+  assert.equal(competingClaim.committed, false, "The second device must not claim the same community day");
+  await set(ref(member.database, `checkIns/group1/${firstCheckIn.id}`), firstCheckIn);
+  const firstClaim = (await get(firstClaimRef)).val();
+  assert.equal(firstClaim.status, "pending");
+  await set(firstClaimRef, { ...firstClaim, status: "committed" });
+  await assert.rejects(
+    () => set(ref(member.database, `checkInDailyClaims/${member.uid}/group1/${checkInDay}`), dailyClaim(checkInDay, "daily-private", "private")),
+    /permission_denied|Permission denied/i,
+    "Shared and private check-ins share one daily slot",
+  );
+  await assert.rejects(
+    () => remove(firstClaimRef),
+    /permission_denied|Permission denied/i,
+    "A committed daily claim cannot be cleared while its check-in remains",
+  );
+  await remove(ref(member.database, `checkIns/group1/${firstCheckIn.id}`));
+  await remove(firstClaimRef);
+  const afterDeleteClaim = await runTransaction(firstClaimRef, (current) => current ? undefined : dailyClaim(checkInDay, "daily-after-delete"));
+  assert.equal(afterDeleteClaim.committed, true, "Deleting a check-in releases its daily slot");
+  const afterDeleteCheckIn = checkIn(member.uid, "daily-after-delete", checkInDay);
+  await set(ref(member.database, `checkIns/group1/${afterDeleteCheckIn.id}`), afterDeleteCheckIn);
+  const replacementClaim = (await get(firstClaimRef)).val();
+  await set(firstClaimRef, { ...replacementClaim, status: "committed" });
+
+  const privateDay = "2026-02-11";
+  const privateRecord = checkIn(member.uid, "private-first", privateDay, "private");
+  const privateClaimRef = ref(member.database, `checkInDailyClaims/${member.uid}/group1/${privateDay}`);
+  const reservedPrivateDay = await runTransaction(privateClaimRef, (current) => current ? undefined : dailyClaim(privateDay, privateRecord.id, "private"));
+  assert.equal(reservedPrivateDay.committed, true);
+  await set(ref(member.database, `privateCheckIns/${member.uid}/${privateRecord.id}`), privateRecord);
+  const privateClaim = (await get(privateClaimRef)).val();
+  await set(privateClaimRef, { ...privateClaim, status: "committed" });
+  await assert.rejects(
+    () => set(ref(member.database, "privateCheckIns/" + member.uid + "/private-second"), checkIn(member.uid, "private-second", privateDay, "private")),
+    /permission_denied|Permission denied/i,
+    "A private check-in cannot be added without its own daily claim",
+  );
+  await assert.rejects(
+    () => remove(privateClaimRef),
+    /permission_denied|Permission denied/i,
+    "A committed private claim cannot be cleared while its check-in remains",
+  );
+  await remove(ref(member.database, `privateCheckIns/${member.uid}/${privateRecord.id}`));
+  await remove(privateClaimRef);
+  const privateRetryClaim = await runTransaction(privateClaimRef, (current) => current ? undefined : dailyClaim(privateDay, "private-retry", "private"));
+  assert.equal(privateRetryClaim.committed, true, "Deleting a private check-in releases its daily slot");
+
+  const concurrentDay = "2026-02-12";
+  const concurrentClaims = await Promise.all([
+    runTransaction(ref(member.database, `checkInDailyClaims/${member.uid}/group1/${concurrentDay}`),
+      (current) => current ? undefined : dailyClaim(concurrentDay, "race-a")),
+    runTransaction(ref(memberDevice.database, `checkInDailyClaims/${member.uid}/group1/${concurrentDay}`),
+      (current) => current ? undefined : dailyClaim(concurrentDay, "race-b")),
+  ]);
+  assert.equal(concurrentClaims.filter((result) => result.committed).length, 1, "Only one device can claim a given user/community/day");
+
+  const recoverableDay = "2026-02-13";
+  const recoverableClaimRef = ref(member.database, `checkInDailyClaims/${member.uid}/group1/${recoverableDay}`);
+  const reservedRecoverableDay = await runTransaction(recoverableClaimRef, (current) => current ? undefined : dailyClaim(recoverableDay, "interrupted-checkin"));
+  assert.equal(reservedRecoverableDay.committed, true);
+  await remove(recoverableClaimRef);
+  const retriedClaim = await runTransaction(recoverableClaimRef, (current) => current ? undefined : dailyClaim(recoverableDay, "retried-checkin"));
+  assert.equal(retriedClaim.committed, true, "An unpersisted pending claim can be rolled back and retried");
+
   const reactionQuery = query(ref(member.database, "prayerReactions/group1"), orderByChild("targetId"), equalTo("target-a"));
   const reactionSnapshot = await get(reactionQuery);
   const matched = Object.values(reactionSnapshot.val() ?? {});
@@ -125,7 +217,7 @@ try {
       if (updates.at(-1) === matched.length + 1) { clearInterval(timer); resolve(); }
     }, 20); setTimeout(() => { clearInterval(timer); reject(new Error("Reconnect listener timed out")); }, 5000); });
   } finally { unsubscribe(); }
-  console.log("Database emulator passed: reader preference validation and same-account sync, private access, indexed queries, pagination, and reconnect.");
+  console.log("Database emulator passed: daily check-in claims, cross-device deduplication, private/shared slot enforcement, reader preference sync, private access, indexed queries, pagination, and reconnect.");
   await signOut(member.auth);
   await signOut(outsider.auth);
   await signOut(memberDevice.auth);

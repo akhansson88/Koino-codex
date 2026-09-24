@@ -14,6 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 
 import { KoinoProvider, useKoinoSelector } from "@/state/koino-store";
+import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
 import { colors, statusBarStyle } from "@/ui/theme";
@@ -33,7 +34,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}><AppLanguageProvider>
       <KoinoProvider>
-        <RootNavigator />
+        <BibleDatabaseProvider>
+          <RootNavigator />
+        </BibleDatabaseProvider>
       </KoinoProvider>
     </AppLanguageProvider></GestureHandlerRootView>
   );

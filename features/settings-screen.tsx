@@ -6,7 +6,7 @@ import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, Text, Vi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
-import { activePrivateCheckIns } from "@/state/check-ins";
+import { checkInExistsForDay } from "@/state/check-ins";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import { EntryVisibility, feedItemKind, normalizeEntryKind, roomTabs, visibility } from "@/state/product";
@@ -100,7 +100,7 @@ import {
 
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
-  const state = useKoinoFields(["authError", "checkIns", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "replies", "users"]);
+  const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
@@ -155,9 +155,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const currentCheckInKey = `${state.currentUserId}:${state.currentGroupId}:${todayKey}`;
-  const todaysCheckIn = [...state.checkIns, ...activePrivateCheckIns(state.privateCheckIns, state.journalEntries)].some(
-    (item) => item.userId === state.currentUserId && item.groupId === state.currentGroupId && localDayKey(item.createdAt) === todayKey,
-  ) || submittedCheckInKey === currentCheckInKey;
+  const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey) || submittedCheckInKey === currentCheckInKey;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const prayerReactionsByTarget = useMemo(() => {
@@ -753,6 +751,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openCheckInComposer() {
+    if (todaysCheckIn || !state.privateCheckInsReady || !state.checkInDailyClaimsReady || !communityFeedReadyForGroup) return;
     resetCommunityCheckIn();
     setCheckInVisible(true);
   }
@@ -1052,7 +1051,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             onReact={togglePostAction}
             reactionState={itemReactionState}
             feedError={communityFeedError}
-            feedLoading={communityFeedLoading}
+            feedLoading={communityFeedLoading || !state.privateCheckInsReady || !state.checkInDailyClaimsReady}
             feedOffline={communityFeedOffline}
             hasMore={state.communityContentHasMore}
             loadingMore={state.communityContentLoadingMore}

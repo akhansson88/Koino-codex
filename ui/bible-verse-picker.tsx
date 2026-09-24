@@ -8,7 +8,6 @@ import { Feather } from "@expo/vector-icons";
 import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import {
   displayBibleBookName,
   displayBibleReference,
@@ -48,9 +47,7 @@ type BibleVersePickerProps = {
 export function BibleVersePicker(props: BibleVersePickerProps) {
   return (
     <BibleBookVersionContext.Provider value={props.bibleVersionId}>
-      <BibleDatabaseProvider>
-        <BibleVersePickerContent {...props} />
-      </BibleDatabaseProvider>
+      <BibleVersePickerContent {...props} />
     </BibleBookVersionContext.Provider>
   );
 }
