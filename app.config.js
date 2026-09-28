@@ -59,7 +59,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "1.2.0",
+  runtimeVersion: "1.3.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

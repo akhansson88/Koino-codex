@@ -129,7 +129,7 @@ export function BibleText({
             key={item.reference}
             onLayout={(event) => onVerseLayout(item.verse, textOffsetRef.current + event.nativeEvent.layout.y)}
             ref={(node) => onVerseRef(item.verse, node)}
-            style={{ gap: 5, borderLeftWidth: item.verse === spokenVerse ? 3 : 0, borderLeftColor: palette.accent, backgroundColor: item.verse === spokenVerse ? palette.peach : undefined }}
+            style={{ gap: 5, borderLeftWidth: 3, borderLeftColor: item.verse === spokenVerse ? palette.accent : "transparent", backgroundColor: item.verse === spokenVerse ? palette.peach : undefined }}
           >
           {subtitlesBefore.map((subtitle) => (
             <Text
