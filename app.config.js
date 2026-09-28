@@ -19,6 +19,7 @@ const baseConfig = {
         NSAllowsArbitraryLoadsInWebContent: true,
       },
       ITSAppUsesNonExemptEncryption: false,
+      UIBackgroundModes: ["audio"],
     },
     bundleIdentifier: "com.akhansson.koino",
   },
@@ -34,6 +35,7 @@ const baseConfig = {
   },
   plugins: [
     "expo-router",
+    ["expo-audio", { microphonePermission: false, recordAudioAndroid: false }],
     "expo-asset",
     [
       "expo-image-picker",
@@ -57,7 +59,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "1.1.0",
+  runtimeVersion: "1.2.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

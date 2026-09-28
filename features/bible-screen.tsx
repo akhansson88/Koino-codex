@@ -1,3 +1,5 @@
+import { BibleAudioPlayer } from "@/features/bible-audio/player";
+import { useBibleAudio } from "@/features/bible-audio/provider";
 import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { tabBarHeight } from "@/ui/navigation-layout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -239,6 +241,11 @@ export function BibleScreen() {
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
   const readerPalette = readerPaletteFor(effectiveReaderTheme);
+  const audio = useBibleAudio();
+  const [audioVisible, setAudioVisible] = useState(false);
+  const [followAudio, setFollowAudio] = useState(true);
+  const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
+  const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
   const [loadedChapter, setLoadedChapter] = useState<{ key: string; value: BibleChapter }>();
   const [chapterLoadError, setChapterLoadError] = useState(false);
@@ -348,7 +355,7 @@ export function BibleScreen() {
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
     : chapterControlsHeight;
-  const readerBottomPadding = Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
+  const readerBottomPadding = (audio.session ? 92 : 0) + Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
   const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
   const readerCanGoBack = navigation.canGoBack();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -663,6 +670,13 @@ export function BibleScreen() {
     return true;
   }, []);
 
+  useEffect(() => {
+    if (followAudio && audioMatchesChapter && spokenVerse && loadedChapter?.key === chapterKey) {
+      const frame = requestAnimationFrame(() => tryScrollToVerse(spokenVerse, true));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [followAudio, audioMatchesChapter, spokenVerse, loadedChapter, chapterKey, tryScrollToVerse]);
+
   const ensureVerseVisibleAboveSelection = useCallback((verse: number) => {
     const verseRow = verseRowsRef.current[verse];
     if (!verseRow) return;
@@ -718,6 +732,18 @@ export function BibleScreen() {
     },
     [showTemporaryHighlight, tryScrollToVerse],
   );
+
+  const previousAudioChapter = useRef<{ book: string; chapter: number } | undefined>(undefined);
+  useEffect(() => {
+    const next = audio.session?.chapter;
+    const previous = previousAudioChapter.current;
+    previousAudioChapter.current = next;
+    if (next && previous && (next.book !== previous.book || next.chapter !== previous.chapter)
+      && followAudio && bibleVersionId === "reformationsbibeln2026"
+      && positionRef.current.book === previous.book && positionRef.current.chapter === previous.chapter) {
+      jumpToPosition({ book: next.book, chapter: next.chapter, verse: next.verses[0].verse });
+    }
+  }, [audio.session?.chapter, followAudio, bibleVersionId, jumpToPosition]);
 
   const travelHistory = useCallback((direction: -1 | 1) => {
     const nextHistory = moveBibleHistory(historyRef.current, direction);
@@ -1339,6 +1365,7 @@ export function BibleScreen() {
           setPickerInitialStage("search");
           setPickerVisible(true);
         }}
+        onOpenAudio={() => setAudioVisible(true)}
         onOpenSettings={() => setSettingsVisible(true)}
         onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}
@@ -1360,7 +1387,7 @@ export function BibleScreen() {
           directionalLockEnabled
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
-          onScrollBeginDrag={handleReaderScrollBeginDrag}
+          onScrollBeginDrag={() => { setFollowAudio(false); handleReaderScrollBeginDrag(); }}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
@@ -1390,6 +1417,7 @@ export function BibleScreen() {
               plans={activeBiblePlans}
             />
             {loadedChapter?.key === chapterKey ? <BibleText
+              spokenVerse={audioMatchesChapter ? spokenVerse : undefined}
               chapterHeading={chapter.heading}
               chapterHighlightByVerse={chapterHighlightByVerse}
               highlightedPosition={highlightedPosition}
@@ -1424,6 +1452,17 @@ export function BibleScreen() {
         </ScrollView>
       </View>
 
+      <BibleAudioPlayer visible={audioVisible} onClose={() => setAudioVisible(false)} onOpen={() => setAudioVisible(true)}
+        onChooseTranslation={() => setBibleVersionId("reformationsbibeln2026")}
+        palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
+        bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={followAudio}
+        onFollow={() => {
+          if (audio.session) {
+            setBibleVersionId("reformationsbibeln2026");
+            setFollowAudio(true);
+            jumpToPosition({ book: audio.session.chapter.book, chapter: audio.session.chapter.chapter, verse: spokenVerse ?? 1 });
+          }
+        }} />
       <ChapterSwipeIndicator
         direction={chapterSwipeDirection}
         nextChapter={nextChapter}

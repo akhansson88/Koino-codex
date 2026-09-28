@@ -28,3 +28,5 @@ community-nav-expo*.log
 database-debug.log
 firebase-debug.log
 features/.generated/
+__pycache__/
+*.pyc

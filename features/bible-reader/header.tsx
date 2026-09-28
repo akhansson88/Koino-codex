@@ -54,6 +54,7 @@ export function BibleReaderHeader({
   onOpenPicker,
   onOpenSearch,
   onOpenSettings,
+  onOpenAudio,
   onOpenVersionPicker,
   palette,
   title,
@@ -69,6 +70,7 @@ export function BibleReaderHeader({
   onOpenPicker: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
+  onOpenAudio: () => void;
   onOpenVersionPicker: () => void;
   palette: ReaderPalette;
   title: string;
@@ -139,6 +141,8 @@ export function BibleReaderHeader({
         <Pressable accessibilityLabel={t("bible.accessibility.historyForward")} accessibilityRole="button" accessibilityState={{ disabled: !canGoHistoryForward }} disabled={!canGoHistoryForward} onPress={onHistoryForward} style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
           <Feather name="chevron-right" size={20} color={palette.muted} style={{ opacity: canGoHistoryForward ? 1 : 0.42 }} />
         </Pressable>
+        <View style={{ flex: 1 }} />
+        <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} />
       </View>
     </View>
   );

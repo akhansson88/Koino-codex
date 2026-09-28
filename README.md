@@ -124,3 +124,33 @@ This is a public address; never put Stripe keys in Expo environment variables.
 Stripe credentials and test/live mode are managed on the payment server.
 
 Run `npm run test:donations` to check the client connection and error handling.
+
+
+## Reformationsbibeln audio
+
+The Bible headphones button opens verse playback with chapter seeking, speed,
+sleep timer, continuous chapters, and lock-screen/background audio. Only complete
+chapters in the public catalog are playable. Browsing does not replace playback;
+use **Follow the spoken verse** to return to the current audio position.
+
+Audio repository: https://github.com/akhansson88/reformationsbibeln-audio
+
+```sh
+npm run bible:audio -- estimate --books John --chapters 1
+npm run bible:audio -- dispatch --books John --chapters 1
+npm run bible:audio -- dispatch --books "John,Romans"
+npm run bible:audio -- dispatch --all
+npm run validate:bible-audio
+python -m unittest discover -s scripts/bible-audio -p "test_*.py"
+```
+
+See [generation and recovery instructions](scripts/bible-audio/README.md).
+The Actions secret `OPENAI_API_KEY` belongs to the audio repository, never the
+mobile app. Generation uses `tts-1-hd` with Onyx and removes footnote asterisks.
+
+This change adds native audio/slider modules and runtime version `1.2.0`.
+Create a fresh native build; an OTA update to an older binary is insufficient.
+Regenerate local native configuration using the project's normal Expo prebuild
+flow before building, or let EAS generate it from `app.config.js`. Test background
+verse transitions, lock-screen controls, calls, and headphone disconnection on
+physical iOS and Android devices before release. Offline downloads are not included.

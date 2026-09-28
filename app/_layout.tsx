@@ -1,3 +1,4 @@
+import { BibleAudioProvider } from "@/features/bible-audio/provider";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
 import "@/features/startup-performance";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -35,7 +36,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}><AppLanguageProvider>
       <KoinoProvider>
         <BibleDatabaseProvider>
-          <RootNavigator />
+          <BibleAudioProvider><RootNavigator /></BibleAudioProvider>
         </BibleDatabaseProvider>
       </KoinoProvider>
     </AppLanguageProvider></GestureHandlerRootView>

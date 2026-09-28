@@ -29,6 +29,7 @@ const bibleVerseWebInteractionStyle =
 
 export function BibleText({
   chapterHeading,
+  spokenVerse,
   chapterHighlightByVerse,
   highlightedPosition,
   onFootnotePress,
@@ -49,6 +50,7 @@ export function BibleText({
   verses,
 }: {
   chapterHeading?: string;
+  spokenVerse?: number;
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   highlightedPosition?: BiblePosition;
   onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number) => void;
@@ -127,7 +129,7 @@ export function BibleText({
             key={item.reference}
             onLayout={(event) => onVerseLayout(item.verse, textOffsetRef.current + event.nativeEvent.layout.y)}
             ref={(node) => onVerseRef(item.verse, node)}
-            style={{ gap: 5 }}
+            style={{ gap: 5, borderLeftWidth: item.verse === spokenVerse ? 3 : 0, borderLeftColor: palette.accent, backgroundColor: item.verse === spokenVerse ? palette.peach : undefined }}
           >
           {subtitlesBefore.map((subtitle) => (
             <Text
