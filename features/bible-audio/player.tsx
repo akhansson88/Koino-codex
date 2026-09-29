@@ -18,7 +18,7 @@ function Progress({ chapter, index, palette }: { chapter: AudioChapter; index: n
   const { t } = useAppTranslation();
   const [dragging, setDragging] = useState<number | null>(null);
   const total = chapter.verses.reduce((sum, v) => sum + v.duration, 0);
-  const elapsed = chapter.verses.slice(0, index).reduce((sum, v) => sum + v.duration, 0) + position;
+  const elapsed = Math.min(total, chapter.verses.slice(0, index).reduce((sum, v) => sum + v.duration, 0) + position);
   return <View>
     <Slider accessibilityLabel={t("audio.progress")} accessibilityValue={{ text: `${time(dragging ?? elapsed)} / ${time(total)}` }} minimumValue={0} maximumValue={total} value={dragging ?? elapsed}
       onSlidingStart={(v) => setDragging(v)} onValueChange={(v) => setDragging(v)} onSlidingComplete={(v) => { setDragging(null); seek(v); }}
@@ -26,10 +26,11 @@ function Progress({ chapter, index, palette }: { chapter: AudioChapter; index: n
     <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(dragging ?? elapsed)}</Text><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(total)}</Text></View>
   </View>;
 }
-export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chapter, version, bottom, follow, onFollow, onChooseTranslation }: {
+export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chapter, version, bottom, follow, onFollow, onChooseTranslation, onMiniHeightChange }: {
   visible: boolean; onClose: () => void; onOpen: () => void; palette: ReaderPalette;
   book: string; chapter: number; version: string; bottom: number; follow: boolean; onFollow: () => void;
   onChooseTranslation: () => void;
+  onMiniHeightChange?: (height: number) => void;
 }) {
   const audio = useBibleAudio();
   const { t } = useAppTranslation();
@@ -47,12 +48,18 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
   </Pressable>;
   const close = () => { void audio.stop(); onClose(); };
   return <>
-    {session && !visible ? <View style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, padding: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, padding: 10, gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       <Pressable accessibilityRole="button" accessibilityLabel={t("audio.open")} onPress={onOpen} style={{ flex: 1, minHeight: 44, justifyContent: "center" }}>
         <Text style={{ color: palette.text, fontWeight: "700" }}>{title}</Text><Text style={{ color: palette.muted }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
       </Pressable>
-      <View style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}>{audio.loading ? <ActivityIndicator color={palette.accent} /> : iconButton(audio.playing ? "pause" : "play", t(audio.playing ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle)}</View>
+      <View style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}>{audio.loading ? <ActivityIndicator color={palette.accent} /> : iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle, audio.commandPending)}</View>
       {iconButton("x", t("audio.close"), close)}
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("audio.follow")} accessibilityState={{ selected: follow && !!matching }} onPress={onFollow}
+        style={{ minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>
+        <Text style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{t("audio.follow")}</Text>
+      </Pressable>
     </View> : null}
     <AppSheet visible={visible} onClose={close} title={t("audio.title")} backgroundColor={palette.sheet} foregroundColor={palette.text} scroll>
       <View style={{ paddingHorizontal: 24, paddingBottom: 30, gap: 20 }}>
@@ -68,9 +75,9 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
         {session ? <>
           <Progress chapter={session.chapter} index={session.index} palette={palette} />
           <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 24 }}>
-            {iconButton("skip-back", t("audio.previousVerse"), () => audio.move(-1), session.index === 0)}
-            {iconButton(audio.playing ? "pause" : "play", t(audio.playing ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle, audio.loading, true)}
-            {iconButton("skip-forward", t("audio.nextVerse"), () => audio.move(1), session.index === session.chapter.verses.length - 1)}
+            {iconButton("skip-back", t("audio.previousVerse"), () => audio.move(-1), session.index === 0 || audio.loading || audio.commandPending)}
+            {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle, audio.loading || audio.commandPending, true)}
+            {iconButton("skip-forward", t("audio.nextVerse"), () => audio.move(1), session.index === session.chapter.verses.length - 1 || audio.loading || audio.commandPending)}
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             {iconButton("chevrons-left", t("audio.previousChapter"), () => { void audio.moveChapter(-1); }, !audio.previousChapter || audio.loading)}

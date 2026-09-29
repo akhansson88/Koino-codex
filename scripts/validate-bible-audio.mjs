@@ -15,6 +15,8 @@ const chapter = { ...entry, schemaVersion: 1, translation: "reformationsbibeln20
 const catalog = { schemaVersion: 1, translation: "reformationsbibeln2026", chapters: { "43:1": entry } };
 assert.equal(parseCatalog(catalog), catalog);
 assert.equal(parseChapter(chapter, entry), chapter);
+assert.equal(parseChapter({ ...chapter, provider: 'elevenlabs', model: 'eleven_v4', voiceName: 'Jessica' }, entry).voiceName, 'Jessica');
+assert.throws(() => parseChapter({ ...chapter, voiceName: 123 }, entry));
 assert.throws(() => parseChapter({ ...chapter, verses: chapter.verses.slice(0, 1) }, entry));
 assert.throws(() => parseChapter({ ...chapter, verses: [chapter.verses[1], chapter.verses[0]] }, entry));
 assert.throws(() => parseChapter({ ...chapter, revision: "wrong" }, entry));
@@ -26,19 +28,21 @@ assert.deepEqual(locateChapterTime(chapter.verses, 100), { index: 1, offset: 9.9
 
 const storage = new Map(), files = new Map(), handlers = new Map();
 let queue = [], active = 0, position = 0, state = 'paused', downloads = 0, setups = 0, plays = 0;
-let blockDownload, failDownload = false;
-const emit = (event, payload) => { for (const fn of handlers.get(event) ?? []) fn(payload); };
+let blockDownload, failDownload = false, dropEvents = false, initialized = false, intent = false, rate = 1, progressRead;
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+const emit = (event, payload) => { if (dropEvents) return; for (const fn of handlers.get(event) ?? []) fn(payload); };
 const constants = Object.fromEntries(['RemotePlay','RemotePause','RemoteStop','RemoteNext','RemotePrevious','RemoteSeek','PlaybackState','PlaybackError','PlaybackActiveTrackChanged','PlaybackProgressUpdated','PlaybackQueueEnded'].map((name) => [name, name]));
 const player = {
-  setupPlayer: async () => { setups++; }, updateOptions: async () => {},
+  setupPlayer: async () => { initialized = true; setups++; }, updateOptions: async () => {},
   addEventListener: (event, fn) => { handlers.set(event, [...(handlers.get(event) ?? []), fn]); },
-  pause: async () => { state = 'paused'; emit('PlaybackState', { state }); },
-  play: async () => { assert.ok(queue.length); assert.ok(queue.every((track) => files.has(track.url)), 'all queued audio must be downloaded before play'); plays++; state = 'playing'; emit('PlaybackState', { state }); },
-  reset: async () => { queue = []; position = 0; active = 0; state = 'paused'; emit('PlaybackState', { state }); },
+  pause: async () => { intent = false; state = 'paused'; emit('PlaybackState', { state }); },
+  play: async () => { assert.ok(queue.length); assert.ok(queue.every((track) => files.has(track.url)), 'all queued audio must be downloaded before play'); plays++; intent = true; state = 'playing'; emit('PlaybackState', { state }); },
+  reset: async () => { queue = []; position = 0; active = 0; intent = false; state = 'paused'; emit('PlaybackState', { state }); },
   add: async (tracks) => { queue.push(...tracks); },
   skip: async (index, offset = 0) => { active = index; position = offset; emit('PlaybackActiveTrackChanged', { track: queue[index] }); emit('PlaybackProgressUpdated', { position }); },
-  setRate: async () => {}, getQueue: async () => [...queue], getActiveTrackIndex: async () => active,
-  getPlaybackState: async () => ({ state }), seekTo: async (value) => { position = value; },
+  setRate: async (value) => { rate = value; }, getRate: async () => rate, getQueue: async () => [...queue], getActiveTrackIndex: async () => queue.length ? active : undefined,
+  getTrack: async (index) => queue[index], getProgress: async () => progressRead ? progressRead() : ({ position, duration: 10, buffered: 10 }), getPlayWhenReady: async () => intent,
+  getPlaybackState: async () => { if (!initialized) throw new Error('not initialized'); return { state }; }, seekTo: async (value) => { position = value; },
   remove: async (indices) => { queue = queue.filter((_, index) => !indices.includes(index)); },
 };
 globalThis.__audioTest = {
@@ -57,12 +61,11 @@ globalThis.fetch = async (url) => ({ ok: true, json: async () => url === entry.m
 const mockPlugin = { name: 'native-audio-mocks', setup(build) {
   build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
   build.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path }) => ({ contents: path === 'react-native-track-player'
-    ? `export default globalThis.__audioTest.player; export const Event = globalThis.__audioTest.constants; export const Capability = {}; export const AppKilledPlaybackBehavior = {}; export const State = {Playing:'playing',Paused:'paused',Ended:'ended',Loading:'loading',Buffering:'buffering'};`
+    ? `export default globalThis.__audioTest.player; export const Event = globalThis.__audioTest.constants; export const Capability = {}; export const AppKilledPlaybackBehavior = {}; export const State = {Playing:'playing',Paused:'paused',Ended:'ended',Loading:'loading',Buffering:'buffering',Error:'error'};`
     : path === 'expo-file-system/legacy' ? `export const {cacheDirectory,makeDirectoryAsync,getInfoAsync,downloadAsync,moveAsync,deleteAsync}=globalThis.__audioTest.fs;`
     : `export default globalThis.__audioTest.storage;`, loader: 'js' }));
 } };
 const engine = await bundle('features/bible-audio/engine.ts', [mockPlugin]);
-await engine.playbackService();
 await engine.setContinuous(false);
 engine.setAudioCatalog(catalog);
 await engine.start(entry);
@@ -72,6 +75,7 @@ assert.equal(setups, 1);
 assert.equal(engine.getSnapshot().playing, true);
 const beforeVerse = downloads;
 await player.skip(1); // Native queue advances without UI / a replacement player.
+await flush();
 assert.equal(engine.getSnapshot().session.index, 1);
 assert.equal(downloads, beforeVerse);
 assert.equal(setups, 1);
@@ -124,8 +128,192 @@ assert.equal(queue.length, 0, 'an incomplete chapter must not start');
 failDownload = false;
 await engine.start(entry);
 assert.equal(engine.getSnapshot().problem, null);
+await engine.playbackService();
+await engine.playbackService();
+assert.equal(handlers.get('PlaybackState').length, 1, 'foreground and service share one subscription');
+assert.equal(handlers.get('RemoteStop').length, 1, 'remote handlers must not duplicate');
 emit('RemoteStop');
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(engine.getSnapshot().session, undefined);
 assert.equal(queue.length, 0);
-console.log('Audio checks passed: manifests, full-chapter prefetch, native queue, cached playback, seeking, chapter navigation, timers, close/cancellation, and network recovery.');
+
+// Reproduce the reported regression: native playback advances with no events at all.
+dropEvents = true;
+await engine.start(entry);
+active = 1; position = 6;
+await engine.syncFromNative();
+assert.equal(engine.getSnapshot().session.index, 1);
+assert.equal(engine.getSnapshot().position, 6);
+assert.equal(engine.getSnapshot().playing, true);
+await engine.toggle();
+assert.equal(intent, false, 'Pause must consult the native player, even with no events');
+assert.equal(engine.getSnapshot().playWhenReady, false);
+await engine.toggle();
+assert.equal(intent, true);
+state = 'buffering'; intent = true;
+await engine.syncFromNative();
+assert.equal(engine.getSnapshot().buffering, true);
+assert.equal(engine.getSnapshot().loading, false, 'buffering does not disable Pause');
+await engine.toggle();
+assert.equal(intent, false);
+await engine.seek(12);
+assert.equal(engine.getSnapshot().session.index, 1);
+assert.equal(engine.getSnapshot().position, 2);
+assert.equal(intent, false, 'seeking while paused must stay paused');
+await engine.move(-1);
+assert.equal(engine.getSnapshot().session.index, 0);
+assert.equal(intent, false);
+await engine.moveChapter(1);
+assert.equal(engine.getSnapshot().session.chapter.chapter, 2);
+assert.equal(engine.getSnapshot().playing, false, 'uncached chapter navigation preserves pause');
+await engine.moveChapter(-1);
+assert.equal(engine.getSnapshot().session.chapter.chapter, 1);
+assert.equal(intent, false);
+await Promise.all([engine.toggle(), engine.toggle()]);
+assert.equal(intent, false, 'rapid toggles are serialized against native intent');
+
+const realPause = player.pause;
+await engine.toggle();
+player.pause = async () => { throw new Error('native command failed'); };
+await engine.toggle();
+assert.equal(engine.getSnapshot().commandPending, false, 'failed command must release controls');
+assert.equal(engine.getSnapshot().problem, 'network');
+player.pause = realPause;
+await engine.toggle();
+assert.equal(engine.getSnapshot().problem, null);
+
+// Foreground polling recovers missed events, also while paused.
+const stopObserving = engine.observeForeground();
+active = 1; position = 4;
+await new Promise((resolve) => setTimeout(resolve, 550));
+assert.equal(engine.getSnapshot().session.index, 1);
+assert.equal(engine.getSnapshot().position, 4);
+stopObserving();
+
+// A late progress event for the previous verse must not overwrite native position.
+dropEvents = false;
+emit('PlaybackProgressUpdated', { track: 0, position: 9 });
+await flush();
+assert.equal(engine.getSnapshot().position, 4);
+let releaseProgress;
+progressRead = () => new Promise((resolve) => { releaseProgress = resolve; });
+const stale = engine.syncFromNative();
+await flush();
+await engine.stop();
+releaseProgress({ position: 8 });
+await stale;
+progressRead = undefined;
+assert.equal(engine.getSnapshot().session, undefined, 'stale read must never reopen a closed session');
+
+await engine.start(entry, 0, 1, false);
+progressRead = async () => { active = 1; return { position: 9 }; };
+assert.equal(await engine.syncFromNative(), false, 'discard a read when native track changes mid-query');
+assert.equal(engine.getSnapshot().position, 1);
+progressRead = undefined; position = 2;
+await engine.syncFromNative();
+assert.equal(engine.getSnapshot().session.index, 1);
+assert.equal(engine.getSnapshot().position, 2);
+await engine.stop();
+
+// Rehydrate a native queue with an empty in-memory chapter map, from the persisted manifest.
+await engine.start(entry, 1, 3, false);
+const preservedQueue = [...queue];
+await engine.stop();
+queue = preservedQueue; active = 1; position = 3;
+const fresh = await bundle('features/bible-audio/engine.ts', [mockPlugin]);
+assert.equal(await fresh.hasNativeQueue(), true);
+await fresh.ensurePlayer();
+assert.equal(setups, 1, 'existing native player must not be recreated');
+await fresh.syncFromNative();
+assert.equal(fresh.getSnapshot().session.index, 1);
+assert.equal(fresh.getSnapshot().position, 3);
+await fresh.stop();
+
+// A refreshed catalog withdraws legacy playback, including persisted native queues.
+fresh.setAudioCatalog(catalog);
+await fresh.start(entry, 0, 2, false);
+await fresh.applyAudioCatalog({ ...catalog, chapters: {} });
+assert.equal(queue.length, 0);
+assert.equal(fresh.getSnapshot().session, undefined);
+assert.equal(storage.has('koino.audio.position.v1'), false);
+await fresh.start(entry);
+assert.equal(queue.length, 0, 'a stale UI entry must not restart a withdrawn chapter');
+fresh.setAudioCatalog(catalog);
+
+const { AudioFollowScroll } = await bundle('features/bible-audio/follow.ts');
+const follow = new AudioFollowScroll();
+let layoutReady = false, delayedMeasure, scrolls = [];
+const measure = (_, done) => { if (layoutReady) done({ verse: { y: 900, height: 80 }, viewport: { y: 100, height: 900 }, offset: 200, controlsTop: 800 }); };
+const scroll = (offset, verse) => scrolls.push({ offset, verse });
+follow.request('John:1', 2);
+follow.tryScroll('John:1', measure, scroll);
+assert.equal(scrolls.length, 0);
+layoutReady = true;
+follow.tryScroll('John:1', measure, scroll);
+assert.deepEqual(scrolls, [{ offset: 982, verse: 2 }], 'delayed layout scrolls above controls, independent of playing state');
+follow.tryScroll('John:1', measure, scroll);
+assert.equal(scrolls.length, 1, 'progress ticks cannot repeatedly scroll');
+follow.request('John:1', 3);
+follow.tryScroll('John:1', (_, done) => { delayedMeasure = done; }, scroll);
+follow.cancel(); // Manual browsing / close.
+delayedMeasure({ verse: { y: 900, height: 80 }, viewport: { y: 100, height: 900 }, offset: 0, controlsTop: 800 });
+assert.equal(scrolls.length, 1, 'manual browsing cancels even an in-flight measurement');
+follow.request('John:2', 1);
+follow.tryScroll('John:1', measure, scroll);
+assert.equal(scrolls.length, 1, 'old chapter layout cannot satisfy a new request');
+follow.tryScroll('John:2', measure, scroll);
+assert.equal(scrolls.length, 2);
+follow.request('John:2', 2);
+follow.tryScroll('John:2', (_, done) => done({ verse: { y: 200, height: 80 }, viewport: { y: 100, height: 900 }, offset: 0, controlsTop: 800 }), scroll);
+assert.equal(scrolls.length, 2, 'already-visible verse must stay still');
+// Exercise the real main/mini player components against the synchronized engine.
+const React = require('react');
+const { act, create } = require('react-test-renderer');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.__audioTest.ui = { engine: fresh, catalog, refresh: async () => {} };
+const uiMocks = { name: 'audio-ui-mocks', setup(build) {
+  build.onResolve({ filter: /^(react-native|@expo\/vector-icons|@react-native-community\/slider|@\/ui\/(app-sheet|app-language|theme)|\.\/provider)$/ }, ({ path }) => ({ path, namespace: 'ui-mock' }));
+  build.onLoad({ filter: /.*/, namespace: 'ui-mock' }, ({ path }) => {
+    const modules = {
+      'react-native': `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Switch='Switch',Text='Text',View='View';`,
+      '@expo/vector-icons': `export const Feather=()=>null;`,
+      '@react-native-community/slider': `export default 'Slider';`,
+      '@/ui/theme': `export const brandPalette={deepNavy:'#0B1220',warmPersika:'#FFC79A'};`,
+      '@/ui/app-sheet': `export const AppSheet=({visible,children})=>visible?children:null;`,
+      '@/ui/app-language': `export const useAppTranslation=()=>({t:(key,args)=>key==='audio.verse'?'Verse '+args.verse:key});`,
+      './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,refresh,toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
+    };
+    return { contents: modules[path], loader: 'js' };
+  });
+} };
+const { BibleAudioPlayer } = await bundle('features/bible-audio/player.tsx', [uiMocks]);
+let ui;
+const props = { visible:true,onClose:()=>{},onOpen:()=>{},palette:{},book:'John',chapter:1,version:'reformationsbibeln2026',bottom:0,follow:true,onFollow:()=>{},onChooseTranslation:()=>{} };
+await act(async () => {
+  await fresh.setContinuous(false);
+  await fresh.start(entry, 1, 4, false);
+  ui = create(React.createElement(BibleAudioPlayer, props));
+});
+assert.equal(ui.root.findByType('Slider').props.value, 14, 'main timeline includes previous verses plus native progress');
+assert.ok(ui.root.findAllByType('Text').some((node) => node.props.children === '0:14'));
+await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.play',accessibilityRole:'button'}).props.onPress(); });
+assert.equal(intent, true);
+await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pause',accessibilityRole:'button'}).props.onPress(); });
+assert.equal(intent, false);
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false})); });
+assert.ok(ui.root.findAllByType('Text').some((node) => node.props.children === 'Verse 2'));
+await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.play',accessibilityRole:'button'}).props.onPress(); });
+assert.equal(intent, true, 'mini-player button controls native playback');
+await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pause',accessibilityRole:'button'}).props.onPress(); });
+assert.equal(intent, false);
+let followed = 0, measuredHeight = 0;
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false,follow:false,onFollow:()=>{followed++;},onMiniHeightChange:(height)=>{measuredHeight=height;}})); });
+const followButton = ui.root.findByProps({accessibilityLabel:'audio.follow',accessibilityRole:'button'});
+assert.equal(followButton.props.accessibilityState.selected, false, 'manual scrolling exposes Follow in the mini player');
+await act(async () => { followButton.props.onPress(); });
+assert.equal(followed, 1);
+assert.equal(intent, false, 'Follow while paused does not start playback');
+ui.root.findAllByType('View').find((node) => node.props.onLayout).props.onLayout({nativeEvent:{layout:{height:144}}});
+assert.equal(measuredHeight, 144, 'reader receives actual mini-player height');
+await act(async () => { ui.unmount(); await fresh.stop(); });
+console.log('Audio validation passed: native synchronization, foreground recovery, main/mini controls, timeline, paused navigation, stale reads, cached queues and verse following.');

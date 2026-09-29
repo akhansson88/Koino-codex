@@ -9,6 +9,7 @@ export type AudioChapterEntry = {
 export type AudioVerse = { verse: number; url: string; duration: number; sha256: string; textHash: string };
 export type AudioChapter = Omit<AudioChapterEntry, "manifestUrl"> & {
   schemaVersion: 1; translation: string; expectedVerses: number[]; verses: AudioVerse[];
+  provider?: string; model?: string; voice?: string; voiceId?: string; voiceName?: string;
 };
 export type AudioCatalog = { schemaVersion: 1; translation: string; chapters: Record<string, AudioChapterEntry> };
 
@@ -38,6 +39,9 @@ export function parseChapter(value: unknown, expected: AudioChapterEntry): Audio
     || !Array.isArray(value.verses) || !Array.isArray(value.expectedVerses) || !value.verses.length
     || value.verses.length !== value.expectedVerses.length) throw new Error("Incomplete audio chapter");
   let previous = 0;
+  for (const key of ["provider", "model", "voice", "voiceId", "voiceName"]) {
+    if (value[key] !== undefined && (typeof value[key] !== "string" || !value[key])) throw new Error("Invalid narration metadata");
+  }
   for (let i = 0; i < value.verses.length; i++) {
     const verse = value.verses[i];
     if (!object(verse) || !Number.isInteger(verse.verse) || Number(verse.verse) <= previous
