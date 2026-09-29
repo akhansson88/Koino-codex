@@ -356,11 +356,11 @@ export function BibleScreen() {
   const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const chapterControlsVisible = !selectedVerseBarVisible;
+  const chapterControlsVisible = !selectedVerseBarVisible && !(audio.session && followAudio);
   const floatingControlsBottom = tabBarHeight(insets.bottom) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
-    : chapterControlsHeight;
+    : chapterControlsVisible ? chapterControlsHeight : 0;
   const readerBottomPadding = (audio.session ? audioMiniHeight + 12 : 0) + Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
   const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
   const readerCanGoBack = navigation.canGoBack();

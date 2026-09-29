@@ -72,3 +72,9 @@ export function locateChapterTime(verses: AudioVerse[], seconds: number) {
   }
   return { index: 0, offset: 0 };
 }
+
+/** Preserve the duration-scaled timeline while selecting the start of its verse. */
+export function snapChapterTime(verses: AudioVerse[], seconds: number) {
+  const { index } = locateChapterTime(verses, seconds);
+  return { verse: verses[index].verse, seconds: verses.slice(0, index).reduce((sum, verse) => sum + verse.duration, 0) };
+}

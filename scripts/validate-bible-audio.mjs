@@ -9,7 +9,7 @@ async function bundle(file, plugins = []) {
   new Function("require", "module", "exports", result.outputFiles[0].text)(require, module, module.exports);
   return module.exports;
 }
-const { parseCatalog, parseChapter, locateChapterTime } = await bundle("features/bible-audio/catalog.ts");
+const { parseCatalog, parseChapter, locateChapterTime, snapChapterTime } = await bundle("features/bible-audio/catalog.ts");
 const entry = { bookId: 43, book: "John", bookName: "Johannesevangeliet", chapter: 1, revision: "test", sourceHash: "source", manifestUrl: "https://github.com/akhansson88/reformationsbibeln-audio/releases/download/audio-test/chapter.json" };
 const chapter = { ...entry, schemaVersion: 1, translation: "reformationsbibeln2026", expectedVerses: [1, 2], verses: [1, 2].map((verse) => ({ verse, duration: 10, sha256: "a".repeat(64), textHash: "b".repeat(64), url: `https://github.com/akhansson88/reformationsbibeln-audio/releases/download/audio-test/verse-${verse}.mp3` })) };
 const catalog = { schemaVersion: 1, translation: "reformationsbibeln2026", chapters: { "43:1": entry } };
@@ -25,6 +25,10 @@ assert.deepEqual(locateChapterTime(chapter.verses, 12), { index: 1, offset: 2 })
 assert.deepEqual(locateChapterTime(chapter.verses, -2), { index: 0, offset: 0 });
 assert.deepEqual(locateChapterTime(chapter.verses, 10), { index: 1, offset: 0 });
 assert.deepEqual(locateChapterTime(chapter.verses, 100), { index: 1, offset: 9.95 });
+const unevenVerses = [{ verse: 1, duration: 4 }, { verse: 3, duration: 15 }, { verse: 4, duration: 2 }];
+for (const [seconds, verse, start] of [[-1,1,0],[3.9,1,0],[4,3,4],[18.9,3,4],[19,4,19],[21,4,19],[100,4,19]]) {
+  assert.deepEqual(snapChapterTime(unevenVerses, seconds), { verse, seconds: start });
+}
 
 const storage = new Map(), files = new Map(), handlers = new Map();
 let queue = [], active = 0, position = 0, state = 'paused', downloads = 0, setups = 0, plays = 0;
@@ -271,17 +275,20 @@ const React = require('react');
 const { act, create } = require('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.__audioTest.ui = { engine: fresh, catalog, refresh: async () => {} };
+globalThis.__audioTest.haptics = 0;
 const uiMocks = { name: 'audio-ui-mocks', setup(build) {
-  build.onResolve({ filter: /^(react-native|@expo\/vector-icons|@react-native-community\/slider|@\/ui\/(app-sheet|app-language|theme)|\.\/provider)$/ }, ({ path }) => ({ path, namespace: 'ui-mock' }));
+  build.onResolve({ filter: /^(react-native|react-native-gesture-handler|expo-haptics|@expo\/vector-icons|@react-native-community\/slider|@\/ui\/(app-sheet|app-language|theme)|\.\/provider)$/ }, ({ path }) => ({ path, namespace: 'ui-mock' }));
   build.onLoad({ filter: /.*/, namespace: 'ui-mock' }, ({ path }) => {
     const modules = {
-      'react-native': `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Switch='Switch',Text='Text',View='View';`,
+      'react-native': `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Switch='Switch',Text='Text',View='View',Platform={OS:'android'};`,
+      'expo-haptics': `export const selectionAsync=async()=>{globalThis.__audioTest.haptics++;};`,
+      'react-native-gesture-handler': `export const NativeViewGestureHandler='NativeViewGestureHandler';`,
       '@expo/vector-icons': `export const Feather=()=>null;`,
       '@react-native-community/slider': `export default 'Slider';`,
       '@/ui/theme': `export const brandPalette={deepNavy:'#0B1220',warmPersika:'#FFC79A'};`,
-      '@/ui/app-sheet': `export const AppSheet=({visible,children})=>visible?children:null;`,
+      '@/ui/app-sheet': `import {createElement} from 'react'; export const AppSheet=({visible,children,onClose})=>createElement('AppSheet',{onClose},visible?children:null);`,
       '@/ui/app-language': `export const useAppTranslation=()=>({t:(key,args)=>key==='audio.verse'?'Verse '+args.verse:key});`,
-      './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,refresh,toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
+      './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,refresh,previousChapter:engine.adjacent(-1),nextChapter:engine.adjacent(1),toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
     };
     return { contents: modules[path], loader: 'js' };
   });
@@ -295,7 +302,32 @@ await act(async () => {
   ui = create(React.createElement(BibleAudioPlayer, props));
 });
 assert.equal(ui.root.findByType('Slider').props.value, 14, 'main timeline includes previous verses plus native progress');
+const scrubGesture = ui.root.findByType('NativeViewGestureHandler');
+assert.equal(scrubGesture.props.disallowInterruption, true, 'sheet cannot interrupt slider gesture');
+assert.equal(scrubGesture.props.shouldActivateOnStart, true, 'Android scrub claims touch before sheet pan');
+assert.equal(scrubGesture.findByType('Slider'), ui.root.findByType('Slider'));
 assert.ok(ui.root.findAllByType('Text').some((node) => node.props.children === '0:14'));
+assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.previousVerse'}).length, 0);
+assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.previousChapter',accessibilityRole:'button'}).length, 1);
+assert.equal(ui.root.findByProps({accessibilityLabel:'audio.nextChapter',accessibilityRole:'button'}).props.disabled, true);
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(3); });
+assert.equal(ui.root.findByType('Slider').props.value, 0);
+await act(async () => { ui.root.findByType('Slider').props.onValueChange(14); });
+assert.equal(ui.root.findByType('Slider').props.value, 10);
+assert.equal(ui.root.findByProps({testID:'audio-verse-tooltip'}).findByType('Text').props.children, 2);
+await act(async () => { ui.root.findByType('Slider').props.onValueChange(17); });
+assert.equal(globalThis.__audioTest.haptics, 1, 'one haptic per verse change');
+await act(async () => { ui.root.findByType('Slider').props.onSlidingComplete(17); await flush(); });
+assert.equal(position, 0, 'scrubbing releases at verse start');
+assert.equal(active, 1);
+assert.equal(intent, false, 'scrubbing preserves pause');
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { ui.root.findByType('Slider').props.onAccessibilityAction({nativeEvent:{actionName:'decrement'}}); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'accessible adjustment selects previous verse');
+assert.equal(position, 0);
+assert.equal(intent, false);
+await act(async () => { ui.root.findByType('Slider').props.onAccessibilityAction({nativeEvent:{actionName:'increment'}}); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 1, 'accessible adjustment selects next verse');
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.play',accessibilityRole:'button'}).props.onPress(); });
 assert.equal(intent, true);
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pause',accessibilityRole:'button'}).props.onPress(); });
@@ -315,5 +347,57 @@ assert.equal(followed, 1);
 assert.equal(intent, false, 'Follow while paused does not start playback');
 ui.root.findAllByType('View').find((node) => node.props.onLayout).props.onLayout({nativeEvent:{layout:{height:144}}});
 assert.equal(measuredHeight, 144, 'reader receives actual mini-player height');
+// Both layouts use chapter navigation, preserving native play/pause intent.
+for (const visible of [true, false]) {
+  await act(async () => {
+    fresh.setAudioCatalog({ ...catalog, chapters: { ...catalog.chapters, '43:2': nextEntry } });
+    await fresh.start(entry, 1, 3, false);
+    ui.update(React.createElement(BibleAudioPlayer, { ...props, visible }));
+  });
+  const button = (label) => ui.root.findByProps({accessibilityLabel:label,accessibilityRole:'button'});
+  assert.equal(button('audio.previousChapter').props.disabled, true);
+  assert.equal(button('audio.nextChapter').props.disabled, false);
+  await act(async () => { button('audio.nextChapter').props.onPress(); await flush(); await flush(); });
+  assert.equal(fresh.getSnapshot().session.chapter.chapter, 2);
+  assert.equal(fresh.getSnapshot().session.index, 0);
+  assert.equal(intent, false, 'chapter change preserves pause');
+  assert.equal(button('audio.nextChapter').props.disabled, true);
+  await act(async () => { button('audio.play').props.onPress(); await flush(); });
+  await act(async () => { button('audio.previousChapter').props.onPress(); await flush(); await flush(); });
+  assert.equal(fresh.getSnapshot().session.chapter.chapter, 1);
+  assert.equal(intent, true, 'chapter change preserves playback');
+}
+let dismissed = 0;
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,onClose:()=>{dismissed++;},onFollow:()=>{followed++;}})); });
+const beforeFollow = followed;
+await act(async () => { ui.root.findByType('AppSheet').props.onClose(); });
+assert.equal(followed, beforeFollow + 1, 'sheet close returns to follow');
+assert.equal(dismissed, 1);
+assert.ok(fresh.getSnapshot().session, 'sheet dismissal keeps session');
+assert.equal(intent, true, 'sheet dismissal keeps playback');
+
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(12); });
+const staleRelease = ui.root.findByType('Slider').props.onSlidingComplete;
+await act(async () => { await fresh.moveChapter(1); });
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { staleRelease(12); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'stale scrub cannot seek into new chapter');
+
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(12); });
+const dismissedRelease = ui.root.findByType('Slider').props.onSlidingComplete;
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false})); });
+assert.equal(ui.root.findAllByType('NativeViewGestureHandler').length, 0, 'follow card retains its existing gesture handling');
+await act(async () => { dismissedRelease(12); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'sheet scrub is cancelled when opening card');
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { ui.root.findByProps({accessibilityLabel:'audio.close',accessibilityRole:'button'}).props.onPress(); await flush(); });
+assert.equal(fresh.getSnapshot().session, undefined, 'card close clears session');
+assert.equal(queue.length, 0);
+assert.equal(intent, false);
+assert.equal(ui.root.findAllByType('Slider').length, 0);
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,onFollow:()=>{followed++;}})); });
+const beforeEmptyClose = followed;
+await act(async () => { ui.root.findByType('AppSheet').props.onClose(); });
+assert.equal(followed, beforeEmptyClose, 'empty sheet closes without activating follow');
 await act(async () => { ui.unmount(); await fresh.stop(); });
 console.log('Audio validation passed: native synchronization, foreground recovery, main/mini controls, timeline, paused navigation, stale reads, cached queues and verse following.');
