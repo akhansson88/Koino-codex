@@ -77,6 +77,11 @@ try {
     flush();
   });
   assert.equal(state.scrolls.length, 0, "Wait for content and viewport before scrolling");
+  await act(async () => {
+    scroll().props.onLayout({ nativeEvent: { layout: { height: 4620 } } });
+    flush();
+  });
+  assert.equal(state.scrolls.length, 0, "Opening with an intrinsic content-sized viewport must not consume the book target");
   await act(async () => { measure(); });
   assert.equal(state.scrolls.at(-1), 42 * 70, "Open at current NT book after layout");
   await act(async () => { scroll().props.onScroll({ nativeEvent: { contentOffset: { y: 3100 } } }); measure(); });

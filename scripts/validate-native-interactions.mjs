@@ -73,6 +73,17 @@ try {
   assert.equal(prevented, true); assert.equal(holds, 3); assert.equal(globalThis.__interaction.haptics, 2);
   await act(() => tree.unmount());
 
+  // The sheet body must have a finite height before Android measures a nested list.
+  // Flex alone lets the list's viewport grow to the height of all its content.
+  globalThis.__interaction.os = "android";
+  await act(() => { tree = create(React.createElement(AppSheet, { visible: true, height: 720, onClose() {}, children: React.createElement("BookList") })); });
+  const fixedBody = () => tree.root.findAllByType("View").find(node => node.props.style?.height !== undefined && node.props.style?.maxHeight === "100%");
+  assert.equal(fixedBody().props.style.height, 700, "Constrain the content to the sheet height minus the handle");
+  const sheetHeader = tree.root.findByType("Sheet").props.handleComponent();
+  await act(() => sheetHeader.props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
+  assert.equal(fixedBody().props.style.height, 624, "Measured custom headers reduce the list viewport");
+  await act(() => tree.unmount());
+
   for (const os of ["android", "ios"]) {
     globalThis.__interaction.os = os;
     const order = [];

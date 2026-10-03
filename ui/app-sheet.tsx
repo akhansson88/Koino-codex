@@ -54,6 +54,7 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
   const sheet = useRef<BottomSheet>(null);
   const heading = useRef<Text>(null);
   const [mounted, setMounted] = useState(visible);
+  const [headerHeight, setHeaderHeight] = useState(20);
   const completed = useRef<(() => void) | undefined>(undefined);
   const closing = useRef(false);
   const requested = useRef(false);
@@ -125,7 +126,7 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
       accessible={dismissible} accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" />
   ), [dismiss, dismissible, t]);
 
-  const renderHeader = useCallback(() => <View>
+  const renderHeader = useCallback(() => <View onLayout={({ nativeEvent }) => setHeaderHeight(nativeEvent.layout.height)}>
     <View style={{ alignItems: "center", paddingVertical: 10 }}><View style={{ height: 4, borderRadius: 2, width: 44, backgroundColor: foregroundColor, opacity: 0.25 }} /></View>
     {header}
     {title ? <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 12, gap: 12 }}>
@@ -159,8 +160,9 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
                 if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
               }
             }}>
+            {/* Bound fixed-height content so nested lists have overflow to scroll on Android. */}
             {scroll ? <BottomSheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 16, paddingHorizontal: 18, paddingBottom: Math.max(24, insets.bottom + 14) }}>{body}</BottomSheetScrollView>
-              : fixedHeight ? <View style={{ flex: 1 }}>{body}</View> : <BottomSheetView>{body}</BottomSheetView>}
+              : fixedHeight ? <View style={{ height: Math.max(0, fixedHeight - headerHeight), maxHeight: "100%", minHeight: 0 }}>{body}</View> : <BottomSheetView>{body}</BottomSheetView>}
           </BottomSheet> : null}
         </View>
       </GestureHandlerRootView>

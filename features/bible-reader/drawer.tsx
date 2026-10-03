@@ -332,7 +332,9 @@ export function BibleDrawer({
               restoreBookScroll();
             } : undefined}
             onLayout={stage === "book" ? ({ nativeEvent }) => {
-              bookViewportReady.current = nativeEvent.layout.height > 0;
+              // The sheet can briefly report its intrinsic content height while opening.
+              // Wait for its bounded viewport before restoring a book position.
+              bookViewportReady.current = nativeEvent.layout.height > 0 && nativeEvent.layout.height <= sheetHeight;
               restoreBookScroll();
             } : undefined}
             onScroll={stage === "book" ? ({ nativeEvent }) => {
