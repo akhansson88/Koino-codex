@@ -28,6 +28,43 @@ try {
     e2eeGroups: { community: { ownerId: owner.uid, epoch: 1, members: { [owner.uid]: true, [member.uid]: true } } },
     encryptedData: { groups: { community: { id: "community", ownerId: owner.uid, inviteCode: "INVITE" } } },
   });
+  const encryptPreferences = (value, path) => value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).map(([name, child]) => [name, encryptPreferences(child, `${path}/${name}`)]))
+    : crypto.encrypt(value, path, `user:${owner.uid}:1`, key, owner.identity);
+  const preferences = { bibleVersionId: 'kjv', fontId: 'serif', fontSize: 20, readerTheme: 'light', showVerseNumbers: true, position: { book: 'John', chapter: 3, verse: 16 }, history: { entries: [{ book: 'John', chapter: 3, verse: 16 }], index: 0 } };
+  await set(ref(owner.database, `encryptedData/bibleReaderPreferences/${owner.uid}`), { ...encryptPreferences(preferences, `bibleReaderPreferences/${owner.uid}`), updatedAt: 1 });
+  const legacyTokens = `pushTokens/${owner.uid}`;
+  await adminDatabase(admin).ref(legacyTokens).set({ device: { token: 'synthetic-token', platform: 'android' } });
+  await denied(() => get(ref(owner.database, legacyTokens)));
+  const followPath = `encryptedData/userDiscussionFollows/${owner.uid}/community/post_fixture`;
+  await set(ref(owner.database, followPath), { id: 'post_fixture', userId: owner.uid, targetType: 'post', targetId: 'fixture', createdAt: '2026-01-01' });
+  await denied(() => set(ref(owner.database, `${followPath}/privateContent`), 'plaintext'));
+  await denied(() => get(ref(outsider.database, followPath)));
+  const migrationGroup = 'not-yet-created';
+  const otherMembership = `userGroups/${member.uid}/${migrationGroup}`;
+  await adminDatabase(admin).ref(otherMembership).set({ userId: member.uid, groupId: migrationGroup });
+  await denied(() => get(ref(owner.database, otherMembership)));
+  await denied(() => get(ref(owner.database, `e2eeGroups/${migrationGroup}`)));
+  await adminDatabase(admin).ref(`e2eeMigrations/group/${migrationGroup}`).set({ ownerId: owner.uid, status: 'copying' });
+  assert.equal((await get(ref(owner.database, `e2eeGroups/${migrationGroup}`))).exists(), false);
+  assert.equal((await get(ref(owner.database, otherMembership))).child('userId').val(), member.uid);
+  for (const collection of ['groups', 'groupMembers', 'posts', 'checkIns', 'replies', 'prayerReactions', 'postReactions', 'groupBiblePlanAnnouncements', 'groupBiblePlanParticipation', 'discussionFollowers']) {
+    assert.equal((await get(ref(owner.database, `${collection}/${migrationGroup}`))).exists(), false);
+    await denied(() => get(ref(outsider.database, `${collection}/${migrationGroup}`)));
+  }
+  await denied(() => get(ref(outsider.database, otherMembership)));
+  await adminDatabase(admin).ref(`e2eeMigrations/group/${migrationGroup}/status`).set('complete');
+  await denied(() => get(ref(owner.database, otherMembership)));
+  await denied(() => get(ref(owner.database, `groups/${migrationGroup}`)));
+  await adminDatabase(admin).ref(`e2eeMigrations/user/${owner.uid}`).set({ status: 'copying' });
+  assert.equal((await get(ref(owner.database, legacyTokens))).child('device/token').val(), 'synthetic-token');
+  await denied(() => get(ref(outsider.database, legacyTokens)));
+  for (const collection of ['biblePlans', 'notificationPreferences', 'pushTokens', 'checkInDailyClaims', 'userDiscussionFollows', 'groupBiblePlanParticipantIds', 'supportIntents']) {
+    try { await get(ref(owner.database, `${collection}/${owner.uid}`)); }
+    catch (error) { throw new Error(`Legacy migration read denied for ${collection}`, { cause: error }); }
+  }
+  await adminDatabase(admin).ref(`e2eeMigrations/user/${owner.uid}/status`).set('complete');
+  await denied(() => get(ref(owner.database, legacyTokens)));
   const journalPath = `encryptedData/journalEntries/${owner.uid}/entry1`;
   const body = crypto.encrypt("Secret journal", `journalEntries/${owner.uid}/entry1/body`, `user:${owner.uid}:1`, key, owner.identity);
   await set(ref(owner.database, journalPath), { id: "entry1", userId: owner.uid, createdAt: "2026-01-01T00:00:00Z", body });

@@ -13,6 +13,10 @@ const bundled = await build({ entryPoints: ['state/encryption/database.ts'], bun
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 const record = { id: 'post', userId: 'owner', groupId: 'group', createdAt: '2026-01-01', body: 'Private prayer', verses: [{ book: 'John', chapter: 3, text: 'Secret verse' }], futureContent: { nested: 'Private future data' } };
 const encrypted = adapter.encodeAt('posts/group/post', record);
+const follow = { id: 'post_fixture', userId: 'owner', targetType: 'post', targetId: 'fixture', createdAt: '2026-01-01' };
+assert.deepEqual(adapter.encodeAt('userDiscussionFollows/owner/group/post_fixture', follow), follow);
+assert.equal(adapter.encodeAt('userDiscussionFollows/owner/group/post_fixture/targetId', 'fixture'), 'fixture');
+assert.throws(() => adapter.encodeAt('userDiscussionFollows/owner/group/post_fixture/body', 'plaintext'), /Unexpected routing field/);
 assert.equal(encrypted.userId, 'owner');
 assert.ok(!JSON.stringify(encrypted).includes('Secret verse'));
 assert.deepEqual(adapter.decodeAt('posts/group/post', encrypted), record);

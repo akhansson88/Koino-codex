@@ -21,6 +21,17 @@ function freeze(node, collection) {
   }
 }
 for (const [collection, node] of Object.entries(rules)) if (!collection.startsWith(".")) freeze(node, collection);
+// Legacy push tokens were deliberately unreadable to clients. The account
+// owner needs a temporary read during migration to copy and verify them.
+rules.pushTokens.$uid[".read"] = `${own} && root.child('e2eeMigrations').child('user').child($uid).child('status').val() == 'copying'`;
+const migratingOwner = "auth != null && root.child('e2eeMigrations').child('group').child($groupId).child('ownerId').val() == auth.uid && root.child('e2eeMigrations').child('group').child($groupId).child('status').val() == 'copying'";
+// A resumable owner migration must still read its source after legacy group
+// metadata or memberships have been conditionally removed.
+for (const collection of ["groups", "groupMembers", "posts", "checkIns", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupBiblePlanParticipation", "discussionFollowers"]) {
+  const node = rules[collection].$groupId;
+  node[".read"] = `(${node[".read"]}) || (${migratingOwner})`;
+}
+rules.userGroups.$uid.$groupId[".read"] = migratingOwner;
 
 function encryptedTree(expectedKey, depth = 0) {
   const valid = `newData.hasChildren(['v','keyId','nonce','ciphertext','signer','signature']) && (!newData.hasChild('wrappedKey') || newData.child('wrappedKey').isString()) && newData.child('v').val() == 1 && newData.child('keyId').val() == (${expectedKey}) && newData.child('nonce').isString() && newData.child('ciphertext').isString() && newData.child('ciphertext').val().length <= 4000000 && newData.child('signature').isString() && root.child('e2eeSigners').child(newData.child('signer').val()).child('uid').val() == auth.uid && root.child('e2eeSigners').child(newData.child('signer').val()).child('active').val() == true`;
@@ -34,6 +45,7 @@ for (const [collection, p] of Object.entries(policies)) {
     collection === "groupMembers" ? ["$groupId", "$uid"] : collection === "userGroups" ? ["$uid", "$groupId"] :
     collection === "groupBiblePlanParticipation" ? ["$groupId", "$announcementId", "$uid"] :
     collection === "discussionFollowers" ? ["$groupId", "$targetType", "$targetId", "$uid"] :
+    collection === "userDiscussionFollows" ? ["$uid", "$groupId", "$id"] :
     collection === "checkInDailyClaims" ? ["$uid", "$groupId", "$dayKey"] :
     p.scope === "group" ? ["$groupId", "$id"] : collection === "inviteCodes" ? ["$code"] : p.depth === 2 ? ["$uid"] : ["$uid", "$id"];
   const shared = p.scope === "group" || p.scope === "membership" || collection === "discussionFollowers";
@@ -79,7 +91,7 @@ for (const [collection, p] of Object.entries(policies)) {
 rules.encryptedData = store;
 rules.e2eeAccounts = { "$uid": { ".read": "auth != null", ".write": false } };
 rules.e2eeSigners = { ".read": "auth != null", ".write": false };
-rules.e2eeGroups = { "$groupId": { ".read": "auth != null && root.child('e2eeGroups').child($groupId).child('members').child(auth.uid).exists()", ".write": false } };
+rules.e2eeGroups = { "$groupId": { ".read": `(auth != null && root.child('e2eeGroups').child($groupId).child('members').child(auth.uid).exists()) || (${migratingOwner})`, ".write": false } };
 rules.e2eeDeviceRequests = { "$uid": { ".read": own, ".write": false } };
 rules.e2eeJoinRequests = { "$groupId": { ".read": owner, "$uid": { ".read": own }, ".write": false } };
 rules.e2eeGroupLocks = { "$groupId": { ".read": member, ".write": false } };

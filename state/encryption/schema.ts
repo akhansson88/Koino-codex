@@ -30,7 +30,7 @@ export const policies: Record<string, CollectionPolicy> = {
   pushTokens: { depth: 3, scope: "routing", metadata: ["token", "platform", "createdAt", "updatedAt"] },
   checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt"] },
   discussionFollowers: { depth: 5, scope: "routing", metadata: ["userId", "createdAt"] },
-  userDiscussionFollows: { depth: 3, scope: "routing", metadata: [...routing, "following"] },
+  userDiscussionFollows: { depth: 4, scope: "routing", metadata: [...routing, "following"] },
   groupBiblePlanParticipantIds: { depth: 3, scope: "routing", metadata: [] },
   supportIntents: { depth: 3, scope: "routing", metadata: [...routing, "amount", "currency", "provider", "providerReference", "status"] },
   legacyUserArchives: { depth: 3, scope: "user", metadata: ["sourceCollection", "createdAt"] },

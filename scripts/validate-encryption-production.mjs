@@ -50,6 +50,10 @@ try {
   await owner.operation(replay);
   await assert.rejects(owner.operation(replay), /already processed/i);
   await call(owner, 'finishMigration', { scope: `user:${owner.uid}` });
+  const followPath = `encryptedData/userDiscussionFollows/${owner.uid}/${groupId}/post_fixture`;
+  await set(ref(owner.database, followPath), { id: 'post_fixture', userId: owner.uid, targetType: 'post', targetId: 'fixture', createdAt: '2026-01-01' });
+  await assert.rejects(get(ref(outsider.database, followPath)), /permission_denied|Permission denied/i);
+  await assert.rejects(set(ref(owner.database, `${followPath}/body`), 'plaintext'), /permission_denied|Permission denied/i);
   const groupKey = crypto.randomKey();
   const group = { id: groupId, ownerId: owner.uid, epoch: 1, revision: 1, status: 'ready', members: { [owner.uid]: pub(owner.root) }, grants: { [owner.uid]: crypto.seal({ keys: { 1: groupKey } }, owner.root.publicKey) }, signer: owner.root.signingPublicKey, signers: [owner.root.signingPublicKey, owner.device.signingPublicKey] };
   group.signature = crypto.signature({ ...group, previous: null }, owner.root.signingPrivateKey);
@@ -77,7 +81,7 @@ finally {
   if (users[0]?.uid) { try { await call(users[0], 'deleteGroup', { groupId }); } catch { /* Group may already be removed or was never created. */ } }
   const updates = {};
   for (const user of users) if (user.uid) {
-    for (const collection of ['e2eeAccounts','e2eeRequests','e2eeDeviceRequests','e2eeMigrations/user','e2eeImageObjects/user-avatars','encryptedData/journalEntries','encryptedData/userGroups']) updates[`${collection}/${user.uid}`] = null;
+    for (const collection of ['e2eeAccounts','e2eeRequests','e2eeDeviceRequests','e2eeMigrations/user','e2eeImageObjects/user-avatars','encryptedData/journalEntries','encryptedData/userGroups','encryptedData/userDiscussionFollows']) updates[`${collection}/${user.uid}`] = null;
     updates[`e2eeSigners/${user.device.signingPublicKey}`] = null;
   }
   if (Object.keys(updates).length) {

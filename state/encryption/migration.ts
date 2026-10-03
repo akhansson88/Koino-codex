@@ -49,7 +49,7 @@ async function copy(path: string, source: unknown, progress: MigrationProgress):
     for (const [id, value] of Object.entries(source as Record<string, unknown>)) await copy(`${path}/${id}`, value, progress);
     return;
   }
-  progress(`Encrypting ${parts[0]}â€¦`);
+  progress(`Encrypting ${parts[0]}…`);
   const content = source && typeof source === "object" ? { ...source } as Record<string, unknown> : source;
   if (content && typeof content === "object") {
     const record = content as Record<string, unknown>;
@@ -99,7 +99,7 @@ export async function migrateOwnedGroups(progress: MigrationProgress) {
     if (legacy) await storage.setItem(archiveKey, JSON.stringify(legacy));
     else { const saved = await storage.getItem(archiveKey); legacy = saved ? JSON.parse(saved) : null; }
     if (!legacy || legacy.ownerId !== state.uid) continue;
-    progress("Encrypting community historyâ€¦");
+    progress("Encrypting community history…");
     await encryptedOperation("beginMigration", { scope: `group:${groupId}` });
     const exists = (await Raw.get(Raw.ref(database, `e2eeGroups/${groupId}`))).exists();
     if (!exists) {

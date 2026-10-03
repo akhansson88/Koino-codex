@@ -43,6 +43,25 @@ and public URLs were denied. Disposable test accounts and records were removed
 after the successful run. Earlier Computer Use stopped because it could not
 verify the current browser URL; no further UI automation was attempted.
 
+## Existing-account migration repair (2026-10-03)
+
+The connected phone exposed two migration permission failures that fresh-account
+checks did not cover: legacy push tokens were unreadable even to the migrating
+owner, and discussion follows were modeled without their group level. Rules now
+allow the owner to read legacy tokens only while personal migration is copying;
+the follow schema and rules use the full user/group/follow path. Community owner
+migration reads also survive removal of legacy group records and membership
+records, including the initial check for a not-yet-created encrypted group.
+Emulator regressions cover outsider denial, closure after migration, nested Bible
+reader preferences and permitted routing fields. Adapter checks, TypeScript and
+the extended production smoke test passed. Temporary production data was removed.
+The phone completed personal migration and opened the signed-in home screen;
+another app restart unlocked successfully without a permission error. A metadata
+check confirmed one completed personal migration and zero copying migrations.
+The Android runtime `2.0.0` fix was published to both preview and production:
+https://expo.dev/accounts/koinolabs-ab/projects/koino-mvp/updates/6e7503ee-d762-4b5b-9b9a-f978a602be9e
+and https://expo.dev/accounts/koinolabs-ab/projects/koino-mvp/updates/69de6154-4ad9-43a0-b6a5-50999b908499.
+
 ## Data protection
 
 - Personal and community content is encrypted on the device using libsodium
