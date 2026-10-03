@@ -1,86 +1,50 @@
-const supabaseUrl = "https://prumjueusdyqnwwovpen.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydW1qdWV1c2R5cW53d292cGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcwMTEzMzIsImV4cCI6MjA1MjU4NzMzMn0.O9DuG9qUeYtfe2Y8e0ykOdg6qoeTqT8bI_i7SwLBh50";
-
+import { crypto, session, sessionGeneration, encryptedOperation } from "@/state/encryption/session";
+import type { EncryptedRecord } from "@/state/encryption/crypto";
 export const roomImagesBucket = "room-images";
 export const userAvatarsBucket = "user-avatars";
-
-function encodedPath(path: string) {
-  return path.split("/").map(encodeURIComponent).join("/");
+export type ImageEncryption = { key: string; keyId: string; signer: string };
+export type UploadedImage = { url: string; encryptedUri: string; encryption: ImageEncryption };
+const images = new Map<string, Promise<string>>();
+export function clearEncryptedImages() { images.clear(); }
+export function roomImagePublicUrl(path: string) { return `koino-encrypted://room-images/${path}`; }
+export function userAvatarPublicUrl(path: string) { return `koino-encrypted://user-avatars/${path}`; }
+async function upload(bucket: string, path: string, body: ArrayBuffer): Promise<UploadedImage> {
+  if (body.byteLength > 2 * 1024 * 1024) throw new Error("Choose an image smaller than 2 MB.");
+  const state = session();
+  const key = crypto.randomKey(), keyId = `image:${crypto.randomKey()}`;
+  const record = crypto.encrypt(crypto.encode(new Uint8Array(body)), `images/${bucket}/${path}`, keyId, key, state.device.identity);
+  await encryptedOperation("imageUpload", { bucket, path, record });
+  const url = `koino-encrypted://${bucket}/${path}`;
+  return { url, encryptedUri: url, encryption: { key, keyId, signer: state.device.identity.signingPublicKey } };
 }
-
-async function storageError(response: Response) {
-  const body = await response.text();
-  try {
-    const parsed = JSON.parse(body) as { error?: string; message?: string };
-    return new Error(parsed.message || parsed.error || `Supabase Storage request failed with ${response.status}.`);
-  } catch {
-    return new Error(body || `Supabase Storage request failed with ${response.status}.`);
+export const uploadRoomImage = (path: string, body: ArrayBuffer) => upload(roomImagesBucket, path, body);
+export const uploadUserAvatar = (path: string, body: ArrayBuffer) => upload(userAvatarsBucket, path, body);
+export const deleteRoomImage = (path: string) => encryptedOperation("imageDelete", { bucket: roomImagesBucket, path });
+export const deleteUserAvatar = (path: string) => encryptedOperation("imageDelete", { bucket: userAvatarsBucket, path });
+export async function resolveEncryptedImages(value: unknown, groupId?: string): Promise<unknown> {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return Promise.all(value.map((child) => resolveEncryptedImages(child, groupId)));
+  const object = value as Record<string, unknown>;
+  if (typeof object.url === "string" && object.url.startsWith("koino-encrypted://")) {
+    const url = object.url, [, bucket, path] = /^koino-encrypted:\/\/([^/]+)\/(.+)$/.exec(url) ?? [];
+    const encryption = object.encryption as ImageEncryption | undefined;
+    if (!bucket || !path || !encryption) throw new Error("Encrypted image metadata is incomplete.");
+    const token = sessionGeneration(), cacheKey = `${token}:${url}:${encryption.keyId}`;
+    let loading = images.get(cacheKey);
+    if (!loading) {
+      loading = (async () => {
+        const { record } = await encryptedOperation<{ record: EncryptedRecord }>("imageDownload", { bucket, path, ...(groupId ? { groupId } : {}) });
+        if (token !== sessionGeneration()) throw new Error("The image session changed.");
+        if (record.keyId !== encryption.keyId || record.signer !== encryption.signer) throw new Error("Image identity could not be verified.");
+        const image = crypto.decrypt(record, `images/${bucket}/${path}`, encryption.key, new Set([encryption.signer])) as string;
+        const encoded = crypto.encode(crypto.decode(image));
+        const standard = encoded.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - encoded.length % 4) % 4);
+        return `data:image/webp;base64,${standard}`;
+      })().catch((error) => { images.delete(cacheKey); throw error; });
+      images.set(cacheKey, loading);
+    }
+    try { return { ...object, encryptedUri: url, url: await loading }; }
+    catch { return { ...object, encryptedUri: url, url: undefined }; }
   }
-}
-
-function storageHeaders(extra?: Record<string, string>) {
-  return {
-    apikey: supabaseAnonKey,
-    authorization: `Bearer ${supabaseAnonKey}`,
-    ...extra,
-  };
-}
-
-function publicUrl(bucket: string, path: string) {
-  return `${supabaseUrl}/storage/v1/object/public/${bucket}/${encodedPath(path)}`;
-}
-
-async function uploadStorageImage(bucket: string, path: string, body: ArrayBuffer) {
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath(path)}`, {
-    body,
-    headers: storageHeaders({
-      "cache-control": "max-age=3600",
-      "content-type": "image/webp",
-      "x-upsert": "false",
-    }),
-    method: "POST",
-  });
-
-  if (!response.ok) {
-    throw await storageError(response);
-  }
-}
-
-async function deleteStorageImage(bucket: string, path: string) {
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}`, {
-    body: JSON.stringify({ prefixes: [path] }),
-    headers: storageHeaders({
-      "content-type": "application/json",
-    }),
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    throw await storageError(response);
-  }
-}
-
-export function roomImagePublicUrl(path: string) {
-  return publicUrl(roomImagesBucket, path);
-}
-
-export function userAvatarPublicUrl(path: string) {
-  return publicUrl(userAvatarsBucket, path);
-}
-
-export async function uploadRoomImage(path: string, body: ArrayBuffer) {
-  await uploadStorageImage(roomImagesBucket, path, body);
-}
-
-export async function uploadUserAvatar(path: string, body: ArrayBuffer) {
-  await uploadStorageImage(userAvatarsBucket, path, body);
-}
-
-export async function deleteRoomImage(path: string) {
-  await deleteStorageImage(roomImagesBucket, path);
-}
-
-export async function deleteUserAvatar(path: string) {
-  await deleteStorageImage(userAvatarsBucket, path);
+  return Object.fromEntries(await Promise.all(Object.entries(object).map(async ([key, child]) => [key, await resolveEncryptedImages(child, groupId)])));
 }

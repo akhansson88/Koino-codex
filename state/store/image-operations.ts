@@ -1,4 +1,4 @@
-import { get, ref, update } from "firebase/database";
+import { get, ref, update } from "@/state/encryption/database";
 import { deleteRoomImage, deleteUserAvatar } from "@/state/supabase-storage";
 import { Id, Membership } from "@/state/types";
 import { type Profile } from "@/state/store/types";

@@ -1,6 +1,6 @@
 import TrackPlayer, { AppKilledPlaybackBehavior, Capability, Event, State, type Track } from "react-native-track-player";
 import * as FileSystem from "expo-file-system/legacy";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/state/encryption/local-storage";
 import { nextBibleChapter, previousBibleChapter } from "../bible-canon";
 import { fetchAudioJson, locateChapterTime, parseChapter, type AudioCatalog, type AudioChapter, type AudioChapterEntry } from "./catalog";
 

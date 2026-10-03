@@ -1,11 +1,13 @@
 import * as FirebaseAuth from "@firebase/auth";
 import type { User as FirebaseUser } from "@firebase/auth";
-import { get, ref, set, update } from "firebase/database";
+import { get, ref, update } from "@/state/encryption/database";
 import { normalizeTheme } from "@/ui/theme";
 import { Group, Membership } from "@/state/types";
 import { now, id, inviteCode } from "@/state/store/helpers";
 import { database } from "@/state/store/firebase";
 import { type Profile } from "@/state/store/types";
+import { createEncryptedGroup, groupJoinRequest } from "@/state/encryption/session";
+import { encodeAt } from "@/state/encryption/database";
 
 export async function ensureProfile(user: FirebaseUser, name?: string) {
   const timestamp = now();
@@ -17,20 +19,18 @@ export async function ensureProfile(user: FirebaseUser, name?: string) {
   await update(profileRef, {
     id: user.uid,
     name: resolvedName,
-    email: user.email ?? null,
     createdAt: existing?.createdAt ?? timestamp,
     theme: normalizeTheme(existing?.theme),
   });
 
-  if (name?.trim() && user.displayName !== resolvedName) {
-    await FirebaseAuth.updateProfile(user, { displayName: resolvedName });
+  if (user.displayName) {
+    await FirebaseAuth.updateProfile(user, { displayName: null });
   }
 
   return {
     ...existing,
     id: user.uid,
     name: resolvedName,
-    email: user.email ?? null,
     createdAt: existing?.createdAt ?? timestamp,
     theme: normalizeTheme(existing?.theme),
   } satisfies Profile;
@@ -57,18 +57,18 @@ export async function createGroupForUser(user: FirebaseUser, name: string, userN
     userId: user.uid,
     groupId,
     role: "owner",
-    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
+    userName: userProfile.name,
     ...(userProfile.image ? { image: userProfile.image } : {}),
     createdAt: timestamp,
   };
 
-  await set(ref(database, `groups/${groupId}`), group);
-  await set(ref(database, `inviteCodes/${code}`), { groupId, createdAt: timestamp });
-  await update(ref(database), {
-    [`groupMembers/${groupId}/${user.uid}`]: membership,
-    [`userGroups/${user.uid}/${groupId}`]: membership,
-    [`profiles/${user.uid}/currentGroupId`]: groupId,
-  });
+  // Generate keys before encoding the creation records; the callback runs only
+  // after the new group's keys are available locally.
+  await createEncryptedGroup(groupId, () => ({
+    group: encodeAt(`groups/${groupId}`, group),
+    membership: encodeAt(`groupMembers/${groupId}/${user.uid}`, membership),
+    userMembership: encodeAt(`userGroups/${user.uid}/${groupId}`, membership),
+  }));
 }
 
 export async function joinGroupByInvite(user: FirebaseUser, code: string, userName?: string) {
@@ -76,25 +76,5 @@ export async function joinGroupByInvite(user: FirebaseUser, code: string, userNa
   if (!normalizedCode) throw new Error("Enter a community invite code.");
 
   const userProfile = await ensureProfile(user, userName);
-
-  const inviteSnapshot = await get(ref(database, `inviteCodes/${normalizedCode}`));
-  const invite = inviteSnapshot.val() as { groupId?: string } | null;
-  if (!invite?.groupId) throw new Error("No community exists for that invite code.");
-
-  const timestamp = now();
-  const membership: Membership = {
-    id: id("membership"),
-    userId: user.uid,
-    groupId: invite.groupId,
-    role: "member",
-    userName: userName?.trim() || user.displayName || user.email?.split("@")[0] || "KOINO member",
-    ...(userProfile.image ? { image: userProfile.image } : {}),
-    createdAt: timestamp,
-  };
-
-  await update(ref(database), {
-    [`groupMembers/${invite.groupId}/${user.uid}`]: membership,
-    [`userGroups/${user.uid}/${invite.groupId}`]: membership,
-    [`profiles/${user.uid}/currentGroupId`]: invite.groupId,
-  });
+  await groupJoinRequest(normalizedCode, userProfile.name);
 }

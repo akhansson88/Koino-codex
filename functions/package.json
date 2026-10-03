@@ -8,14 +8,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test lib/payments/payment-validation.test.js lib/push-delivery.test.js"
+    "test": "npm run build && node --test lib/payments/payment-validation.test.js lib/push-delivery.test.js lib/storage-auth.test.js"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",
     "firebase-functions": "^7.3.2",
+    "libsodium-wrappers": "^0.8.4",
     "stripe": "^22.5.0"
   },
   "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2"
   }

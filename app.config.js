@@ -13,7 +13,7 @@ const baseConfig = {
   },
   ios: {
     supportsTablet: false,
-    buildNumber: "3",
+    buildNumber: "4",
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoadsInWebContent: true,
@@ -24,13 +24,14 @@ const baseConfig = {
     bundleIdentifier: "com.akhansson.koino",
   },
   android: {
+    allowBackup: false,
     googleServicesFile: "./google-services.json",
     adaptiveIcon: {
       foregroundImage: "./koino-logo.png",
       backgroundColor: "#F7EFE4",
     },
     package: "com.akhansson.koinomvp",
-    versionCode: 4,
+    versionCode: 5,
     permissions: ["android.permission.RECORD_AUDIO", "android.permission.POST_NOTIFICATIONS"],
   },
   plugins: [
@@ -47,7 +48,9 @@ const baseConfig = {
     "expo-web-browser",
     "expo-notifications",
     "expo-font",
-    ["expo-sqlite", { enableFTS: true }],
+    ["expo-sqlite", { enableFTS: true, useSQLCipher: true }],
+    "expo-secure-store",
+    ["react-native-libsodium", {}],
   ],
   experiments: {
     typedRoutes: true,
@@ -59,7 +62,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "1.3.0",
+  runtimeVersion: "2.0.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

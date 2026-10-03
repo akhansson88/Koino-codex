@@ -83,10 +83,10 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
   useEffect(() => { if (visible) void audio.refresh(); }, [visible, audio.refresh]);
   const title = session ? `${session.chapter.bookName} ${session.chapter.chapter}` : t("audio.title");
   const verse = session?.chapter.verses[session.index].verse;
-  const iconButton = (icon: "play" | "pause" | "skip-back" | "skip-forward" | "x", label: string, action: () => void, disabled = false, primary = false) => <Pressable
+  const iconButton = (icon: "play" | "pause" | "skip-back" | "skip-forward" | "x", label: string, action: () => void, disabled = false, primary = false, compact = false) => <Pressable
     accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={action}
-    style={{ width: primary ? 68 : 48, height: primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: primary ? brandPalette.warmPersika : "transparent", opacity: disabled ? 0.35 : 1 }}>
-    {primary && audio.loading ? <ActivityIndicator color={brandPalette.deepNavy} /> : <Feather name={icon} size={primary ? 28 : 22} color={primary ? brandPalette.deepNavy : palette.accent} />}
+    style={{ width: compact ? 44 : primary ? 68 : 48, height: compact ? 44 : primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: primary ? brandPalette.warmPersika : "transparent", opacity: disabled ? 0.35 : 1 }}>
+    {primary && audio.loading ? <ActivityIndicator color={brandPalette.deepNavy} /> : <Feather name={icon} size={primary && !compact ? 28 : 22} color={primary ? brandPalette.deepNavy : palette.accent} />}
   </Pressable>;
   const close = () => { void audio.stop(); onClose(); };
   const dismissToFollow = () => { if (session) onFollow(); onClose(); };
@@ -96,15 +96,14 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
     {iconButton("skip-forward", t("audio.nextChapter"), () => { void audio.moveChapter(1); }, !audio.nextChapter || audio.loading || audio.commandPending)}
   </View>;
   return <>
-    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, padding: 10, gap: 8 }}>
+    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 9, gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("audio.open")} onPress={onOpen} style={{ flex: 1, minHeight: 44, justifyContent: "center" }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center" }}>
         <Text style={{ color: palette.text, fontWeight: "700" }}>{title}</Text><Text style={{ color: palette.muted }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
       </Pressable>
-      {iconButton("x", t("audio.close"), close)}
+      {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle, audio.loading || audio.commandPending, true, true)}
+      {iconButton("x", t("audio.close"), close, false, false, true)}
       </View>
-      <Progress key={session.entry.manifestUrl} chapter={session.chapter} index={session.index} palette={palette} />
-      {controls}
       {!follow || !matching ? <Pressable accessibilityRole="button" accessibilityLabel={t("audio.follow")} accessibilityState={{ selected: false }} onPress={onFollow}
         style={{ minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>
         <Text style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{t("audio.follow")}</Text>

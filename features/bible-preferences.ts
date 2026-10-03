@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/state/encryption/local-storage";
 import { useEffect, useState } from "react";
 
 import { isBibleVersionId, type BibleVersionId } from "@/features/bible-versions";

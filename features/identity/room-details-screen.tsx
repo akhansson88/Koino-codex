@@ -201,6 +201,7 @@ export function RoomDetailsScreen() {
             {roomMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{roomMessage}</Text> : null}
 
             <SettingsSection label={t("community.management.settingsTitle")}>
+              <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => router.push("/encryption" as never)} />
               <SettingsRow icon="users" title={t("community.members.title")} onPress={() => setActiveSheet("members")} />
               <SettingsRow
                 icon="edit-2"

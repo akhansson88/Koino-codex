@@ -1,4 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { hydrateNotification } from "@/state/encryption/notifications";
+import AsyncStorage from "@/state/encryption/local-storage";
 import * as FirebaseAuth from "@firebase/auth";
 import type { User as FirebaseUser } from "@firebase/auth";
 import {
@@ -12,7 +13,7 @@ import {
   runTransaction,
   set,
   update,
-} from "firebase/database";
+} from "@/state/encryption/database";
 import {
   createContext,
   PropsWithChildren,
@@ -94,8 +95,19 @@ import {
   profileAndMembershipImageUpdates,
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
+import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup } from "@/state/encryption/session";
+import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
 
+function resolveMentionIds(body: string, members: Membership[]) {
+  const tokens = new Set(Array.from(body.matchAll(/@([\p{L}\p{N}_-]+)/gu), (match) => match[1].toLocaleLowerCase()));
+  const ids = new Set<string>();
+  for (const token of tokens) {
+    const matches = members.filter((member) => { const name = member.userName.trim().toLocaleLowerCase(); return [name.replace(/\s+/g, "_"), name.split(/\s+/)[0]].includes(token); });
+    if (matches.length === 1) ids.add(matches[0].userId);
+  }
+  return [...ids];
+}
 const pendingCheckInKeys = new Set<string>();
 
 const CHECK_IN_CLAIM_RECOVERY_MS = 2 * 60 * 1000;
@@ -559,6 +571,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!firebaseUser) return;
 
+    let active = true;
+    let notificationRevision = 0;
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
     const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
@@ -602,7 +616,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         setPrayerNotificationsHasMore(recent.length === FIREBASE_PAGE_SIZE);
       }),
       onValue(recentFirebaseQuery(activityNotificationsRef), (snapshot) => {
-        setActivityNotifications(firebaseRecords<ActivityNotification>(snapshot.val()));
+        const revision = ++notificationRevision;
+        const records = firebaseRecords<ActivityNotification>(snapshot.val());
+        void Promise.all(records.map(hydrateNotification)).then((items) => {
+          if (active && revision === notificationRevision) setActivityNotifications(items);
+        });
       }),
       onValue(notificationPreferencesRef, (snapshot) => {
         setNotificationPreferences({
@@ -668,7 +686,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
-    return () => unsubs.forEach((unsubscribe) => unsubscribe());
+    return () => { active = false; unsubs.forEach((unsubscribe) => unsubscribe()); };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -967,11 +985,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             case "signUp": {
               const credential = await FirebaseAuth.createUserWithEmailAndPassword(auth, action.email.trim(), action.password);
-              await ensureProfile(credential.user, action.name);
+              await AsyncStorage.setItem(`e2ee.signup-name.${credential.user.uid}`, action.name);
               return;
             }
             case "signOut":
+              await import("@/features/bible-audio/engine").then((engine) => engine.stop());
               clearUserSession();
+              clearEncryptedImages();
+              await AsyncStorage.clearContent();
               await FirebaseAuth.signOut(auth);
               return;
             case "requestPasswordReset": {
@@ -1023,17 +1044,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupToLeave = groups.find((item) => item.id === action.id);
               if (!groupToLeave || groupToLeave.ownerId === firebaseUser.uid) return;
 
-              const remainingMembership = userMemberships.find((membership) => membership.groupId !== action.id);
-              const updates: Record<string, unknown> = {
-                [`groupMembers/${action.id}/${firebaseUser.uid}`]: null,
-                [`userGroups/${firebaseUser.uid}/${action.id}`]: null,
-              };
-
-              if (profile?.currentGroupId === action.id) {
-                updates[`profiles/${firebaseUser.uid}/currentGroupId`] = remainingMembership?.groupId ?? null;
-              }
-
-              await update(ref(database), updates);
+              await leaveEncryptedGroup(action.id);
               return;
             }
             case "removeGroupMember": {
@@ -1044,10 +1055,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const membership = memberships.find((item) => item.groupId === action.groupId && item.userId === action.userId);
               if (!membership || membership.role === "owner") return;
 
-              await update(ref(database), {
-                [`groupMembers/${action.groupId}/${action.userId}`]: null,
-                [`userGroups/${action.userId}/${action.groupId}`]: null,
-              });
+              await rotateGroup(action.groupId, action.userId);
               return;
             }
             case "transferGroupOwnership": {
@@ -1069,18 +1077,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 throw new Error("Choose another current member of this community.");
               }
 
-              const timestamp = now();
-              const previousOwner: Membership = { ...currentOwnerMembership, role: "member" };
-              const nextOwner: Membership = { ...nextOwnerMembership, role: "owner" };
-
-              await update(ref(database), {
-                [`groups/${action.groupId}/ownerId`]: action.userId,
-                [`groups/${action.groupId}/updatedAt`]: timestamp,
-                [`groupMembers/${action.groupId}/${firebaseUser.uid}`]: previousOwner,
-                [`userGroups/${firebaseUser.uid}/${action.groupId}`]: previousOwner,
-                [`groupMembers/${action.groupId}/${action.userId}`]: nextOwner,
-                [`userGroups/${action.userId}/${action.groupId}`]: nextOwner,
-              });
+              await rotateGroup(action.groupId, undefined, action.userId);
               return;
             }
             case "updateGroup":
@@ -1098,12 +1095,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const path = `${action.id}/${Date.now().toString(36)}.webp`;
               const imageBody = await localUriToArrayBuffer(action.localUri);
 
-              await uploadRoomImage(path, imageBody);
+              const encryptedImage = await uploadRoomImage(path, imageBody);
 
               try {
-                const url = roomImagePublicUrl(path);
+                const url = encryptedImage.url;
                 await update(ref(database, `groups/${action.id}`), {
                   image: {
+                    ...encryptedImage,
                     url,
                     path,
                     width: 512,
@@ -1141,11 +1139,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const path = `${firebaseUser.uid}/${Date.now().toString(36)}.webp`;
               const imageBody = await localUriToArrayBuffer(action.localUri);
 
-              await uploadUserAvatar(path, imageBody);
+              const encryptedImage = await uploadUserAvatar(path, imageBody);
 
               try {
-                const url = userAvatarPublicUrl(path);
+                const url = encryptedImage.url;
                 const image: Profile["image"] = {
+                  ...encryptedImage,
                   url,
                   path,
                   width: 512,
@@ -1176,25 +1175,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupToDelete = groupSnapshot.val() as Group | null;
               if (!firebaseUser || !groupToDelete || groupToDelete.ownerId !== firebaseUser.uid) return;
 
-              const memberSnapshot = await get(ref(database, `groupMembers/${action.id}`));
-              const members = asArray<Membership>(memberSnapshot.val());
-              const updates: Record<string, unknown> = {
-                [`groups/${action.id}`]: null,
-                [`inviteCodes/${groupToDelete.inviteCode}`]: null,
-                [`groupMembers/${action.id}`]: null,
-                [`checkIns/${action.id}`]: null,
-                [`posts/${action.id}`]: null,
-                [`replies/${action.id}`]: null,
-                [`prayerReactions/${action.id}`]: null,
-              };
-
-              members.forEach((member) => {
-                updates[`userGroups/${member.userId}/${action.id}`] = null;
-              });
-              updates[`profiles/${firebaseUser.uid}/currentGroupId`] =
-                userMemberships.find((membership) => membership.groupId !== action.id)?.groupId ?? null;
-
-              await update(ref(database), updates);
+              await deleteEncryptedGroup(action.id);
               await deleteRoomStoragePath(groupToDelete.image?.path);
               return;
             }
@@ -1595,6 +1576,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
               if (action.status === "completed" && action.targetType === "user" && action.recipientUserId && action.recipientUserId !== firebaseUser.uid) {
                 const notification: PrayerNotification = {
+                  groupId: profile?.currentGroupId ?? undefined,
                   id: id("prayernotification"),
                   userId: firebaseUser.uid,
                   recipientUserId: action.recipientUserId,
@@ -1655,6 +1637,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 targetType: action.targetType,
                 targetId: action.targetId,
                 body: action.body.trim().slice(0, 500),
+                mentionUserIds: resolveMentionIds(action.body, memberships),
                 createdAt: now(),
               };
               await set(ref(database, `replies/${profile.currentGroupId}/${reply.id}`), reply);
@@ -2005,6 +1988,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 if (participantId) {
                   updates[`groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}/${participantId}`] = {
                     id: participantId,
+                    userId: firebaseUser.uid,
                     announcementId: plan.announcementId,
                     completedDayNumbers: completedDayNumbers(days),
                     totalDays: plan.days.length,
@@ -2090,6 +2074,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               };
               const participation: GroupBiblePlanParticipation = {
                 id: participantId,
+                userId: firebaseUser.uid,
                 announcementId: announcement.id,
                 completedDayNumbers: {},
                 totalDays: announcement.dayCount,

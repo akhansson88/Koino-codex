@@ -30,3 +30,11 @@ firebase-debug.log
 features/.generated/
 __pycache__/
 *.pyc
+
+# Local encryption build output
+.codex/encryption-android-build.log
+.codex/encryption-device.apk.idsig
+
+.codex/encryption-export/
+.codex/encryption-functions-deploy/
+.codex/audit-legacy-collections.cjs

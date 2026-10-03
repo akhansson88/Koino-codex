@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { crypto, sodium } from "./encryption-test-helpers.mjs";
+
+const identity = crypto.identity(), stranger = crypto.identity(), key = crypto.randomKey();
+const path = "journalEntries/user-1/entry-1/body";
+const message = "A private prayer about family and health — åäö 🙏";
+const ciphertext = crypto.encrypt(message, path, "user:user-1:1", key, identity, undefined, '{"subject":"user-1"}');
+const trusted = new Set([identity.signingPublicKey]);
+assert.equal(crypto.decrypt(ciphertext, path, key, trusted), message);
+assert.ok(!JSON.stringify(ciphertext).includes(message));
+assert.notEqual(crypto.encrypt(message, path, ciphertext.keyId, key, identity).nonce, ciphertext.nonce);
+for (const [field, altered] of [["ciphertext", crypto.encode(sodium.randombytes_buf(64))], ["nonce", crypto.randomKey()], ["keyId", "user:user-2:1"], ["signer", stranger.signingPublicKey], ["context", '{"subject":"user-2"}']]) {
+  assert.throws(() => crypto.decrypt({ ...ciphertext, [field]: altered }, path, key, trusted));
+}
+assert.throws(() => crypto.decrypt(ciphertext, path.replace("entry-1", "entry-2"), key, trusted));
+assert.throws(() => crypto.decrypt(ciphertext, path, crypto.randomKey(), trusted));
+assert.throws(() => crypto.decrypt(ciphertext, path, key, new Set([stranger.signingPublicKey])));
+const recoveryKey = crypto.randomKey();
+const vault = { personalKeys: { "1": key }, groups: { community: { "1": key } } };
+const backup = crypto.encrypt(vault, "recovery/user-1", "recovery:1", recoveryKey, identity);
+assert.deepEqual(crypto.decrypt(backup, "recovery/user-1", recoveryKey, trusted), vault);
+assert.throws(() => crypto.decrypt(backup, "recovery/user-1", crypto.randomKey(), trusted), "A password reset cannot provide the recovery key");
+const grant = crypto.seal(vault, stranger.publicKey);
+assert.deepEqual(crypto.unseal(grant, stranger), vault);
+assert.throws(() => crypto.unseal(grant, identity));
+const oldKey = crypto.randomKey(), nextKey = crypto.randomKey();
+const future = crypto.encrypt(message, "posts/group/record/body", "group:group:2", nextKey, identity);
+assert.throws(() => crypto.decrypt(future, "posts/group/record/body", oldKey, trusted));
+assert.equal(crypto.decrypt(future, "posts/group/record/body", nextKey, trusted), message);
+assert.equal(crypto.opaqueId("John 3:16", key), crypto.opaqueId("John 3:16", key));
+assert.notEqual(crypto.opaqueId("John 3:16", key), crypto.opaqueId("John 3:16", nextKey));
+assert.equal(crypto.verify({ id: 1, revision: 2 }, crypto.signature({ revision: 2, id: 1 }, identity.signingPrivateKey), identity.signingPublicKey), true);
+assert.equal(crypto.verify({ id: 1, revision: 3 }, crypto.signature({ id: 1, revision: 2 }, identity.signingPrivateKey), identity.signingPublicKey), false);
+const rules = readFileSync("firebase.rules.json", "utf8");
+assert.ok(rules.includes("encryptedData"));
+assert.ok(rules.includes("e2eeGroupLocks"));
+assert.ok(!rules.includes("numChildren()"), "Realtime Database rules do not implement numChildren()");
+const storageRules = readFileSync("supabase-storage-rules.sql", "utf8");
+assert.doesNotMatch(storageRules, /to anon, authenticated/i);
+assert.doesNotMatch(storageRules, /values \('[^']+', '[^']+', true/i);
+console.log("Encryption validation passed: authentication, tampering, path/author binding, recovery, key grants, rotation, and opaque IDs.");

@@ -1,4 +1,5 @@
 export const englishTranslations = {
+  "common.encryption": "Encryption & devices",
   "audio.title": "Audio Bible",
   "audio.open": "Open audio Bible",
   "audio.play": "Play",
@@ -87,7 +88,6 @@ export const englishTranslations = {
   "bible.navigator.chapter.single": "1 chapter",
   "bible.navigator.chapter.count": "{count} chapters",
   "bible.navigator.myPlaces": "My places",
-  "bible.navigator.continue": "Continue where you were",
   "bible.navigator.saved": "Saved verses",
   "bible.navigator.saved.single": "1 saved verse",
   "bible.navigator.saved.count": "{count} saved verses",

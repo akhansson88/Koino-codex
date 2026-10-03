@@ -6,7 +6,7 @@ import {
   query,
   type DatabaseReference,
   type Query,
-} from "firebase/database";
+} from "@/state/encryption/database";
 
 import type { Id } from "@/state/types";
 

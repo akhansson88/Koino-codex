@@ -4,7 +4,7 @@ import { BibleAudioPlayer } from "@/features/bible-audio/player";
 import { useBibleAudio } from "@/features/bible-audio/provider";
 import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { tabBarHeight } from "@/ui/navigation-layout";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/state/encryption/local-storage";
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -197,7 +197,7 @@ export function BibleScreen() {
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerInitialStage, setPickerInitialStage] = useState<"home" | "search">("home");
+  const [pickerInitialStage, setPickerInitialStage] = useState<"home" | "myPlaces" | "search">("home");
   const [versionPickerVisible, setVersionPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
@@ -249,7 +249,7 @@ export function BibleScreen() {
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);
-  const [audioMiniHeight, setAudioMiniHeight] = useState(122);
+  const [audioMiniHeight, setAudioMiniHeight] = useState(64);
   const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
@@ -1399,6 +1399,10 @@ export function BibleScreen() {
           setPickerVisible(true);
         }}
         onOpenAudio={() => setAudioVisible(true)}
+        onOpenMyPlaces={() => {
+          setPickerInitialStage("myPlaces");
+          setPickerVisible(true);
+        }}
         onOpenSettings={() => setSettingsVisible(true)}
         onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}

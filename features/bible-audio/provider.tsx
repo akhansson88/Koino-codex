@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/state/encryption/local-storage";
 import { AppState } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type PropsWithChildren } from "react";
 import { AUDIO_CATALOG_URL, fetchAudioJson, parseCatalog, type AudioCatalog } from "./catalog";
@@ -51,7 +51,7 @@ function useController() {
       if (state === "active") { observe(); void refresh(); }
       else { stopObserving?.(); stopObserving = undefined; }
     });
-    return () => { mounted = false; stopObserving?.(); subscription.remove(); };
+    return () => { mounted = false; stopObserving?.(); subscription.remove(); void engine.stop().catch(() => undefined); };
   }, [refresh]);
   return { ...playback, catalog, catalogState, refresh, start: engine.start, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
 }

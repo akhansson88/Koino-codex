@@ -1,0 +1,9 @@
+{
+  "database": { "rules": "firebase.rules.json" },
+  "functions": [{
+    "source": ".codex/encryption-functions-deploy",
+    "codebase": "default",
+    "ignore": ["node_modules", "lib/**/*.test.js", "lib/**/*.test.js.map"],
+    "predeploy": ["npm --prefix functions run build", "node scripts/prepare-encryption-deploy.cjs"]
+  }]
+}

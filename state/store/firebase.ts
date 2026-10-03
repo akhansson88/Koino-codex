@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@/state/encryption/local-storage";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
 import type { Auth } from "@firebase/auth";

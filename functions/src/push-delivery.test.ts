@@ -24,7 +24,7 @@ test("badge query counts only unread notification children", async () => {
     },
   } as unknown as Database;
   assert.equal(await activityUnreadCount(database, "user-1"), 3);
-  assert.deepEqual(calls, ["activityNotifications/user-1", "order:readAt", "equal:null"]);
+  assert.deepEqual(calls, ["encryptedData/activityNotifications/user-1", "order:readAt", "equal:null"]);
 });
 
 test("global and category preferences independently gate pushes", () => {
@@ -49,10 +49,12 @@ test("comment messages are immediate and preserve deep-link data", () => {
   const owner = buildCommentPushMessage({ ...base, reason: "owner" });
   const mention = buildCommentPushMessage({ ...base, reason: "mention" });
   const participant = buildCommentPushMessage({ ...base, reason: "participant" });
-  assert.equal(owner.title, "Alex commented on your post");
+  assert.equal(owner.title, "KOINO");
+  assert.equal(owner.body, "New activity in KOINO.");
+  assert.doesNotMatch(JSON.stringify(owner), /Alex|A reply/);
   assert.equal(mention.channelId, "mentions");
   assert.equal(mention.priority, "high");
-  assert.equal(participant.title, "New activity on a discussion you joined");
+  assert.equal(participant.title, "KOINO");
   assert.deepEqual(owner.data, {
     notificationId: "reply-1",
     groupId: "group-1",
@@ -64,7 +66,7 @@ test("comment messages are immediate and preserve deep-link data", () => {
 
 test("prayer messages use the prayer channel", () => {
   const message = buildPrayerPushMessage("Sam", "prayer-1");
-  assert.equal(message.title, "Sam prayed for you");
+  assert.equal(message.title, "KOINO");
   assert.equal(message.channelId, "prayer-activity");
   assert.deepEqual(message.data, { prayerNotificationId: "prayer-1" });
 });

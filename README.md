@@ -154,3 +154,7 @@ Regenerate local native configuration using the project's normal Expo prebuild
 flow before building, or let EAS generate it from `app.config.js`. Test background
 verse transitions, lock-screen controls, calls, and headphone disconnection on
 physical iOS and Android devices before release. Offline downloads are not included.
+
+## Content encryption
+
+See [ENCRYPTION.md](./ENCRYPTION.md) for the implementation, readable metadata, recovery behavior, migration, validation and required release checks. A new native binary is required.

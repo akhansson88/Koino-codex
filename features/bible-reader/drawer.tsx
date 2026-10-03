@@ -1,7 +1,7 @@
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
-import { AppSheet, SheetScrollView, type AppSheetHandle } from "@/ui/app-sheet";
+import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -16,7 +16,7 @@ import {
 import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import type { BibleHighlight, JournalEntry, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
-import { type ReaderPalette, type PickerStage, type TestamentFilter } from "@/features/bible-reader/types";
+import { type ReaderPalette, type PickerStage } from "@/features/bible-reader/types";
 import {
   biblePositionFromVerse,
   testamentForBook,
@@ -59,7 +59,7 @@ export function BibleDrawer({
   biblePlanCount: number;
   bibleVersionId: BibleVersionId;
   highlights: BibleHighlight[];
-  initialStage: "home" | "search";
+  initialStage: "home" | "myPlaces" | "search";
   initialPosition: BiblePosition;
   journalEntries: JournalEntry[];
   onClose: () => void;
@@ -81,11 +81,40 @@ export function BibleDrawer({
   const sheetRef = useRef<AppSheetHandle>(null);
   const drawerScrollRef = useRef<ScrollView>(null);
   const phraseSearchRequestRef = useRef(0);
-  const [stage, setStage] = useState<PickerStage>(initialStage);
+  const [stage, setStage] = useState<PickerStage>(initialStage === "home" ? "book" : initialStage);
   const [bookQuery, setBookQuery] = useState("");
   const [bookParentStage, setBookParentStage] = useState<"book" | "search">("book");
   const [selectedBook, setSelectedBook] = useState(initialPosition.book);
-  const [testament, setTestament] = useState<TestamentFilter>("all");
+  const bookScrollOffset = useRef(0);
+  const bookOffsets = useRef<Record<string, number>>({});
+  const pendingBookScroll = useRef<number | "current" | null>("current");
+  const bookContentReady = useRef(false);
+  const bookViewportReady = useRef(false);
+  const bookScrollFrame = useRef<number | undefined>(undefined);
+
+  // Native row measurements account for translated names and larger text sizes.
+  // Consume the pending target once so later layouts never undo user scrolling.
+  const restoreBookScroll = useCallback(() => {
+    if (pendingBookScroll.current === null) return;
+    if (bookScrollFrame.current !== undefined) cancelAnimationFrame(bookScrollFrame.current);
+    bookScrollFrame.current = requestAnimationFrame(() => {
+      const pending = pendingBookScroll.current;
+      if (pending === null || !bookContentReady.current || !bookViewportReady.current) return;
+      const y = pending === "current" ? bookOffsets.current[initialPosition.book] : pending;
+      if (y === undefined || !drawerScrollRef.current) return;
+      drawerScrollRef.current.scrollTo({ animated: false, y: Math.max(0, y) });
+      bookScrollOffset.current = Math.max(0, y);
+      pendingBookScroll.current = null;
+    });
+  }, [initialPosition.book]);
+
+  useLayoutEffect(() => {
+    bookContentReady.current = false;
+    bookViewportReady.current = false;
+    return () => {
+      if (bookScrollFrame.current !== undefined) cancelAnimationFrame(bookScrollFrame.current);
+    };
+  }, [stage, visible]);
   const [phraseSearchLoading, setPhraseSearchLoading] = useState(false);
   const [phraseSearchResults, setPhraseSearchResults] = useState<BibleTextSearchResult[]>([]);
   const [savedVerseMenu, setSavedVerseMenu] = useState<SavedVerse | undefined>();
@@ -101,14 +130,16 @@ export function BibleDrawer({
   const onOpenTopic = (topic?: string) => sheetRef.current?.dismiss(() => openTopic(topic));
 
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) return;
     const normalized = normalizeBiblePosition(initialPosition);
-    setStage(initialStage);
+    setStage(initialStage === "home" ? "book" : initialStage);
     setBookQuery("");
     setBookParentStage(initialStage === "search" ? "search" : "book");
     setSelectedBook(normalized.book);
-    setTestament("all");
+    pendingBookScroll.current = "current";
+    bookOffsets.current = {};
+    bookScrollOffset.current = 0;
     setSavedVerseMenu(undefined);
   }, [initialPosition, initialStage, visible]);
 
@@ -133,8 +164,9 @@ export function BibleDrawer({
 
 
   useEffect(() => {
-    if (!visible) return;
-    requestAnimationFrame(() => drawerScrollRef.current?.scrollTo({ animated: false, y: 0 }));
+    if (!visible || stage === "book") return;
+    const frame = requestAnimationFrame(() => drawerScrollRef.current?.scrollTo({ animated: false, y: 0 }));
+    return () => cancelAnimationFrame(frame);
   }, [stage, visible]);
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
@@ -143,8 +175,7 @@ export function BibleDrawer({
   const selectableBooks = kjvBooks.filter((item) => {
     const displayName = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language);
     const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
-    const matchesTestament = testament === "all" || testamentForBook(item.name) === testament;
-    return matchesQuery && matchesTestament;
+    return matchesQuery;
   });
   const matchingTopics = normalizedQuery
     ? suggestedTopics.filter((topic) => {
@@ -201,15 +232,14 @@ export function BibleDrawer({
         .slice(0, 12),
     [journalEntries],
   );
+  const isRootStage = stage === "book" || stage === "myPlaces";
   const title =
-    stage === "home"
+    stage === "book"
       ? t("bible.navigator.title")
+      : stage === "myPlaces"
+        ? t("bible.navigator.myPlaces")
       : stage === "search"
         ? t("bible.navigator.search")
-      : stage === "book"
-        ? testament === "old"
-          ? t("bible.navigator.oldTestament")
-          : t("bible.navigator.newTestament")
         : stage === "chapter"
           ? displayBibleBookName(selectedBook, bookLanguage)
             : stage === "saved"
@@ -219,28 +249,29 @@ export function BibleDrawer({
                 : t("bible.navigator.reflections");
 
   function goBack() {
+    if (stage === "saved" || stage === "highlights" || stage === "reflections") {
+      setStage("myPlaces");
+      return;
+    }
     if (stage === "chapter") {
+      if (bookParentStage === "book") pendingBookScroll.current = bookScrollOffset.current;
       setStage(bookParentStage);
       return;
     }
-    if (stage !== "home") {
-      setStage("home");
+    if (!isRootStage) {
+      pendingBookScroll.current = "current";
+      setStage("book");
       setBookQuery("");
       return;
     }
     closeWithAnimation();
   }
 
-  function openBookList(nextTestament: TestamentFilter) {
-    setTestament(nextTestament);
-    setBookQuery("");
-    setStage("book");
-  }
-
-  function openSearch() {
-    setTestament("all");
-    setBookQuery("");
-    setStage("search");
+  function filterBooks(query: string) {
+    pendingBookScroll.current = 0;
+    setBookQuery(query);
+    restoreBookScroll();
+    drawerScrollRef.current?.scrollTo({ animated: false, y: 0 });
   }
 
   function chooseBook(bookName: string) {
@@ -256,7 +287,7 @@ export function BibleDrawer({
   }
 
   return (
-    <AppSheet ref={sheetRef} onBack={goBack} visible={visible} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
+    <AppSheet ref={sheetRef} contentPanning={false} onBack={goBack} visible={visible} onClose={onClose} height={sheetHeight} backgroundColor={palette.sheet} foregroundColor={palette.text}>
               <View style={{ flex: 1, paddingBottom: insets.bottom }}>
           <BibleSheetTop
             bordered
@@ -266,59 +297,56 @@ export function BibleDrawer({
           >
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <ReaderCircleButton
-                accessibilityLabel={stage === "home" ? t("bible.navigator.close") : t("bible.navigator.back")}
-                icon={stage === "home" ? "x" : "chevron-left"}
+                accessibilityLabel={isRootStage ? t("bible.navigator.close") : t("bible.navigator.back")}
+                icon={isRootStage ? "x" : "chevron-left"}
                 onPress={goBack}
                 palette={palette}
               />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text numberOfLines={2} style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{title}</Text>
-                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "home" ? `${chapterLabel(initialPosition, bookLanguage)} - ${versionLabel}` : versionLabel}</Text>
+                <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{stage === "book" ? `${chapterLabel(initialPosition, bookLanguage)} - ${versionLabel}` : versionLabel}</Text>
               </View>
             </View>
           </BibleSheetTop>
 
-          <SheetScrollView
+          {stage === "book" ? (
+            <View style={{ paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: 12, paddingBottom: 8 }}>
+              <DrawerSearchBox
+                onChangeText={filterBooks}
+                onSubmit={() => undefined}
+                palette={palette}
+                placeholder={t("bible.navigator.filterBooks")}
+                value={bookQuery}
+              />
+            </View>
+          ) : null}
+          {/* This fixed-height drawer scrolls independently of the sheet's animated scroll controller. */}
+          <ScrollView
+            key={stage}
             ref={drawerScrollRef}
+            style={{ flex: 1, minHeight: 0 }}
+            nestedScrollEnabled
+            keyboardDismissMode="on-drag"
+            onContentSizeChange={stage === "book" ? (_width, contentHeight) => {
+              bookContentReady.current = contentHeight > 0;
+              restoreBookScroll();
+            } : undefined}
+            onLayout={stage === "book" ? ({ nativeEvent }) => {
+              bookViewportReady.current = nativeEvent.layout.height > 0;
+              restoreBookScroll();
+            } : undefined}
+            onScroll={stage === "book" ? ({ nativeEvent }) => {
+              if (pendingBookScroll.current === null) bookScrollOffset.current = nativeEvent.contentOffset.y;
+            } : undefined}
+            scrollEventThrottle={16}
             contentInsetAdjustmentBehavior="never"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 18, padding: bibleSheetHorizontalPadding, paddingBottom: Math.max(28, insets.bottom + 20) }}
+            contentContainerStyle={{ gap: stage === "book" ? 8 : 18, padding: bibleSheetHorizontalPadding, paddingBottom: Math.max(28, insets.bottom + 20) }}
           >
-            {stage === "home" ? (
+            {stage === "myPlaces" ? (
               <>
-                <DrawerSection title={t("bible.navigator.goTo")} palette={palette}>
-                  <DrawerRow
-                    icon="book-open"
-                    onPress={() => openBookList("old")}
-                    palette={palette}
-                    subtitle={t("bible.navigator.oldTestamentRange")}
-                    title={t("bible.navigator.oldTestament")}
-                  />
-                  <DrawerRow
-                    icon="book"
-                    onPress={() => openBookList("new")}
-                    palette={palette}
-                    subtitle={t("bible.navigator.newTestamentRange")}
-                    title={t("bible.navigator.newTestament")}
-                  />
-                  <DrawerRow
-                    icon="search"
-                    onPress={openSearch}
-                    palette={palette}
-                    subtitle={t("bible.navigator.searchSubtitle")}
-                    title={t("bible.navigator.search")}
-                  />
-                </DrawerSection>
-
                 <DrawerSection title={t("bible.navigator.myPlaces")} palette={palette}>
-                  <DrawerRow
-                    icon="play-circle"
-                    onPress={() => onSelect(initialPosition)}
-                    palette={palette}
-                    subtitle={referenceLabel(initialPosition, bookLanguage)}
-                    title={t("bible.navigator.continue")}
-                  />
                   <DrawerRow
                     icon="bookmark"
                     onPress={() => setStage("saved")}
@@ -456,30 +484,35 @@ export function BibleDrawer({
 
             {stage === "book" ? (
               <>
-                <DrawerSearchBox
-                  onChangeText={setBookQuery}
-                  onSubmit={() => undefined}
-                  palette={palette}
-                  placeholder={t("bible.navigator.filterBooks")}
-                  value={bookQuery}
-                />
-                <View style={{ gap: 8 }}>
-                  {selectableBooks.length > 0 ? (
-                    selectableBooks.map((item) => (
-                      <DrawerBookRow
-                        key={item.name}
-                        book={item}
-                        language={language}
-                        onPress={() => chooseBook(item.name)}
-                        palette={palette}
-                        selected={item.name === initialPosition.book}
-                        t={t}
-                      />
-                    ))
-                  ) : (
-                    <DrawerEmptyState palette={palette} text={t("bible.navigator.noBooks")} />
-                  )}
-                </View>
+                {(["old", "new"] as const).map((section) => {
+                  const books = selectableBooks.filter((item) => testamentForBook(item.name) === section);
+                  if (!books.length) return null;
+                  return [
+                    <Text
+                      key={section}
+                      accessibilityRole="header"
+                      style={{ color: palette.muted, fontSize: 13, fontWeight: "900", paddingTop: 12, paddingBottom: 4, borderTopWidth: section === "new" ? 1 : 0, borderTopColor: palette.line }}
+                    >
+                      {t(section === "old" ? "bible.navigator.oldTestament" : "bible.navigator.newTestament")}
+                    </Text>,
+                    ...books.map((item) => (
+                      <View key={item.name} onLayout={({ nativeEvent }) => {
+                        bookOffsets.current[item.name] = nativeEvent.layout.y;
+                        restoreBookScroll();
+                      }}>
+                        <DrawerBookRow
+                          book={item}
+                          language={language}
+                          onPress={() => chooseBook(item.name)}
+                          palette={palette}
+                          selected={item.name === initialPosition.book}
+                          t={t}
+                        />
+                      </View>
+                    )),
+                  ];
+                })}
+                {!selectableBooks.length ? <DrawerEmptyState palette={palette} text={t("bible.navigator.noBooks")} /> : null}
               </>
             ) : null}
 
@@ -577,7 +610,7 @@ export function BibleDrawer({
                 )}
               </View>
             ) : null}
-          </SheetScrollView>
+          </ScrollView>
         </View>
 
       <SavedVerseActionSheet

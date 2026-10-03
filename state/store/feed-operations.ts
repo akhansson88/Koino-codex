@@ -1,4 +1,4 @@
-import { get, ref, remove, update } from "firebase/database";
+import { get, ref, remove, update } from "@/state/encryption/database";
 import { Id, PostReaction, PrayerReaction, Reply } from "@/state/types";
 import { database } from "@/state/store/firebase";
 import { asArray } from "@/state/store/helpers";

@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { crypto } from './encryption-test-helpers.mjs';
+process.env.FIREBASE_DATABASE_EMULATOR_HOST = '127.0.0.1:9001';
+const require = createRequire(new URL('../functions/package.json', import.meta.url));
+const { initializeApp, deleteApp } = require('firebase-admin/app');
+const { getDatabase } = require('firebase-admin/database');
+const app = initializeApp({ projectId: 'demo-koino', databaseURL: 'https://demo-koino-default-rtdb.firebaseio.com' });
+const { encryptedAccount } = require('../functions/lib/encryption.js');
+const { createCommentNotification, sendPrayerNotification } = require('../functions/lib/activity-notifications.js');
+const db = getDatabase(app);
+const pub = (identity) => ({ publicKey: identity.publicKey, signingPublicKey: identity.signingPublicKey });
+function request(user, operation, data) {
+  const payload = { operation, data, deviceId: user.device.id, requestId: crypto.randomKey(), timestamp: Date.now() };
+  return { auth: { uid: user.uid }, data: { ...payload, signature: crypto.signature(payload, user.device.identity.signingPrivateKey) } };
+}
+const call = (user, operation, data) => encryptedAccount.run(request(user, operation, data));
+async function setup(uid) {
+  const user = { uid, root: crypto.identity(), device: { id: 'initial', identity: crypto.identity() }, recoveryKey: crypto.randomKey() };
+  user.vault = { uid, identity: user.root };
+  const device = { id: user.device.id, ...pub(user.device.identity), grant: crypto.seal(user.vault, user.device.identity.publicKey), certificate: crypto.signature({ uid, id: user.device.id, ...pub(user.device.identity) }, user.root.signingPrivateKey) };
+  const data = { ...pub(user.root), device, recovery: crypto.encrypt(user.vault, `recovery/${uid}`, 'recovery:1', user.recoveryKey, user.root) };
+  await call(user, 'setup', { ...data, proof: crypto.signature(data, user.root.signingPrivateKey) });
+  return user;
+}
+const signGroup = (group, identity) => { const { signature, ...payload } = group; return { ...payload, signature: crypto.signature({ ...payload, previous: payload.previous ?? null }, identity.signingPrivateKey) }; };
+try {
+  await db.ref().set(null);
+  const owner = await setup('owner'), member = await setup('member');
+  const extra = { id: 'second', identity: crypto.identity() };
+  const expected = pub(extra.identity);
+  await call({ ...owner, device: extra }, 'requestDevice', { id: extra.id, ...expected });
+  await assert.rejects(call(owner, 'approveDevice', { id: extra.id, expected: pub(member.root) }), /changed/);
+  await call(owner, 'approveDevice', { id: extra.id, expected, certificate: crypto.signature({ uid: owner.uid, id: extra.id, ...expected }, owner.root.signingPrivateKey), grant: crypto.seal(owner.vault, extra.identity.publicKey) });
+  const recovery = crypto.encrypt(owner.vault, 'recovery/owner', 'recovery:1', owner.recoveryKey, owner.root);
+  const backup = request(owner, 'backup', { recovery, grants: { initial: crypto.seal(owner.vault, owner.device.identity.publicKey), second: crypto.seal(owner.vault, extra.identity.publicKey) } });
+  await encryptedAccount.run(backup);
+  await assert.rejects(encryptedAccount.run(backup), /already processed/);
+  const key = crypto.randomKey();
+  const group = signGroup({ id: 'community', ownerId: owner.uid, epoch: 1, revision: 1, status: 'ready', members: { owner: pub(owner.root) }, grants: { owner: crypto.seal({ keys: { 1: key } }, owner.root.publicKey) }, signer: owner.root.signingPublicKey, signers: [owner.root.signingPublicKey, owner.device.identity.signingPublicKey] }, owner.root);
+  const membership = { id: 'membership', userId: 'owner', groupId: 'community', role: 'owner' };
+  await assert.rejects(call(owner, 'createGroup', { group, records: { group: { id: 'community', ownerId: 'owner', inviteCode: 'INVITE', name: 'Plaintext room' }, membership, userMembership: membership } }), /encrypted before/);
+  const nativeFetch = globalThis.fetch;
+  let forcedConflict = false;
+  globalThis.fetch = async (url, options) => {
+    if (!forcedConflict && options?.method === 'PUT') { forcedConflict = true; await db.ref('restConflictMarker').set('preserve concurrent write'); }
+    return nativeFetch(url, options);
+  };
+  try { await call(owner, 'createGroup', { group, records: { group: { id: 'community', ownerId: 'owner', inviteCode: 'INVITE', createdAt: '2026-01-01' }, membership, userMembership: membership } }); }
+  finally { globalThis.fetch = nativeFetch; }
+  assert.equal(forcedConflict, true);
+  assert.equal((await db.ref('restConflictMarker').get()).val(), 'preserve concurrent write', 'ETag retry preserves unrelated concurrent updates');
+  const oldReply = { id: 'old-reply', userId: 'owner', targetType: 'post', targetId: 'old-post', createdAt: '2026-01-01' };
+  await db.ref('replies/community/old-reply').set(oldReply);
+  await call(owner, 'beginMigration', { scope: 'group:community' });
+  await db.ref('replies/community').remove();
+  await call(owner, 'beginMigration', { scope: 'group:community' });
+  await call(owner, 'finishMigration', { scope: 'group:community' });
+  assert.equal((await db.ref('e2eeMigrations/group/community/importedEventIds/old-reply').get()).val(), true);
+  await db.ref('encryptedData/posts/community/old-post').set({ userId: 'member' });
+  await db.ref('encryptedData/groupMembers/community').set({ owner: membership, member: { userId: 'member' } });
+  await createCommentNotification.run({ params: { groupId: 'community', replyId: 'old-reply' }, data: { val: () => oldReply } });
+  assert.equal((await db.ref('encryptedData/activityNotifications/member/old-reply').get()).exists(), false, 'delayed migration replies do not recreate notifications');
+  await call(member, 'requestJoin', { code: 'INVITE', identity: pub(member.root), name: crypto.seal({ name: 'Member' }, owner.root.publicKey) });
+  const nextKey = crypto.randomKey();
+  const joined = signGroup({ ...group, previous: group, epoch: 2, revision: 2, members: { owner: pub(owner.root), member: pub(member.root) }, grants: { owner: crypto.seal({ keys: { 1: key, 2: nextKey } }, owner.root.publicKey), member: crypto.seal({ keys: { 1: key, 2: nextKey } }, member.root.publicKey) } }, owner.root);
+  await assert.rejects(call(member, 'groupChange', { group: joined }), /authorized/);
+  const memberRecord = { id: 'member-membership', userId: 'member', groupId: 'community', role: 'member' };
+  await call(owner, 'groupChange', { group: joined, records: { membership: memberRecord, userMembership: memberRecord } });
+  const granted = crypto.unseal((await db.ref('e2eeGroups/community/grants/member').get()).val(), member.root);
+  assert.equal(granted.keys[1], key, 'new members receive full history');
+  await call(member, 'leaveGroup', { groupId: 'community' });
+  assert.equal((await db.ref('e2eeGroupLocks/community').get()).val(), true);
+  await assert.rejects(call(owner, 'groupChange', { group: signGroup({ ...joined, previous: joined, revision: 3 }, owner.root) }), /Group changed/);
+  const removed = signGroup({ ...joined, previous: joined, revision: 3, epoch: 3, members: { owner: pub(owner.root) }, grants: { owner: crypto.seal({ keys: { 1: key, 2: nextKey, 3: crypto.randomKey() } }, owner.root.publicKey) } }, owner.root);
+  await call(owner, 'groupChange', { group: removed });
+  assert.equal((await db.ref('e2eeGroupLocks/community').get()).exists(), false);
+  assert.equal((await db.ref('encryptedData/userGroups/member/community').get()).exists(), false);
+  const recovered = { id: 'recovered', identity: crypto.identity() };
+  const registration = { id: recovered.id, ...pub(recovered.identity), grant: crypto.seal(owner.vault, recovered.identity.publicKey), certificate: crypto.signature({ uid: 'owner', id: recovered.id, ...pub(recovered.identity) }, owner.root.signingPrivateKey) };
+  await call({ ...owner, device: recovered }, 'recover', { device: registration, proof: crypto.signature({ device: registration }, owner.root.signingPrivateKey) });
+  const newRoot = crypto.identity(), newRecoveryKey = crypto.randomKey();
+  const before = (await db.ref('e2eeAccounts/owner').get()).val();
+  const newVault = { uid: 'owner', identity: newRoot, previousIdentities: [owner.root] };
+  const devices = Object.fromEntries(Object.entries(before.devices).map(([id, entry]) => [id, { ...entry, active: id === 'second' ? false : entry.active, certificate: crypto.signature({ uid: 'owner', id, publicKey: entry.publicKey, signingPublicKey: entry.signingPublicKey }, newRoot.signingPrivateKey), grant: id === 'second' ? entry.grant : crypto.seal(newVault, entry.publicKey) }]));
+  const rotation = { previous: pub(owner.root), next: pub(newRoot), signature: crypto.signature({ previous: pub(owner.root), next: pub(newRoot) }, owner.root.signingPrivateKey) };
+  await call(owner, 'revokeDevice', { id: 'second', next: pub(newRoot), rotation, devices, personalEpoch: 2, recovery: crypto.encrypt(newVault, 'recovery/owner', 'recovery:1', newRecoveryKey, newRoot), groupRequests: {} });
+  await assert.rejects(call({ ...owner, device: extra }, 'resolveInvite', { code: 'INVITE' }), /Unlock/);
+  await assert.rejects(call({ ...owner, device: recovered }, 'recover', { device: registration, proof: crypto.signature({ device: registration }, owner.root.signingPrivateKey) }), /Recovery proof/);
+  assert.equal((await db.ref('e2eeGroupLocks/community').get()).val(), true);
+  const rekeyed = signGroup({ ...removed, previous: removed, revision: 4, epoch: 4, members: { owner: pub(newRoot) }, grants: { owner: crypto.seal({ keys: { 1: key, 2: nextKey, 4: crypto.randomKey() } }, newRoot.publicKey) } }, owner.root);
+  await call(owner, 'groupChange', { group: rekeyed });
+  assert.equal((await db.ref('e2eeGroupLocks/community').get()).exists(), false);
+  await call(owner, 'deleteGroup', { groupId: 'community' });
+  assert.equal((await db.ref('encryptedData/groups/community').get()).exists(), false);
+  const legacy = { id: 'entry', userId: 'owner', body: 'Legacy secret', createdAt: '2026-01-01' };
+  await db.ref('journalEntries/owner/entry').set(legacy);
+  const retiredPlan = { active: { title: 'Private historical plan', readings: ['John 3:16'] } };
+  await db.ref('privateBiblePlans/owner').set(retiredPlan);
+  const oldPrayer = { id: 'old-prayer', userId: 'member', recipientUserId: 'owner' };
+  await db.ref('prayerNotifications/owner/old-prayer').set(oldPrayer);
+  await call(owner, 'beginMigration', { scope: 'user:owner' });
+  assert.deepEqual((await call(owner, 'readLegacyArchive', { kind: 'user', target: 'owner', collection: 'privateBiblePlans' })).source, retiredPlan);
+  await assert.rejects(call(member, 'readLegacyArchive', { kind: 'user', target: 'owner', collection: 'privateBiblePlans' }), /authorized/);
+  await assert.rejects(call(owner, 'readLegacyArchive', { kind: 'user', target: 'owner', collection: 'e2eeAccounts' }), /Invalid/);
+  await assert.rejects(call(owner, 'finishMigration', { scope: 'user:owner' }), /Legacy content remains/);
+  await assert.rejects(call(owner, 'deleteLegacyBatch', { records: [{ path: 'journalEntries/owner/entry', digest: 'incorrect' }] }), /Legacy content changed/);
+  assert.equal((await db.ref('journalEntries/owner/entry/body').get()).val(), 'Legacy secret');
+  const { sodium } = await import('./encryption-test-helpers.mjs');
+  const digest = sodium.to_hex(sodium.crypto_generichash(32, crypto.canonical(legacy), null));
+  await db.ref('encryptedData/journalEntries/owner/entry').set({ ...legacy, body: crypto.encrypt(legacy.body, 'journalEntries/owner/entry/body', 'user:owner:2', crypto.randomKey(), owner.device.identity) });
+  await call(owner, 'deleteLegacyBatch', { records: [{ path: 'journalEntries/owner/entry', digest }] });
+  await db.ref('prayerNotifications/owner').remove();
+  await assert.rejects(call(owner, 'finishMigration', { scope: 'user:owner' }), /Legacy content remains/);
+  await call(owner, 'deleteLegacyBatch', { records: [{ path: 'privateBiblePlans/owner', digest: sodium.to_hex(sodium.crypto_generichash(32, crypto.canonical(retiredPlan), null)) }] });
+  await call(owner, 'finishMigration', { scope: 'user:owner' });
+  assert.equal((await db.ref('e2eeMigrations/user/owner/importedEventIds/old-prayer').get()).val(), true);
+  await db.ref('encryptedData/pushTokens/owner/test').set({ token: 'ExponentPushToken[test]' });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('Imported prayer notification attempted a network push'); };
+  try { await sendPrayerNotification.run({ params: { recipientUserId: 'owner', notificationId: 'old-prayer' }, data: { val: () => oldPrayer } }); }
+  finally { globalThis.fetch = originalFetch; }
+  assert.equal((await db.ref('e2eeMigrations/user/owner/status').get()).val(), 'complete');
+  console.log('Encryption backend checks passed: device approvals, recovery proof, request replay, owner admission, history grants, departure locks, rotation, revocation, deletion, conditional migration, and silent history imports.');
+} finally { await deleteApp(app); }
+process.exit(0);

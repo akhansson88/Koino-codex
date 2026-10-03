@@ -19,6 +19,7 @@ import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
 import { colors, statusBarStyle } from "@/ui/theme";
+import { EncryptionBoundary } from "@/ui/encryption";
 
 const enableNativeBackGesture = Platform.OS === "ios";
 
@@ -34,11 +35,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}><AppLanguageProvider>
-      <KoinoProvider>
+      <EncryptionBoundary><KoinoProvider>
         <BibleDatabaseProvider>
           <BibleAudioProvider><RootNavigator /></BibleAudioProvider>
         </BibleDatabaseProvider>
-      </KoinoProvider>
+      </KoinoProvider></EncryptionBoundary>
     </AppLanguageProvider></GestureHandlerRootView>
   );
 }
@@ -84,6 +85,7 @@ function RootNavigator() {
         <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+        <Stack.Screen name="encryption" options={{ headerShown: false }} />
         <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
       </Stack>

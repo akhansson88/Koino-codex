@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { build } from "esbuild";
 
 const store = readFileSync(new URL("../state/koino-store.tsx", import.meta.url), "utf8");
 const pagination = readFileSync(new URL("../state/firebase-pagination.ts", import.meta.url), "utf8");
 const rules = JSON.parse(readFileSync(new URL("../firebase.rules.json", import.meta.url), "utf8"));
-const { firebaseRecords, mergeFirebaseRecords } = await import("../state/firebase-pagination.ts");
+const compiled = await build({ entryPoints: ["state/firebase-pagination.ts"], bundle: true, format: "esm", platform: "node", write: false, plugins: [{ name: "database-query-only", setup(builder) { builder.onResolve({ filter: /^@\/state\/encryption\/database$/ }, () => ({ path: "queries", namespace: "test" })); builder.onLoad({ filter: /.*/, namespace: "test" }, () => ({ contents: "export const endBefore = () => {}; export const get = () => {}; export const limitToLast = () => {}; export const orderByChild = () => {}; export const query = () => {};", loader: "js" })); } }] });
+const { firebaseRecords, mergeFirebaseRecords } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString("base64")}`);
 
 const subscribedRefs = [
   "journalRef",

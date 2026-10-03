@@ -16,6 +16,8 @@ export type GroupImage = {
   height: 512;
   contentType: "image/webp";
   updatedAt: string;
+  encryptedUri?: string;
+  encryption?: import("@/state/supabase-storage").ImageEncryption;
 };
 
 export type ProfileImage = GroupImage;
@@ -150,6 +152,7 @@ export type GroupBiblePlanAnnouncement = {
 };
 
 export type GroupBiblePlanParticipation = {
+  userId?: Id;
   id: Id;
   announcementId: Id;
   completedDayNumbers: Record<string, true>;
@@ -209,6 +212,7 @@ export type PrayerSession = {
 };
 
 export type PrayerNotification = {
+  groupId?: Id;
   id: Id;
   userId: Id;
   recipientUserId: Id;
@@ -268,6 +272,7 @@ export type PostReaction = {
 };
 
 export type Reply = {
+  mentionUserIds?: string[];
   id: Id;
   userId: Id;
   targetType: ReplyTargetType;

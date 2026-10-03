@@ -192,6 +192,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           onPress={() => setActiveSheet("security")}
           showDivider
         />
+        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => router.push("/encryption" as never)} />
         <SettingsRow icon="shield" title={t("identity.privacy.title")} subtitle={t("identity.privacy.subtitle")} onPress={() => setActiveSheet("privacy")} showDivider />
         <SettingsRow
           icon="file-text"

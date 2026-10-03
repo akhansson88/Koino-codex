@@ -1,3 +1,4 @@
+import * as FileSystem from "expo-file-system/legacy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -147,7 +148,8 @@ export function RoomImageCropper({
         [{ crop: cropRect }, { resize: { height: outputSize, width: outputSize } }],
         { compress: 0.5, format: ImageManipulator.SaveFormat.WEBP },
       );
-      await onSave(result.uri);
+      try { await onSave(result.uri); }
+      finally { if (FileSystem.cacheDirectory && result.uri.startsWith(FileSystem.cacheDirectory) && result.uri !== source.uri) await FileSystem.deleteAsync(result.uri, { idempotent: true }); }
     } catch {
       setError(t("shared.cropper.saveError"));
       setSaving(false);

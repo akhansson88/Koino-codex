@@ -1,6 +1,7 @@
 import { type TranslationDictionary } from "@/ui/translations/types";
 
 export const swedishTranslations: TranslationDictionary = {
+  "common.encryption": "Kryptering och enheter",
   "audio.title": "Ljudbibel",
   "audio.open": "Öppna ljudbibeln",
   "audio.play": "Spela",
@@ -89,7 +90,6 @@ export const swedishTranslations: TranslationDictionary = {
   "bible.navigator.chapter.single": "1 kapitel",
   "bible.navigator.chapter.count": "{count} kapitel",
   "bible.navigator.myPlaces": "Mina platser",
-  "bible.navigator.continue": "Fortsätt där du var",
   "bible.navigator.saved": "Sparade verser",
   "bible.navigator.saved.single": "1 sparad vers",
   "bible.navigator.saved.count": "{count} sparade verser",

@@ -1,4 +1,4 @@
-import { get, onValue, ref, runTransaction } from "firebase/database";
+import { get, onValue, ref, runTransaction } from "@/state/encryption/database";
 
 import { database } from "@/state/store/firebase";
 import { parsePreferences } from "@/features/bible-reader/preferences";

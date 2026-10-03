@@ -14,7 +14,7 @@ export type BibleReaderFontId = (typeof readerFonts)[number]["id"];
 
 export type BibleReaderThemeId = (typeof readerThemes)[number]["id"];
 
-export type PickerStage = "home" | "search" | "book" | "chapter" | "saved" | "highlights" | "reflections";
+export type PickerStage = "home" | "myPlaces" | "search" | "book" | "chapter" | "saved" | "highlights" | "reflections";
 
 export type TestamentFilter = "all" | "old" | "new";
 

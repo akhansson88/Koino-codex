@@ -79,8 +79,9 @@ async function recordDeliveryError(
   error: { stage: "ticket" | "receipt"; message?: string; code?: string; tokenHash?: string },
 ) {
   const id = diagnosticId(`${sourceId}_${error.stage}_${error.tokenHash ?? "request"}`);
-  await database.ref(`pushDeliveryDiagnostics/${recipientUserId}/${id}`).set({
+  await database.ref(`encryptedData/pushDeliveryDiagnostics/${recipientUserId}/${id}`).set({
     ...error,
+    message: "Push delivery failed.",
     sourceId,
     occurredAt: new Date().toISOString(),
   });
@@ -88,12 +89,12 @@ async function recordDeliveryError(
 }
 
 export async function pushAllowed(database: Database, recipientUserId: string, category: PushCategory) {
-  const snapshot = await database.ref(`notificationPreferences/${recipientUserId}`).get();
+  const snapshot = await database.ref(`encryptedData/notificationPreferences/${recipientUserId}`).get();
   return preferenceAllows((snapshot.val() ?? {}) as NotificationPreferences, category);
 }
 
 export async function activityUnreadCount(database: Database, recipientUserId: string) {
-  const snapshot = await database.ref(`activityNotifications/${recipientUserId}`)
+  const snapshot = await database.ref(`encryptedData/activityNotifications/${recipientUserId}`)
     .orderByChild("readAt").equalTo(null).get();
   return snapshot.numChildren();
 }
@@ -105,7 +106,7 @@ export async function sendExpoPush(
   message: ExpoPushMessage,
   fetchImpl: typeof fetch = fetch,
 ) {
-  const tokensSnapshot = await database.ref(`pushTokens/${recipientUserId}`).get();
+  const tokensSnapshot = await database.ref(`encryptedData/pushTokens/${recipientUserId}`).get();
   const tokenEntries = Object.entries((tokensSnapshot.val() ?? {}) as Record<string, PushTokenRecord>)
     .filter((entry): entry is [string, { token: string; platform?: "android" | "ios" }] => typeof entry[1]?.token === "string");
 
@@ -131,7 +132,7 @@ export async function sendExpoPush(
       const hash = tokenHash(tokenRecord.token);
       if (!ticket || ticket.status !== "ok" || !ticket.id) {
         if (isDeviceNotRegistered(ticket?.details)) {
-          await database.ref(`pushTokens/${recipientUserId}/${tokenId}`).remove();
+          await database.ref(`encryptedData/pushTokens/${recipientUserId}/${tokenId}`).remove();
         }
         await recordDeliveryError(database, recipientUserId, sourceId, {
           stage: "ticket",
@@ -175,7 +176,7 @@ export async function processExpoReceipts(database: Database, fetchImpl: typeof 
     const item = pending[receiptId];
     if (receipt.status === "error") {
       if (isDeviceNotRegistered(receipt.details)) {
-        await database.ref(`pushTokens/${item.recipientUserId}/${item.tokenId}`).remove();
+        await database.ref(`encryptedData/pushTokens/${item.recipientUserId}/${item.tokenId}`).remove();
       }
       await recordDeliveryError(database, item.recipientUserId, receiptId, {
         stage: "receipt",

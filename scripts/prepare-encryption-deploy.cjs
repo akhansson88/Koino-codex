@@ -1,0 +1,23 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const source = path.join(root, 'functions');
+const destination = path.join(root, '.codex', 'encryption-functions-deploy');
+fs.mkdirSync(destination, { recursive: true });
+fs.cpSync(path.join(source, 'lib'), path.join(destination, 'lib'), { recursive: true });
+const packageJson = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+delete packageJson.scripts;
+fs.writeFileSync(path.join(destination, 'package.json'), JSON.stringify(packageJson, null, 2) + '\n');
+fs.copyFileSync(path.join(source, 'package-lock.json'), path.join(destination, 'package-lock.json'));
+fs.writeFileSync(path.join(destination, 'lib', 'index.js'), `
+const notifications = require('./activity-notifications');
+const encryption = require('./encryption');
+exports.createCommentNotification = notifications.createCommentNotification;
+exports.sendPrayerNotification = notifications.sendPrayerNotification;
+exports.checkPushReceipts = notifications.checkPushReceipts;
+exports.encryptedAccount = encryption.encryptedAccount;
+exports.pruneEncryptedRequests = encryption.pruneEncryptedRequests;
+`);
+const modules = path.join(destination, 'node_modules');
+if (!fs.existsSync(modules)) fs.symlinkSync(path.join(source, 'node_modules'), modules, process.platform === 'win32' ? 'junction' : 'dir');
+console.log('Prepared encryption Functions entry point without unrelated payment exports.');

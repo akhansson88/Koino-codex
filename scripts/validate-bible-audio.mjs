@@ -63,7 +63,7 @@ const nextEntry = { ...entry, chapter: 2, manifestUrl: entry.manifestUrl.replace
 const nextChapter = { ...chapter, ...nextEntry, verses: chapter.verses.map((verse) => ({ ...verse, url: verse.url.replace('audio-test', 'audio-test2') })) };
 globalThis.fetch = async (url) => ({ ok: true, json: async () => url === entry.manifestUrl ? chapter : nextChapter });
 const mockPlugin = { name: 'native-audio-mocks', setup(build) {
-  build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
+  build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage|@\/state\/encryption\/local-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
   build.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path }) => ({ contents: path === 'react-native-track-player'
     ? `export default globalThis.__audioTest.player; export const Event = globalThis.__audioTest.constants; export const Capability = {}; export const AppKilledPlaybackBehavior = {}; export const State = {Playing:'playing',Paused:'paused',Ended:'ended',Loading:'loading',Buffering:'buffering',Error:'error'};`
     : path === 'expo-file-system/legacy' ? `export const {cacheDirectory,makeDirectoryAsync,getInfoAsync,downloadAsync,moveAsync,deleteAsync}=globalThis.__audioTest.fs;`
@@ -334,6 +334,13 @@ await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pau
 assert.equal(intent, false);
 await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false})); });
 assert.ok(ui.root.findAllByType('Text').some((node) => node.props.children === 'Verse 2'));
+assert.equal(ui.root.findAllByType('Slider').length, 0, 'compact card leaves seeking in the full player');
+assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.previousChapter',accessibilityRole:'button'}).length, 0);
+assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.nextChapter',accessibilityRole:'button'}).length, 0);
+let opened = 0;
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false,onOpen:()=>{opened++;}})); });
+await act(async () => { ui.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel?.startsWith('audio.open,')).props.onPress(); });
+assert.equal(opened, 1, 'chapter and verse open the full player');
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.play',accessibilityRole:'button'}).props.onPress(); });
 assert.equal(intent, true, 'mini-player button controls native playback');
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pause',accessibilityRole:'button'}).props.onPress(); });
@@ -345,14 +352,14 @@ assert.equal(followButton.props.accessibilityState.selected, false, 'manual scro
 await act(async () => { followButton.props.onPress(); });
 assert.equal(followed, 1);
 assert.equal(intent, false, 'Follow while paused does not start playback');
-ui.root.findAllByType('View').find((node) => node.props.onLayout).props.onLayout({nativeEvent:{layout:{height:144}}});
-assert.equal(measuredHeight, 144, 'reader receives actual mini-player height');
-// Both layouts use chapter navigation, preserving native play/pause intent.
-for (const visible of [true, false]) {
+ui.root.findAllByType('View').find((node) => node.props.onLayout).props.onLayout({nativeEvent:{layout:{height:116}}});
+assert.equal(measuredHeight, 116, 'reader receives actual mini-player height including Follow');
+// Chapter navigation remains in the full player, preserving native play/pause intent.
+{
   await act(async () => {
     fresh.setAudioCatalog({ ...catalog, chapters: { ...catalog.chapters, '43:2': nextEntry } });
     await fresh.start(entry, 1, 3, false);
-    ui.update(React.createElement(BibleAudioPlayer, { ...props, visible }));
+    ui.update(React.createElement(BibleAudioPlayer, { ...props, visible:true }));
   });
   const button = (label) => ui.root.findByProps({accessibilityLabel:label,accessibilityRole:'button'});
   assert.equal(button('audio.previousChapter').props.disabled, true);
