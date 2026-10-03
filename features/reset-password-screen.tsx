@@ -3,7 +3,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
-import { Body, Card, Field, PillButton, Screen, Title } from "@/ui/components";
+import { Body, Card, PasswordField, PillButton, Screen, Title } from "@/ui/components";
 import { colors } from "@/ui/theme";
 
 type QueryParams = Record<string, string | string[] | undefined>;
@@ -63,7 +63,7 @@ export function ResetPasswordScreen() {
   return (
     <Screen>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 72 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 72 }}>
           <View style={{ gap: 10 }}>
             <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900", letterSpacing: 2 }}>KOINO PASSWORD RESET</Text>
             <Title>Choose a new password.</Title>
@@ -74,7 +74,7 @@ export function ResetPasswordScreen() {
             {hasResetCode ? (
               <>
                 <Body>Enter your new password below.</Body>
-                <Field
+                <PasswordField
                   value={newPassword}
                   onChangeText={setNewPassword}
                   onSubmitEditing={handleResetPassword}
@@ -83,10 +83,9 @@ export function ResetPasswordScreen() {
                   autoComplete="new-password"
                   autoCorrect={false}
                   returnKeyType="next"
-                  secureTextEntry
                   textContentType="newPassword"
                 />
-                <Field
+                <PasswordField
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   onSubmitEditing={handleResetPassword}
@@ -95,7 +94,6 @@ export function ResetPasswordScreen() {
                   autoComplete="new-password"
                   autoCorrect={false}
                   returnKeyType="done"
-                  secureTextEntry
                   textContentType="newPassword"
                 />
                 {newPassword && newPassword.length < 6 ? <Body muted>Use at least 6 characters.</Body> : null}

@@ -1,4 +1,5 @@
-import { PropsWithChildren } from "react";
+import { Feather } from "@expo/vector-icons";
+import { PropsWithChildren, useState } from "react";
 import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
 
 import { brandPalette, colors, platformShadow, radius, typography } from "@/ui/theme";
@@ -128,6 +129,41 @@ export function Field(props: TextInputProps) {
         props.style,
       ]}
     />
+  );
+}
+
+export function PasswordField(props: TextInputProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const fieldLabel = props.accessibilityLabel ?? props.placeholder ?? "password";
+
+  return (
+    <View style={{ position: "relative" }}>
+      <Field
+        {...props}
+        secureTextEntry={!isVisible}
+        style={[props.style, { paddingRight: 58 }]}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${isVisible ? "Hide" : "Show"} ${fieldLabel.toLowerCase()}`}
+        onPress={() => setIsVisible((visible) => !visible)}
+        style={({ pressed }) => ({
+          position: "absolute",
+          right: 4,
+          top: 4,
+          bottom: 4,
+          width: 44,
+          minHeight: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Feather name={isVisible ? "eye-off" : "eye"} size={20} color={colors.olive} />
+        </View>
+      </Pressable>
+    </View>
   );
 }
 

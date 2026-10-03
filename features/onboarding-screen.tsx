@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-na
 
 import { useKoino } from "@/state/koino-store";
 import { markStartupMilestone } from "@/features/startup-performance";
-import { Body, Card, Choice, Field, PillButton, Screen } from "@/ui/components";
+import { Body, Card, Choice, Field, PasswordField, PillButton, Screen } from "@/ui/components";
 import { KoinoLogo } from "@/ui/koino-logo";
 import { colors } from "@/ui/theme";
 
@@ -74,7 +74,7 @@ export function OnboardingScreen() {
   return (
     <Screen>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 48 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 48 }}>
           <View style={{ alignItems: "center", gap: 12 }}>
             <KoinoLogo size={164} />
             <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "700", letterSpacing: 1 }}>KOINO</Text>
@@ -107,7 +107,8 @@ export function OnboardingScreen() {
                   keyboardType={Platform.OS === "web" ? "default" : "email-address"}
                   returnKeyType="next"
                 />
-                <Field
+                <PasswordField
+                  key={authMode}
                   value={password}
                   onChangeText={setPassword}
                   onSubmitEditing={handleAuthSubmit}
@@ -115,7 +116,6 @@ export function OnboardingScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="done"
-                  secureTextEntry
                 />
                 {state.authError ? <Body muted>{state.authError}</Body> : null}
                 {authMode === "signIn" && resetMessage ? <Body muted>{resetMessage}</Body> : null}
