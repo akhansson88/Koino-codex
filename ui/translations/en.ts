@@ -6,7 +6,6 @@ export const englishTranslations = {
   "audio.pause": "Pause",
   "audio.progress": "Chapter progress",
   "audio.verse": "Verse {verse}",
-  "audio.ai": "AI narration · Onyx",
   "audio.translationUnavailable": "Audio is available for Reformationsbibeln. Choose that translation to start a chapter.",
   "audio.chooseTranslation": "Use Reformationsbibeln",
   "audio.loading": "Loading audio…",
