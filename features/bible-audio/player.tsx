@@ -113,7 +113,7 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
       <View style={{ paddingHorizontal: 24, paddingBottom: 30, gap: 20 }}>
         <View style={{ gap: 6 }}><Text style={{ color: palette.muted, fontSize: 12, letterSpacing: 1.5 }}>REFORMATIONSBIBELN</Text>
           <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 26, fontWeight: "700" }}>{session ? title : `${entry?.bookName ?? book} ${chapter}`}</Text>
-          <Text style={{ color: palette.muted }}>{t("audio.ai")}{session ? ` · ${t("audio.verse", { verse: verse ?? 1 })}` : ""}</Text>
+          {session ? <Text style={{ color: palette.muted }}>{t("audio.verse", { verse: verse ?? 1 })}</Text> : null}
         </View>
         {!supported ? <View style={{ gap: 12 }}><Text style={{ color: palette.muted }}>{t("audio.translationUnavailable")}</Text><Pressable accessibilityRole="button" onPress={onChooseTranslation} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("audio.chooseTranslation")}</Text></Pressable></View> : !entry ? <Text style={{ color: palette.muted }}>{t(audio.catalogState === "loading" ? "audio.loading" : audio.catalogState === "error" ? "audio.network" : "audio.unavailable")}</Text> : !matching ?
           <Pressable accessibilityRole="button" onPress={() => void audio.start(entry)} style={{ backgroundColor: brandPalette.warmPersika, padding: 16, borderRadius: 14 }}><Text style={{ color: brandPalette.deepNavy, textAlign: "center", fontWeight: "700" }}>{t("audio.startChapter", { chapter: `${entry.bookName} ${chapter}` })}</Text></Pressable> : null}

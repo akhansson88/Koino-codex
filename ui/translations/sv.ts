@@ -8,7 +8,6 @@ export const swedishTranslations: TranslationDictionary = {
   "audio.pause": "Pausa",
   "audio.progress": "Kapitlets uppspelning",
   "audio.verse": "Vers {verse}",
-  "audio.ai": "AI-uppläsning · Onyx",
   "audio.translationUnavailable": "Ljud finns för Reformationsbibeln. Välj den översättningen för att starta ett kapitel.",
   "audio.chooseTranslation": "Välj Reformationsbibeln",
   "audio.loading": "Laddar ljud…",
