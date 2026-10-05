@@ -145,8 +145,9 @@ python -m unittest discover -s scripts/bible-audio -p "test_*.py"
 ```
 
 See [generation and recovery instructions](scripts/bible-audio/README.md).
-The Actions secret `OPENAI_API_KEY` belongs to the audio repository, never the
-mobile app. Generation uses `tts-1-hd` with Onyx and removes footnote asterisks.
+The Actions secret `ELEVENLABS_API_KEY` belongs to the audio repository, never the
+mobile app. Generation uses ElevenLabs voice `qAZH0aMXY8tw1QufPN0D` and removes
+footnote asterisks. Use `--overwrite` to replace audio for the selected chapters.
 
 This change adds native audio/slider modules and runtime version `1.2.0`.
 Create a fresh native build; an OTA update to an older binary is insufficient.

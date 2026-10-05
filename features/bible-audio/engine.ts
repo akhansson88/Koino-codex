@@ -124,7 +124,7 @@ async function downloadChapter(entry: AudioChapterEntry, token: number): Promise
           throw error;
         }
       }
-      tracks[index] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: uri, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: `Reformationsbibeln · ${chapter.voiceName ?? (chapter.voice === "onyx" ? "Onyx" : "AI")}`, album: "Koino", duration: verse.duration, entry, verseIndex: index };
+      tracks[index] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: uri, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: "Reformationsbibeln", album: "Koino", duration: verse.duration, entry, verseIndex: index };
     }
   }));
   return tracks;
