@@ -1,4 +1,5 @@
 import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
+import { BibleDatabaseBoundary } from "@/features/bible-database-provider";
 /* Hallmark · component: scripture picker · genre: editorial · theme: Koino
  * states: default · hover · focus · active · disabled · loading · error · success
  * contrast: pass (46–50) · pre-emit critique: P5 H5 E4 S5 R5 V4
@@ -47,7 +48,7 @@ type BibleVersePickerProps = {
 export function BibleVersePicker(props: BibleVersePickerProps) {
   return (
     <BibleBookVersionContext.Provider value={props.bibleVersionId}>
-      <BibleVersePickerContent {...props} />
+      <BibleDatabaseBoundary><BibleVersePickerContent {...props} /></BibleDatabaseBoundary>
     </BibleBookVersionContext.Provider>
   );
 }

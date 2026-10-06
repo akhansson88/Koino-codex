@@ -61,7 +61,8 @@ globalThis.__audioTest = {
 };
 const nextEntry = { ...entry, chapter: 2, manifestUrl: entry.manifestUrl.replace('audio-test', 'audio-test2') };
 const nextChapter = { ...chapter, ...nextEntry, verses: chapter.verses.map((verse) => ({ ...verse, url: verse.url.replace('audio-test', 'audio-test2') })) };
-globalThis.fetch = async (url) => ({ ok: true, json: async () => url === entry.manifestUrl ? chapter : nextChapter });
+const manifests = new Map([[entry.manifestUrl, chapter], [nextEntry.manifestUrl, nextChapter]]);
+globalThis.fetch = async (url) => ({ ok: manifests.has(url), json: async () => manifests.get(url) });
 const mockPlugin = { name: 'native-audio-mocks', setup(build) {
   build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage|@\/state\/encryption\/local-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
   build.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path }) => ({ contents: path === 'react-native-track-player'
@@ -217,6 +218,40 @@ progressRead = undefined; position = 2;
 await engine.syncFromNative();
 assert.equal(engine.getSnapshot().session.index, 1);
 assert.equal(engine.getSnapshot().position, 2);
+await engine.stop();
+
+// Background playback has no foreground observer. Native service events must
+// keep extending the queue beyond the one chapter initially prefetched.
+const backgroundEntries = [entry, nextEntry, ...[3, 4].map((number) => ({ ...entry, chapter: number, manifestUrl: entry.manifestUrl.replace('audio-test', `audio-background-${number}`) }))];
+for (const item of backgroundEntries.slice(2)) {
+  manifests.set(item.manifestUrl, { ...chapter, ...item, verses: chapter.verses.map((verse) => ({ ...verse, url: verse.url.replace('audio-test', `audio-background-${item.chapter}`) })) });
+}
+const until = async (condition, message) => {
+  for (let i = 0; i < 100 && !condition(); i++) await flush();
+  assert.ok(condition(), message);
+};
+engine.setAudioCatalog({ ...catalog, chapters: Object.fromEntries(backgroundEntries.map((item) => [`${item.bookId}:${item.chapter}`, item])) });
+await engine.setContinuous(true);
+await engine.start(entry);
+await until(() => queue.length === 4, 'prefetch chapter 2 before the first background transition');
+await player.skip(2);
+await until(() => queue.length === 6, 'chapter 2 service event must queue chapter 3 with no foreground polling');
+await player.skip(4);
+await until(() => queue.length === 8, 'chapter 3 service event must queue chapter 4 with no foreground polling');
+await player.skip(6);
+await until(() => engine.getSnapshot().session.chapter.chapter === 4, 'play a third chapter transition while the UI is inactive');
+emit('RemotePause');
+await until(() => !intent, 'lock-screen Pause must work in the playback service');
+emit('RemotePlay');
+await until(() => intent, 'lock-screen Play must work in the playback service');
+await engine.moveChapter(-1);
+await engine.setSleep('chapter');
+assert.equal(queue.length, 6, 'end-of-chapter sleep must still remove upcoming audio');
+active = 5; position = 10; state = 'ended'; intent = false;
+const playsBeforeSleep = plays;
+emit('PlaybackQueueEnded', { track: active, position });
+await until(() => engine.getSnapshot().sleep === 0, 'background queue end must consume the chapter sleep timer');
+assert.equal(plays, playsBeforeSleep, 'chapter sleep timer must prevent automatic continuation');
 await engine.stop();
 
 // Rehydrate a native queue with an empty in-memory chapter map, from the persisted manifest.
@@ -407,4 +442,4 @@ const beforeEmptyClose = followed;
 await act(async () => { ui.root.findByType('AppSheet').props.onClose(); });
 assert.equal(followed, beforeEmptyClose, 'empty sheet closes without activating follow');
 await act(async () => { ui.unmount(); await fresh.stop(); });
-console.log('Audio validation passed: native synchronization, foreground recovery, main/mini controls, timeline, paused navigation, stale reads, cached queues and verse following.');
+console.log('Audio validation passed: background chapter continuation, service controls and sleep timer, native synchronization, foreground recovery, main/mini controls, timeline, paused navigation, stale reads, cached queues and verse following.');

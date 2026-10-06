@@ -48,7 +48,7 @@ const mocks = {
   `,
   "@/features/bible-database-provider": `
     import { useEffect, useState } from "react";
-    export function BibleDatabaseProvider({ children }) {
+    export function BibleDatabaseBoundary({ children }) {
       const [ready, setReady] = useState(globalThis.__pickerLifecycle.ready);
       useEffect(() => {
         globalThis.__pickerLifecycle.finishLoading = () => setReady(true);

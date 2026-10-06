@@ -87,6 +87,7 @@ import {
 import { CommunityPrayerMemberModal, CommunityPrayerActions } from "@/features/community/prayer-actions";
 import { FocusedScreenHeader } from "@/features/community/focused-header";
 import { MembersPanel } from "@/features/community/members-panel";
+import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import {
   MemoCommunityFeedCard,
   CommunityFeedEndpoint,
@@ -941,6 +942,22 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     </BottomSheet>
   ) : null;
 
+  if (group?.migrationPending && roomView !== "rooms") {
+    return <View style={{ flex: 1, backgroundColor: colors.cream }}>
+      <AppScreen topInset={false}>
+        {roomView !== "detail" ? <FocusedScreenHeader onBack={goBackFromRoomView} title={group.name} /> : null}
+        <Card style={{ gap: 20, padding: 20 }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
+            <RoomImage name={group.name} size={58} />
+            <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900", flex: 1 }}>{group.name}</Text>
+          </View>
+          <CommunityEncryptionNotice group={group} />
+          <SecondaryButton onPress={openRoomOverview}>{t("community.rooms.other")}</SecondaryButton>
+        </Card>
+      </AppScreen>
+    </View>;
+  }
+
   if (roomView === "prayerMomentDetail" && group) {
     if (!selectedPrayerMoment) {
       return (
@@ -1269,6 +1286,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   </View>
                 </View>
               </View>
+              {group.migrationPending ? <CommunityEncryptionNotice group={group} /> : <>
               <View style={{ backgroundColor: colors.line, height: 1 }} />
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
                 <View style={{ flex: 1, gap: 3 }}>
@@ -1283,6 +1301,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 {t("community.rooms.open")}
               </SecondaryButton>
               {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
+              </>}
             </>
           ) : (
             <>
@@ -1324,7 +1343,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{room.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
-                    {communityMemberCount(roomMemberCount(state.groupMemberCounts, room.id), t)}
+                    {room.migrationPending ? t(room.migrationAwaitingApproval ? "community.encryption.approvalTitle" : "community.encryption.setupTitle") : communityMemberCount(roomMemberCount(state.groupMemberCounts, room.id), t)}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={19} color={colors.muted} />

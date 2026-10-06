@@ -30,6 +30,9 @@ export type Group = {
   image?: GroupImage;
   createdAt: string;
   updatedAt: string;
+  migrationPending?: boolean;
+  migrationOwnerName?: string;
+  migrationAwaitingApproval?: boolean;
 };
 
 export type Membership = {

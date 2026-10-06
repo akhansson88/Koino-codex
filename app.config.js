@@ -31,7 +31,7 @@ const baseConfig = {
       backgroundColor: "#F7EFE4",
     },
     package: "com.akhansson.koinomvp",
-    versionCode: 5,
+    versionCode: 21,
     permissions: ["android.permission.RECORD_AUDIO", "android.permission.POST_NOTIFICATIONS"],
   },
   plugins: [
@@ -62,7 +62,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "2.0.0",
+  runtimeVersion: "2.0.1",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

@@ -2,6 +2,7 @@ import { hydrateNotification } from "@/state/encryption/notifications";
 import AsyncStorage from "@/state/encryption/local-storage";
 import * as FirebaseAuth from "@firebase/auth";
 import type { User as FirebaseUser } from "@firebase/auth";
+import * as FirebaseDatabase from "firebase/database";
 import {
   equalTo,
   get,
@@ -96,6 +97,7 @@ import {
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
 import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup } from "@/state/encryption/session";
+import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
 
@@ -259,9 +261,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [authReady, setAuthReady] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
   const [userGroupsReady, setUserGroupsReady] = useState(false);
+  const [profileSnapshotReady, setProfileSnapshotReady] = useState(false);
+  const [userGroupsSnapshotReady, setUserGroupsSnapshotReady] = useState(false);
+  const [personalHistoryUid, setPersonalHistoryUid] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
+  const [encryptedGroups, setGroups] = useState<Group[]>([]);
+  const [encryptedUserMemberships, setUserMemberships] = useState<Membership[]>([]);
+  const [legacyGroups, setLegacyGroups] = useState<Group[]>([]);
+  const [legacyMemberships, setLegacyMemberships] = useState<Membership[]>([]);
+  const [legacyCommunitiesReady, setLegacyCommunitiesReady] = useState(false);
   const [groupMemberCounts, setGroupMemberCounts] = useState<Record<Id, number>>({});
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
@@ -308,8 +316,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const olderPrayerReactionsRef = useRef<PrayerReaction[]>([]);
   const olderPostReactionsRef = useRef<PostReaction[]>([]);
   const [theme, setTheme] = useState<ThemeName>("light");
-  const membershipGroupIds = useMemo(() => [...new Set(userMemberships.map((item) => item.groupId))].sort(), [userMemberships]);
+  const userMemberships = useMemo(() => [...legacyMemberships.filter((legacy) => !encryptedUserMemberships.some((member) => member.groupId === legacy.groupId)), ...encryptedUserMemberships], [legacyMemberships, encryptedUserMemberships]);
+  const groups = useMemo(() => [...legacyGroups.filter((legacy) => !encryptedUserMemberships.some((member) => member.groupId === legacy.id)), ...encryptedGroups], [legacyGroups, encryptedGroups, encryptedUserMemberships]);
+  const membershipGroupIds = useMemo(() => [...new Set(encryptedUserMemberships.map((item) => item.groupId))].sort(), [encryptedUserMemberships]);
   const membershipGroupKey = JSON.stringify(membershipGroupIds);
+  const currentGroupEncrypted = Boolean(profile?.currentGroupId && userGroupsSnapshotReady && encryptedUserMemberships.some((member) => member.groupId === profile.currentGroupId));
+  const currentGroupMigrationPending = Boolean(profile?.currentGroupId && !currentGroupEncrypted && legacyMemberships.some((member) => member.groupId === profile.currentGroupId));
   const [themeReady, setThemeReady] = useState(false);
   const themeRef = useRef<ThemeName>("light");
   const hasStoredThemeRef = useRef(false);
@@ -320,8 +332,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setProfile(null);
     setProfileReady(true);
     setUserGroupsReady(true);
+    setProfileSnapshotReady(false);
+    setUserGroupsSnapshotReady(false);
     setGroups([]);
     setUserMemberships([]);
+    setLegacyGroups([]);
+    setLegacyMemberships([]);
+    setLegacyCommunitiesReady(false);
+    setPersonalHistoryUid(null);
     setGroupMemberCounts({});
     setMemberships([]);
     setCheckIns([]);
@@ -409,6 +427,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     if (!firebaseUser) return;
 
     setProfileReady(false);
+    setProfileSnapshotReady(false);
     setProfile(null);
     let active = true;
     const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
@@ -422,6 +441,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           } catch (error) {
             if (!active) return;
             setAuthError(authMessage(error));
+            setProfileSnapshotReady(false);
             setProfileReady(true);
             markStartupMilestone("profileReady", "error");
           }
@@ -430,6 +450,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
         const nextProfile = snapshot.val() as Profile;
         setProfile(nextProfile);
+        setProfileSnapshotReady(true);
         const nextTheme = normalizeTheme(nextProfile.theme);
         if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
           isThemeSyncPendingRef.current = false;
@@ -443,6 +464,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       (error) => {
         if (!active) return;
         setAuthError(authMessage(error));
+        setProfileSnapshotReady(false);
         setProfileReady(true);
         markStartupMilestone("profileReady", "error");
       },
@@ -453,8 +475,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!firebaseUser) return;
+    setLegacyCommunitiesReady(false);
+    setLegacyGroups([]);
+    setLegacyMemberships([]);
+    return listenLegacyCommunities(firebaseUser.uid, (snapshot) => {
+      setLegacyMemberships(snapshot.memberships);
+      setLegacyGroups(snapshot.groups);
+      setLegacyCommunitiesReady(snapshot.ready);
+    }, () => {
+      // Missing legacy access must never be interpreted as leaving a community.
+      setLegacyCommunitiesReady(false);
+    });
+  }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
 
     setUserGroupsReady(false);
+    setUserGroupsSnapshotReady(false);
     setUserMemberships([]);
     let active = true;
     const userGroupsRef = ref(database, `userGroups/${firebaseUser.uid}`);
@@ -464,11 +502,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         if (!active) return;
         setUserMemberships(asArray<Membership>(snapshot.val()));
         setUserGroupsReady(true);
+        setUserGroupsSnapshotReady(true);
         markStartupMilestone("userGroupsReady");
       },
       (error) => {
         if (!active) return;
         setAuthError(authMessage(error));
+        setUserGroupsSnapshotReady(false);
         setUserGroupsReady(true);
         markStartupMilestone("userGroupsReady", "error");
       },
@@ -545,36 +585,81 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, [firebaseUser?.uid, membershipGroupKey, profile?.currentGroupId]);
 
   useEffect(() => {
-    if (!firebaseUser || !profileReady || !userGroupsReady) return;
+    // A failed/deferred decryption is not evidence that the user left a group.
+    // Only successful server snapshots may repair the selected group.
+    if (!firebaseUser || !profileSnapshotReady || !userGroupsSnapshotReady || !legacyCommunitiesReady) return;
 
     const joinedGroupIds = userMemberships.map((membership) => membership.groupId);
-    if (joinedGroupIds.length === 0) {
-      if (profile?.currentGroupId) {
-        void update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: null });
-      }
-      return;
+    if (profile?.currentGroupId && !joinedGroupIds.includes(profile.currentGroupId)) {
+      let active = true;
+      const selectedGroupId = profile.currentGroupId;
+      void (async () => {
+        try {
+          // Admission removes the pending marker and creates the encrypted
+          // membership atomically, but its decoded listener can arrive later.
+          // Confirm server absence before changing the selected community.
+          const membership = await FirebaseDatabase.get(FirebaseDatabase.ref(database, `encryptedData/userGroups/${firebaseUser.uid}/${selectedGroupId}`));
+          if (!active || auth.currentUser?.uid !== firebaseUser.uid || membership.exists()) return;
+          await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: joinedGroupIds[0] ?? null });
+        } catch {
+          // A failed presence check does not establish that membership ended.
+        }
+      })();
+      return () => { active = false; };
     }
 
-    if (!profile?.currentGroupId || !joinedGroupIds.includes(profile.currentGroupId)) {
+    if (!profile?.currentGroupId && joinedGroupIds.length > 0) {
       void update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: joinedGroupIds[0] });
     }
-  }, [firebaseUser, profile?.currentGroupId, profileReady, userGroupsReady, userMemberships]);
+  }, [firebaseUser, profile?.currentGroupId, profileSnapshotReady, userGroupsSnapshotReady, legacyCommunitiesReady, userMemberships]);
 
   useEffect(() => {
-    if (!firebaseUser || !profileReady || !userGroupsReady) return;
+    if (!firebaseUser || !profileSnapshotReady || !userGroupsSnapshotReady) return;
 
     void syncUserMembershipImage(firebaseUser.uid, profile?.image ?? null).catch(() => {
       // Avatar fanout is best-effort; profile uploads should not be blocked by it.
     });
-  }, [firebaseUser, profile?.image, profileReady, userGroupsReady]);
+  }, [firebaseUser, profile?.image, profileSnapshotReady, userGroupsSnapshotReady]);
+
+  useEffect(() => {
+    setPersonalHistoryUid(null);
+    if (!firebaseUser || !profileSnapshotReady || !userGroupsSnapshotReady) return;
+    const uid = firebaseUser.uid;
+    let active = true;
+    // Give the profile/membership commit a frame before large histories begin
+    // authenticating thousands of fields on the JavaScript thread.
+    const timer = setTimeout(() => {
+      if (active && auth.currentUser?.uid === uid) setPersonalHistoryUid(uid);
+    }, 50);
+    return () => { active = false; clearTimeout(timer); };
+  }, [firebaseUser?.uid, profileSnapshotReady, userGroupsSnapshotReady]);
 
   useEffect(() => {
     if (!firebaseUser) return;
 
     let active = true;
+    olderPrivateCheckInsRef.current = [];
+    setPrivateCheckInsReady(false);
+    setPrivateCheckInsHasMore(false);
+    const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
+    const unsubscribe = onValue(recentFirebaseQuery(privateCheckInsRef), (snapshot) => {
+      if (!active) return;
+      const recent = firebaseRecords<CheckIn>(snapshot.val());
+      setPrivateCheckIns(mergeFirebaseRecords(olderPrivateCheckInsRef.current, recent));
+      setPrivateCheckInsHasMore(recent.length === FIREBASE_PAGE_SIZE);
+      setPrivateCheckInsReady(true);
+    }, (error) => {
+      if (active) setAuthError(authMessage(error));
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!firebaseUser || personalHistoryUid !== firebaseUser.uid) return;
+
+    let active = true;
     let notificationRevision = 0;
     const journalRef = ref(database, `journalEntries/${firebaseUser.uid}`);
-    const privateCheckInsRef = ref(database, `privateCheckIns/${firebaseUser.uid}`);
     const sessionsRef = ref(database, `prayerSessions/${firebaseUser.uid}`);
     const prayerNotificationsRef = ref(database, `prayerNotifications/${firebaseUser.uid}`);
     const activityNotificationsRef = ref(database, `activityNotifications/${firebaseUser.uid}`);
@@ -588,11 +673,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const supportRef = ref(database, `supportIntents/${firebaseUser.uid}`);
 
     olderJournalEntriesRef.current = [];
-    olderPrivateCheckInsRef.current = [];
-    setPrivateCheckInsReady(false);
     olderPrayerNotificationsRef.current = [];
     setJournalEntriesHasMore(false);
-    setPrivateCheckInsHasMore(false);
     setPrayerNotificationsHasMore(false);
 
     const unsubs = [
@@ -600,14 +682,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         const recent = firebaseRecords<JournalEntry>(snapshot.val());
         setJournalEntries(mergeFirebaseRecords(olderJournalEntriesRef.current, recent));
         setJournalEntriesHasMore(recent.length === FIREBASE_PAGE_SIZE);
-      }),
-      onValue(recentFirebaseQuery(privateCheckInsRef), (snapshot) => {
-        const recent = firebaseRecords<CheckIn>(snapshot.val());
-        setPrivateCheckIns(mergeFirebaseRecords(olderPrivateCheckInsRef.current, recent));
-        setPrivateCheckInsHasMore(recent.length === FIREBASE_PAGE_SIZE);
-        setPrivateCheckInsReady(true);
-      }, (error) => {
-        setAuthError(authMessage(error));
       }),
       onValue(sessionsRef, (snapshot) => setPrayerSessions(asArray<PrayerSession>(snapshot.val()))),
       onValue(recentFirebaseQuery(prayerNotificationsRef), (snapshot) => {
@@ -664,6 +738,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
 
         const settingsSnapshot = await get(bibleHighlightColorSettingsRef);
+        if (!active) return;
         if (settingsSnapshot.exists()) {
           setBibleHighlightColors([]);
           return;
@@ -687,10 +762,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     ];
 
     return () => { active = false; unsubs.forEach((unsubscribe) => unsubscribe()); };
-  }, [firebaseUser]);
+  }, [firebaseUser?.uid, personalHistoryUid]);
 
   useEffect(() => {
-    if (!firebaseUser || !profile?.currentGroupId) {
+    if (!firebaseUser || !profile?.currentGroupId || !currentGroupEncrypted) {
       setCommunityFeedError(undefined);
       setCommunityFeedGroupId(undefined);
       setCommunityFeedOffline(undefined);
@@ -869,10 +944,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       active = false;
       unsubs.forEach((unsubscribe) => unsubscribe());
     };
-  }, [firebaseUser, profile?.currentGroupId]);
+  }, [firebaseUser, profile?.currentGroupId, currentGroupEncrypted]);
 
   const state = useMemo<KoinoState>(() => {
-    const memberUsers = memberships.map<User>((membership) => ({
+    const visibleMemberships = currentGroupMigrationPending ? legacyMemberships.filter((member) => member.groupId === profile?.currentGroupId) : memberships;
+    const memberUsers = visibleMemberships.map<User>((membership) => ({
       id: membership.userId,
       name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
       image: membership.image ?? (membership.userId === profile?.id ? profile.image : undefined),
@@ -905,7 +981,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       users,
       groups,
       groupMemberCounts,
-      memberships,
+      memberships: visibleMemberships,
       checkIns,
       privateCheckIns,
       posts,
@@ -947,6 +1023,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     journalEntriesHasMore,
     journalEntriesLoadingMore,
     memberships,
+    legacyMemberships,
+    currentGroupMigrationPending,
     posts,
     postReactions,
     prayerNotifications,
@@ -979,6 +1057,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setAuthError(undefined);
 
       try {
+        const groupMutationTypes: Action["type"][] = [
+          "leaveGroup", "removeGroupMember", "transferGroupOwnership", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup",
+          "submitCheckIn", "updateCheckIn", "deleteCheckIn", "createPost", "editPost", "deletePost", "markPrayerAnswered", "updatePrayerAnswer", "unmarkPrayerAnswered",
+          "unpray", "togglePostReaction", "createReply", "deleteReply", "announceBiblePlan", "unannounceBiblePlan", "joinGroupBiblePlan", "setDiscussionFollow",
+        ];
+        const explicitGroupId = action.type === "removeGroupMember" || action.type === "transferGroupOwnership" ? action.groupId
+          : ["leaveGroup", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup"].includes(action.type) && "id" in action ? action.id : undefined;
+        const linkedPlan = action.type === "deleteBiblePlan" ? biblePlans.find((plan) => plan.id === action.id)
+          : action.type === "markBiblePlanDay" ? biblePlans.find((plan) => plan.id === action.planId) : undefined;
+        const targetGroupId = explicitGroupId ?? (linkedPlan?.announcementId ? linkedPlan.groupId : undefined) ?? profile?.currentGroupId;
+        const pendingTarget = targetGroupId && legacyMemberships.some((member) => member.groupId === targetGroupId) && !encryptedUserMemberships.some((member) => member.groupId === targetGroupId);
+        const sharedJournalMutation = action.type === "createJournalEntry" && action.shareWithGroup;
+        const linkedPlanMutation = Boolean(linkedPlan?.announcementId);
+        const groupPrayerMutation = action.type === "finishPrayer" && ["post", "check_in", "reply", "user"].includes(action.targetType);
+        if (pendingTarget && action.type === "loadOlderCommunityContent") return;
+        if (pendingTarget && (groupMutationTypes.includes(action.type) || sharedJournalMutation || linkedPlanMutation || groupPrayerMutation)) {
+          throw new Error("This community is waiting for its host to finish encryption and restore member access.");
+        }
         switch (action.type) {
             case "signIn":
               await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
@@ -2315,6 +2411,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       communityPageAvailability,
       discussionFollows,
       firebaseUser,
+      legacyMemberships,
+      encryptedUserMemberships,
       groupBiblePlanAnnouncements,
       groupBiblePlanParticipantIds,
       groupBiblePlanParticipations,

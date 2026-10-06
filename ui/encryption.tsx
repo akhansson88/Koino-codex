@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren } from "react";
+import { useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { router } from "expo-router";
@@ -7,8 +7,8 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors } from "@/ui/theme";
 import { useKoino } from "@/state/koino-store";
 import { encodeAt } from "@/state/encryption/database";
-import { crypto, session, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
-import { migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
+import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
+import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 
 function useWords() {
@@ -32,6 +32,7 @@ function Button({ label, onPress, disabled }: { label: string; onPress: () => vo
 
 export function EncryptionBoundary({ children }: PropsWithChildren) {
   const w = useWords();
+  const authRevision = useRef(0);
   const [user, setUser] = useState<User | null>(null);
   const [phase, setPhase] = useState<"loading" | "signedOut" | "setup" | "recovery" | "migrating" | "ready" | "error">("loading");
   const [draft, setDraft] = useState<Vault>();
@@ -42,28 +43,39 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   async function finish() {
-    const uid = auth.currentUser?.uid;
-    setPhase("migrating");
-    await migratePersonal(setProgress);
-    await migrateOwnedGroups(setProgress);
-    if (auth.currentUser?.uid === uid) setPhase("ready");
+    const uid = session().uid, token = sessionGeneration();
+    const isCurrent = () => auth.currentUser?.uid === uid && token === sessionGeneration();
+    setProgress("");
+    const complete = await personalMigrationComplete();
+    if (!isCurrent()) return;
+    if (!complete) {
+      setPhase("migrating");
+      await migratePersonal((message) => { if (isCurrent()) setProgress(message); });
+    }
+    if (!isCurrent()) return;
+    await migrateOwnedGroups((message) => { if (isCurrent()) { setPhase("migrating"); setProgress(message); } });
+    if (isCurrent()) setPhase("ready");
   }
   useEffect(() => {
-    let revision = 0, active = true;
+    let active = true;
     const unsubscribe = onAuthStateChanged(auth, (next) => {
-      const request = ++revision;
+      const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
       setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError("");
       if (!next) { setPhase("signedOut"); return; }
       setPhase("loading");
       void unlockExisting(next.uid).then(async (result) => {
-        if (!active || revision !== request) return;
-        if (result === "setup") { setDraft(await draftAccount(next.uid)); setPhase("setup"); }
+        if (!active || authRevision.current !== request) return;
+        if (result === "setup") {
+          const nextDraft = await draftAccount(next.uid);
+          if (!active || authRevision.current !== request) return;
+          setDraft(nextDraft); setPhase("setup");
+        }
         else if (result === "recovery") setPhase("recovery");
         else await finish();
-      }).catch((problem: Error) => { if (active && revision === request) { setError(problem.message); setPhase("error"); } });
+      }).catch((problem: Error) => { if (active && authRevision.current === request) { setError(problem.message); setPhase("error"); } });
     });
-    return () => { active = false; revision++; unsubscribe(); lockSession(); clearEncryptedImages(); };
+    return () => { active = false; authRevision.current++; unsubscribe(); lockSession(); clearEncryptedImages(); };
   }, []);
   useEffect(() => {
     if (!user || phase !== "ready") return;
@@ -73,8 +85,10 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       const remote = value as Account | null;
       if (!remote?.devices[deviceId]?.active) { lockSession(); clearEncryptedImages(); setPhase("recovery"); return; }
       if (!refreshing && !identityRotationInProgress() && remote.signingPublicKey !== session().vault.identity.signingPublicKey) {
+        const request = authRevision.current;
+        const isCurrent = () => authRevision.current === request && auth.currentUser?.uid === user.uid;
         refreshing = true; setPhase("loading"); clearEncryptedImages();
-        void unlockExisting(user.uid).then(async (result) => { if (result === "ready") await finish(); else setPhase("recovery"); }).catch((problem: Error) => { setError(problem.message); setPhase("error"); });
+        void unlockExisting(user.uid).then(async (result) => { if (!isCurrent()) return; if (result === "ready") await finish(); else setPhase("recovery"); }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
       }
     });
   }, [user?.uid, phase]);
@@ -85,8 +99,12 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     finally { setBusy(false); }
   }
   if (phase === "signedOut" || phase === "ready") return children;
+  if (phase === "loading") return <View style={[styles.screen, { alignItems: "center", justifyContent: "center", gap: 18 }]}>
+    <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
+    <ActivityIndicator accessibilityLabel={w("Opening KOINO", "Öppnar KOINO")} color={colors.ink} />
+  </View>;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <Text style={styles.title}>{w("Protect your KOINO account", "Skydda ditt KOINO-konto")}</Text>
+    <Text style={styles.title}>{phase === "migrating" ? w("Encrypting your history", "Krypterar din historik") : w("Protect your KOINO account", "Skydda ditt KOINO-konto")}</Text>
     {phase === "setup" && draft ? <>
       <Text style={styles.body}>{w("Your personal and community content will be encrypted before upload. Save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
       <View style={styles.card}><Text selectable style={styles.body}>{draft.recoveryKey}</Text></View>
@@ -102,7 +120,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       {fingerprint ? <Text selectable style={styles.body}>{w("Compare this fingerprint on your existing device:", "Jämför detta fingeravtryck på din befintliga enhet:")} {fingerprint}</Text> : null}
       <Button label={w("Check approval", "Kontrollera godkännande")} disabled={busy} onPress={() => void work(async () => { if (await unlockExisting(user.uid) !== "ready") throw new Error(w("This device is still waiting for approval.", "Enheten väntar fortfarande på godkännande.")); await finish(); })} />
     </> : null}
-    {phase === "loading" || phase === "migrating" ? <><ActivityIndicator color={colors.ink} /><Text style={styles.body}>{phase === "migrating" ? w("Encrypting your existing history. Keep the app open; interrupted migrations resume safely.", "Krypterar din befintliga historik. Håll appen öppen; avbrutna migreringar kan återupptas.") : w("Unlocking encrypted content…", "Låser upp krypterat innehåll…")}</Text>{progress ? <Text style={styles.body}>{progress}</Text> : null}</> : null}
+    {phase === "migrating" ? <><ActivityIndicator color={colors.ink} /><Text style={styles.body}>{w("Encrypting your existing history. Keep the app open; interrupted migrations resume safely.", "Krypterar din befintliga historik. Håll appen öppen; avbrutna migreringar kan återupptas.")}</Text>{progress ? <Text style={styles.body}>{progress}</Text> : null}</> : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {phase === "error" || (phase === "migrating" && error) ? <Button label={w("Retry", "Försök igen")} disabled={busy} onPress={() => void work(async () => { if (user && await unlockExisting(user.uid) === "ready") await finish(); else setPhase("recovery"); })} /> : null}
     {user ? <Button label={w("Sign out", "Logga ut")} disabled={busy} onPress={() => void work(async () => { await signOut(auth); })} /> : null}

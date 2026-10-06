@@ -34,7 +34,7 @@ export async function deleteUserAvatarStoragePath(path?: string) {
 async function userMembershipImageUpdates(userId: Id, image: Profile["image"] | null) {
   const userGroupsSnapshot = await get(ref(database, `userGroups/${userId}`));
   return asArray<Membership>(userGroupsSnapshot.val()).reduce<Record<string, Profile["image"] | null>>((updates, membership) => {
-    if (membership.image?.url === image?.url) return updates;
+    if ((membership.image?.encryptedUri ?? membership.image?.url) === (image?.encryptedUri ?? image?.url)) return updates;
 
     updates[`groupMembers/${membership.groupId}/${userId}/image`] = image;
     updates[`userGroups/${userId}/${membership.groupId}/image`] = image;

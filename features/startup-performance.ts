@@ -6,6 +6,7 @@ export type StartupMilestone =
   | "authReady"
   | "profileReady"
   | "userGroupsReady"
+  | "homeContentReady"
   | "firstScreenMounted";
 
 export type StartupMark = {

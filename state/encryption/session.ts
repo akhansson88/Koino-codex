@@ -63,7 +63,9 @@ async function writeVault() {
 }
 export async function account(uid: string) {
   const state = session();
+  const token = generation;
   const value = (await get(ref(database, `e2eeAccounts/${uid}`))).val() as Account | null;
+  if (token !== generation || current !== state) throw new Error("The account changed while loading identities.");
   if (!value) throw new Error("This member has not set up encryption yet.");
   for (const [id, device] of Object.entries(value.devices ?? {})) {
     if (!crypto.verify({ uid, id, publicKey: device.publicKey, signingPublicKey: device.signingPublicKey }, device.certificate, value.signingPublicKey)) throw new Error("Device certificate could not be verified.");
@@ -81,10 +83,10 @@ export async function localDevice(uid: string): Promise<Device> {
 export async function unlockExisting(uid: string): Promise<"setup" | "recovery" | "ready"> {
   lockSession();
   const token = generation;
-  const remote = (await get(ref(database, `e2eeAccounts/${uid}`))).val() as Account | null;
+  const [snapshot, device] = await Promise.all([get(ref(database, `e2eeAccounts/${uid}`)), localDevice(uid)]);
+  const remote = snapshot.val() as Account | null;
   if (auth.currentUser?.uid !== uid || token !== generation) throw new Error("The account changed while unlocking.");
   if (!remote) return "setup";
-  const device = await localDevice(uid);
   const registration = remote.devices?.[device.id];
   if (!registration?.active) return "recovery";
   if (registration.publicKey !== device.identity.publicKey || registration.signingPublicKey !== device.identity.signingPublicKey) throw new Error("Device identity changed unexpectedly.");
@@ -174,8 +176,10 @@ export async function prepareScope(scope: string, write = false) {
   const state = session();
   if (scope.startsWith("group:")) {
     const group = await loadGroup(scope.slice(6));
-    const locked = (await get(ref(database, `e2eeGroupLocks/${group.id}`))).exists();
-    if (write && (group.status !== "ready" || locked)) throw new Error("This community is waiting for its owner to rotate encryption keys.");
+    if (write) {
+      const locked = (await get(ref(database, `e2eeGroupLocks/${group.id}`))).exists();
+      if (group.status !== "ready" || locked) throw new Error("This community is waiting for its owner to rotate encryption keys.");
+    }
     return;
   }
   if (scope !== `user:${state.uid}`) throw new Error("Private content belongs to another account.");
@@ -198,10 +202,10 @@ export function keyForScope(scope: string, keyId?: string) {
 }
 export async function ensureGroupDeviceSigners(groupId: string) {
   const group = current?.groups[groupId] ?? await loadGroup(groupId);
-  for (const uid of Object.keys(group.members)) {
+  await Promise.all(Object.keys(group.members).map(async (uid) => {
     const remote = await account(uid);
     if (!identityMatches(group.members[uid], remote)) throw new Error("A community member's identity changed. Ask the owner to verify it.");
-  }
+  }));
 }
 export function identityMatches(expected: PublicIdentity, remote: Account) {
   let identity = expected;

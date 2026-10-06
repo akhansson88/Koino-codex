@@ -261,6 +261,11 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
       const invite = (await db().ref(`encryptedData/inviteCodes/${id(data.code)}`).get()).val();
       if (!invite) throw new HttpsError("not-found", "No community uses that invite code.");
       if (!same(data.identity, { publicKey: account!.publicKey, signingPublicKey: account!.signingPublicKey }) || typeof data.name !== "string" || data.name.length > 4096) invalid();
+      const group = (await db().ref(`e2eeGroups/${invite.groupId}`).get()).val();
+      if (same(group?.members?.[uid], data.identity) && !(await db().ref(`e2eeDepartures/${invite.groupId}/${uid}`).get()).exists()) {
+        await db().ref().update({ [`e2eePendingGroups/${uid}/${invite.groupId}`]: null, [`e2eeJoinRequests/${invite.groupId}/${uid}`]: null });
+        return {};
+      }
       await db().ref(`e2eeJoinRequests/${invite.groupId}/${uid}`).set({ ...data.identity, name: data.name });
       return {};
     }
@@ -314,6 +319,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
           store.groupMembers[group.id][member] = data.records.membership;
           store.userGroups[member] ??= {}; store.userGroups[member][group.id] = data.records.userMembership;
           delete root.e2eeJoinRequests?.[group.id]?.[member];
+          delete root.e2eePendingGroups?.[member]?.[group.id];
         }
         return root;
       });
@@ -331,6 +337,10 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
         if ((legacy?.ownerId ?? encrypted?.ownerId) !== uid) denied();
       }
       const migrationRef = db().ref(`e2eeMigrations/${kind}/${target}`);
+      if ((await migrationRef.child("status").get()).val() === "complete") {
+        if (kind === "group") await db().ref(`e2eeMigrationGroups/${uid}/${target}`).remove();
+        return { complete: true };
+      }
       await migrationRef.update({ status: "copying", ownerId: uid });
       // Keep these IDs after completion so delayed database events from the
       // history copy cannot deliver old replies or prayer notices again.
@@ -342,11 +352,11 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
     }
     case "stageLegacyMembers": {
       const groupId = id(data.groupId);
-      await requireGroup(groupId, uid, true);
+      const authority = await requireGroup(groupId, uid, true);
       const legacyMembers = (await db().ref(`groupMembers/${groupId}`).get()).val() ?? {};
       const group = (await db().ref(`encryptedData/groups/${groupId}`).get()).val();
       const updates: Obj = {};
-      for (const member of Object.keys(legacyMembers)) if (member !== uid) updates[`e2eePendingGroups/${member}/${groupId}`] = { inviteCode: group.inviteCode };
+      for (const member of Object.keys(legacyMembers)) if (member !== uid && !authority.members[member]) updates[`e2eePendingGroups/${member}/${groupId}`] = { inviteCode: group.inviteCode };
       if (Object.keys(updates).length) await db().ref().update(updates);
       return {};
     }

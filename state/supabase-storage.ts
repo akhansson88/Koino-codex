@@ -5,6 +5,7 @@ export const userAvatarsBucket = "user-avatars";
 export type ImageEncryption = { key: string; keyId: string; signer: string };
 export type UploadedImage = { url: string; encryptedUri: string; encryption: ImageEncryption };
 const images = new Map<string, Promise<string>>();
+const diagnosticClock = () => globalThis.performance?.now?.() ?? Date.now();
 export function clearEncryptedImages() { images.clear(); }
 export function roomImagePublicUrl(path: string) { return `koino-encrypted://room-images/${path}`; }
 export function userAvatarPublicUrl(path: string) { return `koino-encrypted://user-avatars/${path}`; }
@@ -36,9 +37,19 @@ export async function resolveEncryptedImages(value: unknown, groupId?: string): 
         const { record } = await encryptedOperation<{ record: EncryptedRecord }>("imageDownload", { bucket, path, ...(groupId ? { groupId } : {}) });
         if (token !== sessionGeneration()) throw new Error("The image session changed.");
         if (record.keyId !== encryption.keyId || record.signer !== encryption.signer) throw new Error("Image identity could not be verified.");
+        const decryptStarted = diagnosticClock();
         const image = crypto.decrypt(record, `images/${bucket}/${path}`, encryption.key, new Set([encryption.signer])) as string;
+        const base64Started = diagnosticClock();
         const encoded = crypto.encode(crypto.decode(image));
         const standard = encoded.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - encoded.length % 4) % 4);
+        const completed = diagnosticClock();
+        if (completed - decryptStarted > 50) console.info("[encryption] image decode", {
+          imageType: bucket === userAvatarsBucket ? "avatar" : "room",
+          ciphertextChars: record.ciphertext.length,
+          decryptMs: Math.round(base64Started - decryptStarted),
+          base64Ms: Math.round(completed - base64Started),
+          elapsedMs: Math.round(completed - decryptStarted),
+        });
         return `data:image/webp;base64,${standard}`;
       })().catch((error) => { images.delete(cacheKey); throw error; });
       images.set(cacheKey, loading);

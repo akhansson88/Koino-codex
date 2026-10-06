@@ -5,6 +5,7 @@ import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
+import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { markStartupMilestone } from "@/features/startup-performance";
 import { checkInExistsForDay } from "@/state/check-ins";
@@ -87,6 +88,7 @@ export function HomeScreen() {
   }, []);
 
   const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const communityMigrationPending = Boolean(group?.migrationPending);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
@@ -111,11 +113,17 @@ export function HomeScreen() {
     state.currentGroupId && state.communityFeedGroupId === state.currentGroupId && state.communityFeedReady,
   );
   const profileLoading = Boolean(state.currentUserId && !state.profileReady);
+  useEffect(() => {
+    if (state.currentUserId && state.profileReady && state.userGroupsReady) {
+      markStartupMilestone("homeContentReady", "profile-and-membership-rendered");
+    }
+  }, [state.currentUserId, state.profileReady, state.userGroupsReady]);
   const communityContentLoading =
     profileLoading ||
     !state.userGroupsReady ||
     Boolean(state.currentGroupId && !state.communityFeedError && !communityFeedReadyForGroup);
   const checkInStatusReady = Boolean(
+    !communityMigrationPending &&
     state.currentUserId &&
     state.currentGroupId &&
     state.profileReady &&
@@ -182,7 +190,7 @@ export function HomeScreen() {
   }, [params.checkIn, checkInStatusReady, todaysCheckIn]);
 
   function openPrayerSurface() {
-    if (communityContentLoading) return;
+    if (communityMigrationPending || communityContentLoading) return;
     if (openPrayer && state.currentGroupId) {
       router.push({
         pathname: "/home/[groupId]/prayer",
@@ -282,7 +290,13 @@ export function HomeScreen() {
 
         {checkInStatusReady && !todaysCheckIn ? <HeartCheckInCard onPress={openCheckIn} /> : null}
 
-        <PrayerPreviewCard
+        {communityMigrationPending ? <Card style={{ gap: 8 }}>
+          <Text style={[typography.cardTitle, { color: colors.ink }]}>{group?.name}</Text>
+          {group ? <CommunityEncryptionNotice group={group} /> : null}
+          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/community" as never)}>
+            <Text style={[typography.label, { color: colors.olive }]}>{t("community.rooms.open")}</Text>
+          </Pressable>
+        </Card> : <><PrayerPreviewCard
           members={communityMembers}
           loading={communityContentLoading}
           onPress={openPrayerSurface}
@@ -298,7 +312,7 @@ export function HomeScreen() {
           prayerCount={latestCommunityItem ? itemPrayerState(latestCommunityItem).count : 0}
           userById={userById}
           userImageById={userImageById}
-        />
+        /></>}
 
         {state.authError ? (
           <Card>

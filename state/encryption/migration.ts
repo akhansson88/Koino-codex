@@ -3,50 +3,81 @@ import { updateProfile } from "firebase/auth";
 import { auth, database } from "@/state/store/firebase";
 import { policies } from "./schema";
 import { encodeAt, decodeAt, set, ref, physicalPath } from "./database";
-import { crypto, session, encryptedOperation, createEncryptedGroup, groupJoinRequest, loadGroup } from "./session";
+import { crypto, session, sessionGeneration, encryptedOperation, createEncryptedGroup, groupJoinRequest, loadGroup } from "./session";
 import storage from "./local-storage";
 import { uploadRoomImage, uploadUserAvatar, deleteRoomImage, deleteUserAvatar } from "@/state/supabase-storage";
 import { legacyPersonalCollections, legacyGroupCollections } from "./legacy-collections";
+export { listenLegacyCommunities, type LegacyCommunitySnapshot } from "./legacy-communities";
 
 export type MigrationProgress = (message: string) => void;
+const personalCompletionKey = (uid: string) => `e2ee.migration-complete.user.${uid}`;
+function migrationGuard() {
+  const uid = session().uid, token = sessionGeneration();
+  return () => { if (auth.currentUser?.uid !== uid || sessionGeneration() !== token) throw new Error("The account changed while preparing encrypted history."); };
+}
+export async function personalMigrationComplete() {
+  const uid = session().uid;
+  const ensureCurrent = migrationGuard();
+  const cached = await storage.getItem(personalCompletionKey(uid));
+  ensureCurrent();
+  if (cached === "true") return true;
+  const complete = (await Raw.get(Raw.ref(database, `e2eeMigrations/user/${uid}/status`))).val() === "complete";
+  ensureCurrent();
+  if (complete) await storage.setItem(personalCompletionKey(uid), "true");
+  return complete;
+}
+
 const digest = (value: unknown) => {
   // Match the server's libsodium hash of canonical JSON, including legacy arrays.
   return import("react-native-libsodium").then(({ default: sodium }) => sodium.to_hex(sodium.crypto_generichash(32, crypto.canonical(value), null)));
 };
 async function deleteSource(path: string, source: unknown) {
-  await encryptedOperation("deleteLegacyBatch", { records: [{ path, digest: await digest(source) }] });
+  const ensureCurrent = migrationGuard();
+  const sourceDigest = await digest(source);
+  ensureCurrent();
+  await encryptedOperation("deleteLegacyBatch", { records: [{ path, digest: sourceDigest }] });
 }
 async function archiveRetiredCollections(kind: "user" | "group", target: string, progress: MigrationProgress) {
+  const ensureCurrent = migrationGuard();
   for (const collection of kind === "user" ? legacyPersonalCollections : legacyGroupCollections) {
+    ensureCurrent();
     const { source } = await encryptedOperation<{ source: unknown }>("readLegacyArchive", { kind, target, collection });
+    ensureCurrent();
     if (source === null) continue;
     progress("Encrypting older account history…");
     const path = `${kind === "user" ? "legacyUserArchives" : "legacyGroupArchives"}/${target}/${collection}`;
     const archive = { sourceCollection: collection, createdAt: new Date().toISOString(), ...(kind === "group" ? { userId: session().uid } : {}), content: JSON.stringify(source) };
     await set(ref(database, path), archive);
+    ensureCurrent();
     const restored = decodeAt(path, (await Raw.get(Raw.ref(database, physicalPath(path)))).val()) as typeof archive;
+    ensureCurrent();
     if (crypto.canonical(JSON.parse(restored.content)) !== crypto.canonical(source)) throw new Error("Older history verification failed. Original data has been preserved.");
     await deleteSource(`${collection}/${target}`, source);
   }
 }
 async function migrateImage(image: any, bucket: "room-images" | "user-avatars") {
   if (!image || image.encryption) return image;
+  const ensureCurrent = migrationGuard();
   const cacheKey = `e2ee.image-migration.${session().uid}.${bucket}.${image.path}`;
   const cached = await storage.getItem(cacheKey);
+  ensureCurrent();
   if (cached) return JSON.parse(cached);
   const response = await encryptedOperation<{ bytes: string }>("legacyImage", { bucket, path: image.path });
+  ensureCurrent();
   const bytes = crypto.decode(response.bytes);
   const path = `${image.path.split("/")[0]}/${crypto.randomKey()}.kenc`;
   const uploaded = bucket === "room-images" ? await uploadRoomImage(path, bytes.slice().buffer as ArrayBuffer) : await uploadUserAvatar(path, bytes.slice().buffer as ArrayBuffer);
+  ensureCurrent();
   const next = { ...image, ...uploaded, path };
   await storage.setItem(cacheKey, JSON.stringify(next));
   return next;
 }
 async function copy(path: string, source: unknown, progress: MigrationProgress): Promise<void> {
   if (source === null || source === undefined) return;
+  const ensureCurrent = migrationGuard();
   const parts = path.split("/"), definition = policies[parts[0]];
   if (parts.length < definition.depth) {
-    for (const [id, value] of Object.entries(source as Record<string, unknown>)) await copy(`${path}/${id}`, value, progress);
+    for (const [id, value] of Object.entries(source as Record<string, unknown>)) { await copy(`${path}/${id}`, value, progress); ensureCurrent(); }
     return;
   }
   progress(`Encrypting ${parts[0]}…`);
@@ -60,8 +91,11 @@ async function copy(path: string, source: unknown, progress: MigrationProgress):
     if (Array.isArray(record.images) && record.images.length) throw new Error("Legacy attachments need migration before this account can be unlocked. Their original data has been preserved.");
     if (parts[0] === "activityNotifications") for (const field of ["actorName", "actorImage", "targetOwnerName", "contentLabel", "preview"]) delete record[field];
   }
+  ensureCurrent();
   await set(ref(database, path), content);
+  ensureCurrent();
   const stored = (await Raw.get(Raw.ref(database, physicalPath(path)))).val();
+  ensureCurrent();
   const restored = decodeAt(path, stored);
   if (crypto.canonical(restored) !== crypto.canonical(JSON.parse(JSON.stringify(content)))) throw new Error("Migration verification failed. Original content has been preserved.");
   if (parts[0] === "profiles" && (source as any).image?.path) await deleteUserAvatar((source as any).image.path);
@@ -69,57 +103,91 @@ async function copy(path: string, source: unknown, progress: MigrationProgress):
 }
 export async function migratePersonal(progress: MigrationProgress) {
   const state = session();
-  const status = (await Raw.get(Raw.ref(database, `e2eeMigrations/user/${state.uid}`))).val();
-  if (status?.status === "complete") return;
+  const ensureCurrent = migrationGuard();
+  const complete = await personalMigrationComplete();
+  ensureCurrent();
+  if (complete) return;
   await encryptedOperation("beginMigration", { scope: `user:${state.uid}` });
+  ensureCurrent();
   await storage.migrateLegacy();
+  ensureCurrent();
   for (const [collection, definition] of Object.entries(policies)) {
     if (definition.scope !== "user" && definition.scope !== "routing") continue;
     if (["inviteCodes", "discussionFollowers", "pushDeliveryDiagnostics", "legacyUserArchives"].includes(collection)) continue;
     const path = `${collection}/${state.uid}`;
     const source = (await Raw.get(Raw.ref(database, path))).val();
+    ensureCurrent();
     await copy(path, source, progress);
+    ensureCurrent();
   }
   const existing = (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).exists();
+  ensureCurrent();
   if (!existing) {
     const name = await storage.getItem(`e2ee.signup-name.${state.uid}`);
     await set(ref(database, `profiles/${state.uid}`), { id: state.uid, name: name?.trim() || auth.currentUser?.displayName || "KOINO member", theme: "light", createdAt: new Date().toISOString() });
   }
   if (auth.currentUser?.displayName) await updateProfile(auth.currentUser, { displayName: null });
   await archiveRetiredCollections("user", state.uid, progress);
+  ensureCurrent();
   await encryptedOperation("finishMigration", { scope: `user:${state.uid}` });
+  await storage.setItem(personalCompletionKey(state.uid), "true");
 }
 export async function migrateOwnedGroups(progress: MigrationProgress) {
   const state = session();
-  const memberships = (await Raw.get(Raw.ref(database, `userGroups/${state.uid}`))).val() as Record<string, any> | null;
-  const queue = (await Raw.get(Raw.ref(database, `e2eeMigrationGroups/${state.uid}`))).val() as Record<string, boolean> | null;
-  for (const groupId of new Set([...Object.keys(memberships ?? {}), ...Object.keys(queue ?? {})])) {
+  const ensureCurrent = migrationGuard();
+  const [membershipSnapshot, queueSnapshot, pendingSnapshot] = await Promise.all([
+    Raw.get(Raw.ref(database, `userGroups/${state.uid}`)),
+    Raw.get(Raw.ref(database, `e2eeMigrationGroups/${state.uid}`)),
+    Raw.get(Raw.ref(database, `e2eePendingGroups/${state.uid}`)),
+  ]);
+  ensureCurrent();
+  const memberships = membershipSnapshot.val() as Record<string, any> | null;
+  const queue = queueSnapshot.val() as Record<string, boolean> | null;
+  const pending = pendingSnapshot.val() as Record<string, { inviteCode: string }> | null;
+  const owned = Object.entries(memberships ?? {}).filter(([, membership]) => membership.role === "owner").map(([groupId]) => groupId);
+  for (const groupId of new Set([...owned, ...Object.keys(queue ?? {})])) {
+    ensureCurrent();
+    const completionKey = `e2ee.migration-complete.group.${state.uid}.${groupId}`;
+    if (await storage.getItem(completionKey) === "true") continue;
+    const status = (await Raw.get(Raw.ref(database, `e2eeMigrations/group/${groupId}/status`))).val();
+    ensureCurrent();
+    if (status === "complete") { await storage.setItem(completionKey, "true"); continue; }
     let legacy = (await Raw.get(Raw.ref(database, `groups/${groupId}`))).val();
+    ensureCurrent();
     const archiveKey = `e2ee.legacy-group.${state.uid}.${groupId}`;
     if (legacy) await storage.setItem(archiveKey, JSON.stringify(legacy));
     else { const saved = await storage.getItem(archiveKey); legacy = saved ? JSON.parse(saved) : null; }
     if (!legacy || legacy.ownerId !== state.uid) continue;
+    ensureCurrent();
     progress("Encrypting community history…");
-    await encryptedOperation("beginMigration", { scope: `group:${groupId}` });
+    const migration = await encryptedOperation<{ complete?: boolean }>("beginMigration", { scope: `group:${groupId}` });
+    ensureCurrent();
+    if (migration.complete) { await storage.setItem(completionKey, "true"); continue; }
     const exists = (await Raw.get(Raw.ref(database, `e2eeGroups/${groupId}`))).exists();
+    ensureCurrent();
     if (!exists) {
       const membership = { ...memberships![groupId], image: undefined };
       const group = { ...legacy, image: undefined };
       delete membership.image; delete group.image;
       await createEncryptedGroup(groupId, () => ({ group: encodeAt(`groups/${groupId}`, group), membership: encodeAt(`groupMembers/${groupId}/${state.uid}`, membership), userMembership: encodeAt(`userGroups/${state.uid}/${groupId}`, membership) }));
     } else await loadGroup(groupId);
+    ensureCurrent();
     const members = (await Raw.get(Raw.ref(database, `groupMembers/${groupId}`))).val() as Record<string, unknown> | null;
+    ensureCurrent();
     // Preserve admission information for existing members who have not yet
     // enrolled; their owner must verify their identity before sharing keys.
     await encryptedOperation("stageLegacyMembers", { groupId });
     for (const [collection, definition] of Object.entries(policies)) {
       if ((definition.scope !== "group" && collection !== "discussionFollowers") || ["groupMembers", "legacyGroupArchives"].includes(collection)) continue;
       const path = `${collection}/${groupId}`;
-      await copy(path, (await Raw.get(Raw.ref(database, path))).val(), progress);
+      const source = (await Raw.get(Raw.ref(database, path))).val();
+      ensureCurrent();
+      await copy(path, source, progress);
     }
     for (const uid of Object.keys(members ?? {})) {
       const path = `userGroups/${uid}/${groupId}`;
       const value = (await Raw.get(Raw.ref(database, path))).val();
+      ensureCurrent();
       if (value) await deleteSource(path, value);
     }
     if (members) await deleteSource(`groupMembers/${groupId}`, members);
@@ -128,10 +196,19 @@ export async function migrateOwnedGroups(progress: MigrationProgress) {
     if (invite) await deleteSource(invitePath, invite);
     if (legacy.image?.path) await deleteRoomImage(legacy.image.path);
     await archiveRetiredCollections("group", groupId, progress);
+    ensureCurrent();
     await encryptedOperation("finishMigration", { scope: `group:${groupId}` });
+    await storage.setItem(completionKey, "true");
     await storage.removeItem(archiveKey);
   }
-  const pending = (await Raw.get(Raw.ref(database, `e2eePendingGroups/${state.uid}`))).val() as Record<string, { inviteCode: string }> | null;
-  const profile = decodeAt(`profiles/${state.uid}`, (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).val()) as { name: string };
-  for (const entry of Object.values(pending ?? {})) await groupJoinRequest(entry.inviteCode, profile.name);
+  if (pending && Object.keys(pending).length) {
+    const profile = decodeAt(`profiles/${state.uid}`, (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).val()) as { name: string };
+    ensureCurrent();
+    for (const [groupId, entry] of Object.entries(pending)) {
+      const request = (await Raw.get(Raw.ref(database, `e2eeJoinRequests/${groupId}/${state.uid}`))).val();
+      ensureCurrent();
+      if (request?.publicKey === state.vault.identity.publicKey && request?.signingPublicKey === state.vault.identity.signingPublicKey) continue;
+      await groupJoinRequest(entry.inviteCode, profile.name);
+    }
+  }
 }

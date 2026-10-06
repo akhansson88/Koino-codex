@@ -149,12 +149,18 @@ The Actions secret `ELEVENLABS_API_KEY` belongs to the audio repository, never t
 mobile app. Generation uses ElevenLabs voice `qAZH0aMXY8tw1QufPN0D` and removes
 footnote asterisks. Use `--overwrite` to replace audio for the selected chapters.
 
-This change adds native audio/slider modules and runtime version `1.2.0`.
-Create a fresh native build; an OTA update to an older binary is insufficient.
+The Android background-audio fix patches TrackPlayer's native event delivery for
+React Native's New Architecture. `npm install` applies it through
+`scripts/patch-track-player.cjs`. It uses the active headless-service React context
+so chapter transitions and lock-screen controls keep reaching the playback
+service while the screen is off. Runtime version `2.0.1` requires a fresh native
+build; an OTA update to an older binary is insufficient.
 Regenerate local native configuration using the project's normal Expo prebuild
 flow before building, or let EAS generate it from `app.config.js`. Test background
 verse transitions, lock-screen controls, calls, and headphone disconnection on
 physical iOS and Android devices before release. Offline downloads are not included.
+For the screen-off regression, verify at least three consecutive chapter
+transitions without waking the phone, beyond the chapter prefetched before locking.
 
 ## Content encryption
 

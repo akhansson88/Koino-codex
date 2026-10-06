@@ -19,6 +19,7 @@ const baseState = {
   groups: [{ id: "room", name: "Test community", ownerId: "reader" }],
   users: [{ id: "reader", name: "Reader" }], groupMemberCounts: { room: 1 },
   communityFeedGroupId: "room", communityFeedReady: true, theme: "light",
+  privateCheckInsReady: true, checkInDailyClaimsReady: true, checkInDailyClaims: [],
   memberships: [], checkIns: [], privateCheckIns: [], posts: [],
   journalEntries: [], prayerReactions: [], postReactions: [], replies: [],
 };
@@ -147,6 +148,16 @@ try {
       assert.equal(harness.backs, before + 1);
       await act(() => tree.unmount());
     }
+  }
+  for (const component of [screens.Overview, screens.Prayer, screens.CheckIns]) {
+    harness.state = { ...populatedState, groups: [{ ...baseState.groups[0], migrationPending: true }] };
+    await act(async () => { tree = create(React.createElement(component)); });
+    const rendered = JSON.stringify(tree.toJSON(), (key, value) => key === "_owner" ? undefined : value);
+    assert.ok(rendered.includes("Test community"), "A pending community must retain its identity");
+    assert.ok(rendered.includes("community.encryption.setupTitle"), "A pending community must explain its encryption status");
+    assert.ok(!rendered.includes("Prayer regression content") && !rendered.includes("Check-in regression content"),
+      "Pending community surfaces must withhold group content and its actions");
+    await act(() => tree.unmount());
   }
   console.log("Community navigation passed: Android attachment, inline Prayer/Check-ins opening, initial page/content/empty/loading/error rendering, and back navigation.");
 } finally {

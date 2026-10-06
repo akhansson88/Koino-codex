@@ -53,9 +53,17 @@ try {
   const oldReply = { id: 'old-reply', userId: 'owner', targetType: 'post', targetId: 'old-post', createdAt: '2026-01-01' };
   await db.ref('replies/community/old-reply').set(oldReply);
   await call(owner, 'beginMigration', { scope: 'group:community' });
+  await db.ref('groupMembers/community').set({ owner: membership, member: { userId: 'member' } });
+  await call(owner, 'stageLegacyMembers', { groupId: 'community' });
+  assert.deepEqual((await db.ref('e2eePendingGroups/member/community').get()).val(), { inviteCode: 'INVITE' }, 'legacy membership remains staged until the owner grants encrypted access');
+  await db.ref('groupMembers/community').remove();
   await db.ref('replies/community').remove();
   await call(owner, 'beginMigration', { scope: 'group:community' });
   await call(owner, 'finishMigration', { scope: 'group:community' });
+  await db.ref('e2eeMigrationGroups/owner/community').set(true);
+  assert.deepEqual(await call(owner, 'beginMigration', { scope: 'group:community' }), { complete: true });
+  assert.equal((await db.ref('e2eeMigrations/group/community/status').get()).val(), 'complete', 'booting cannot reopen a completed group migration');
+  assert.equal((await db.ref('e2eeMigrationGroups/owner/community').get()).exists(), false);
   assert.equal((await db.ref('e2eeMigrations/group/community/importedEventIds/old-reply').get()).val(), true);
   await db.ref('encryptedData/posts/community/old-post').set({ userId: 'member' });
   await db.ref('encryptedData/groupMembers/community').set({ owner: membership, member: { userId: 'member' } });
@@ -67,6 +75,12 @@ try {
   await assert.rejects(call(member, 'groupChange', { group: joined }), /authorized/);
   const memberRecord = { id: 'member-membership', userId: 'member', groupId: 'community', role: 'member' };
   await call(owner, 'groupChange', { group: joined, records: { membership: memberRecord, userMembership: memberRecord } });
+  assert.equal((await db.ref('e2eePendingGroups/member/community').get()).exists(), false, 'approval removes the legacy admission marker');
+  await db.ref('e2eePendingGroups/member/community').set({ inviteCode: 'INVITE' });
+  await db.ref('e2eeJoinRequests/community/member').set({ ...pub(member.root), name: 'stale' });
+  await call(member, 'requestJoin', { code: 'INVITE', identity: pub(member.root), name: crypto.seal({ name: 'Member' }, owner.root.publicKey) });
+  assert.equal((await db.ref('e2eeJoinRequests/community/member').get()).exists(), false, 'an existing encrypted member does not create a fresh request on every boot');
+  assert.equal((await db.ref('e2eePendingGroups/member/community').get()).exists(), false);
   const granted = crypto.unseal((await db.ref('e2eeGroups/community/grants/member').get()).val(), member.root);
   assert.equal(granted.keys[1], key, 'new members receive full history');
   await call(member, 'leaveGroup', { groupId: 'community' });
@@ -121,6 +135,8 @@ try {
   try { await sendPrayerNotification.run({ params: { recipientUserId: 'owner', notificationId: 'old-prayer' }, data: { val: () => oldPrayer } }); }
   finally { globalThis.fetch = originalFetch; }
   assert.equal((await db.ref('e2eeMigrations/user/owner/status').get()).val(), 'complete');
+  assert.deepEqual(await call(owner, 'beginMigration', { scope: 'user:owner' }), { complete: true });
+  assert.equal((await db.ref('e2eeMigrations/user/owner/status').get()).val(), 'complete', 'personal history is migrated once');
   console.log('Encryption backend checks passed: device approvals, recovery proof, request replay, owner admission, history grants, departure locks, rotation, revocation, deletion, conditional migration, and silent history imports.');
 } finally { await deleteApp(app); }
 process.exit(0);

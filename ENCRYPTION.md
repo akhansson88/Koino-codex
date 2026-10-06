@@ -62,6 +62,58 @@ The Android runtime `2.0.0` fix was published to both preview and production:
 https://expo.dev/accounts/koinolabs-ab/projects/koino-mvp/updates/6e7503ee-d762-4b5b-9b9a-f978a602be9e
 and https://expo.dev/accounts/koinolabs-ab/projects/koino-mvp/updates/69de6154-4ad9-43a0-b6a5-50999b908499.
 
+## Startup and existing community visibility repair (2026-10-06)
+
+Opening the bundled Bible database previously blocked the entire route tree.
+Home now avoids its asset download, import and opening entirely. The reader or
+verse picker starts initialization on demand; the root retains the connection
+afterward, and only Bible-dependent surfaces wait for it. Authenticated profile
+and membership text also render before private avatar downloads finish. Large
+encrypted collection reads share an 8 ms work budget checked between records,
+with a frame interval between work turns. Private check-ins start immediately;
+unrelated personal history subscriptions start after the authenticated profile
+and membership have committed to the screen. This prioritizes usable Home
+content while full history continues loading. Before the repair,
+the previously uninterrupted synchronous decryption batch delayed Home updates
+by about 13 seconds on the connected Android device. The existing authentication
+checks and opaque record identities remain unchanged, and partial collections
+are never published. Key unlocking and device authorization still run at
+startup. Completed migrations use account-scoped SQLCipher completion markers,
+and the backend refuses to reopen a completed migration. Interrupted migrations
+continue to retry safely. Normal starts display a brief KOINO loading view;
+the history migration screen appears only when history actually needs copying.
+
+The connected account retained its original legacy community membership in
+Firebase. Its community owner's encryption enrollment had not occurred, so the
+encrypted-only UI incorrectly presented it as absent. The app now retains the
+community identity and membership and shows the owner setup/access approval
+status. Community history and writes wait for the owner's encrypted key grant.
+Cached community identity is stored in SQLCipher so it survives the transition
+from legacy membership to pending approval. Failed or incomplete membership
+reads cannot clear the selected community. Successful admission clears the
+pending marker and repeated join requests are avoided.
+
+Regressions cover delayed Bible import and failure, retained picker connections,
+nonblocking avatar hydration, yielding collection reads, stale sessions and
+superseded snapshots, completed/interrupted migrations,
+legacy membership callback ordering, pending access transitions, community
+navigation and protected pending-community writes.
+
+The connected Pixel 11 Pro runs the repaired preview update
+`0ca7d42a-996f-41d8-9370-4ae05e5d63b5`, runtime `2.0.0`.
+A force-stop/cold launch measured Home mount at 989 ms and authenticated Home
+content at 1,255 ms from JavaScript entry, compared with the original Home mount
+at about 15 seconds. The 3-second screenshot from the launch command shows the
+greeting, avatar and retained community. No history migration screen appears.
+The same Android bundle was published to production as
+`d3dffb52-efeb-4ff1-8df1-695fc766081b`:
+https://expo.dev/accounts/koinolabs-ab/projects/koino-mvp/updates/d3dffb52-efeb-4ff1-8df1-695fc766081b.
+The `encryptedAccount` backend function was deployed separately; the connected
+community still awaits its owner's one-time enrollment and access approval.
+Native verification also opened the Bible successfully, restored its reading
+position and highlights, and confirmed that database initialization starts only
+when the Bible is requested. The phone was left on the repaired Home screen.
+
 ## Data protection
 
 - Personal and community content is encrypted on the device using libsodium
@@ -181,6 +233,9 @@ npm run test:functions
 npm run encryption:rules
 npm run validate:encryption
 npm run validate:encryption-adapter
+npm run validate:encryption-migration
+npm run validate:startup-memberships
+npm run validate:bible-startup
 npm run validate:encryption-emulator
 npm run validate:encryption-backend
 npm run validate:startup
