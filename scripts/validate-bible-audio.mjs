@@ -369,26 +369,105 @@ await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pau
 assert.equal(intent, false);
 await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false})); });
 assert.ok(ui.root.findAllByType('Text').some((node) => node.props.children === 'Verse 2'));
-assert.equal(ui.root.findAllByType('Slider').length, 0, 'compact card leaves seeking in the full player');
+assert.equal(ui.root.findAllByType('Slider').length, 1, 'compact follow player exposes its chapter timeline');
+assert.equal(ui.root.findByType('Slider').props.value, 10);
+assert.equal(ui.root.findByType('Slider').props.accessibilityValue.text, 'Verse 2, 0:10 / 0:20');
+assert.equal(ui.root.findAllByType('Text').filter((node) => /^\d+:\d{2}$/.test(node.props.children)).length, 0, 'compact timeline omits visible timestamps');
 assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.previousChapter',accessibilityRole:'button'}).length, 0);
 assert.equal(ui.root.findAllByProps({accessibilityLabel:'audio.nextChapter',accessibilityRole:'button'}).length, 0);
 let opened = 0;
 await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false,onOpen:()=>{opened++;}})); });
 await act(async () => { ui.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel?.startsWith('audio.open,')).props.onPress(); });
 assert.equal(opened, 1, 'chapter and verse open the full player');
+const beforeCompactHaptics = globalThis.__audioTest.haptics;
+const beforeCompactSeek = fresh.getSnapshot().navigationRevision;
+await act(async () => {
+  ui.root.findByType('Slider').parent.props.onLayout({nativeEvent:{layout:{width:152}}});
+  ui.root.findByType('Slider').props.onSlidingStart(3);
+});
+assert.equal(ui.root.findByType('Slider').props.value, 0);
+assert.equal(ui.root.findByProps({testID:'audio-verse-tooltip'}).findByType('Text').props.children, 1);
+await act(async () => { ui.root.findByType('Slider').props.onValueChange(14); });
+const compactTooltip = ui.root.findByProps({testID:'audio-verse-tooltip'});
+assert.equal(compactTooltip.findByType('Text').props.children, 2);
+assert.equal(compactTooltip.props.pointerEvents, 'none');
+assert.ok(compactTooltip.props.style.left >= 0 && compactTooltip.props.style.left + compactTooltip.props.style.width <= 152, 'verse preview stays within a narrow timeline');
+await act(async () => { ui.root.findByType('Slider').props.onValueChange(17); });
+assert.equal(globalThis.__audioTest.haptics, beforeCompactHaptics + 1, 'compact scrub gives one haptic per verse change');
+await act(async () => { ui.root.findByType('Slider').props.onSlidingComplete(17); await flush(); });
+assert.equal(active, 1);
+assert.equal(position, 0, 'compact scrub seeks to the start of the selected verse');
+assert.equal(intent, false, 'compact scrub preserves pause');
+assert.equal(opened, 1, 'scrubbing keeps the compact player open');
+assert.equal(fresh.getSnapshot().navigationRevision, beforeCompactSeek + 1, 'compact seeking requests reader follow even within the same verse');
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { ui.root.findByType('Slider').props.onAccessibilityAction({nativeEvent:{actionName:'decrement'}}); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'compact accessible adjustment selects the previous verse');
+assert.equal(position, 0);
+assert.equal(intent, false);
+await act(async () => { ui.root.findByType('Slider').props.onAccessibilityAction({nativeEvent:{actionName:'increment'}}); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 1, 'compact accessible adjustment selects the next verse');
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.play',accessibilityRole:'button'}).props.onPress(); });
 assert.equal(intent, true, 'mini-player button controls native playback');
+await act(async () => {
+  ui.root.findByType('Slider').props.onSlidingStart(0);
+  ui.root.findByType('Slider').props.onSlidingComplete(3);
+  await flush();
+});
+assert.equal(fresh.getSnapshot().session.index, 0);
+assert.equal(position, 0);
+assert.equal(intent, true, 'compact scrub preserves playback');
 await act(async () => { await ui.root.findByProps({accessibilityLabel:'audio.pause',accessibilityRole:'button'}).props.onPress(); });
 assert.equal(intent, false);
+// Loading and pending native commands disable the compact slider and cancel its preview.
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(14); });
+const pendingCommandRelease = ui.root.findByType('Slider').props.onSlidingComplete;
+const originalGetQueue = player.getQueue;
+let releaseQueue, pendingCompactSeek;
+player.getQueue = () => new Promise((resolve) => { releaseQueue = resolve; });
+await act(async () => { pendingCompactSeek = fresh.seek(4); await flush(); });
+assert.equal(ui.root.findByType('Slider').props.disabled, true, 'pending native command disables compact seeking');
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => {
+  ui.root.findByType('Slider').props.onSlidingStart(14);
+  ui.root.findByType('Slider').props.onAccessibilityAction({nativeEvent:{actionName:'increment'}});
+  pendingCommandRelease(14);
+});
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+player.getQueue = originalGetQueue;
+await act(async () => { releaseQueue([...queue]); await pendingCompactSeek; });
+assert.equal(fresh.getSnapshot().session.index, 0, 'cancelled scrub cannot override a pending seek');
+assert.equal(position, 4);
+assert.equal(ui.root.findByType('Slider').props.disabled, false);
+
+files.clear();
+blockDownload = new Promise((resolve) => { releaseDownload = resolve; });
+let loadingCompactChapter;
+await act(async () => { loadingCompactChapter = fresh.start(entry, 0, 0, false); await flush(); });
+assert.equal(ui.root.findByType('Slider').props.disabled, true, 'loading disables the compact timeline');
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(14); });
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { releaseDownload(); blockDownload = undefined; await loadingCompactChapter; });
+assert.equal(ui.root.findByType('Slider').props.disabled, false);
 let followed = 0, measuredHeight = 0;
 await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false,follow:false,onFollow:()=>{followed++;},onMiniHeightChange:(height)=>{measuredHeight=height;}})); });
 const followButton = ui.root.findByProps({accessibilityLabel:'audio.follow',accessibilityRole:'button'});
 assert.equal(followButton.props.accessibilityState.selected, false, 'manual scrolling exposes Follow in the mini player');
+await act(async () => {
+  ui.root.findByType('Slider').props.onSlidingStart(14);
+  ui.root.findByType('Slider').props.onSlidingComplete(14);
+  await flush();
+});
+assert.equal(followed, 0, 'compact seeking leaves manual browsing in control until Follow is pressed');
+assert.equal(fresh.getSnapshot().session.index, 1);
 await act(async () => { followButton.props.onPress(); });
 assert.equal(followed, 1);
 assert.equal(intent, false, 'Follow while paused does not start playback');
-ui.root.findAllByType('View').find((node) => node.props.onLayout).props.onLayout({nativeEvent:{layout:{height:116}}});
-assert.equal(measuredHeight, 116, 'reader receives actual mini-player height including Follow');
+const compactCard = ui.root.findAllByType('View').find((node) => node.props.onLayout && node.props.style.position === 'absolute');
+for (const height of [130, 164]) {
+  compactCard.props.onLayout({nativeEvent:{layout:{height}}});
+  assert.equal(measuredHeight, height, 'reader receives actual compact height including Follow and larger text');
+}
 // Chapter navigation remains in the full player, preserving native play/pause intent.
 {
   await act(async () => {
@@ -432,7 +511,23 @@ assert.equal(ui.root.findAllByType('NativeViewGestureHandler').length, 0, 'follo
 await act(async () => { dismissedRelease(12); await flush(); });
 assert.equal(fresh.getSnapshot().session.index, 0, 'sheet scrub is cancelled when opening card');
 assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(12); });
+const compactStaleRelease = ui.root.findByType('Slider').props.onSlidingComplete;
+await act(async () => { await fresh.moveChapter(-1); });
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { compactStaleRelease(12); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'compact scrub cannot seek into a replacement chapter');
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(12); });
+const expandedRelease = ui.root.findByType('Slider').props.onSlidingComplete;
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, props)); });
+await act(async () => { expandedRelease(12); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 0, 'compact scrub is cancelled when expanding the player');
+assert.equal(ui.root.findAllByProps({testID:'audio-verse-tooltip'}).length, 0);
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, {...props,visible:false})); });
+await act(async () => { ui.root.findByType('Slider').props.onSlidingStart(12); });
+const closedCompactRelease = ui.root.findByType('Slider').props.onSlidingComplete;
 await act(async () => { ui.root.findByProps({accessibilityLabel:'audio.close',accessibilityRole:'button'}).props.onPress(); await flush(); });
+await act(async () => { closedCompactRelease(12); await flush(); });
 assert.equal(fresh.getSnapshot().session, undefined, 'card close clears session');
 assert.equal(queue.length, 0);
 assert.equal(intent, false);

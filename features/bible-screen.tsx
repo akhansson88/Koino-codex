@@ -249,7 +249,7 @@ export function BibleScreen() {
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);
-  const [audioMiniHeight, setAudioMiniHeight] = useState(64);
+  const [audioMiniHeight, setAudioMiniHeight] = useState(82);
   const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;

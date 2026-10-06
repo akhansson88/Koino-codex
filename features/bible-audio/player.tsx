@@ -15,7 +15,7 @@ function time(seconds: number) {
   const n = Math.max(0, Math.floor(seconds));
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 }
-function Progress({ chapter, index, palette, active = true, inSheet = false }: { chapter: AudioChapter; index: number; palette: ReaderPalette; active?: boolean; inSheet?: boolean }) {
+function Progress({ chapter, index, palette, active = true, inSheet = false, compact = false }: { chapter: AudioChapter; index: number; palette: ReaderPalette; active?: boolean; inSheet?: boolean; compact?: boolean }) {
   const { seek, position, loading, commandPending } = useBibleAudio();
   const { t } = useAppTranslation();
   const [dragging, setDragging] = useState<number | null>(null);
@@ -57,15 +57,15 @@ function Progress({ chapter, index, palette, active = true, inSheet = false }: {
         if (canSeek) void seek(snapChapterTime(chapter.verses, v).seconds);
       }}
       minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={brandPalette.warmPersika} style={{ height: 44 }} />;
-  return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ paddingTop: 30 }}>
-    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
+  return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ flex: compact ? 1 : undefined, minWidth: 0, paddingTop: compact ? 0 : 30 }}>
+    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
       <Text accessibilityLabel={t("audio.verse", { verse: selected.verse })} style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{selected.verse}</Text>
     </View> : null}
     {/* Keep the sheet's pan and scroll handlers from taking over a scrub. */}
     {inSheet ? <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
       <View collapsable={false}>{slider}</View>
     </NativeViewGestureHandler> : slider}
-    <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(dragging ?? elapsed)}</Text><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(total)}</Text></View>
+    {!compact ? <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(dragging ?? elapsed)}</Text><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(total)}</Text></View> : null}
   </View>;
 }
 export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chapter, version, bottom, follow, onFollow, onChooseTranslation, onMiniHeightChange }: {
@@ -96,16 +96,17 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
     {iconButton("skip-forward", t("audio.nextChapter"), () => { void audio.moveChapter(1); }, !audio.nextChapter || audio.loading || audio.commandPending)}
   </View>;
   return <>
-    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 9, gap: 8 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center" }}>
-        <Text style={{ color: palette.text, fontWeight: "700" }}>{title}</Text><Text style={{ color: palette.muted }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
+    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ minWidth: 0, minHeight: 24, flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Text numberOfLines={1} style={{ color: palette.text, fontWeight: "700", flexShrink: 1 }}>{title}</Text><Text numberOfLines={1} style={{ color: palette.muted, flexShrink: 0 }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
       </Pressable>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Progress key={session.entry.manifestUrl} chapter={session.chapter} index={session.index} palette={palette} active={!visible} compact />
       {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), audio.problem === "network" ? audio.retry : audio.toggle, audio.loading || audio.commandPending, true, true)}
       {iconButton("x", t("audio.close"), close, false, false, true)}
       </View>
       {!follow || !matching ? <Pressable accessibilityRole="button" accessibilityLabel={t("audio.follow")} accessibilityState={{ selected: false }} onPress={onFollow}
-        style={{ minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>
+        style={{ marginTop: 4, minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>
         <Text style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{t("audio.follow")}</Text>
       </Pressable> : null}
     </View> : null}
