@@ -30,6 +30,15 @@ for (const [seconds, verse, start] of [[-1,1,0],[3.9,1,0],[4,3,4],[18.9,3,4],[19
   assert.deepEqual(snapChapterTime(unevenVerses, seconds), { verse, seconds: start });
 }
 
+// Decimal durations must round-trip every cumulative verse start exactly.
+const decimalVerses = [1.01, 1.01, 1.04, 1.17, 2.41].map((duration, index) => ({ verse: index + 1, duration }));
+let verseStart = 0;
+for (let index = 0; index < decimalVerses.length; index++) {
+  assert.deepEqual(locateChapterTime(decimalVerses, verseStart), { index, offset: 0 });
+  assert.deepEqual(snapChapterTime(decimalVerses, verseStart), { verse: index + 1, seconds: verseStart });
+  verseStart += decimalVerses[index].duration;
+}
+
 const storage = new Map(), files = new Map(), handlers = new Map();
 let queue = [], active = 0, position = 0, state = 'paused', downloads = 0, setups = 0, plays = 0;
 let blockDownload, failDownload = false, dropEvents = false, initialized = false, intent = false, rate = 1, progressRead;
@@ -479,6 +488,14 @@ assert.equal(scrolls.length, 2);
 follow.request('John:2', 2);
 follow.tryScroll('John:2', (_, done) => done({ verse: { y: 200, height: 80 }, viewport: { y: 100, height: 900 }, offset: 0, controlsTop: 800 }), scroll);
 assert.equal(scrolls.length, 2, 'already-visible verse must stay still');
+// A verse still inside the reader viewport can already be covered by the player.
+follow.request('John:2', 3);
+follow.tryScroll('John:2', (_, done) => done({ verse: { y: 690, height: 40 }, viewport: { y: 80, height: 900 }, offset: 100, controlsTop: 720 }), scroll);
+assert.deepEqual(scrolls.at(-1), { offset: 692, verse: 3 }, 'follow triggers at measured player top minus 18, not the viewport bottom');
+const beforeClearVerse = scrolls.length;
+follow.request('John:2', 4);
+follow.tryScroll('John:2', (_, done) => done({ verse: { y: 650, height: 40 }, viewport: { y: 80, height: 900 }, offset: 100, controlsTop: 720 }), scroll);
+assert.equal(scrolls.length, beforeClearVerse, 'verse above the player clearance stays still');
 // Exercise the real main/mini player components against the synchronized engine.
 const React = require('react');
 const { act, create } = require('react-test-renderer');
@@ -733,6 +750,11 @@ assert.equal(fresh.getSnapshot().session.index, 1, 'accessibility decrement cann
 await act(async () => { rangeSlider().props.onAccessibilityAction({nativeEvent:{actionName:'increment'}}); await flush(); });
 assert.equal(fresh.getSnapshot().session.index, 2);
 assert.equal(rangeSlider().props.value, 10);
+await act(async () => { rangeSlider().props.onSlidingStart(14); });
+assert.equal(ui.root.findByProps({testID:'audio-verse-tooltip'}).findByType('Text').props.children, 3);
+await act(async () => { rangeSlider().props.onSlidingComplete(21); await flush(); });
+assert.equal(fresh.getSnapshot().session.index, 2, 'release into verse 4 must play displayed verse 3');
+assert.equal(position, 0);
 await act(async () => { rangeSlider().props.onSlidingStart(21); });
 assert.equal(ui.root.findByProps({testID:'audio-verse-tooltip'}).findByType('Text').props.children, 4);
 await act(async () => { rangeSlider().props.onSlidingComplete(21); await flush(); });
@@ -767,4 +789,34 @@ assert.equal(rangeSlider().props.maximumValue, 30);
 await act(async () => { await fresh.startPassage(passageEntry, { startVerse:4,endVerse:6,savedVerseId:'missing' }); });
 assert.ok(ui.root.findAllByType('Text').some(node => node.props.children === 'audio.passageUnavailable'));
 await act(async () => { ui.unmount(); await fresh.stop(); });
+// Native player geometry is reported in window coordinates and invalidated on hide.
+const originalRAF = globalThis.requestAnimationFrame, originalCancelRAF = globalThis.cancelAnimationFrame;
+const playerFrames = new Map(); let nextPlayerFrame = 0;
+globalThis.requestAnimationFrame = callback => { playerFrames.set(++nextPlayerFrame, callback); return nextPlayerFrame; };
+globalThis.cancelAnimationFrame = id => playerFrames.delete(id);
+const topReports = [], heightReports = [], nativeMeasures = [];
+const geometryProps = { ...props, visible: false, onMiniTopChange: top => topReports.push(top), onMiniHeightChange: height => heightReports.push(height) };
+try {
+  await fresh.start(entry, 0, 0, false);
+  await act(async () => { ui = create(React.createElement(BibleAudioPlayer, geometryProps), { createNodeMock: () => ({ measureInWindow: done => nativeMeasures.push(done) }) }); });
+  const mini = () => ui.root.findAllByType('View').find(node => node.props.style?.position === 'absolute' && node.props.style?.bottom === geometryProps.bottom);
+  await act(async () => { mini().props.onLayout({ nativeEvent: { layout: { height: 144 } } }); });
+  assert.equal(heightReports.at(-1), 144);
+  await act(async () => { nativeMeasures.at(-1)(0, 620, 380, 144); });
+  assert.equal(topReports.at(-1), 620, 'compact player reports its actual window top');
+  await act(async () => { mini().props.onLayout({ nativeEvent: { layout: { height: 188 } } }); });
+  await act(async () => { nativeMeasures.at(-1)(0, 576, 380, 188); });
+  assert.equal(topReports.at(-1), 576, 'Follow button height changes update the measured top');
+  await act(async () => { mini().props.onLayout({ nativeEvent: { layout: { height: 188 } } }); });
+  const lateMeasurement = nativeMeasures.at(-1);
+  await act(async () => { ui.update(React.createElement(BibleAudioPlayer, { ...geometryProps, visible: true })); });
+  await act(async () => { for (const callback of playerFrames.values()) callback(); playerFrames.clear(); });
+  assert.equal(topReports.at(-1), undefined, 'expanded player clears compact occlusion');
+  lateMeasurement(0, 576, 380, 188);
+  assert.equal(topReports.at(-1), undefined, 'stale native measurement cannot restore hidden player bounds');
+  await act(async () => { ui.unmount(); await fresh.stop(); });
+} finally {
+  globalThis.requestAnimationFrame = originalRAF;
+  globalThis.cancelAnimationFrame = originalCancelRAF;
+}
 console.log('Audio validation passed: bounded saved-passage queues, replay, retries, restoration, range timelines, background chapter continuation, service controls, sleep timer, native synchronization, stale reads and verse following.');

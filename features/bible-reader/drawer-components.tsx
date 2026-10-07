@@ -114,7 +114,7 @@ export function DrawerSearchBox({
     >
       <Feather name="search" size={18} color={palette.muted} />
       <SheetTextInput
-        autoCapitalize="words"
+        autoCapitalize="sentences"
         autoCorrect={false}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}

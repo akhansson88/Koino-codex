@@ -93,8 +93,9 @@ function TopicSpeechProgress({ palette }: { palette: ReaderPalette }) {
   const topic = audio.session?.topic;
   const item = topic?.definition.items[topic.itemIndex];
   const chapter = audio.session?.chapter;
-  const [draft, setDraft] = useState<number | null>(null);
-  useEffect(() => { setDraft(null); }, [item?.id]);
+  const [draft, setDraft] = useState<ReturnType<typeof snapChapterTime> | null>(null);
+  const scrubTarget = useRef<ReturnType<typeof snapChapterTime> | null>(null);
+  useEffect(() => { setDraft(null); scrubTarget.current = null; }, [item?.id]);
   const enabled = Boolean(item && chapter && !audio.loading && !audio.commandPending && !audio.pendingTopic && !audio.pendingRequest);
   const scope = item ? `${topic?.definition.id}:${item.id}:${audio.session?.entry.manifestUrl}` : undefined;
   const scopeRef = useRef(scope);
@@ -103,7 +104,7 @@ function TopicSpeechProgress({ palette }: { palette: ReaderPalette }) {
   enabledRef.current = enabled;
   useEffect(() => { scopeRef.current = scope; return () => { scopeRef.current = undefined; }; }, [scope]);
   const canSeek = () => enabledRef.current && scopeRef.current === scope;
-  useEffect(() => { if (!enabled) setDraft(null); }, [enabled]);
+  useEffect(() => { if (!enabled) { setDraft(null); scrubTarget.current = null; } }, [enabled]);
   if (!item || !chapter || !audio.session) return null;
   const verses = chapter.verses.filter((verse) => verse.verse >= item.startVerse && verse.verse <= item.endVerse);
   if (!verses.length) return null;
@@ -111,15 +112,15 @@ function TopicSpeechProgress({ palette }: { palette: ReaderPalette }) {
   const total = verses.reduce((sum, verse) => sum + verse.duration, 0);
   const elapsed = Math.min(total, verses.slice(0, relativeIndex).reduce((sum, verse) => sum + verse.duration, 0) + audio.position);
   const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-  const selected = snapChapterTime(verses, draft ?? elapsed);
+  const selected = draft ?? snapChapterTime(verses, elapsed);
   return <View>
-    <Slider accessibilityLabel={`${t("audio.passageProgress")}: ${item.reference}`} accessibilityValue={{ text: `${t("audio.verse", { verse: selected.verse })}, ${clock(draft ?? elapsed)} / ${clock(total)}` }} minimumValue={0} maximumValue={total} value={draft ?? elapsed} disabled={!enabled} onValueChange={(value) => { if (canSeek()) setDraft(value); }} onSlidingComplete={(value) => { setDraft(null); if (canSeek()) void audio.seek(snapChapterTime(verses, value).seconds); }} accessibilityActions={[{ name: "increment" }, { name: "decrement" }]} onAccessibilityAction={(event) => {
+    <Slider accessibilityLabel={`${t("audio.passageProgress")}: ${item.reference}`} accessibilityValue={{ text: `${t("audio.verse", { verse: selected.verse })}, ${clock(draft?.seconds ?? elapsed)} / ${clock(total)}` }} minimumValue={0} maximumValue={total} value={draft?.seconds ?? elapsed} disabled={!enabled} onValueChange={(value) => { if (canSeek()) { const target = snapChapterTime(verses, value); scrubTarget.current = target; setDraft(target); } }} onSlidingComplete={(value) => { const target = scrubTarget.current ?? snapChapterTime(verses, value); scrubTarget.current = null; setDraft(null); if (canSeek()) void audio.seek(target.seconds); }} accessibilityActions={[{ name: "increment" }, { name: "decrement" }]} onAccessibilityAction={(event) => {
       if (!canSeek()) return;
       const direction = event.nativeEvent.actionName === "increment" ? 1 : event.nativeEvent.actionName === "decrement" ? -1 : 0;
       const nextIndex = Math.max(0, Math.min(verses.length - 1, relativeIndex + direction));
       if (direction && nextIndex !== relativeIndex) void audio.seek(verses.slice(0, nextIndex).reduce((sum, verse) => sum + verse.duration, 0));
     }} minimumTrackTintColor={palette.accent} maximumTrackTintColor={palette.line} thumbTintColor={palette.accent} style={{ height: 44 }} />
-    <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{clock(draft ?? elapsed)}</Text><Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{clock(total)}</Text></View>
+    <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{clock(draft?.seconds ?? elapsed)}</Text><Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{clock(total)}</Text></View>
   </View>;
 }
 

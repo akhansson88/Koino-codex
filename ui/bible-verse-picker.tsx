@@ -250,7 +250,7 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
             <View style={{ position: "relative" }}>
               <TextInputField
                 accessibilityLabel={t("shared.scripturePicker.searchAccessibility")}
-                autoCapitalize="none"
+                autoCapitalize="sentences"
                 onChangeText={(value) => {
                   setScriptureQuery(value);
                   setSearchRetry(0);
@@ -430,7 +430,7 @@ function BookBrowser({ bookQuery, books, language, onBookQuery, onSelect, t }: {
       </View>
       <View style={{ gap: 6 }}>
         <Text style={[typography.label, { color: colors.ink }]}>{t("shared.scripturePicker.filterBooks")}</Text>
-        <TextInputField accessibilityLabel={t("shared.scripturePicker.filterBooks")} onChangeText={onBookQuery} placeholder={t("shared.scripturePicker.searchBooks")} value={bookQuery} />
+        <TextInputField accessibilityLabel={t("shared.scripturePicker.filterBooks")} autoCapitalize="sentences" onChangeText={onBookQuery} placeholder={t("shared.scripturePicker.searchBooks")} value={bookQuery} />
       </View>
       <BookSection label={t("shared.scripturePicker.oldTestament")} books={oldTestament} language={language} onSelect={onSelect} />
       <BookSection label={t("shared.scripturePicker.newTestament")} books={newTestament} language={language} onSelect={onSelect} />

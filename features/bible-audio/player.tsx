@@ -19,9 +19,9 @@ function time(seconds: number) {
 function Progress({ chapter, index, passage, palette, active = true, inSheet = false, compact = false }: { chapter: AudioChapter; index: number; passage?: { startVerse: number; endVerse: number }; palette: ReaderPalette; active?: boolean; inSheet?: boolean; compact?: boolean }) {
   const { seek, position, loading, commandPending } = useBibleAudio();
   const { t } = useAppTranslation();
-  const [dragging, setDragging] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<ReturnType<typeof snapChapterTime> | null>(null);
   const [width, setWidth] = useState(0);
-  const scrubVerse = useRef<number | null>(null);
+  const scrubVerse = useRef<ReturnType<typeof snapChapterTime> | null>(null);
   const enabled = active && !loading && !commandPending;
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
@@ -33,17 +33,17 @@ function Progress({ chapter, index, passage, palette, active = true, inSheet = f
   const relativeIndex = passage ? Math.max(0, verses.findIndex((verse) => verse.verse === chapter.verses[index]?.verse)) : index;
   const total = verses.reduce((sum, v) => sum + v.duration, 0);
   const elapsed = Math.min(total, verses.slice(0, relativeIndex).reduce((sum, v) => sum + v.duration, 0) + position);
-  const selected = snapChapterTime(verses, dragging ?? elapsed);
+  const selected = dragging ?? snapChapterTime(verses, elapsed);
   const preview = (seconds: number) => {
     if (!enabledRef.current) return;
     const target = snapChapterTime(verses, seconds);
-    if (scrubVerse.current !== null && scrubVerse.current !== target.verse && Platform.OS !== "web") {
+    if (scrubVerse.current !== null && scrubVerse.current.verse !== target.verse && Platform.OS !== "web") {
       void Haptics.selectionAsync().catch(() => undefined);
     }
-    scrubVerse.current = target.verse;
-    setDragging(target.seconds);
+    scrubVerse.current = target;
+    setDragging(target);
   };
-  const slider = <Slider disabled={!enabled} accessibilityLabel={t(passage ? "audio.passageProgress" : "audio.progress")} accessibilityValue={{ text: `${t("audio.verse", { verse: selected.verse })}, ${time(dragging ?? elapsed)} / ${time(total)}` }} minimumValue={0} maximumValue={total} value={dragging ?? elapsed}
+  const slider = <Slider disabled={!enabled} accessibilityLabel={t(passage ? "audio.passageProgress" : "audio.progress")} accessibilityValue={{ text: `${t("audio.verse", { verse: selected.verse })}, ${time(dragging?.seconds ?? elapsed)} / ${time(total)}` }} minimumValue={0} maximumValue={total} value={dragging?.seconds ?? elapsed}
       accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
       onAccessibilityAction={(event) => {
         if (!enabledRef.current) return;
@@ -53,31 +53,47 @@ function Progress({ chapter, index, passage, palette, active = true, inSheet = f
         if (Platform.OS !== "web") void Haptics.selectionAsync().catch(() => undefined);
         void seek(verses.slice(0, nextIndex).reduce((sum, verse) => sum + verse.duration, 0));
       }}
-      onSlidingStart={preview} onValueChange={(v) => { if (scrubVerse.current !== null) preview(v); }} onSlidingComplete={(v) => {
+      onSlidingStart={preview} onValueChange={(v) => { if (scrubVerse.current !== null) preview(v); }} onSlidingComplete={() => {
+        const target = scrubVerse.current;
         const canSeek = enabledRef.current && scrubVerse.current !== null;
         scrubVerse.current = null;
         setDragging(null);
-        if (canSeek) void seek(snapChapterTime(verses, v).seconds);
+        if (canSeek && target) void seek(target.seconds);
       }}
       minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={brandPalette.warmPersika} style={{ height: 44 }} />;
   return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ flex: compact ? 1 : undefined, minWidth: 0, paddingTop: compact ? 0 : 30 }}>
-    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
+    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging.seconds / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
       <Text accessibilityLabel={t("audio.verse", { verse: selected.verse })} style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{selected.verse}</Text>
     </View> : null}
     {/* Keep the sheet's pan and scroll handlers from taking over a scrub. */}
     {inSheet ? <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
       <View collapsable={false}>{slider}</View>
     </NativeViewGestureHandler> : slider}
-    {!compact ? <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(dragging ?? elapsed)}</Text><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(total)}</Text></View> : null}
+    {!compact ? <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(dragging?.seconds ?? elapsed)}</Text><Text style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{time(total)}</Text></View> : null}
   </View>;
 }
-export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chapter, version, bottom, follow, onFollow, onChooseTranslation, onMiniHeightChange }: {
+export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chapter, version, bottom, follow, onFollow, onChooseTranslation, onMiniHeightChange, onMiniTopChange }: {
   visible: boolean; onClose: () => void; onOpen: () => void; palette: ReaderPalette;
   book: string; chapter: number; version: string; bottom: number; follow: boolean; onFollow: () => void;
   onChooseTranslation: () => void;
   onMiniHeightChange?: (height: number) => void;
+  onMiniTopChange?: (top: number | undefined) => void;
 }) {
   const audio = useBibleAudio();
+  const miniRef = useRef<View>(null);
+  const miniMeasurement = useRef(0);
+  const miniVisible = Boolean(audio.session && !visible && !audio.pendingRequest && !audio.pendingTopic);
+  const measureMini = () => {
+    const revision = ++miniMeasurement.current;
+    miniRef.current?.measureInWindow((_x, y, _width, height) => {
+      if (revision === miniMeasurement.current && height > 0) onMiniTopChange?.(y);
+    });
+  };
+  useEffect(() => {
+    if (!onMiniTopChange) return;
+    const frame = requestAnimationFrame(() => { if (miniVisible) measureMini(); else onMiniTopChange?.(undefined); });
+    return () => { cancelAnimationFrame(frame); miniMeasurement.current++; };
+  }, [miniVisible, bottom, follow, onMiniTopChange]);
   const { t } = useAppTranslation();
   const entry = Object.values(audio.catalog?.chapters ?? {}).find((c) => c.book === book && c.chapter === chapter);
   const pendingPassage = audio.pendingRequest?.passage;
@@ -113,7 +129,7 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
     {iconButton("skip-forward", t(topic ? "bible.topics.audio.nextPassage" : "audio.nextChapter"), () => { if (topic) void audio.moveTopicPassage(1); else void audio.moveChapter(1); }, (topic ? topicIndex < 0 || topicIndex >= topicItems.length - 1 : !audio.nextChapter) || audio.loading || audio.commandPending)}
   </View>;
   return <>
-    {session && !visible ? <View onLayout={(event) => onMiniHeightChange?.(event.nativeEvent.layout.height)} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6 }}>
+    {session && !visible ? <View ref={miniRef} collapsable={false} onLayout={(event) => { onMiniHeightChange?.(event.nativeEvent.layout.height); measureMini(); }} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6 }}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${topicItem?.reference ?? t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ minWidth: 0, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6 }}>
         <Text numberOfLines={1} style={{ color: palette.text, fontWeight: "700", flexShrink: 1 }}>{title}</Text><Text numberOfLines={1} style={{ color: palette.muted, flexShrink: 0 }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
       </Pressable>

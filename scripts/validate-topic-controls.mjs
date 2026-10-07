@@ -134,6 +134,9 @@ try {
   assert.equal(speechSlider().props.value, 0);
   await act(async () => { speechSlider().props.onSlidingComplete(12); });
   assert.deepEqual(calls.at(-1), ["seek", 8], "Topic panel scrubbing snaps to the beginning of the selected numbered verse");
+  await act(async () => { speechSlider().props.onValueChange(2); });
+  await act(async () => { speechSlider().props.onSlidingComplete(12); });
+  assert.deepEqual(calls.at(-1), ["seek", 0], "Topic release uses the displayed selection rather than a later native value");
   assert.equal(named(t("bible.topics.audio.previousPassage")).props.disabled, true);
   await press(named(t("bible.topics.audio.nextPassage"))); assert.deepEqual(calls.at(-1), ["move", 1]);
   const slider = root().findAllByType("Slider").find(node => node.props.accessibilityLabel === t("bible.topics.audio.pauseLabel"));

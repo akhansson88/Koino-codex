@@ -211,7 +211,7 @@ export function BibleTopicsModal({
           >
             <Feather name="search" size={16} color={palette.muted} />
             <SheetTextInput
-              autoCapitalize="none"
+              autoCapitalize="sentences"
               autoCorrect={false}
               onChangeText={(value) => {
                 setQuery(value);

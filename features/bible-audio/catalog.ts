@@ -63,12 +63,14 @@ export async function fetchAudioJson(url: string): Promise<unknown> {
   } finally { clearTimeout(timeout); }
 }
 export function locateChapterTime(verses: AudioVerse[], seconds: number) {
-  let remaining = Math.max(0, seconds);
+  const position = Math.max(0, seconds);
+  let start = 0;
   for (let index = 0; index < verses.length; index++) {
-    if (remaining < verses[index].duration || index === verses.length - 1) {
-      return { index, offset: Math.min(remaining, Math.max(0, verses[index].duration - 0.05)) };
+    const end = start + verses[index].duration;
+    if (position < end || index === verses.length - 1) {
+      return { index, offset: Math.min(Math.max(0, position - start), Math.max(0, verses[index].duration - 0.05)) };
     }
-    remaining -= verses[index].duration;
+    start = end;
   }
   return { index: 0, offset: 0 };
 }

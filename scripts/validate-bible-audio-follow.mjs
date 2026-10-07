@@ -150,6 +150,7 @@ const topicSession = (base, itemIndex = 0, phase = "verse") => ({ ...base, passa
 const pendingTopic = { definition: topicDefinition, options: { mode: "all" } };
 const request = value => ({ entry: value.entry, offset: 0, autoplay: true, passage: value.passage });
 let renderer;
+const measuredScrolls = [];
 
 async function flushFrames() {
   for (let count = 0; frames.size; count++) {
@@ -161,7 +162,9 @@ async function flushFrames() {
 }
 async function mount(playback = {}) {
   audio.snapshot = { ...emptyPlayback(), ...playback };
-  await act(async () => { renderer = create(React.createElement(BibleScreen)); });
+  await act(async () => { renderer = create(React.createElement(BibleScreen), { createNodeMock: element => element.type === "ScrollView"
+    ? { scrollTo: value => measuredScrolls.push(value) }
+    : { measureInWindow: done => done(0, 100, 420, 800) } }); });
   await flushFrames();
 }
 async function publish(changes) {
@@ -295,6 +298,21 @@ try {
   await mount({ session: chapterSession, playWhenReady: true });
   assert.deepEqual(reader(), { position: { book: "Psalms", chapter: 23, verse: 1 }, version: "reformationsbibeln2026" });
   assert.equal(props("BibleAudioPlayer").follow, true);
+  let measuredVerseY = 680;
+  props("BibleText").onVerseRef(1, { measureInWindow: done => done(0, measuredVerseY, 380, 60) });
+  const scrollCount = measuredScrolls.length;
+  await act(async () => { props("BibleAudioPlayer").onMiniTopChange(700); });
+  await flushFrames();
+  assert.equal(measuredScrolls.length, scrollCount + 1, "Measured player top triggers follow before the verse goes beneath the player");
+  assert.equal(measuredScrolls.at(-1).y, 562, "Player and verse use the same window coordinate system");
+  measuredVerseY = 600;
+  await act(async () => { props("BibleAudioPlayer").onMiniTopChange(620); });
+  await flushFrames();
+  assert.equal(measuredScrolls.length, scrollCount + 2, "A taller player rechecks the current spoken verse without advancing playback");
+  measuredVerseY = 300;
+  await act(async () => { props("BibleAudioPlayer").onMiniTopChange(700); });
+  await flushFrames();
+  assert.equal(measuredScrolls.length, scrollCount + 2, "Already-visible verse stays still after player layout changes");
   assert.equal(audio.navigations.length, 0, "Playback does not navigate to another app route");
   await unmount();
   console.log("Bible audio follow validation passed: saved/topic playback preserves reader and open views, explicit topic Follow closes topics and spans passages, and chapter auto-follow remains intact.");

@@ -259,6 +259,7 @@ export function BibleScreen() {
     : undefined;
   const activelyFollowingAudio = followAudio && !boundedAudioPending && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
   const [audioMiniHeight, setAudioMiniHeight] = useState(82);
+  const [audioMiniTop, setAudioMiniTop] = useState<number | undefined>();
   const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
@@ -694,14 +695,14 @@ export function BibleScreen() {
         row.measureInWindow((_vx, verseY, _vw, verseHeight) => done({
           verse: { y: verseY, height: verseHeight }, viewport: { y, height: viewportHeight },
           offset: readerScrollOffsetRef.current,
-          controlsTop: height - floatingControlsBottom - activeFloatingControlsHeight - audioMiniHeight - 24,
+          controlsTop: audioMiniTop ?? y + viewportHeight,
         }));
       });
     }, (offset, verse) => {
       programmaticScrollVerseRef.current = verse;
       scrollRef.current?.scrollTo({ animated: true, y: offset });
     });
-  }, [isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, height, floatingControlsBottom, activeFloatingControlsHeight, audioMiniHeight]);
+  }, [isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, audioMiniTop]);
 
   const ensureVerseVisibleAboveSelection = useCallback((verse: number) => {
     const verseRow = verseRowsRef.current[verse];
@@ -1516,6 +1517,7 @@ export function BibleScreen() {
 
       <BibleAudioPlayer visible={audioVisible} onClose={() => setAudioVisible(false)} onOpen={() => setAudioVisible(true)}
         onMiniHeightChange={setAudioMiniHeight}
+        onMiniTopChange={setAudioMiniTop}
         onChooseTranslation={() => setBibleVersionId("reformationsbibeln2026")}
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
         bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={activelyFollowingAudio}
