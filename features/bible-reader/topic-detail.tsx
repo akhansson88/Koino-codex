@@ -1,6 +1,6 @@
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { Feather } from "@expo/vector-icons";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bibleVerseFromReference, type BibleVersionId } from "@/features/bible-kjv";
@@ -16,6 +16,10 @@ import {
 } from "@/features/bible-reader/types";
 import { localizedTopicTitle, bibleTopicVoteKey } from "@/features/bible-reader/topics-api";
 import { ReaderCircleButton } from "@/features/bible-reader/header";
+import { useBibleAudio } from "@/features/bible-audio/provider";
+import { TopicPassageAudioControl, TopicPlaybackPanel } from "@/features/bible-audio/topic-controls";
+import { topicDefinition, topicReferenceItemIds } from "@/features/bible-audio/topic-definition";
+import type { TopicDefinition } from "@/features/bible-audio/topic-playback";
 
 export function BibleTopicDetailPane({
   bibleVersionId,
@@ -49,7 +53,10 @@ export function BibleTopicDetailPane({
   votePending: string;
 }) {
   const { t } = useAppTranslation();
+  const audio = useBibleAudio();
+  const bookLanguage = useBibleBookLanguage(bibleVersionLabel);
   const insets = useSafeAreaInsets();
+  useEffect(() => { void audio.refresh(); }, [audio.refresh]);
   const resolvedVerses = useMemo(
     () =>
       references.map((item) => ({
@@ -61,6 +68,13 @@ export function BibleTopicDetailPane({
     [bibleVersionId, references],
   );
   const title = localizedTopicTitle(topic, t);
+  const definition = useMemo(() => topicDefinition({
+    topic,
+    title,
+    translation: bibleVersionId,
+    references: resolvedVerses.map((item) => ({ ...item, displayedReference: displayBibleReference(item.reference, bookLanguage) })),
+  }), [bibleVersionId, bookLanguage, resolvedVerses, title, topic]);
+  const itemIds = useMemo(() => topicReferenceItemIds(resolvedVerses), [resolvedVerses]);
 
   return (
     <View style={{ backgroundColor: palette.background, flex: 1 }}>
@@ -129,6 +143,7 @@ export function BibleTopicDetailPane({
             </View>
           ) : resolvedVerses.length > 0 ? (
             <>
+              <TopicPlaybackPanel definition={definition} palette={palette} />
               <View style={{ backgroundColor: palette.peach, borderRadius: radius.md, gap: 3, paddingHorizontal: 13, paddingVertical: 11 }}>
                 <Text style={{ color: palette.text, fontSize: 12, fontWeight: "800", lineHeight: 18 }}>
                   {source === "openbible" ? t("bible.topics.voteSource") : t("bible.topics.textSearchSource", { translation: bibleVersionLabel })}
@@ -139,7 +154,9 @@ export function BibleTopicDetailPane({
               <TopicVerseCard
                 key={`${item.reference}-${index}`}
                 bibleVersionLabel={bibleVersionLabel}
+                definition={definition}
                 item={item}
+                itemId={itemIds[index]}
                 onPress={item.verse ? () => onSelectReference(item.reference) : undefined}
                 onVote={(value) => onVote(item, value)}
                 palette={palette}
@@ -160,7 +177,9 @@ export function BibleTopicDetailPane({
 
 function TopicVerseCard({
   bibleVersionLabel,
+  definition,
   item,
+  itemId,
   onPress,
   onVote,
   palette,
@@ -168,7 +187,9 @@ function TopicVerseCard({
   voting,
 }: {
   bibleVersionLabel: string;
+  definition: TopicDefinition;
   item: BibleTopicReference & { verse?: BibleVerse };
+  itemId: string;
   onPress?: () => void;
   onVote: (value: BibleTopicVoteValue) => void;
   palette: ReaderPalette;
@@ -224,6 +245,7 @@ function TopicVerseCard({
           </Text>
         )}
       </Pressable>
+      <TopicPassageAudioControl definition={definition} itemId={itemId} reference={displayedReference} palette={palette} />
       {item.voteId ? <View style={{ alignItems: "center", borderTopColor: palette.line, borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between", paddingTop: 11 }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           {voting ? <ActivityIndicator color={palette.muted} size="small" /> : <Feather name="thumbs-up" size={13} color={palette.muted} />}
@@ -245,7 +267,7 @@ function TopicVerseCard({
               borderWidth: 1,
               flexDirection: "row",
               gap: 5,
-              minHeight: 32,
+              minHeight: 44,
               opacity: !item.voteId || (Boolean(userVote) && userVote !== 1) ? 0.55 : 1,
               paddingHorizontal: 10,
             }}
@@ -266,7 +288,7 @@ function TopicVerseCard({
               borderWidth: 1,
               flexDirection: "row",
               gap: 5,
-              minHeight: 32,
+              minHeight: 44,
               opacity: !item.voteId || (Boolean(userVote) && userVote !== -1) ? 0.55 : 1,
               paddingHorizontal: 10,
             }}

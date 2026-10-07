@@ -22,6 +22,9 @@ globalThis.__audioRestoreTest = {
     getSessionGeneration: () => scenario.generation,
     setAudioCatalog: () => {}, applyAudioCatalog: async () => {},
     observeForeground: () => () => {},
+    loadTopicPreferences: async () => { scenario.topicPreferencesLoaded = true; },
+    restoreTopicPlayback: async saved => { scenario.topicRestored = saved; return scenario.topicValid ?? true; },
+    startTopicPlaylist: () => {}, setTopicPause: () => {}, setTopicLoop: () => {}, moveTopicPassage: () => {},
     hasNativeQueue: async () => {
       if (scenario.advanceGeneration) scenario.generation++;
       return scenario.nativeQueue ?? false;
@@ -45,7 +48,7 @@ const result = await build({
     builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path }) => ({ contents: path === "react-native"
       ? `export const AppState = { currentState: "active", addEventListener: () => ({ remove: () => {} }) };`
       : path === "./engine"
-        ? `export const {subscribe,getSnapshot,getSessionGeneration,setAudioCatalog,applyAudioCatalog,observeForeground,hasNativeQueue,ensurePlayer,syncFromNative,isAudioPassage,setSpeed,start,startPassage,stop,savePosition,adjacent,toggle,move,moveChapter,seek,setContinuous,setSleep,retry}=globalThis.__audioRestoreTest.engine;`
+        ? `export const {subscribe,getSnapshot,getSessionGeneration,setAudioCatalog,applyAudioCatalog,observeForeground,loadTopicPreferences,restoreTopicPlayback,startTopicPlaylist,setTopicPause,setTopicLoop,moveTopicPassage,hasNativeQueue,ensurePlayer,syncFromNative,isAudioPassage,setSpeed,start,startPassage,stop,savePosition,adjacent,toggle,move,moveChapter,seek,setContinuous,setSleep,retry}=globalThis.__audioRestoreTest.engine;`
         : `export default globalThis.__audioRestoreTest.storage;`, loader: "js" }));
   } }],
 });
@@ -94,4 +97,23 @@ await restore({ ...saved, passage }, { nativeQueue: true }, value => {
 await restore({ ...saved, passage }, { advanceGeneration: true }, value => {
   assert.equal(value.start, undefined, "a user request started during initialization must prevent stale restoration");
 });
-console.log("Bible audio restoration validation passed: paused passage restore, legacy compatibility, invalid metadata, native queue precedence, and session generation guard.");
+const topicState = { ...saved, topic: { definition: { id: "hope" }, phase: "gap", pauseSeconds: 3, loop: "topic" } };
+await restore(topicState, {}, value => {
+  assert.equal(value.topicPreferencesLoaded, true, "remembered topic pause preference loads during initialization");
+  assert.deepEqual(value.topicRestored, topicState, "topic restoration delegates the complete persisted state, including gap and loop");
+  assert.equal(value.start, undefined, "topic restoration must never fall through to chapter playback");
+  assert.equal(controller.startTopicPlaylist, globalThis.__audioRestoreTest.engine.startTopicPlaylist);
+  assert.equal(controller.setTopicPause, globalThis.__audioRestoreTest.engine.setTopicPause);
+});
+await restore({ ...saved, topic: null }, { topicValid: false }, value => {
+  assert.equal(value.topicRestored.topic, null);
+  assert.equal(value.start, undefined, "malformed topic state cannot restore as an unbounded chapter");
+});
+await restore(topicState, { nativeQueue: true }, value => {
+  assert.equal(value.nativeSynced, true);
+  assert.equal(value.topicRestored, undefined, "native topic playback takes precedence over persisted state");
+});
+await restore(topicState, { advanceGeneration: true }, value => {
+  assert.equal(value.topicRestored, undefined, "a newer request prevents stale topic restoration");
+});
+console.log("Bible audio restoration validation passed: topic preferences/restoration, paused passage restore, legacy compatibility, invalid metadata, native queue precedence, and session generation guard.");

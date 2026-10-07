@@ -17,7 +17,7 @@ export function SavedVerseAudioControl({ verse, reference, palette }: {
   const passage = savedAudioPassage(verse);
   const entry = passage ? Object.values(audio.catalog?.chapters ?? {}).find((item) => item.book === passage.book && item.chapter === passage.chapter) : undefined;
   const pending = audio.pendingRequest?.passage?.savedVerseId === verse.id;
-  const matching = !audio.pendingRequest && audio.session?.passage?.savedVerseId === verse.id;
+  const matching = !audio.pendingRequest && !audio.pendingTopic && audio.session?.passage?.savedVerseId === verse.id;
   const ownProblem = (pending || matching) ? audio.problem : null;
   const loading = pending && audio.loading;
   const retryPlayback = ownProblem === "network";

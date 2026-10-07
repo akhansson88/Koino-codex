@@ -138,6 +138,16 @@ function session(book, chapterNumber, passage, verse = passage?.startVerse ?? 1)
 const first = session("John", 3, { startVerse: 16, endVerse: 17, savedVerseId: "saved-john" });
 const second = session("Romans", 8, { startVerse: 28, endVerse: 28, savedVerseId: "saved-romans" });
 const chapterSession = session("Psalms", 23);
+const topicDefinition = {
+  id: "hope-fixture", topic: "Hope", title: "Hope", translation: "reformationsbibeln2026", unavailableCount: 0,
+  items: [
+    { id: "hope-john", reference: "John 3:16-17", book: "John", chapter: 3, startVerse: 16, endVerse: 17 },
+    { id: "hope-romans", reference: "Romans 8:28", book: "Romans", chapter: 8, startVerse: 28, endVerse: 28 },
+  ],
+};
+const topicSession = (base, itemIndex = 0, phase = "verse") => ({ ...base, passage: undefined,
+  topic: { definition: topicDefinition, mode: "all", loop: "off", pauseSeconds: 3, itemIndex, phase, unavailableItemIds: [] } });
+const pendingTopic = { definition: topicDefinition, options: { mode: "all" } };
 const request = value => ({ entry: value.entry, offset: 0, autoplay: true, passage: value.passage });
 let renderer;
 
@@ -240,13 +250,54 @@ try {
   assertUnchanged(replayBaseline, "Restarting the same saved passage clears explicit Follow");
   await unmount();
 
+  // Topic playback has its own identity: a restored or pending playlist must
+  // not inherit chapter following or navigate away from topic details.
+  await mount({ session: topicSession(first), playWhenReady: true });
+  assert.deepEqual(reader(), { position: { book: "Philippians", chapter: 4, verse: 4 }, version: "kjv" });
+  const topicRestoreBaseline = await openDrawer();
+  await publish({ session: topicSession({ ...first, index: 16 }, 0, "gap"), navigationRevision: 1 });
+  assertUnchanged(topicRestoreBaseline, "Restored topic advances into silence without navigation");
+  await unmount();
+
+  await mount({ session: chapterSession, pendingTopic, loading: true });
+  assert.deepEqual(reader(), { position: { book: "Philippians", chapter: 4, verse: 4 }, version: "kjv" });
+  const pendingTopicBaseline = await openDrawer();
+  await publish({ loading: false, problem: "network" });
+  assertUnchanged(pendingTopicBaseline, "Failed topic request does not follow stale chapter");
+  await publish({ pendingTopic: undefined, problem: null, session: topicSession(first), playWhenReady: true });
+  assertUnchanged(pendingTopicBaseline, "Prepared topic does not inherit chapter following");
+  await act(async () => { props("BibleDrawer").onOpenTopic("Hope"); });
+  await flushFrames();
+  const topicReader = reader();
+  assert.equal(props("BibleTopicsModal").visible, true);
+  await publish({ session: topicSession({ ...first, index: 16 }, 0, "gap"), navigationRevision: 2 });
+  assert.deepEqual(reader(), topicReader, "Topic controls preserve reader position and translation");
+  assert.equal(props("BibleTopicsModal").visible, true, "Playing a topic leaves its page open");
+  await publish({ session: topicSession(second, 1), navigationRevision: 3 });
+  assert.deepEqual(reader(), topicReader, "Moving to another topic passage does not navigate the reader");
+  assert.equal(props("BibleTopicsModal").detailVisible, true);
+  await act(async () => { props("BibleAudioPlayer").onFollow(); });
+  await flushFrames();
+  assert.equal(props("BibleTopicsModal").visible, false, "Explicit Follow closes the topic view");
+  assert.deepEqual(reader(), { position: { book: "Romans", chapter: 8, verse: 28 }, version: "reformationsbibeln2026" });
+  assert.equal(props("BibleAudioPlayer").follow, true);
+  await publish({ session: topicSession(first), navigationRevision: 4 });
+  assert.deepEqual(reader(), { position: { book: "John", chapter: 3, verse: 16 }, version: "reformationsbibeln2026" }, "Explicit topic Follow spans passage changes and loops");
+  await act(async () => { props("BibleDrawer").onOpenTopic("Hope"); });
+  await flushFrames();
+  const reopenedTopicReader = reader();
+  await publish({ session: topicSession(second, 1), navigationRevision: 5 });
+  assert.deepEqual(reader(), reopenedTopicReader, "Reopening topics suspends explicit topic Follow");
+  assert.equal(props("BibleAudioPlayer").follow, false);
+  await unmount();
+
   // Preserve ordinary chapter startup behavior.
   await mount({ session: chapterSession, playWhenReady: true });
   assert.deepEqual(reader(), { position: { book: "Psalms", chapter: 23, verse: 1 }, version: "reformationsbibeln2026" });
   assert.equal(props("BibleAudioPlayer").follow, true);
   assert.equal(audio.navigations.length, 0, "Playback does not navigate to another app route");
   await unmount();
-  console.log("Bible audio follow validation passed: restored/pending/switching passages preserve reader and open drawer, explicit Follow enables navigation, and chapter auto-follow remains intact.");
+  console.log("Bible audio follow validation passed: saved/topic playback preserves reader and open views, explicit topic Follow closes topics and spans passages, and chapter auto-follow remains intact.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   globalThis.requestAnimationFrame = originalRequestFrame;

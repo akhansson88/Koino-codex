@@ -252,10 +252,12 @@ export function BibleScreen() {
   const [followedAudioPassageKey, setFollowedAudioPassageKey] = useState<string | undefined>();
   const audioPassage = audio.pendingRequest?.passage ?? audio.session?.passage;
   const audioPassageEntry = audio.pendingRequest?.passage ? audio.pendingRequest.entry : audio.session?.entry;
-  const audioPassageKey = audioPassage && audioPassageEntry
+  const audioTopic = audio.pendingTopic?.definition ?? audio.session?.topic?.definition;
+  const boundedAudioPending = !!audio.pendingRequest?.passage || !!audio.pendingTopic;
+  const audioPassageKey = audioTopic ? `topic:${audioTopic.id}` : audioPassage && audioPassageEntry
     ? JSON.stringify([audioPassageEntry.manifestUrl, audioPassage.savedVerseId, audioPassage.startVerse, audioPassage.endVerse])
     : undefined;
-  const activelyFollowingAudio = followAudio && !audio.pendingRequest?.passage && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
+  const activelyFollowingAudio = followAudio && !boundedAudioPending && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
   const [audioMiniHeight, setAudioMiniHeight] = useState(82);
   const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
@@ -760,22 +762,22 @@ export function BibleScreen() {
 
   const hadAudioSession = useRef(false);
   useEffect(() => {
-    if (audio.pendingRequest?.passage) {
+    if (boundedAudioPending) {
       setFollowedAudioPassageKey(undefined);
       setFollowAudio(false);
       audioFollowScroll.current.cancel();
     }
-  }, [audio.pendingRequest]);
+  }, [audio.pendingRequest, audio.pendingTopic, boundedAudioPending]);
 
   useEffect(() => {
-    if (audio.session && !audio.session.passage && !audio.pendingRequest?.passage && !hadAudioSession.current) setFollowAudio(true);
+    if (audio.session && !audio.session.passage && !audio.session.topic && !boundedAudioPending && !hadAudioSession.current) setFollowAudio(true);
     if (!audio.session) {
       audioFollowScroll.current.cancel();
       setFollowedAudioPassageKey(undefined);
-      if (hadAudioSession.current && !audio.pendingRequest?.passage) setFollowAudio(true);
+      if (hadAudioSession.current && !boundedAudioPending) setFollowAudio(true);
     }
     hadAudioSession.current = !!audio.session;
-  }, [audio.session, audio.pendingRequest?.passage]);
+  }, [audio.session, boundedAudioPending]);
 
   useEffect(() => {
     const session = audio.session;
@@ -1304,6 +1306,9 @@ export function BibleScreen() {
     const nextTopic = topic.trim();
     if (!nextTopic) return;
 
+    setFollowAudio(false);
+    audioFollowScroll.current.cancel();
+
     const requestId = topicRequestRef.current + 1;
     topicRequestRef.current = requestId;
     setSelectedTopic(nextTopic);
@@ -1515,8 +1520,9 @@ export function BibleScreen() {
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
         bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={activelyFollowingAudio}
         onFollow={() => {
-          if (audio.session && !audio.pendingRequest?.passage) {
-            setFollowedAudioPassageKey(audio.session.passage ? audioPassageKey : undefined);
+          if (audio.session && !boundedAudioPending) {
+            if (audio.session.topic) closeTopics();
+            setFollowedAudioPassageKey(audio.session.passage || audio.session.topic ? audioPassageKey : undefined);
             setBibleVersionId("reformationsbibeln2026");
             setFollowAudio(true);
             jumpToPosition({ book: audio.session.chapter.book, chapter: audio.session.chapter.chapter, verse: spokenVerse ?? 1 }, false, false, true);
@@ -1642,6 +1648,8 @@ export function BibleScreen() {
           router.push(`/me/${entryId}` as never);
         }}
         onOpenTopic={(topic) => {
+          setFollowAudio(false);
+          audioFollowScroll.current.cancel();
           setPickerVisible(false);
           if (topic) {
             openTopic(topic);

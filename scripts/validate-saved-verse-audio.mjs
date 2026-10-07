@@ -120,6 +120,11 @@ try {
   assert.ok(button("Retry saved audio", secondVerse.reference));
   await press(button("Play saved passage"));
   assert.deepEqual(calls.at(-1), ["start", entry, range], "Playing the previous row replaces a failed pending request instead of toggling its stale session");
+  await rerender({ ...initialAudio, session, pendingTopic: { definition: { id: "hope" }, options: { mode: "all" } }, problem: "network" });
+  assert.ok(button("Play saved passage"));
+  assert.equal(button("Retry saved audio"), undefined, "A saved row must not claim a pending topic's failure");
+  await press(button("Play saved passage"));
+  assert.deepEqual(calls.at(-1), ["start", entry, range], "Saved playback replaces a pending topic instead of toggling the previous saved queue");
   await rerender({ ...initialAudio, pendingRequest, problem: "unavailable" });
   assert.equal(button("Play saved passage").props.disabled, true);
   assert.ok(textIncludes("Audio is unavailable for this saved passage."));

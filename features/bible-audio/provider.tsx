@@ -23,6 +23,7 @@ function useController() {
     const observe = () => { stopObserving?.(); stopObserving = engine.observeForeground(); };
     if (AppState.currentState === "active") observe();
     void (async () => {
+      await engine.loadTopicPreferences();
       let available: AudioCatalog | undefined;
       try {
         const cached = await AsyncStorage.getItem("koino.audio.catalog.v1");
@@ -39,6 +40,10 @@ function useController() {
         const stored = await AsyncStorage.getItem("koino.audio.position.v1");
         if (!stored || !mounted || initialGeneration !== 0 || engine.getSessionGeneration() !== initialGeneration || engine.getSnapshot().session || engine.getSnapshot().loading) return;
         const saved = JSON.parse(stored);
+        if (saved.topic !== undefined) {
+          await engine.restoreTopicPlayback(saved);
+          return;
+        }
         parseCatalog({ schemaVersion: 1, translation: "reformationsbibeln2026", chapters: { [`${saved.entry.bookId}:${saved.entry.chapter}`]: saved.entry } });
         if (!Number.isInteger(saved.index) || !Number.isFinite(saved.offset) || saved.offset < 0) return;
         if (saved.passage !== undefined && !engine.isAudioPassage(saved.passage)) return;
@@ -54,7 +59,7 @@ function useController() {
     });
     return () => { mounted = false; stopObserving?.(); subscription.remove(); void engine.stop().catch(() => undefined); };
   }, [refresh]);
-  return { ...playback, catalog, catalogState, refresh, start: engine.start, startPassage: engine.startPassage, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
+  return { ...playback, catalog, catalogState, refresh, start: engine.start, startPassage: engine.startPassage, startTopicPlaylist: engine.startTopicPlaylist, setTopicPause: engine.setTopicPause, setTopicLoop: engine.setTopicLoop, moveTopicPassage: engine.moveTopicPassage, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
 }
 const AudioContext = createContext<ReturnType<typeof useController> | null>(null);
 export function BibleAudioProvider({ children }: PropsWithChildren) { return <AudioContext.Provider value={useController()}>{children}</AudioContext.Provider>; }

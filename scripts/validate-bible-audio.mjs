@@ -44,7 +44,7 @@ const player = {
   reset: async () => { queue = []; position = 0; active = 0; intent = false; state = 'paused'; emit('PlaybackState', { state }); },
   add: async (tracks) => { queue.push(...tracks); },
   skip: async (index, offset = 0) => { active = index; position = offset; emit('PlaybackActiveTrackChanged', { track: queue[index] }); emit('PlaybackProgressUpdated', { position }); },
-  setRate: async (value) => { rate = value; }, getRate: async () => rate, getQueue: async () => [...queue], getActiveTrackIndex: async () => queue.length ? active : undefined,
+  setRate: async (value) => { rate = value; }, getRate: async () => rate, setRepeatMode: async () => {}, getQueue: async () => [...queue], getActiveTrackIndex: async () => queue.length ? active : undefined,
   getTrack: async (index) => queue[index], getProgress: async () => progressRead ? progressRead() : ({ position, duration: 10, buffered: 10 }), getPlayWhenReady: async () => intent,
   getPlaybackState: async () => { if (!initialized) throw new Error('not initialized'); return { state }; }, seekTo: async (value) => { position = value; },
   remove: async (indices) => { queue = queue.filter((_, index) => !indices.includes(index)); },
@@ -52,8 +52,9 @@ const player = {
 globalThis.__audioTest = {
   player, constants,
   storage: { getItem: async (key) => storage.get(key) ?? null, setItem: async (key, value) => { storage.set(key, value); }, removeItem: async (key) => { storage.delete(key); } },
-  fs: { cacheDirectory: 'file:///cache/', makeDirectoryAsync: async () => {},
+  fs: { cacheDirectory: 'file:///cache/', EncodingType: { Base64: 'base64' }, makeDirectoryAsync: async () => {},
     getInfoAsync: async (uri) => ({ exists: files.has(uri), size: files.get(uri) ?? 0 }),
+    writeAsStringAsync: async (uri, value) => { files.set(uri, Buffer.from(value, 'base64').length); },
     downloadAsync: async (url, destination) => { downloads++; if (blockDownload) await blockDownload; if (failDownload) throw new Error('offline'); files.set(destination, 1000); return { status: 200 }; },
     moveAsync: async ({ from, to }) => { files.set(to, files.get(from)); files.delete(from); },
     deleteAsync: async (uri) => { files.delete(uri); },
@@ -66,8 +67,8 @@ globalThis.fetch = async (url) => ({ ok: manifests.has(url), json: async () => m
 const mockPlugin = { name: 'native-audio-mocks', setup(build) {
   build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage|@\/state\/encryption\/local-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
   build.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path }) => ({ contents: path === 'react-native-track-player'
-    ? `export default globalThis.__audioTest.player; export const Event = globalThis.__audioTest.constants; export const Capability = {}; export const AppKilledPlaybackBehavior = {}; export const State = {Playing:'playing',Paused:'paused',Ended:'ended',Loading:'loading',Buffering:'buffering',Error:'error'};`
-    : path === 'expo-file-system/legacy' ? `export const {cacheDirectory,makeDirectoryAsync,getInfoAsync,downloadAsync,moveAsync,deleteAsync}=globalThis.__audioTest.fs;`
+    ? `export default globalThis.__audioTest.player; export const Event = globalThis.__audioTest.constants; export const RepeatMode={Off:'off',Track:'track',Queue:'queue'}; export const Capability = {}; export const AppKilledPlaybackBehavior = {}; export const State = {Playing:'playing',Paused:'paused',Ended:'ended',Loading:'loading',Buffering:'buffering',Error:'error'};`
+    : path === 'expo-file-system/legacy' ? `export const {cacheDirectory,EncodingType,makeDirectoryAsync,getInfoAsync,downloadAsync,writeAsStringAsync,moveAsync,deleteAsync}=globalThis.__audioTest.fs;`
     : `export default globalThis.__audioTest.storage;`, loader: 'js' }));
 } };
 const engine = await bundle('features/bible-audio/engine.ts', [mockPlugin]);
@@ -493,7 +494,7 @@ const uiMocks = { name: 'audio-ui-mocks', setup(build) {
       'react-native-gesture-handler': `export const NativeViewGestureHandler='NativeViewGestureHandler';`,
       '@expo/vector-icons': `export const Feather=()=>null;`,
       '@react-native-community/slider': `export default 'Slider';`,
-      '@/ui/theme': `export const brandPalette={deepNavy:'#0B1220',warmPersika:'#FFC79A'};`,
+      '@/ui/theme': `export const brandPalette={deepNavy:'#0B1220',warmPersika:'#FFC79A'},radius={lg:16};`,
       '@/ui/app-sheet': `import {createElement} from 'react'; export const AppSheet=({visible,children,onClose})=>createElement('AppSheet',{onClose},visible?children:null);`,
       '@/ui/app-language': `export const useAppTranslation=()=>({t:(key,args)=>key==='audio.verse'?'Verse '+args.verse:key});`,
       './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,catalogState:'ready',refresh,start:engine.start,retry:engine.retry,previousChapter:engine.adjacent(-1),nextChapter:engine.adjacent(1),toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
