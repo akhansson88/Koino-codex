@@ -37,6 +37,8 @@ import {
   PickerGrid,
 } from "@/features/bible-reader/drawer-components";
 import { SavedVerseActionSheet } from "@/features/bible-reader/verse-actions";
+import { SavedVerseAudioControl } from "@/features/bible-audio/saved-verse-audio";
+import { useBibleAudio } from "@/features/bible-audio/provider";
 
 export function BibleDrawer({
   biblePlanCount,
@@ -75,6 +77,7 @@ export function BibleDrawer({
 }) {
   const bookLanguage = useBibleBookLanguage(bibleVersionId);
   const { language, t } = useAppTranslation();
+  const { refresh: refreshAudioCatalog } = useBibleAudio();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
@@ -82,6 +85,9 @@ export function BibleDrawer({
   const drawerScrollRef = useRef<ScrollView>(null);
   const phraseSearchRequestRef = useRef(0);
   const [stage, setStage] = useState<PickerStage>(initialStage === "home" ? "book" : initialStage);
+  useEffect(() => {
+    if (visible && stage === "saved") void refreshAudioCatalog();
+  }, [refreshAudioCatalog, stage, visible]);
   const [bookQuery, setBookQuery] = useState("");
   const [bookParentStage, setBookParentStage] = useState<"book" | "search">("book");
   const [selectedBook, setSelectedBook] = useState(initialPosition.book);
@@ -539,6 +545,7 @@ export function BibleDrawer({
                         <Pressable
                           accessibilityLabel={t("bible.saved.actions.more", { reference: displayBibleReference(verse.reference, bookLanguage, verse.translation) })}
                           accessibilityRole="button"
+                          hitSlop={4}
                           onPress={() => setSavedVerseMenu(verse)}
                           style={{
                             alignItems: "center",
@@ -554,6 +561,8 @@ export function BibleDrawer({
                           <Feather name="more-horizontal" size={18} color={palette.accent} />
                         </Pressable>
                       )}
+                      fullText
+                      footer={<SavedVerseAudioControl verse={verse} reference={displayBibleReference(verse.reference, bookLanguage, verse.translation)} palette={palette} />}
                       key={verse.id}
                       onPress={() => openSavedVerse(verse)}
                       palette={palette}

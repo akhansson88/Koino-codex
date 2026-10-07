@@ -41,9 +41,10 @@ function useController() {
         const saved = JSON.parse(stored);
         parseCatalog({ schemaVersion: 1, translation: "reformationsbibeln2026", chapters: { [`${saved.entry.bookId}:${saved.entry.chapter}`]: saved.entry } });
         if (!Number.isInteger(saved.index) || !Number.isFinite(saved.offset) || saved.offset < 0) return;
+        if (saved.passage !== undefined && !engine.isAudioPassage(saved.passage)) return;
         if ([0.75, 1, 1.25, 1.5, 2].includes(saved.speed)) await engine.setSpeed(saved.speed);
         const entry = available?.chapters[`${saved.entry.bookId}:${saved.entry.chapter}`];
-        if (entry && mounted && engine.getSessionGeneration() === initialGeneration) await engine.start(entry, saved.index, saved.offset, false);
+        if (entry && mounted && engine.getSessionGeneration() === initialGeneration) await engine.start(entry, saved.index, saved.offset, false, saved.passage);
       } catch { /* Playback restores paused; invalid state is ignored. */ }
     })();
     const subscription = AppState.addEventListener("change", (state) => {
@@ -53,7 +54,7 @@ function useController() {
     });
     return () => { mounted = false; stopObserving?.(); subscription.remove(); void engine.stop().catch(() => undefined); };
   }, [refresh]);
-  return { ...playback, catalog, catalogState, refresh, start: engine.start, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
+  return { ...playback, catalog, catalogState, refresh, start: engine.start, startPassage: engine.startPassage, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
 }
 const AudioContext = createContext<ReturnType<typeof useController> | null>(null);
 export function BibleAudioProvider({ children }: PropsWithChildren) { return <AudioContext.Provider value={useController()}>{children}</AudioContext.Provider>; }

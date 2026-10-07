@@ -10,7 +10,7 @@ import { act, create } from "react-test-renderer";
 const require = createRequire(import.meta.url);
 const directory = await mkdtemp(path.join(tmpdir(), "koino-drawer-"));
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const state = globalThis.__drawer = { scrolls: [], closes: 0 };
+const state = globalThis.__drawer = { scrolls: [], closes: 0, catalogRefreshes: 0 };
 let frameId = 0;
 const frames = new Map();
 globalThis.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
@@ -31,6 +31,8 @@ const mocks = {
   "@/features/bible-reader/sheet-primitives": `export const BibleSheetTop="BibleSheetTop", bibleSheetHorizontalPadding=20;`,
   "@/features/bible-reader/header": `export const ReaderCircleButton="ReaderCircleButton";`,
   "@/features/bible-reader/verse-actions": `export const SavedVerseActionSheet="SavedVerseActionSheet";`,
+  "@/features/bible-audio/provider": `const refresh=async()=>{globalThis.__drawer.catalogRefreshes++;}; export const useBibleAudio=()=>({refresh});`,
+  "@/features/bible-audio/saved-verse-audio": `export const SavedVerseAudioControl="SavedVerseAudioControl";`,
   "@/features/bible-reader/drawer-components": `export const DrawerSection="DrawerSection", DrawerRow="DrawerRow", DrawerSearchBox="DrawerSearchBox", DrawerEmptyState="DrawerEmptyState", DrawerBookRow="DrawerBookRow", DrawerVerseRow="DrawerVerseRow", PickerGrid="PickerGrid";`,
   "@/ui/app-sheet": `import React,{forwardRef,useImperativeHandle} from "react";
     export const AppSheet=forwardRef((props,ref)=>{useImperativeHandle(ref,()=>({dismiss:callback=>{globalThis.__drawer.closes++; callback?.();}}));return props.visible?<sheet {...props}/>:null;});
@@ -114,7 +116,24 @@ try {
   assert.equal(state.closes, closes + 1, "Android back closes the root list");
   await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, initialStage: "search" })); });
   assert.equal(root().findByType("DrawerSearchBox").props.placeholder, "bible.navigator.searchPlaceholder", "Header search still works");
-  console.log("Bible drawer navigation, filtering, layout scrolling and reopening passed.");
+  const saved = { id: "saved-john", reference: "John 1:3-4", text: "The entire saved passage remains visible, including its final words.", translation: "Reformationsbibeln 2026", savedAt: "2026-10-07T10:00:00Z" };
+  await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, initialStage: "myPlaces", savedVerses: [saved] })); });
+  assert.equal(state.catalogRefreshes, 0, "Audio catalog is refreshed only when saved verses open");
+  await act(async () => { root().findAllByType("DrawerRow").find(row => row.props.title === "bible.navigator.saved").props.onPress(); });
+  assert.equal(state.catalogRefreshes, 1);
+  const savedRow = root().findByType("DrawerVerseRow");
+  assert.equal(savedRow.props.fullText, true, "Saved passages opt into their full text");
+  assert.equal(savedRow.props.text, saved.text, "Use the stored passage text without replacing its translation");
+  assert.equal(savedRow.props.footer.type, "SavedVerseAudioControl");
+  assert.equal(savedRow.props.footer.props.verse, saved);
+  const beforeMenuCloses = state.closes;
+  await act(async () => { savedRow.props.action.props.onPress(); });
+  assert.equal(state.closes, beforeMenuCloses, "The more menu does not navigate or dismiss the drawer");
+  assert.equal(root().findByType("SavedVerseActionSheet").props.verse, saved);
+  await act(async () => { root().findByType("sheet").props.onBack(); });
+  await act(async () => { root().findAllByType("DrawerRow").find(row => row.props.title === "bible.navigator.saved").props.onPress(); });
+  assert.equal(state.catalogRefreshes, 2, "Reopening saved verses checks for newly published narration");
+  console.log("Bible drawer navigation, layout scrolling, full saved passages, actions and audio refresh passed.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   await rm(directory, { recursive: true, force: true });

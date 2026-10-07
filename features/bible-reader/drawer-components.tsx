@@ -257,6 +257,8 @@ export function DrawerBookRow({
 export function DrawerVerseRow({
   action,
   accentColor,
+  footer,
+  fullText = false,
   meta,
   onPress,
   palette,
@@ -266,6 +268,8 @@ export function DrawerVerseRow({
 }: {
   action?: ReactNode;
   accentColor?: BibleHighlightColor;
+  footer?: ReactNode;
+  fullText?: boolean;
   meta?: string;
   onPress: () => void;
   palette: ReaderPalette;
@@ -276,7 +280,8 @@ export function DrawerVerseRow({
   const { t } = useAppTranslation();
   const card = (
     <Pressable
-      accessibilityLabel={t("bible.navigator.openPassage", { reference })}
+      accessibilityLabel={fullText && text ? `${reference}. ${text}` : t("bible.navigator.openPassage", { reference })}
+      accessibilityHint={fullText ? t("bible.navigator.openPassage", { reference }) : undefined}
       accessibilityRole="button"
       onPress={onPress}
       style={{
@@ -284,14 +289,17 @@ export function DrawerVerseRow({
         borderColor: palette.line,
         borderRadius: radius.lg,
         borderWidth: 1,
+        borderBottomLeftRadius: footer ? 0 : radius.lg,
+        borderBottomRightRadius: footer ? 0 : radius.lg,
+        borderBottomWidth: footer ? 0 : 1,
         gap: 6,
         minHeight: 74,
         padding: 14,
-        paddingRight: action ? 66 : 14,
+        paddingRight: action && !fullText ? 66 : 14,
       }}
     >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        <Text numberOfLines={1} style={{ color: palette.text, flex: 1, fontSize: 15, fontWeight: "900" }}>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 10, minHeight: action && fullText ? 40 : undefined, paddingRight: action && fullText ? 52 : undefined }}>
+        <Text numberOfLines={fullText ? undefined : 1} style={{ color: palette.text, flex: 1, fontSize: 15, fontWeight: "900" }}>
           {reference}
         </Text>
         {accentColor ? (
@@ -312,7 +320,7 @@ export function DrawerVerseRow({
         {showArrow ? <Feather name="arrow-right" size={16} color={palette.accent} /> : null}
       </View>
       {text ? (
-        <Text numberOfLines={2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
+        <Text numberOfLines={fullText ? undefined : 2} style={{ color: palette.muted, fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
           {text}
         </Text>
       ) : null}
@@ -324,12 +332,17 @@ export function DrawerVerseRow({
     </Pressable>
   );
 
-  if (!action) return card;
+  if (!action && !footer) return card;
 
   return (
     <View style={{ position: "relative" }}>
       {card}
-      <View style={{ position: "absolute", right: 10, top: 10, zIndex: 1 }}>{action}</View>
+      {footer ? (
+        <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderTopWidth: 0, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 }}>
+          {footer}
+        </View>
+      ) : null}
+      {action ? <View style={{ position: "absolute", right: 10, top: 10, zIndex: 1 }}>{action}</View> : null}
     </View>
   );
 }

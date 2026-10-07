@@ -5,6 +5,10 @@
   "main": "index.js",
   "scripts": {
     "validate:bible-audio": "node scripts/validate-bible-audio.mjs",
+    "validate:bible-audio-restore": "node scripts/validate-bible-audio-restore.mjs",
+    "validate:bible-audio-follow": "node scripts/validate-bible-audio-follow.mjs",
+    "validate:saved-verse-audio": "node scripts/validate-saved-verse-audio.mjs",
+    "validate:bible-drawer": "node scripts/validate-bible-drawer.mjs",
     "bible:audio": "python scripts/bible-audio/audio.py",
     "start": "expo start",
     "start:lan": "expo start --lan",

@@ -4,11 +4,13 @@ import AsyncStorage from "@/state/encryption/local-storage";
 import { nextBibleChapter, previousBibleChapter } from "../bible-canon";
 import { fetchAudioJson, locateChapterTime, parseChapter, type AudioCatalog, type AudioChapter, type AudioChapterEntry } from "./catalog";
 
-type VerseTrack = Track & { entry: AudioChapterEntry; verseIndex: number };
+export type AudioPassage = { startVerse: number; endVerse: number; savedVerseId: string };
+export type AudioRequest = { entry: AudioChapterEntry; index?: number; offset: number; autoplay: boolean; passage?: AudioPassage };
+type VerseTrack = Track & { entry: AudioChapterEntry; verseIndex: number; passage?: AudioPassage };
 // Keep each manifest once; embedding it in every native track makes long queues quadratic.
 const chapters = new Map<string, AudioChapter>();
-export type AudioSession = { chapter: AudioChapter; entry: AudioChapterEntry; index: number };
-type Snapshot = { session?: AudioSession; navigationRevision: number; playing: boolean; playWhenReady: boolean; loading: boolean; buffering: boolean; commandPending: boolean; position: number; problem: "network" | "unavailable" | null; speed: number; continuous: boolean; sleep: number | "chapter" };
+export type AudioSession = { chapter: AudioChapter; entry: AudioChapterEntry; index: number; passage?: AudioPassage };
+type Snapshot = { session?: AudioSession; pendingRequest?: AudioRequest; navigationRevision: number; playing: boolean; playWhenReady: boolean; loading: boolean; buffering: boolean; commandPending: boolean; position: number; problem: "network" | "unavailable" | null; speed: number; continuous: boolean; sleep: number | "chapter" };
 let snapshot: Snapshot = { navigationRevision: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, position: 0, problem: null, speed: 1, continuous: true, sleep: 0 };
 const listeners = new Set<() => void>();
 export const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -23,15 +25,19 @@ export function setAudioCatalog(value: AudioCatalog) { catalog = value; }
 export async function applyAudioCatalog(value: AudioCatalog) {
   catalog = value;
   const available = (entry: AudioChapterEntry) => value.chapters[`${entry.bookId}:${entry.chapter}`]?.manifestUrl === entry.manifestUrl;
-  if ((pending && !available(pending)) || (snapshot.session && !available(snapshot.session.entry))) {
+  if (pending ? !available(pending.entry) : snapshot.session && !available(snapshot.session.entry)) {
     await stop();
     return;
   }
-  if (!setup) return;
+  // While replacing a queue, the paused old tracks do not describe the new request.
+  if (!setup || pending) return;
+  const token = generation;
   let withdrawnActive = false;
   await serial(async () => {
+    if (token !== generation || pending) return;
     const queue = await TrackPlayer.getQueue() as VerseTrack[];
     const active = await TrackPlayer.getActiveTrackIndex();
+    if (token !== generation || pending) return;
     if (active !== undefined && queue[active]?.entry && !available(queue[active].entry)) {
       withdrawnActive = true;
       return;
@@ -39,7 +45,7 @@ export async function applyAudioCatalog(value: AudioCatalog) {
     const removed = queue.flatMap((track, index) => track.entry && !available(track.entry) ? [index] : []);
     if (removed.length) await TrackPlayer.remove(removed);
   });
-  if (withdrawnActive) await stop();
+  if (withdrawnActive && token === generation && !pending) await stop();
 }
 let setup: Promise<void> | undefined;
 let generation = 0;
@@ -48,7 +54,7 @@ let playbackListenersReady = false;
 let remoteListenersReady = false;
 const commands = new Set<symbol>();
 let deadline = 0;
-let pending: AudioChapterEntry | undefined;
+let pending: AudioRequest | undefined;
 let appending: number | undefined;
 let closing = false;
 let savedWrites = Promise.resolve();
@@ -57,17 +63,32 @@ let mutations = Promise.resolve();
 const serial = (operation: () => Promise<void>) => { const result = mutations.then(operation); mutations = result.catch(() => {}); return result; };
 const POSITION_KEY = "koino.audio.position.v1";
 
+export function isAudioPassage(value: unknown): value is AudioPassage {
+  if (!value || typeof value !== "object") return false;
+  const passage = value as AudioPassage;
+  return Number.isSafeInteger(passage.startVerse) && passage.startVerse > 0
+    && Number.isSafeInteger(passage.endVerse) && passage.endVerse >= passage.startVerse
+    && typeof passage.savedVerseId === "string" && passage.savedVerseId.length > 0;
+}
+function samePassage(first?: AudioPassage, second?: AudioPassage) {
+  return first?.startVerse === second?.startVerse && first?.endVerse === second?.endVerse && first?.savedVerseId === second?.savedVerseId;
+}
+function passageIndices(chapter: AudioChapter, passage?: AudioPassage) {
+  return chapter.verses.flatMap((verse, index) => !passage || (verse.verse >= passage.startVerse && verse.verse <= passage.endVerse) ? [index] : []);
+}
+class UnavailablePassageError extends Error {}
+
 export function adjacent(delta: number) {
   const value = snapshot.session;
-  if (!value) return;
+  if (!value || value.passage) return;
   const target = (delta < 0 ? previousBibleChapter : nextBibleChapter)(value.chapter.book, value.chapter.chapter);
   return Object.values(catalog?.chapters ?? {}).find((entry) => entry.book === target?.book && entry.chapter === target.chapter);
 }
 export async function savePosition() {
   const value = snapshot.session;
-  if (!value || closing) return;
+  if (!value || closing || pending) return;
   savedAt = Date.now();
-  const json = JSON.stringify({ entry: value.entry, index: value.index, offset: snapshot.position, speed: snapshot.speed });
+  const json = JSON.stringify({ entry: value.entry, index: value.index, offset: snapshot.position, speed: snapshot.speed, passage: value.passage });
   savedWrites = savedWrites.then(() => AsyncStorage.setItem(POSITION_KEY, json)).catch(() => {});
   await savedWrites;
 }
@@ -98,17 +119,20 @@ async function getChapter(entry: AudioChapterEntry): Promise<AudioChapter> {
   return chapter;
 }
 
-// Four downloads at a time; playback starts only after every verse is local.
-async function downloadChapter(entry: AudioChapterEntry, token: number): Promise<VerseTrack[]> {
+// Four downloads at a time; playback starts only after every requested verse is local.
+async function downloadChapter(entry: AudioChapterEntry, token: number, passage?: AudioPassage): Promise<VerseTrack[]> {
   const chapter = await getChapter(entry);
+  const indices = passageIndices(chapter, passage);
+  if (passage && indices.length !== passage.endVerse - passage.startVerse + 1) throw new UnavailablePassageError("Missing passage verses");
   const directory = `${FileSystem.cacheDirectory}bible-audio/${entry.bookId}-${entry.chapter}-${entry.revision}/`;
   await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-  const tracks: VerseTrack[] = new Array(chapter.verses.length);
+  const tracks: VerseTrack[] = new Array(indices.length);
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(4, tracks.length) }, async () => {
-    while (cursor < chapter.verses.length) {
+    while (cursor < indices.length) {
       if (generation !== token) throw new Error("Cancelled chapter download");
-      const index = cursor++;
+      const queueIndex = cursor++;
+      const index = indices[queueIndex];
       const verse = chapter.verses[index];
       const uri = `${directory}${verse.verse}-${verse.sha256}.mp3`;
       const existing = await FileSystem.getInfoAsync(uri);
@@ -124,14 +148,14 @@ async function downloadChapter(entry: AudioChapterEntry, token: number): Promise
           throw error;
         }
       }
-      tracks[index] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: uri, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: "Reformationsbibeln", album: "Koino", duration: verse.duration, entry, verseIndex: index };
+      tracks[queueIndex] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: uri, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: "Reformationsbibeln", album: "Koino", duration: verse.duration, entry, verseIndex: index, passage };
     }
   }));
   return tracks;
 }
 
 async function prepareNext() {
-  if (appending === generation || pending || closing || !snapshot.continuous || snapshot.sleep === "chapter" || !snapshot.session) return;
+  if (appending === generation || pending || closing || !snapshot.continuous || snapshot.sleep === "chapter" || !snapshot.session || snapshot.session.passage) return;
   const entry = adjacent(1);
   if (!entry) return;
   const token = generation;
@@ -141,45 +165,51 @@ async function prepareNext() {
     if (queue.some((track) => track.entry?.manifestUrl === entry.manifestUrl)) return;
     const tracks = await downloadChapter(entry, token);
     await serial(async () => {
-      if (token === generation && snapshot.continuous && snapshot.sleep !== "chapter" && catalog?.chapters[`${entry.bookId}:${entry.chapter}`]?.manifestUrl === entry.manifestUrl) await TrackPlayer.add(tracks);
+      if (token === generation && !snapshot.session?.passage && snapshot.continuous && snapshot.sleep !== "chapter" && catalog?.chapters[`${entry.bookId}:${entry.chapter}`]?.manifestUrl === entry.manifestUrl) await TrackPlayer.add(tracks);
     });
   } catch { /* The current chapter remains fully playable offline. */ }
   finally { if (appending === token) appending = undefined; }
 }
 
-export async function start(entry: AudioChapterEntry, index = 0, offset = 0, autoplay = true) {
+export function startPassage(entry: AudioChapterEntry, passage: AudioPassage) {
+  return start(entry, undefined, 0, true, passage);
+}
+export async function start(entry: AudioChapterEntry, index?: number, offset = 0, autoplay = true, passage?: AudioPassage) {
   const current = catalog?.chapters[`${entry.bookId}:${entry.chapter}`];
-  if (catalog && !current) { update({ problem: "unavailable" }); return; }
   entry = current ?? entry;
   const token = ++generation;
   ++readRevision;
   closing = false;
-  pending = entry;
+  pending = { entry, index, offset, autoplay, passage: passage ? { ...passage } : undefined };
+  const request = pending;
   commands.clear();
-  update({ loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null });
+  update({ pendingRequest: request, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null });
   try {
     await ensurePlayer();
     await serial(async () => { if (token === generation) await TrackPlayer.pause(); });
-    const tracks = await downloadChapter(entry, token);
+    if ((catalog && !current) || (passage !== undefined && !isAudioPassage(passage))) throw new UnavailablePassageError("Unavailable passage");
+    const tracks = await downloadChapter(entry, token, request.passage);
     await serial(async () => {
       if (token !== generation) return;
       await TrackPlayer.reset();
       await TrackPlayer.add(tracks);
-      const selected = Math.max(0, Math.min(index, tracks.length - 1));
+      const first = tracks[0].verseIndex;
+      const selectedVerse = Number.isInteger(index) ? Math.max(first, Math.min(index!, tracks[tracks.length - 1].verseIndex)) : first;
+      const selected = tracks.findIndex((track) => track.verseIndex === selectedVerse);
       await TrackPlayer.skip(selected, Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)));
       await TrackPlayer.setRate(snapshot.speed);
       if (token !== generation) return;
       pending = undefined;
-      update({ session: { chapter: chapters.get(entry.manifestUrl)!, entry, index: selected }, position: Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)), loading: false });
+      update({ session: { chapter: chapters.get(entry.manifestUrl)!, entry, index: tracks[selected].verseIndex, passage: request.passage }, pendingRequest: undefined, position: Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)), loading: false });
       if (autoplay) await TrackPlayer.play();
     });
     if (token === generation) { await syncFromNative(); void prepareNext(); }
-  } catch { if (token === generation) update({ loading: false, playing: false, problem: "network" }); }
+  } catch (error) { if (token === generation) update({ loading: false, playing: false, playWhenReady: false, problem: error instanceof UnavailablePassageError ? "unavailable" : "network" }); }
 }
 export async function stop() {
   ++generation; ++readRevision; pending = undefined; deadline = 0; closing = true;
   commands.clear();
-  update({ session: undefined, position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
+  update({ session: undefined, pendingRequest: undefined, position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
   await serial(async () => { if (setup) { await ensurePlayer(); await TrackPlayer.reset(); } });
   await savedWrites;
   if (closing) await AsyncStorage.removeItem(POSITION_KEY);
@@ -202,10 +232,17 @@ async function command(operation: () => Promise<void>) {
   } catch { if (token === generation && !closing) update({ problem: "network" }); }
   finally { commands.delete(id); if (token === generation) update({ commandPending: commands.size > 0 }); }
 }
+async function playOrReplay() {
+  if ((await TrackPlayer.getPlaybackState()).state === State.Ended) {
+    if (snapshot.session?.passage) await TrackPlayer.skip(0, 0);
+    else await TrackPlayer.seekTo(0);
+  }
+  await TrackPlayer.play();
+}
 export async function toggle() {
   await command(async () => {
     const [state, intent] = await Promise.all([TrackPlayer.getPlaybackState(), TrackPlayer.getPlayWhenReady()]);
-    if (state.state === State.Ended) { await TrackPlayer.seekTo(0); await TrackPlayer.play(); }
+    if (state.state === State.Ended) await playOrReplay();
     else if (intent) await TrackPlayer.pause();
     else await TrackPlayer.play();
     update({ problem: null });
@@ -214,9 +251,10 @@ export async function toggle() {
 async function seekInChapter(seconds: number) {
   const session = snapshot.session;
   if (!session) return;
-  const target = locateChapterTime(session.chapter.verses, seconds);
+  const indices = passageIndices(session.chapter, session.passage);
+  const target = locateChapterTime(indices.map((index) => session.chapter.verses[index]), seconds);
   const queue = await TrackPlayer.getQueue() as VerseTrack[];
-  const index = queue.findIndex((track) => track.entry?.manifestUrl === session.entry.manifestUrl && track.verseIndex === target.index);
+  const index = queue.findIndex((track) => track.entry?.manifestUrl === session.entry.manifestUrl && samePassage(track.passage, session.passage) && track.verseIndex === indices[target.index]);
   if (index >= 0) {
     const intent = await TrackPlayer.getPlayWhenReady();
     await TrackPlayer.skip(index, target.offset);
@@ -229,12 +267,14 @@ export async function move(delta: number) {
   await command(async () => {
     const session = snapshot.session;
     if (!session) return;
-    const index = session.index + delta;
-    if (index >= 0 && index < session.chapter.verses.length) await seekInChapter(session.chapter.verses.slice(0, index).reduce((n, verse) => n + verse.duration, 0));
+    const indices = passageIndices(session.chapter, session.passage);
+    const index = indices.indexOf(session.index) + delta;
+    if (index >= 0 && index < indices.length) await seekInChapter(indices.slice(0, index).reduce((n, verseIndex) => n + session.chapter.verses[verseIndex].duration, 0));
   });
 }
 export async function moveChapter(delta: number) {
   await syncFromNative();
+  const token = generation;
   const entry = adjacent(delta);
   if (!entry || pending || closing) return;
   let uncachedIntent: boolean | undefined;
@@ -245,7 +285,7 @@ export async function moveChapter(delta: number) {
     if (index >= 0) { await TrackPlayer.skip(index, 0); if (!intent) await TrackPlayer.pause(); }
     else uncachedIntent = intent;
   });
-  if (uncachedIntent !== undefined && !closing) await start(entry, 0, 0, uncachedIntent);
+  if (uncachedIntent !== undefined && token === generation && !pending && !closing) await start(entry, 0, 0, uncachedIntent);
 }
 export async function setSpeed(speed: number) { update({ speed }); if (setup) await TrackPlayer.setRate(speed); await savePosition(); }
 async function trimUpcoming() {
@@ -263,7 +303,12 @@ export async function setSleep(sleep: number | "chapter") {
   update({ sleep }); deadline = typeof sleep === "number" && sleep > 0 ? Date.now() + sleep * 60000 : 0;
   if (sleep === "chapter") await trimUpcoming(); else await prepareNext();
 }
-export function retry() { const entry = pending ?? snapshot.session?.entry; if (entry) void start(entry, pending ? 0 : snapshot.session?.index, pending ? 0 : snapshot.position); }
+export function retry() {
+  const request = pending;
+  if (request) return start(request.entry, request.index, request.offset, request.autoplay, request.passage);
+  const session = snapshot.session;
+  if (session) return start(session.entry, session.index, snapshot.position, true, session.passage);
+}
 
 // Events are hints to reconcile native state, never the sole source of UI truth.
 // Read the index twice to avoid assigning one track's progress to another track.
@@ -278,16 +323,16 @@ export async function syncFromNative(): Promise<boolean> {
       TrackPlayer.getTrack(index), TrackPlayer.getProgress(), TrackPlayer.getPlaybackState(), TrackPlayer.getPlayWhenReady(), TrackPlayer.getRate(),
     ]);
     const verse = track as VerseTrack | undefined;
-    if (!verse?.entry || !Number.isInteger(verse.verseIndex)) return false;
+    if (!verse?.entry || !Number.isInteger(verse.verseIndex) || (verse.passage !== undefined && !isAudioPassage(verse.passage))) return false;
     const chapter = await getChapter(verse.entry);
     const active = await TrackPlayer.getActiveTrackIndex();
     if (active !== index || token !== generation || revision !== readRevision || closing || pending) return false;
     const item = chapter.verses[verse.verseIndex];
-    if (!item || !Number.isFinite(progress.position)) return false;
+    if (!item || !Number.isFinite(progress.position) || (verse.passage && (item.verse < verse.passage.startVerse || item.verse > verse.passage.endVerse))) return false;
     const old = snapshot.session;
-    const changed = old?.entry.manifestUrl !== verse.entry.manifestUrl || old.index !== verse.verseIndex;
+    const changed = old?.entry.manifestUrl !== verse.entry.manifestUrl || old.index !== verse.verseIndex || !samePassage(old.passage, verse.passage);
     update({
-      session: changed ? { chapter, entry: verse.entry, index: verse.verseIndex } : old,
+      session: changed ? { chapter, entry: verse.entry, index: verse.verseIndex, passage: verse.passage } : old,
       position: Math.max(0, Math.min(progress.position, item.duration)),
       playing: state.state === State.Playing, playWhenReady: intent && state.state !== State.Ended && state.state !== State.Error,
       loading: false, buffering: state.state === State.Loading || state.state === State.Buffering, speed: rate,
@@ -311,12 +356,14 @@ export function ensurePlaybackListeners() {
   });
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
     if (closing || pending) return;
+    const token = generation;
     void (async () => {
       await syncFromNative();
       // Ignore delayed end events from a queue that has since changed or resumed.
-      if (closing || pending || (await TrackPlayer.getPlaybackState()).state !== State.Ended) return;
+      const state = await TrackPlayer.getPlaybackState();
+      if (closing || pending || token !== generation || state.state !== State.Ended) return;
       if (snapshot.sleep === "chapter") update({ sleep: 0 });
-      else if (snapshot.continuous) { const entry = adjacent(1); if (entry) await start(entry); else update({ problem: "unavailable" }); }
+      else if (snapshot.continuous && !snapshot.session?.passage) { const entry = adjacent(1); if (entry) await start(entry); else update({ problem: "unavailable" }); }
     })().catch(() => {});
   });
 }
@@ -338,11 +385,14 @@ export async function playbackService() {
   ensurePlaybackListeners();
   if (remoteListenersReady) return;
   remoteListenersReady = true;
-  TrackPlayer.addEventListener(Event.RemotePlay, () => { void syncFromNative().then(() => command(() => TrackPlayer.play())); });
+  TrackPlayer.addEventListener(Event.RemotePlay, () => { void syncFromNative().then(() => command(playOrReplay)); });
   TrackPlayer.addEventListener(Event.RemotePause, () => { void syncFromNative().then(() => command(() => TrackPlayer.pause())); });
   TrackPlayer.addEventListener(Event.RemoteStop, () => { void stop(); });
   TrackPlayer.addEventListener(Event.RemoteNext, () => { void moveChapter(1); });
   TrackPlayer.addEventListener(Event.RemotePrevious, () => { void moveChapter(-1); });
-  TrackPlayer.addEventListener(Event.RemoteSeek, ({ position }) => { void command(() => TrackPlayer.seekTo(position)); });
+  TrackPlayer.addEventListener(Event.RemoteSeek, ({ position }) => { void command(async () => {
+    const duration = snapshot.session?.chapter.verses[snapshot.session.index]?.duration;
+    if (Number.isFinite(position) && duration) await TrackPlayer.seekTo(Math.max(0, Math.min(position, duration - 0.05)));
+  }); });
   await syncFromNative();
 }

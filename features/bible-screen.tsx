@@ -249,6 +249,13 @@ export function BibleScreen() {
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);
+  const [followedAudioPassageKey, setFollowedAudioPassageKey] = useState<string | undefined>();
+  const audioPassage = audio.pendingRequest?.passage ?? audio.session?.passage;
+  const audioPassageEntry = audio.pendingRequest?.passage ? audio.pendingRequest.entry : audio.session?.entry;
+  const audioPassageKey = audioPassage && audioPassageEntry
+    ? JSON.stringify([audioPassageEntry.manifestUrl, audioPassage.savedVerseId, audioPassage.startVerse, audioPassage.endVerse])
+    : undefined;
+  const activelyFollowingAudio = followAudio && !audio.pendingRequest?.passage && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
   const [audioMiniHeight, setAudioMiniHeight] = useState(82);
   const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
@@ -356,7 +363,7 @@ export function BibleScreen() {
   const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const chapterControlsVisible = !selectedVerseBarVisible && !(audio.session && followAudio);
+  const chapterControlsVisible = !selectedVerseBarVisible && !(audio.session && activelyFollowingAudio);
   const floatingControlsBottom = tabBarHeight(insets.bottom) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
@@ -677,7 +684,7 @@ export function BibleScreen() {
   }, []);
 
   const scrollToAudioVerse = useCallback(() => {
-    if (!isAudioPageFocused || !followAudio || !audioMatchesChapter || loadedChapter?.key !== chapterKey) return;
+    if (!isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter || loadedChapter?.key !== chapterKey) return;
     audioFollowScroll.current.tryScroll(chapterKey, (verse, done) => {
       const row = verseRowsRef.current[verse];
       if (!row || !readerViewportRef.current) return;
@@ -692,7 +699,7 @@ export function BibleScreen() {
       programmaticScrollVerseRef.current = verse;
       scrollRef.current?.scrollTo({ animated: true, y: offset });
     });
-  }, [isAudioPageFocused, followAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, height, floatingControlsBottom, activeFloatingControlsHeight, audioMiniHeight]);
+  }, [isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, height, floatingControlsBottom, activeFloatingControlsHeight, audioMiniHeight]);
 
   const ensureVerseVisibleAboveSelection = useCallback((verse: number) => {
     const verseRow = verseRowsRef.current[verse];
@@ -753,17 +760,26 @@ export function BibleScreen() {
 
   const hadAudioSession = useRef(false);
   useEffect(() => {
-    if (audio.session && !hadAudioSession.current) setFollowAudio(true);
+    if (audio.pendingRequest?.passage) {
+      setFollowedAudioPassageKey(undefined);
+      setFollowAudio(false);
+      audioFollowScroll.current.cancel();
+    }
+  }, [audio.pendingRequest]);
+
+  useEffect(() => {
+    if (audio.session && !audio.session.passage && !audio.pendingRequest?.passage && !hadAudioSession.current) setFollowAudio(true);
     if (!audio.session) {
       audioFollowScroll.current.cancel();
-      if (hadAudioSession.current) setFollowAudio(true);
+      setFollowedAudioPassageKey(undefined);
+      if (hadAudioSession.current && !audio.pendingRequest?.passage) setFollowAudio(true);
     }
     hadAudioSession.current = !!audio.session;
-  }, [audio.session]);
+  }, [audio.session, audio.pendingRequest?.passage]);
 
   useEffect(() => {
     const session = audio.session;
-    if (!session || !followAudio || !isAudioPageFocused || !spokenVerse) { audioFollowScroll.current.cancel(); return; }
+    if (!session || !activelyFollowingAudio || !isAudioPageFocused || !spokenVerse) { audioFollowScroll.current.cancel(); return; }
     pendingScrollVerseRef.current = undefined;
     const targetKey = `reformationsbibeln2026:${session.chapter.book}:${session.chapter.chapter}`;
     audioFollowScroll.current.request(targetKey, spokenVerse);
@@ -773,7 +789,7 @@ export function BibleScreen() {
     }
     const frame = requestAnimationFrame(scrollToAudioVerse);
     return () => { cancelAnimationFrame(frame); audioFollowScroll.current.cancel(); };
-  }, [audio.session?.entry.manifestUrl, spokenVerse, audio.navigationRevision, audio.playWhenReady, followAudio, isAudioPageFocused, bibleVersionId, scrollToAudioVerse, jumpToPosition]);
+  }, [audio.session?.entry.manifestUrl, audioPassageKey, spokenVerse, audio.navigationRevision, audio.playWhenReady, activelyFollowingAudio, isAudioPageFocused, bibleVersionId, scrollToAudioVerse, jumpToPosition]);
 
   const travelHistory = useCallback((direction: -1 | 1) => {
     setFollowAudio(false); audioFollowScroll.current.cancel();
@@ -1400,6 +1416,8 @@ export function BibleScreen() {
         }}
         onOpenAudio={() => setAudioVisible(true)}
         onOpenMyPlaces={() => {
+          setFollowAudio(false);
+          audioFollowScroll.current.cancel();
           setPickerInitialStage("myPlaces");
           setPickerVisible(true);
         }}
@@ -1495,9 +1513,10 @@ export function BibleScreen() {
         onMiniHeightChange={setAudioMiniHeight}
         onChooseTranslation={() => setBibleVersionId("reformationsbibeln2026")}
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
-        bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={followAudio}
+        bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={activelyFollowingAudio}
         onFollow={() => {
-          if (audio.session) {
+          if (audio.session && !audio.pendingRequest?.passage) {
+            setFollowedAudioPassageKey(audio.session.passage ? audioPassageKey : undefined);
             setBibleVersionId("reformationsbibeln2026");
             setFollowAudio(true);
             jumpToPosition({ book: audio.session.chapter.book, chapter: audio.session.chapter.chapter, verse: spokenVerse ?? 1 }, false, false, true);
