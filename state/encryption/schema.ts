@@ -29,7 +29,7 @@ export const policies: Record<string, CollectionPolicy> = {
   notificationPreferences: { depth: 2, scope: "routing", metadata: ["pushEnabled", "ownContent", "mentions", "followedDiscussions", "prayerActivity"] },
   pushTokens: { depth: 3, scope: "routing", metadata: ["token", "platform", "createdAt", "updatedAt"] },
   checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt"] },
-  discussionFollowers: { depth: 5, scope: "routing", metadata: ["userId", "createdAt"] },
+  discussionFollowers: { depth: 5, scope: "routing", metadata: ["id", "userId", "targetType", "targetId", "createdAt"] },
   userDiscussionFollows: { depth: 4, scope: "routing", metadata: [...routing, "following"] },
   groupBiblePlanParticipantIds: { depth: 3, scope: "routing", metadata: [] },
   supportIntents: { depth: 3, scope: "routing", metadata: [...routing, "amount", "currency", "provider", "providerReference", "status"] },

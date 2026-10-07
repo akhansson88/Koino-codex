@@ -84,13 +84,19 @@ try {
   await denied(() => update(ref(owner.database, notificationPath), { targetId: "forged" }));
   await update(ref(owner.database, notificationPath), { readAt: "2026-01-02T00:00:00Z" });
   const followerPath = `encryptedData/discussionFollowers/community/post/post1/${member.uid}`;
-  const follower = { userId: member.uid, createdAt: "2026-01-01T00:00:00Z" };
+  // Use the complete DiscussionFollow record written by both legacy and current
+  // clients. A reduced fixture misses routing fields rejected during migration.
+  const follower = { id: "post_post1", userId: member.uid, targetType: "post", targetId: "post1", createdAt: "2026-01-01T00:00:00Z" };
   await denied(() => set(ref(owner.database, followerPath), follower));
   await adminDatabase(admin).ref("e2eeMigrations/group/community").set({ ownerId: owner.uid, status: "copying" });
   await set(ref(owner.database, followerPath), follower);
   await denied(() => set(ref(outsider.database, followerPath), follower));
   await adminDatabase(admin).ref("e2eeMigrations/group/community/status").set("complete");
   await denied(() => update(ref(owner.database, followerPath), { createdAt: "2026-01-02T00:00:00Z" }));
+  await set(ref(member.database, followerPath), follower);
+  assert.deepEqual((await get(ref(member.database, followerPath))).val(), follower);
+  await denied(() => set(ref(member.database, `${followerPath}/body`), "plaintext"));
+  await denied(() => get(ref(outsider.database, followerPath)));
   const postPath = "encryptedData/posts/community/post1";
   const postBody = crypto.encrypt("Group prayer", "posts/community/post1/body", "group:community:1", key, member.identity);
   await set(ref(member.database, postPath), { id: "post1", groupId: "community", userId: member.uid, createdAt: "2026-01-02T00:00:00Z", body: postBody });
