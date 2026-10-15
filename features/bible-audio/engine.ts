@@ -74,6 +74,8 @@ let savedWrites = Promise.resolve();
 let savedAt = 0;
 let mutations = Promise.resolve();
 const serial = (operation: () => Promise<void>) => { const result = mutations.then(operation); mutations = result.catch(() => {}); return result; };
+let cacheMutations = Promise.resolve();
+const serialCache = (operation: () => Promise<void>) => { const result = cacheMutations.then(operation); cacheMutations = result.catch(() => {}); return result; };
 const POSITION_KEY = "koino.audio.position.v1";
 type TopicRestorePoint = { itemId: string; index: number; phase: "verse" | "gap"; offset: number; speed: number; autoplay: boolean; completed?: boolean };
 type ResolvedTopicItem = { item: TopicItem; itemIndex: number; entry: AudioChapterEntry; chapter: AudioChapter; indices: number[] };
@@ -92,6 +94,17 @@ let topicCommandProblem = false;
 let topicCounter = 0;
 let pauseRevision = 0;
 let topicPreferenceLoaded = false;
+let pauseRebuildInFlight: Promise<void> | null = null;
+let nextPauseRebuildTarget: number | null = null;
+let nextPauseRebuildResolvers: Array<() => void> = [];
+let nextPauseRebuildRejecters: Array<(err: unknown) => void> = [];
+function resetPauseRebuild() {
+  nextPauseRebuildTarget = null;
+  const resolvers = nextPauseRebuildResolvers;
+  nextPauseRebuildResolvers = [];
+  nextPauseRebuildRejecters = [];
+  resolvers.forEach((r) => r());
+}
 
 export function isAudioPassage(value: unknown): value is AudioPassage {
   if (!value || typeof value !== "object") return false;
@@ -270,6 +283,7 @@ export async function start(entry: AudioChapterEntry, index?: number, offset = 0
 export async function stop() {
   ++generation; ++readRevision; pending = undefined; pendingTopic = undefined; activeTopic = undefined; topicCommandProblem = false; deadline = 0; closing = true;
   commands.clear();
+  resetPauseRebuild();
   update({ session: undefined, pendingRequest: undefined, pendingTopic: undefined, position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
   await serial(async () => { if (setup) { await ensurePlayer(); await TrackPlayer.reset(); } });
   await savedWrites;
@@ -303,10 +317,16 @@ async function playOrReplay() {
 }
 export async function toggle() {
   if (topicCommandProblem && snapshot.session?.topic) { await retry(); return; }
+  const currentIntent = snapshot.playWhenReady;
+  const nextIntent = !currentIntent;
+  update({ playWhenReady: nextIntent, playing: nextIntent, problem: null });
   await command(async () => {
     const [state, intent] = await Promise.all([TrackPlayer.getPlaybackState(), TrackPlayer.getPlayWhenReady()]);
     if (state.state === State.Ended || (snapshot.session?.topic && activeTopic?.completed)) await playOrReplay();
-    else if (intent) await TrackPlayer.pause();
+    else if (nextIntent ? !intent : intent) {
+      if (nextIntent) await TrackPlayer.play();
+      else await TrackPlayer.pause();
+    } else if (intent) await TrackPlayer.pause();
     else await TrackPlayer.play();
     update({ problem: null });
   });
@@ -524,6 +544,7 @@ async function topicTracks(runtime: TopicRuntime, currentItemId: string, speed: 
   const tracks: VerseTrack[] = [];
   for (let itemIndex = 0; itemIndex < selected.length; itemIndex++) {
     const resolved = selected[itemIndex];
+    let lastTrack: VerseTrack | undefined;
     for (let index = 0; index < resolved.indices.length; index++) {
       const verseIndex = resolved.indices[index];
       const verse = resolved.chapter.verses[verseIndex];
@@ -535,12 +556,13 @@ async function topicTracks(runtime: TopicRuntime, currentItemId: string, speed: 
         entry: resolved.entry, verseIndex, topic,
       };
       tracks.push(track);
-      const final = itemIndex === selected.length - 1 && index === resolved.indices.length - 1;
-      if (silence && (!final || runtime.loop !== "off")) tracks.push({
-        ...track, id: `${runtime.definitionId}:${resolved.item.id}:${verseIndex}:gap`, url: silence,
-        duration: runtime.pauseSeconds * speed, topic: { ...topic, phase: "gap", gapSeconds: runtime.pauseSeconds },
-      });
+      lastTrack = track;
     }
+    const final = itemIndex === selected.length - 1;
+    if (silence && lastTrack && (!final || runtime.loop !== "off")) tracks.push({
+      ...lastTrack, id: `${runtime.definitionId}:${resolved.item.id}:${lastTrack.verseIndex}:gap`, url: silence,
+      duration: runtime.pauseSeconds * speed, topic: { ...lastTrack.topic!, phase: "gap", gapSeconds: runtime.pauseSeconds },
+    });
   }
   return tracks;
 }
@@ -549,12 +571,57 @@ function publishTopicTrack(runtime: TopicRuntime, track: VerseTrack, nativeOffse
   const phase = track.topic!.phase;
   update({ session: { chapter: resolved.chapter, entry: resolved.entry, index: track.verseIndex, topic: topicSession(runtime, resolved.item.id, phase, phase === "gap" ? nativeOffset / speed : 0) }, position: phase === "gap" ? resolved.chapter.verses[track.verseIndex].duration : nativeOffset });
 }
-type TopicQueueChange = { speed?: number; itemId?: string; restore?: TopicRestorePoint; intent?: boolean; requireLocalFirst?: boolean };
+type TopicQueueChange = { speed?: number; itemId?: string; restore?: TopicRestorePoint; intent?: boolean; requireLocalFirst?: boolean; seamless?: boolean };
 /** Called only inside serial(): all queue edits preserve a freshly read native position. */
 async function rebuildTopicQueue(runtime: TopicRuntime, token: number, change: TopicQueueChange = {}) {
   checkTopicGeneration(token);
   const [intent, state] = await Promise.all([TrackPlayer.getPlayWhenReady(), TrackPlayer.getPlaybackState()]);
   checkTopicGeneration(token);
+
+  if (change.seamless && !change.restore && !change.itemId) {
+    const [active, progress, rate] = await Promise.all([TrackPlayer.getActiveTrackIndex(), TrackPlayer.getProgress(), TrackPlayer.getRate()]);
+    const previous = active === undefined ? undefined : (await TrackPlayer.getTrack(active)) as VerseTrack | undefined;
+    if (previous?.topic?.definitionId === runtime.definitionId && active !== undefined) {
+      const speed = change.speed ?? snapshot.speed;
+      if (runtime.mode === "all" && runtime.loop !== "passage") await resolveAllTopicItems(runtime, token);
+      pruneTopicCatalog(runtime);
+      let tracks = await topicTracks(runtime, runtime.selectedItemId, speed);
+      checkTopicGeneration(token);
+      const activeInTracks = tracks.findIndex((t) => t.id === previous.id);
+      if (activeInTracks >= 0) {
+        const currentQueue = (await TrackPlayer.getQueue()) as VerseTrack[];
+        const afterCurrent = currentQueue.slice(active + 1);
+        const afterTarget = tracks.slice(activeInTracks + 1);
+        const afterDiff = afterCurrent.length !== afterTarget.length || afterCurrent.some((t, i) => t.id !== afterTarget[i]?.id);
+        if (afterDiff) {
+          const toRemove = [];
+          for (let i = currentQueue.length - 1; i > active; i--) toRemove.push(i);
+          if (toRemove.length) await TrackPlayer.remove(toRemove);
+          if (afterTarget.length) await TrackPlayer.add(afterTarget);
+        }
+        const beforeCurrent = currentQueue.slice(0, active);
+        const beforeTarget = tracks.slice(0, activeInTracks);
+        const beforeDiff = beforeCurrent.length !== beforeTarget.length || beforeCurrent.some((t, i) => t.id !== beforeTarget[i]?.id);
+        if (beforeDiff) {
+          const toRemove = [];
+          for (let i = active - 1; i >= 0; i--) toRemove.push(i);
+          if (toRemove.length) await TrackPlayer.remove(toRemove);
+          if (beforeTarget.length) await TrackPlayer.add(beforeTarget, 0);
+        }
+        await setNativeRepeat(runtime.loop);
+        await TrackPlayer.setRate(speed);
+        await updateCapabilities(true);
+        runtime.installedCacheRevision = runtime.cacheRevision;
+        runtime.requestedSpeed = undefined;
+        topicCommandProblem = false;
+        update({ speed, problem: null });
+        publishTopicTrack(runtime, previous, progress.position, speed);
+        await persistTopicRuntime(runtime);
+        return;
+      }
+    }
+  }
+
   await TrackPlayer.pause();
   const [active, progress, rate] = await Promise.all([TrackPlayer.getActiveTrackIndex(), TrackPlayer.getProgress(), TrackPlayer.getRate()]);
   const previous = active === undefined ? undefined : await TrackPlayer.getTrack(active) as VerseTrack | undefined;
@@ -631,20 +698,17 @@ async function rebuildTopicQueue(runtime: TopicRuntime, token: number, change: T
 async function substituteTopicCache(runtime: TopicRuntime, token: number) {
   if (runtime.promotionScheduled) return;
   runtime.promotionScheduled = true;
-  await serial(async () => {
+  await serialCache(async () => {
     let originalIntent = false;
-    let editing = false;
     try {
-      if (token !== generation || closing || pending || pendingTopic || activeTopic !== runtime || runtime.cacheRevision === runtime.installedCacheRevision) return;
+      if (token !== generation || closing || pending || pendingTopic || activeTopic !== runtime || runtime.cacheRevision === runtime.installedCacheRevision || commands.size > 0) return;
       const index = await TrackPlayer.getActiveTrackIndex();
-      const track = index === undefined ? undefined : await TrackPlayer.getTrack(index) as VerseTrack | undefined;
       const intent = await TrackPlayer.getPlayWhenReady();
       originalIntent = intent;
       const state = await TrackPlayer.getPlaybackState();
       if (state.state === State.Ended || state.state === State.Error || topicCommandProblem) return;
-      if (intent && track?.topic?.phase !== "gap") return;
       checkTopicGeneration(token);
-      let active = index;
+      let active = index ?? -1;
       let queue = await TrackPlayer.getQueue() as VerseTrack[];
       const replacement = (queued: VerseTrack) => {
         if (queued.topic?.definitionId !== runtime.definitionId || queued.topic.phase !== "verse") return;
@@ -652,24 +716,20 @@ async function substituteTopicCache(runtime: TopicRuntime, token: number) {
         const local = resolved && runtime.local.get(recordingKey(resolved, queued.verseIndex));
         return local && queued.url !== local ? local : undefined;
       };
-      if (!queue.some((queued, i) => i !== active && replacement(queued))) {
+      if (!queue.some((queued, i) => i > active && replacement(queued))) {
         if (!queue.some((queued) => replacement(queued))) runtime.installedCacheRevision = runtime.cacheRevision;
         return;
       }
       ++readRevision;
-      if (intent) await TrackPlayer.pause();
-      editing = true;
-      active = await TrackPlayer.getActiveTrackIndex();
+      active = (await TrackPlayer.getActiveTrackIndex()) ?? active;
       queue = await TrackPlayer.getQueue() as VerseTrack[];
       checkTopicGeneration(token);
       let promoted = 0;
-      for (let i = queue.length - 1; i >= 0; i--) {
+      for (let i = queue.length - 1; i > active; i--) {
         const queued = queue[i];
         const local = replacement(queued);
         if (!local) continue;
-        if (i === active) continue;
-        // Insert then remove the old copy. The active item is never reloaded and
-        // retains its native clock, even if playback advances near a gap boundary.
+        // Insert then remove the old copy. The active item is never touched, so audio never cuts out.
         await TrackPlayer.add({ ...queued, url: local }, i);
         await TrackPlayer.remove(i + 1);
         checkTopicGeneration(token);
@@ -677,22 +737,12 @@ async function substituteTopicCache(runtime: TopicRuntime, token: number) {
       }
       const remaining = await TrackPlayer.getQueue() as VerseTrack[];
       if (!remaining.some((queued) => replacement(queued))) runtime.installedCacheRevision = runtime.cacheRevision;
-      if (intent && token === generation && !closing && !pending && !pendingTopic) await TrackPlayer.play();
       ++readRevision;
     } catch {
       if (token !== generation || closing || pending || pendingTopic || activeTopic !== runtime) return;
       try {
-        // An insert may have succeeded before removal failed. Reconstructing
-        // restores the exact queue and its active clock before resuming.
-        if (editing) await rebuildTopicQueue(runtime, token, { intent: originalIntent });
-        else if (originalIntent) await TrackPlayer.play();
-      } catch {
-        if (token === generation && !closing && !pending && !pendingTopic) {
-          topicCommandProblem = true;
-          update({ problem: "network", playing: false, playWhenReady: false });
-          await savePosition();
-        }
-      }
+        if (originalIntent) await TrackPlayer.play();
+      } catch {}
       ++readRevision;
     }
   }).catch(() => {}).finally(() => { runtime.promotionScheduled = false; });
@@ -703,7 +753,7 @@ async function beginTopic(definition: TopicDefinition, options: TopicOptions, re
   ++readRevision; closing = false; pending = undefined; activeTopic = undefined; topicCommandProblem = false;
   const frozen = isTopicDefinition(definition) ? { ...definition, items: definition.items.map((item) => ({ ...item })) } : definition;
   const request: PendingTopic = { definition: frozen, options: { ...options, pauseSeconds: normalizeTopicPause(options.pauseSeconds ?? snapshot.topicPauseSeconds), loop: options.loop ?? "off" }, restore };
-  pendingTopic = request; commands.clear();
+  pendingTopic = request; commands.clear(); resetPauseRebuild();
   update({ pendingRequest: undefined, pendingTopic: { definition: frozen, options: request.options }, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null, sleep: snapshot.sleep === "chapter" ? 0 : snapshot.sleep });
   try {
     await ensurePlayer();
@@ -742,6 +792,83 @@ async function beginTopic(definition: TopicDefinition, options: TopicOptions, re
     if (token === generation) update({ loading: false, playing: false, playWhenReady: false, problem: error instanceof UnavailablePassageError ? "unavailable" : "network" });
   }
 }
+async function triggerTopicPauseRebuild(runtime: TopicRuntime, targetPause: number): Promise<void> {
+  const token = generation;
+  if (closing || pending || pendingTopic || activeTopic !== runtime) return;
+
+  if (pauseRebuildInFlight) {
+    nextPauseRebuildTarget = targetPause;
+    return new Promise<void>((resolve, reject) => {
+      nextPauseRebuildResolvers.push(resolve);
+      nextPauseRebuildRejecters.push(reject);
+    });
+  }
+
+  const runRebuild = async (pauseVal: number) => {
+    await serial(async () => {
+      if (token !== generation || closing || pending || pendingTopic || activeTopic !== runtime) return;
+      ++readRevision;
+      runtime.pauseSeconds = pauseVal;
+      const session = snapshot.session;
+      if (session?.topic) {
+        update({
+          session: {
+            ...session,
+            topic: {
+              ...session.topic,
+              pauseSeconds: pauseVal,
+              gapRemainingSeconds: session.topic.phase === "gap" ? Math.max(0, pauseVal - (session.topic.gapElapsedSeconds ?? 0)) : undefined,
+            },
+          },
+        });
+      }
+      await rebuildTopicQueue(runtime, token, { seamless: true });
+      ++readRevision;
+    });
+    if (token === generation && !closing) {
+      await syncFromNative();
+      await savePosition();
+    }
+  };
+
+  pauseRebuildInFlight = (async () => {
+    try {
+      await runRebuild(targetPause);
+      while (nextPauseRebuildTarget !== null) {
+        const nextVal = nextPauseRebuildTarget;
+        nextPauseRebuildTarget = null;
+        const resolvers = nextPauseRebuildResolvers;
+        const rejecters = nextPauseRebuildRejecters;
+        nextPauseRebuildResolvers = [];
+        nextPauseRebuildRejecters = [];
+        try {
+          await runRebuild(nextVal);
+          resolvers.forEach((r) => r());
+        } catch (err) {
+          rejecters.forEach((rj) => rj(err));
+          throw err;
+        }
+      }
+    } catch (err) {
+      if (token === generation && !closing && snapshot.session?.topic) {
+        topicCommandProblem = true;
+        update({ problem: "network" });
+        await savePosition();
+      }
+      throw err;
+    } finally {
+      pauseRebuildInFlight = null;
+      if (nextPauseRebuildResolvers.length) {
+        const resolvers = nextPauseRebuildResolvers;
+        nextPauseRebuildResolvers = [];
+        resolvers.forEach((r) => r());
+      }
+    }
+  })();
+
+  return pauseRebuildInFlight;
+}
+
 export async function setTopicPause(seconds: number) {
   const pause = normalizeTopicPause(seconds);
   ++pauseRevision; update({ topicPauseSeconds: pause });
@@ -750,51 +877,121 @@ export async function setTopicPause(seconds: number) {
     pendingTopic.options.pauseSeconds = pause;
     update({ pendingTopic: { definition: pendingTopic.definition, options: { ...pendingTopic.options } } });
   } else if (snapshot.session?.topic && activeTopic) {
-    await command(async () => {
-      if (activeTopic) {
-        activeTopic.pauseSeconds = pause;
-        const session = snapshot.session;
-        if (session?.topic) update({ session: { ...session, topic: { ...session.topic, pauseSeconds: pause, gapRemainingSeconds: session.topic.phase === "gap" ? Math.max(0, pause - (session.topic.gapElapsedSeconds ?? 0)) : undefined } } });
-        await rebuildTopicQueue(activeTopic, generation);
-      }
-    });
+    activeTopic.pauseSeconds = pause;
+    const session = snapshot.session;
+    if (session?.topic) {
+      update({
+        session: {
+          ...session,
+          topic: {
+            ...session.topic,
+            pauseSeconds: pause,
+            gapRemainingSeconds: session.topic.phase === "gap" ? Math.max(0, pause - (session.topic.gapElapsedSeconds ?? 0)) : undefined,
+          },
+        },
+      });
+    }
+    await triggerTopicPauseRebuild(activeTopic, pause);
   }
   await savedWrites;
 }
 export async function setTopicLoop(loop: TopicLoop) {
   if (!isTopicLoop(loop)) return;
   const token = generation;
+  const runtime = activeTopic;
+  if (runtime) {
+    runtime.loop = loop;
+    if (loop === "topic") runtime.mode = "all";
+    const session = snapshot.session;
+    if (session?.topic) update({ session: { ...session, topic: { ...session.topic, mode: runtime.mode, loop } } });
+  }
   await command(async () => {
     const runtime = activeTopic;
-    if (!runtime) return;
+    if (!runtime || token !== generation) return;
     const active = await TrackPlayer.getActiveTrackIndex();
     const track = active === undefined ? undefined : await TrackPlayer.getTrack(active) as VerseTrack | undefined;
     const intent = await TrackPlayer.getPlayWhenReady();
-    await TrackPlayer.pause();
     checkTopicGeneration(token);
     if (track?.topic?.definitionId === runtime.definitionId) runtime.selectedItemId = track.topic.itemId;
     runtime.loop = loop;
     if (loop === "topic") runtime.mode = "all";
     const session = snapshot.session;
     if (session?.topic) update({ session: { ...session, topic: { ...session.topic, mode: runtime.mode, loop } } });
+    await setNativeRepeat(runtime.loop);
     if (runtime.mode === "all") await resolveAllTopicItems(runtime, token);
-    await rebuildTopicQueue(runtime, token, { intent });
+    await rebuildTopicQueue(runtime, token, { intent, seamless: true });
     if (runtime.mode === "all") void downloadTopicRecordings(runtime, runtime.resolved, token, true).catch(() => {});
   });
 }
-export async function moveTopicPassage(delta: number) {
-  await syncFromNative();
+export async function jumpToTopicPassage(itemId: string) {
   const token = generation;
+  const runtime = activeTopic, session = snapshot.session;
+  if (!runtime || !session?.topic) return;
+  const intent = snapshot.playWhenReady;
+  const target = runtime.resolved.find((item) => item.item.id === itemId);
+  if (target) {
+    runtime.selectedItemId = target.item.id;
+    update({
+      session: {
+        chapter: target.chapter,
+        entry: target.entry,
+        index: target.indices[0],
+        topic: topicSession(runtime, target.item.id, "verse", 0),
+      },
+      position: 0,
+      navigationRevision: snapshot.navigationRevision + 1,
+    });
+  }
+
   await command(async () => {
-    const runtime = activeTopic, session = snapshot.session;
-    if (!runtime || !session?.topic || !Number.isInteger(delta) || !delta) return;
-    const intent = await TrackPlayer.getPlayWhenReady();
-    await TrackPlayer.pause();
-    await resolveAllTopicItems(runtime, token);
-    const position = runtime.resolved.findIndex((item) => item.itemIndex === session.topic!.itemIndex);
-    const target = runtime.resolved[position + delta];
-    if (!target) { if (intent) await TrackPlayer.play(); return; }
-    await rebuildTopicQueue(runtime, token, { itemId: target.item.id, intent });
+    if (!runtime || token !== generation) return;
+    const queue = await TrackPlayer.getQueue() as VerseTrack[];
+    const targetTrackIndex = queue.findIndex((track) => track.topic?.itemId === itemId && track.topic.phase === "verse");
+    if (targetTrackIndex >= 0) {
+      await TrackPlayer.skip(targetTrackIndex, 0);
+      if (intent) await TrackPlayer.play();
+      else await TrackPlayer.pause();
+    } else {
+      await resolveAllTopicItems(runtime, token);
+      const targetItem = runtime.resolved.find((item) => item.item.id === itemId);
+      if (!targetItem) return;
+      await rebuildTopicQueue(runtime, token, { itemId: targetItem.item.id, intent });
+    }
+    update({ navigationRevision: snapshot.navigationRevision + 1 });
+  });
+}
+export async function moveTopicPassage(delta: number) {
+  const token = generation;
+  const runtime = activeTopic, session = snapshot.session;
+  if (!runtime || !session?.topic || !Number.isInteger(delta) || !delta) return;
+  const intent = snapshot.playWhenReady;
+  const position = runtime.resolved.findIndex((item) => item.itemIndex === session.topic!.itemIndex);
+  const target = runtime.resolved[position + delta];
+  if (!target) return;
+
+  runtime.selectedItemId = target.item.id;
+  update({
+    session: {
+      chapter: target.chapter,
+      entry: target.entry,
+      index: target.indices[0],
+      topic: topicSession(runtime, target.item.id, "verse", 0),
+    },
+    position: 0,
+    navigationRevision: snapshot.navigationRevision + 1,
+  });
+
+  await command(async () => {
+    if (!runtime || token !== generation) return;
+    const queue = await TrackPlayer.getQueue() as VerseTrack[];
+    const targetTrackIndex = queue.findIndex((track) => track.topic?.itemId === target.item.id && track.topic.phase === "verse");
+    if (targetTrackIndex >= 0) {
+      await TrackPlayer.skip(targetTrackIndex, 0);
+      if (intent) await TrackPlayer.play();
+      else await TrackPlayer.pause();
+    } else {
+      await rebuildTopicQueue(runtime, token, { itemId: target.item.id, intent });
+    }
     update({ navigationRevision: snapshot.navigationRevision + 1 });
   });
 }

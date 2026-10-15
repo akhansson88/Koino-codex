@@ -25,9 +25,12 @@ export function silenceWavBase64(seconds: number): string {
   chunks.push(chunk);
   return chunks.join("");
 }
+const silenceCache = new Map<number, string>();
 /** Duration is scaled by narration rate by the caller, keeping wall-clock pauses exact. */
 export function ensureTopicSilence(seconds: number): Promise<string> {
   const duration = Math.round(seconds * SAMPLE_RATE) / SAMPLE_RATE;
+  const cached = silenceCache.get(duration);
+  if (cached) return Promise.resolve(cached);
   const existing = pending.get(duration);
   if (existing) return existing;
   const work = (async () => {
@@ -38,6 +41,7 @@ export function ensureTopicSilence(seconds: number): Promise<string> {
       await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
       await FileSystem.writeAsStringAsync(uri, silenceWavBase64(duration), { encoding: "base64" as FileSystem.EncodingType });
     }
+    silenceCache.set(duration, uri);
     return uri;
   })().finally(() => { pending.delete(duration); });
   pending.set(duration, work);

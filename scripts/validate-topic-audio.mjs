@@ -91,7 +91,10 @@ await scenario("exact topic queue and completion", async () => {
     await engine.startTopicPlaylist(definition, { mode: "all" });
     assert.equal(engine.getSnapshot().problem, null);
     assert.deepEqual(h.speech().map(track => [track.topic.itemId, track.entry.bookId, track.entry.chapter, track.verseIndex]), [["range", 43, 1, 1], ["range", 43, 1, 2], ["psalm", 19, 8, 1], ["overlap", 43, 1, 2]]);
-    assert.equal(h.gaps().length, 3, "Pause after every numbered verse except the topic's final verse");
+    assert.equal(h.gaps().length, 2, "Pause between verse cards except after the topic's final card");
+    assert.equal(native.queue[0].topic.phase, "verse");
+    assert.equal(native.queue[1].topic.phase, "verse");
+    assert.equal(native.queue[2].topic.phase, "gap");
     assert.equal(native.queue.at(-1).topic.phase, "verse");
     assert.equal(native.repeat, "off");
     const firstQueue = h.starts[0];
@@ -159,9 +162,9 @@ await scenario("pause, speed, seek, navigation and preferences", async () => {
   const h = await harness(); const { engine, native } = h;
   try {
     await engine.startTopicPlaylist(definition, { mode: "all", pauseSeconds: 3 });
-    await h.at("range", 2, "gap", 1);
+    await h.at("range", 3, "gap", 1);
     assert.equal(engine.getSnapshot().session.topic.gapRemainingSeconds, 2);
-    assert.equal(engine.getSnapshot().position, john.chapter.verses[1].duration, "Passage speech progress reaches the preceding verse's end during silence");
+    assert.equal(engine.getSnapshot().position, john.chapter.verses[2].duration, "Passage speech progress reaches the preceding verse's end during silence");
     await engine.toggle(); assert.equal(native.intent, false);
     await engine.setTopicPause(5);
     assert.equal(h.activeTrack().topic.phase, "gap"); assert.equal(native.position, 1); assert.equal(native.intent, false);
@@ -176,9 +179,11 @@ await scenario("pause, speed, seek, navigation and preferences", async () => {
     }
     await engine.setTopicPause(0);
     assert.equal(h.gaps().length, 0); assert.equal(h.activeTrack().topic.phase, "verse");
-    assert.equal(h.activeTrack().verseIndex, 2, "Removing an active pause advances to the next verse");
+    assert.equal(h.activeTrack().topic.itemId, "psalm", "Removing an active pause advances to the next passage");
     await engine.setTopicPause(60);
     assert.equal(engine.getSnapshot().topicPauseSeconds, 60); assert.ok(h.gaps().every(gap => gap.duration / native.rate === 60));
+    await engine.moveTopicPassage(-1);
+    assert.equal(h.activeTrack().topic.itemId, "range");
     await engine.seek(9.5);
     assert.equal(h.activeTrack().topic.itemId, "range"); assert.equal(h.activeTrack().verseIndex, 2); assert.equal(native.position, 1.5, "Seeking uses passage speech time, excluding all silent tracks");
     await engine.moveTopicPassage(1);
@@ -213,13 +218,11 @@ await scenario("serialized settings and stable native position", async () => {
   try {
     await engine.startTopicPlaylist(definition, { mode: "all", pauseSeconds: 3 });
     await h.at("range", 2, "verse", 7.9);
-    native.pauseHook = async () => {
-      native.pauseHook = undefined;
-      native.index = native.queue.findIndex(track => track.topic.itemId === "range" && track.topic.phase === "verse" && track.verseIndex === 2);
-      native.position = 0.2;
-    };
+    const startsWhilePlaying = h.starts.length;
     await engine.setTopicPause(4);
-    assert.equal(h.activeTrack().verseIndex, 2); assert.equal(native.position, 0.2, "Queue reconstruction reads the stable native position after pausing, preserving a verse that advances during the pause command");
+    assert.equal(h.activeTrack().verseIndex, 1, "Changing pause time does not stop or reload the active verse");
+    assert.equal(native.position, 7.9, "Changing pause time preserves playing position without reloading");
+    assert.equal(h.starts.length, startsWhilePlaying, "No additional player reloads when changing pause time");
     assert.equal(native.intent, true);
     await Promise.all([engine.setTopicPause(5), engine.setSpeed(2), engine.seek(4)]);
     assert.equal(engine.getSnapshot().session.topic.pauseSeconds, 5); assert.equal(native.rate, 2);
@@ -396,7 +399,7 @@ await scenario("cache replacement failure preserves playback or exposes Retry", 
     const prefetch = deferred();
     native.downloadBlock = async url => { if (url.includes("/19-8-")) await prefetch.promise; };
     await engine.startTopicPlaylist(definition, { mode: "all", pauseSeconds: 3 });
-    await h.at("range", 2, "gap", 1); assert.equal(native.intent, true);
+    await h.at("range", 3, "gap", 1); assert.equal(native.intent, true);
     native.insertFailure = true;
     prefetch.resolve(); native.downloadBlock = undefined; await flush(20);
     for (let i = 0; i < 3; i++) await engine.syncFromNative();

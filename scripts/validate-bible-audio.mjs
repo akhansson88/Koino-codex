@@ -506,7 +506,7 @@ const uiMocks = { name: 'audio-ui-mocks', setup(build) {
   build.onResolve({ filter: /^(react-native|react-native-gesture-handler|expo-haptics|@expo\/vector-icons|@react-native-community\/slider|@\/ui\/(app-sheet|app-language|theme)|\.\/provider)$/ }, ({ path }) => ({ path, namespace: 'ui-mock' }));
   build.onLoad({ filter: /.*/, namespace: 'ui-mock' }, ({ path }) => {
     const modules = {
-      'react-native': `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Switch='Switch',Text='Text',View='View',Platform={OS:'android'};`,
+      'react-native': `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Switch='Switch',Text='Text',View='View',Modal='Modal',Platform={OS:'android'};`,
       'expo-haptics': `export const selectionAsync=async()=>{globalThis.__audioTest.haptics++;};`,
       'react-native-gesture-handler': `export const NativeViewGestureHandler='NativeViewGestureHandler';`,
       '@expo/vector-icons': `export const Feather=()=>null;`,

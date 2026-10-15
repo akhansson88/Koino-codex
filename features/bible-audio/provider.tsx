@@ -59,7 +59,7 @@ function useController() {
     });
     return () => { mounted = false; stopObserving?.(); subscription.remove(); void engine.stop().catch(() => undefined); };
   }, [refresh]);
-  return { ...playback, catalog, catalogState, refresh, start: engine.start, startPassage: engine.startPassage, startTopicPlaylist: engine.startTopicPlaylist, setTopicPause: engine.setTopicPause, setTopicLoop: engine.setTopicLoop, moveTopicPassage: engine.moveTopicPassage, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
+  return { ...playback, catalog, catalogState, refresh, start: engine.start, startPassage: engine.startPassage, startTopicPlaylist: engine.startTopicPlaylist, setTopicPause: engine.setTopicPause, setTopicLoop: engine.setTopicLoop, moveTopicPassage: engine.moveTopicPassage, jumpToTopicPassage: engine.jumpToTopicPassage, stop: engine.stop, toggle: engine.toggle, move: engine.move, moveChapter: engine.moveChapter, previousChapter: engine.adjacent(-1), nextChapter: engine.adjacent(1), seek: engine.seek, setSpeed: engine.setSpeed, setContinuous: engine.setContinuous, setSleep: engine.setSleep, retry: engine.retry };
 }
 const AudioContext = createContext<ReturnType<typeof useController> | null>(null);
 export function BibleAudioProvider({ children }: PropsWithChildren) { return <AudioContext.Provider value={useController()}>{children}</AudioContext.Provider>; }

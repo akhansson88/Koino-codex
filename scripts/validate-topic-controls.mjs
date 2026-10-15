@@ -30,7 +30,7 @@ const references = [
 ];
 state.verses = Object.fromEntries(references.map(value => [value.reference, value.verse]));
 const mocked = {
-  "react-native": `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Text='Text',View='View',Switch='Switch',ScrollView='ScrollView'; export const Platform={OS:'android'};`,
+  "react-native": `export const ActivityIndicator='ActivityIndicator',Pressable='Pressable',Text='Text',View='View',Switch='Switch',ScrollView='ScrollView',Modal='Modal'; export const Platform={OS:'android'};`,
   "react-native-gesture-handler": `export const NativeViewGestureHandler='NativeViewGestureHandler';`,
   "expo-haptics": `export const selectionAsync=async()=>{};`,
   "@react-native-community/slider": `export default 'Slider';`,
@@ -57,7 +57,7 @@ async function bundle(file) {
   const module = { exports: {} }; new Function("require", "module", "exports", result.outputFiles[0].text)(require, module, module.exports); return module.exports;
 }
 const { topicDefinition, topicReferenceItemIds } = await bundle("features/bible-audio/topic-definition.ts");
-const { TopicPlaybackPanel, TopicPassageAudioControl } = await bundle("features/bible-audio/topic-controls.tsx");
+const { TopicPlaybackPanel, TopicPassageAudioControl, TopicSpeechProgress } = await bundle("features/bible-audio/topic-controls.tsx");
 const { DrawerVerseRow } = await bundle("features/bible-reader/drawer-components.tsx");
 const { BibleAudioPlayer } = await bundle("features/bible-audio/player.tsx");
 const { BibleTopicDetailPane } = await bundle("features/bible-reader/topic-detail.tsx");
@@ -78,6 +78,7 @@ let renderer; let navigations = 0; let votes = 0;
 function Topic({ currentDefinition = definition }) {
   return React.createElement(React.Fragment, null,
     React.createElement(TopicPlaybackPanel, { definition: currentDefinition, palette }),
+    React.createElement(TopicSpeechProgress, { palette }),
     ...references.map((value, index) => React.createElement(DrawerVerseRow, { key: index, fullText: true, reference: value.reference, text: value.verse.text, palette,
       onPress: () => { navigations++; },
       action: React.createElement("Pressable", { accessibilityLabel: `Vote: ${value.reference}`, onPress: () => { votes++; } }),
@@ -139,10 +140,13 @@ try {
   assert.deepEqual(calls.at(-1), ["seek", 0], "Topic release uses the displayed selection rather than a later native value");
   assert.equal(named(t("bible.topics.audio.previousPassage")).props.disabled, true);
   await press(named(t("bible.topics.audio.nextPassage"))); assert.deepEqual(calls.at(-1), ["move", 1]);
-  const slider = root().findAllByType("Slider").find(node => node.props.accessibilityLabel === t("bible.topics.audio.pauseLabel"));
-  assert.equal(slider.props.minimumValue, 0); assert.equal(slider.props.maximumValue, 60); assert.equal(slider.props.step, 1);
-  await act(async () => { await slider.props.onSlidingComplete(60); });
-  assert.deepEqual(calls.at(-1), ["pause", 60]);
+  const pauseDropdown = () => buttons().find(node => node.props.accessibilityLabel?.startsWith(t("bible.topics.audio.pauseDropdownTitle")));
+  assert.ok(pauseDropdown(), "Topic pause dropdown trigger is present");
+  await press(pauseDropdown());
+  const pauseOption10 = () => buttons().find(node => node.props.accessibilityLabel === t("bible.topics.audio.seconds", { seconds: 10 }));
+  assert.ok(pauseOption10(), "Dropdown alternative 10s is present");
+  await press(pauseOption10());
+  assert.deepEqual(calls.at(-1), ["pause", 10]);
   await update({ ...initialAudio, position: 8, session: session({ phase: "gap", gapRemainingSeconds: 2 }) });
   assert.equal(speechSlider().props.value, 8, "Speech progress stays at the preceding verse's end during a pause");
   assert.ok(texts().some(value => /2/.test(value)), "Current silent pause has a visible remaining-time indicator");
