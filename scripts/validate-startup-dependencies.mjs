@@ -69,7 +69,7 @@ const imports = new Map();
 for (const statement of providerAst.statements) if (ts.isImportDeclaration(statement)) {
   const specifier = statement.moduleSpecifier.text;
   const bindings = statement.importClause?.namedBindings;
-  if (bindings && ts.isNamedImports(bindings)) imports.set(specifier, bindings.elements.map((element) => (element.propertyName ?? element.name).text));
+  if (bindings && ts.isNamedImports(bindings)) imports.set(specifier, [...new Set([...(imports.get(specifier) ?? []), ...bindings.elements.map((element) => (element.propertyName ?? element.name).text)])]);
 }
 const subscriptions = new Map(), timers = new Map(), commits = [];
 const fixture = globalThis.startupProviderFixture = {
@@ -106,7 +106,7 @@ const temporary = await mkdtemp(path.join(projectRoot, "node_modules", "koino-st
 let tree;
 try {
   const outfile = path.join(temporary, "provider.cjs");
-  await build({ entryPoints: [path.join(projectRoot, "state/koino-store.tsx")], bundle: true, platform: "node", format: "cjs", packages: "external", outfile, plugins: [{ name: "provider-native-boundaries", setup(builder) {
+  await build({ jsx: "automatic", entryPoints: [path.join(projectRoot, "state/koino-store.tsx")], bundle: true, platform: "node", format: "cjs", packages: "external", outfile, plugins: [{ name: "provider-native-boundaries", setup(builder) {
     builder.onResolve({ filter: /^@\/|^@firebase\/auth$|^firebase\/database$/ }, ({ path: specifier }) => specifier === "@/state/selective-store" ? undefined : { path: specifier, namespace: "fixture" });
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path: specifier }) => {
       const names = new Set([...(imports.get(specifier) ?? []), ...Object.keys(fixture.modules[specifier] ?? {}).filter((name) => name !== "default")]);

@@ -3,6 +3,8 @@ import { buildSync } from "esbuild";
 
 const bundle = buildSync({ entryPoints: ["state/encryption/schema.ts"], bundle: true, platform: "node", format: "esm", write: false });
 const { policies } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const historyBundle = buildSync({ entryPoints: ["state/encryption/history-policy.ts"], bundle: true, platform: "node", format: "esm", write: false });
+const { sharedHistoryCollections } = await import(`data:text/javascript;base64,${Buffer.from(historyBundle.outputFiles[0].text).toString("base64")}`);
 const rules = JSON.parse(readFileSync("firebase.legacy.rules.json", "utf8")).rules;
 const own = "auth != null && auth.uid == $uid";
 const member = "auth != null && root.child('e2eeGroups').child($groupId).child('members').child(auth.uid).exists() && !root.child('e2eeDepartures').child($groupId).child(auth.uid).exists()";
@@ -32,6 +34,17 @@ for (const collection of ["groups", "groupMembers", "posts", "checkIns", "replie
   node[".read"] = `(${node[".read"]}) || (${migratingOwner})`;
 }
 rules.userGroups.$uid.$groupId[".read"] = migratingOwner;
+const legacyGroupCollections = ["groups", "groupMembers", "userGroups", "inviteCodes", "posts", "checkIns", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupBiblePlanParticipation", "discussionFollowers"];
+function closeLegacy(node, closeReads = true) {
+  for (const [key, value] of Object.entries(node)) {
+    if (key === ".write" || key === ".read" && closeReads) node[key] = `(${value}) && root.child('e2eePolicy').child('encryptedGroupsOnly').val() != true`;
+    else if (value && typeof value === "object") closeLegacy(value, closeReads);
+  }
+}
+for (const collection of legacyGroupCollections) closeLegacy(rules[collection]);
+for (const collection of ["prayerNotifications", "activityNotifications", "userDiscussionFollows", "groupBiblePlanParticipantIds"]) closeLegacy(rules[collection], false);
+const legacyPlan = rules.biblePlans.$uid.$planId;
+legacyPlan[".write"] = `(${legacyPlan[".write"]}) && (root.child('e2eePolicy').child('encryptedGroupsOnly').val() != true || (!newData.hasChild('announcementId') && !newData.hasChild('groupId')))`;
 
 function encryptedTree(expectedKey, depth = 0) {
   const valid = `newData.hasChildren(['v','keyId','nonce','ciphertext','signer','signature']) && (!newData.hasChild('wrappedKey') || newData.child('wrappedKey').isString()) && newData.child('v').val() == 1 && newData.child('keyId').val() == (${expectedKey}) && newData.child('nonce').isString() && newData.child('ciphertext').isString() && newData.child('ciphertext').val().length <= 4000000 && newData.child('signature').isString() && root.child('e2eeSigners').child(newData.child('signer').val()).child('uid').val() == auth.uid && root.child('e2eeSigners').child(newData.child('signer').val()).child('active').val() == true`;
@@ -86,9 +99,18 @@ for (const [collection, p] of Object.entries(policies)) {
     node.$field = encryptedTree(expectedKey);
   }
   if (collection === "activityNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
+  if (sharedHistoryCollections.includes(collection) || collection === "biblePlans") {
+    const generation = "!root.child('e2eePolicy').child('historyGeneration').exists() || newData.child('historyGeneration').val() == root.child('e2eePolicy').child('historyGeneration').val()";
+    const personal = collection === "biblePlans" ? "!newData.hasChild('announcementId') && !newData.hasChild('groupId')" : collection === "checkInDailyClaims" ? "newData.child('visibility').val() == 'private'" : "false";
+    node[".validate"] = `(${personal}) || (${generation})`;
+    node[".write"] = `(${node[".write"]}) && root.child('e2eePolicy').child('sharedWritesFrozen').val() != true`;
+    if (collection === "activityNotifications") node.readAt[".write"] = `(${own}) && root.child('e2eePolicy').child('sharedWritesFrozen').val() != true`;
+  }
+  if (collection === "legacyGroupArchives") node[".write"] = `(${node[".write"]}) && root.child('e2eePolicy').child('encryptedGroupsOnly').val() != true`;
   store[collection] = target;
 }
 rules.encryptedData = store;
+rules.e2eePolicy = { ".read": "auth != null", ".write": false };
 rules.e2eeAccounts = { "$uid": { ".read": "auth != null", ".write": false } };
 rules.e2eeSigners = { ".read": "auth != null", ".write": false };
 rules.e2eeGroups = { "$groupId": { ".read": `(auth != null && root.child('e2eeGroups').child($groupId).child('members').child(auth.uid).exists()) || (${migratingOwner})`, ".write": false } };

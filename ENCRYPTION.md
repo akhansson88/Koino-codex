@@ -1,5 +1,58 @@
 # Encryption implementation and rollout
 
+## Encrypted-only community cutover (2026-10-17)
+
+The approved reset removes all legacy communities and clears all shared history
+from retained encrypted communities. Personal journals, private check-ins,
+independent plans, saved verses, identities, recovery material and encrypted
+community settings/memberships are protected by cleanup checks.
+
+`e2eePolicy` holds `encryptedGroupsOnly`, `historyGeneration`,
+`sharedWritesFrozen` and the cutover checkpoints. Shared record writes carry the
+current routing field `historyGeneration`; stale queued writes are rejected.
+Notification handlers reject stale events and check that their source exists.
+Legacy group reads/writes and group migration endpoints close at cutover.
+The app removes cached legacy identities and displays only encrypted memberships
+and pending encrypted admissions. This does not erase copies on offline devices
+or provider-retained backups; no new plaintext backup is created.
+
+The maintenance script defaults to a read-only database/storage inventory. It
+requires the explicit project and execution flags for every mutation, compares
+database ETags, verifies protected account/group/personal data, and records only
+paths/counts and hashes. It waits at least 120 seconds after freezing to drain
+in-flight notification handlers. A completed cleanup does not erase new messages
+when retried. Use the phases in order:
+
+```sh
+node scripts/retire-legacy-groups.mjs --project=koino-codex
+node scripts/retire-legacy-groups.mjs --project=koino-codex --execute --phase=freeze
+node scripts/retire-legacy-groups.mjs --project=koino-codex --execute --phase=clean
+node scripts/retire-legacy-groups.mjs --project=koino-codex --execute --phase=reopen
+```
+
+Regression checks cover mixed legacy/encrypted cleanup, retained private plans
+and claims, interrupted/repeated cleanup, malformed authority, full/partial
+write generations, maintenance denial, stale writes/events, personal enrollment,
+and marking current notifications read.
+
+Production cleanup completed on 2026-10-17: zero legacy groups remain and one
+encrypted group was retained. Shared conversation/check-in/reaction/plan archives
+and associated follows/notifications were cleared. The room-image bucket was
+empty. Account keys, encrypted group settings/memberships, and personal content
+passed the preservation checks. Shared writes are reopened with generation 1.
+The production smoke test passed new encrypted conversation persistence after
+reconnection, outsider denial, rejection of stale writes and legacy group access,
+personal enrollment, and private image operations. Disposable test data was
+removed. A subsequent inventory found zero remaining cleanup targets.
+
+Android updates were published for runtime 2.0.1 on preview and production. The
+existing EAS binaries use runtime 2.0.0; native dependencies, lockfile and plugin
+configuration are unchanged since that binary, so the same bundle was also
+published for runtime 2.0.0. The repository retains its normal runtime 2.0.1.
+Production updates: `85c0beec-a938-4f28-9488-d2f0d1b18458` (2.0.1) and
+`f7e4e66f-eb67-4e13-83f3-be57630a03c4` (2.0.0).
+Phone verification is pending: ADB currently detects no connected device.
+
 ## Current status
 
 This change adds client encryption, recovery and device approval, community key

@@ -137,6 +137,17 @@ try {
   assert.equal((await db.ref('e2eeMigrations/user/owner/status').get()).val(), 'complete');
   assert.deepEqual(await call(owner, 'beginMigration', { scope: 'user:owner' }), { complete: true });
   assert.equal((await db.ref('e2eeMigrations/user/owner/status').get()).val(), 'complete', 'personal history is migrated once');
+  await db.ref('e2eePolicy').set({encryptedGroupsOnly:true,historyGeneration:1,sharedWritesFrozen:true});
+  await assert.rejects(call(owner,'beginMigration',{scope:'group:community'}),/retired/);
+  await assert.rejects(call(owner,'stageLegacyMembers',{groupId:'community'}),/retired/);
+  await assert.rejects(call(owner,'readLegacyArchive',{kind:'group',target:'community',collection:'commentReactions'}),/retired/);
+  await assert.rejects(call(owner,'leaveGroup',{groupId:'community'}),/maintenance/);
+  assert.deepEqual(await call(owner,'beginMigration',{scope:'user:owner'}),{complete:true});
+  const stalePrayer={...oldPrayer,historyGeneration:0};
+  await db.ref('encryptedData/prayerNotifications/owner/stale').set(stalePrayer);
+  globalThis.fetch=async()=>{throw Error('Stale event attempted network push');};
+  try { await sendPrayerNotification.run({params:{recipientUserId:'owner',notificationId:'stale'},data:{val:()=>stalePrayer}}); }
+  finally { globalThis.fetch=originalFetch; }
   console.log('Encryption backend checks passed: device approvals, recovery proof, request replay, owner admission, history grants, departure locks, rotation, revocation, deletion, conditional migration, and silent history imports.');
 } finally { await deleteApp(app); }
 process.exit(0);

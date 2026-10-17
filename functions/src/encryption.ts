@@ -112,6 +112,13 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
   const { signature, ...signed } = payload;
   const data = payload.data as Obj;
   if (!data || typeof data !== "object") invalid();
+  const policy = (await db().ref("e2eePolicy").get()).val();
+  if (policy?.encryptedGroupsOnly && (payload.operation === "stageLegacyMembers" || ["beginMigration", "finishMigration"].includes(payload.operation) && String(data.scope).startsWith("group:") || payload.operation === "readLegacyArchive" && data.kind === "group" || payload.operation === "legacyImage" && data.bucket === "room-images")) {
+    throw new HttpsError("failed-precondition", "Legacy communities have been retired. Use an encrypted community.");
+  }
+  if (policy?.sharedWritesFrozen && ["createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
+    throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
+  }
   const firstOperations = ["setup", "recover", "requestDevice"];
   if (!firstOperations.includes(payload.operation)) {
     const activeDevice = account?.devices?.[id(payload.deviceId)];

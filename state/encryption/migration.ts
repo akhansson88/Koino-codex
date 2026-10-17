@@ -3,9 +3,9 @@ import { updateProfile } from "firebase/auth";
 import { auth, database } from "@/state/store/firebase";
 import { policies } from "./schema";
 import { encodeAt, decodeAt, set, ref, physicalPath } from "./database";
-import { crypto, session, sessionGeneration, encryptedOperation, createEncryptedGroup, groupJoinRequest, loadGroup } from "./session";
+import { crypto, session, sessionGeneration, encryptedOperation, groupJoinRequest } from "./session";
 import storage from "./local-storage";
-import { uploadRoomImage, uploadUserAvatar, deleteRoomImage, deleteUserAvatar } from "@/state/supabase-storage";
+import { uploadRoomImage, uploadUserAvatar, deleteUserAvatar } from "@/state/supabase-storage";
 import { legacyPersonalCollections, legacyGroupCollections } from "./legacy-collections";
 export { listenLegacyCommunities, type LegacyCommunitySnapshot } from "./legacy-communities";
 
@@ -132,75 +132,12 @@ export async function migratePersonal(progress: MigrationProgress) {
   await encryptedOperation("finishMigration", { scope: `user:${state.uid}` });
   await storage.setItem(personalCompletionKey(state.uid), "true");
 }
-export async function migrateOwnedGroups(progress: MigrationProgress) {
+export async function migrateOwnedGroups(_progress: MigrationProgress) {
   const state = session();
   const ensureCurrent = migrationGuard();
-  const [membershipSnapshot, queueSnapshot, pendingSnapshot] = await Promise.all([
-    Raw.get(Raw.ref(database, `userGroups/${state.uid}`)),
-    Raw.get(Raw.ref(database, `e2eeMigrationGroups/${state.uid}`)),
-    Raw.get(Raw.ref(database, `e2eePendingGroups/${state.uid}`)),
-  ]);
+  await storage.clearLegacyCommunities();
+  const pending = (await Raw.get(Raw.ref(database, `e2eePendingGroups/${state.uid}`))).val() as Record<string, { inviteCode: string }> | null;
   ensureCurrent();
-  const memberships = membershipSnapshot.val() as Record<string, any> | null;
-  const queue = queueSnapshot.val() as Record<string, boolean> | null;
-  const pending = pendingSnapshot.val() as Record<string, { inviteCode: string }> | null;
-  const owned = Object.entries(memberships ?? {}).filter(([, membership]) => membership.role === "owner").map(([groupId]) => groupId);
-  for (const groupId of new Set([...owned, ...Object.keys(queue ?? {})])) {
-    ensureCurrent();
-    const completionKey = `e2ee.migration-complete.group.${state.uid}.${groupId}`;
-    if (await storage.getItem(completionKey) === "true") continue;
-    const status = (await Raw.get(Raw.ref(database, `e2eeMigrations/group/${groupId}/status`))).val();
-    ensureCurrent();
-    if (status === "complete") { await storage.setItem(completionKey, "true"); continue; }
-    let legacy = (await Raw.get(Raw.ref(database, `groups/${groupId}`))).val();
-    ensureCurrent();
-    const archiveKey = `e2ee.legacy-group.${state.uid}.${groupId}`;
-    if (legacy) await storage.setItem(archiveKey, JSON.stringify(legacy));
-    else { const saved = await storage.getItem(archiveKey); legacy = saved ? JSON.parse(saved) : null; }
-    if (!legacy || legacy.ownerId !== state.uid) continue;
-    ensureCurrent();
-    progress("Encrypting community history…");
-    const migration = await encryptedOperation<{ complete?: boolean }>("beginMigration", { scope: `group:${groupId}` });
-    ensureCurrent();
-    if (migration.complete) { await storage.setItem(completionKey, "true"); continue; }
-    const exists = (await Raw.get(Raw.ref(database, `e2eeGroups/${groupId}`))).exists();
-    ensureCurrent();
-    if (!exists) {
-      const membership = { ...memberships![groupId], image: undefined };
-      const group = { ...legacy, image: undefined };
-      delete membership.image; delete group.image;
-      await createEncryptedGroup(groupId, () => ({ group: encodeAt(`groups/${groupId}`, group), membership: encodeAt(`groupMembers/${groupId}/${state.uid}`, membership), userMembership: encodeAt(`userGroups/${state.uid}/${groupId}`, membership) }));
-    } else await loadGroup(groupId);
-    ensureCurrent();
-    const members = (await Raw.get(Raw.ref(database, `groupMembers/${groupId}`))).val() as Record<string, unknown> | null;
-    ensureCurrent();
-    // Preserve admission information for existing members who have not yet
-    // enrolled; their owner must verify their identity before sharing keys.
-    await encryptedOperation("stageLegacyMembers", { groupId });
-    for (const [collection, definition] of Object.entries(policies)) {
-      if ((definition.scope !== "group" && collection !== "discussionFollowers") || ["groupMembers", "legacyGroupArchives"].includes(collection)) continue;
-      const path = `${collection}/${groupId}`;
-      const source = (await Raw.get(Raw.ref(database, path))).val();
-      ensureCurrent();
-      await copy(path, source, progress);
-    }
-    for (const uid of Object.keys(members ?? {})) {
-      const path = `userGroups/${uid}/${groupId}`;
-      const value = (await Raw.get(Raw.ref(database, path))).val();
-      ensureCurrent();
-      if (value) await deleteSource(path, value);
-    }
-    if (members) await deleteSource(`groupMembers/${groupId}`, members);
-    const invitePath = `inviteCodes/${legacy.inviteCode}`;
-    const invite = (await Raw.get(Raw.ref(database, invitePath))).val();
-    if (invite) await deleteSource(invitePath, invite);
-    if (legacy.image?.path) await deleteRoomImage(legacy.image.path);
-    await archiveRetiredCollections("group", groupId, progress);
-    ensureCurrent();
-    await encryptedOperation("finishMigration", { scope: `group:${groupId}` });
-    await storage.setItem(completionKey, "true");
-    await storage.removeItem(archiveKey);
-  }
   if (pending && Object.keys(pending).length) {
     const profile = decodeAt(`profiles/${state.uid}`, (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).val()) as { name: string };
     ensureCurrent();

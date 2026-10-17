@@ -21,7 +21,7 @@ const fixture = globalThis.encryptionFixture = {
 };
 const bundled = await build({ entryPoints: ['state/encryption/database.ts'], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [{ name: 'native-boundaries', setup(builder) {
   builder.onResolve({ filter: /^firebase\/database$|^@\/state\/store\/firebase$|^@\/state\/supabase-storage$|^\.\/session$/ }, (args) => ({ path: args.path, namespace: 'fixture' }));
-  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents: path === './session' ? 'const fixture=globalThis.encryptionFixture; export const crypto=fixture.crypto, session=()=>fixture.state, keyForScope=fixture.selected, prepareScope=(...args)=>fixture.prepareScope(...args), ensureGroupDeviceSigners=(...args)=>fixture.ensureGroupDeviceSigners(...args), account=(...args)=>fixture.account(...args), sessionGeneration=()=>fixture.generation;' : path.includes('supabase') ? 'export const resolveEncryptedImages=(...args)=>globalThis.encryptionFixture.resolveEncryptedImages(...args);' : path.includes('store/firebase') ? 'export const database={};' : 'const fixture=globalThis.encryptionFixture; export const ref=(_db,path)=>({path}), query=(r)=>r, equalTo=()=>{}, orderByChild=()=>{}, endBefore=()=>{}, limitToLast=()=>{}, get=(r)=>fixture.get(r), set=()=>{}, update=()=>{}, onValue=(...args)=>fixture.onValue(...args), runTransaction=()=>{};' }));
+  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents: path === './session' ? 'const fixture=globalThis.encryptionFixture; export const crypto=fixture.crypto, session=()=>fixture.state, keyForScope=fixture.selected, prepareScope=(...args)=>fixture.prepareScope(...args), ensureGroupDeviceSigners=(...args)=>fixture.ensureGroupDeviceSigners(...args), account=(...args)=>fixture.account(...args), sessionGeneration=()=>fixture.generation;' : path.includes('supabase') ? 'export const resolveEncryptedImages=(...args)=>globalThis.encryptionFixture.resolveEncryptedImages(...args);' : path.includes('store/firebase') ? 'export const database={};' : 'const fixture=globalThis.encryptionFixture; export const ref=(_db,path)=>({path}), query=(r)=>r, equalTo=()=>{}, orderByChild=()=>{}, endBefore=()=>{}, limitToLast=()=>{}, get=(r)=>fixture.get(r), set=(r,v)=>fixture.set?.(r,v), update=(r,v)=>fixture.update?.(r,v), onValue=(...args)=>fixture.onValue(...args), runTransaction=()=>{};' }));
 } }] });
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 const record = { id: 'post', userId: 'owner', groupId: 'group', createdAt: '2026-01-01', body: 'Private prayer', verses: [{ book: 'John', chapter: 3, text: 'Secret verse' }], futureContent: { nested: 'Private future data' } };
@@ -211,3 +211,17 @@ try {
   else delete globalThis.performance;
 }
 console.log('Encryption adapter checks passed: content authentication, membership fanout, recipient rotation, shared group preparation, nonblocking avatars, budgeted collection decoding, opaque IDs, and stale session guards.');
+
+records.set('e2eePolicy',{historyGeneration:1});
+const sent=[];
+fixture.set=(reference,value)=>sent.push({path:reference.path,value});
+fixture.update=(reference,value)=>sent.push({path:reference.path,value});
+await adapter.set(adapter.ref({},'posts/group/fresh'),{userId:'owner',body:'fresh'});
+assert.equal(sent.at(-1).value.historyGeneration,1);
+assert.equal(typeof sent.at(-1).value.body.ciphertext,'string');
+await adapter.update(adapter.ref({},'posts/group/fresh'),{body:'updated'});
+assert.equal(sent.at(-1).path,'encryptedData');
+assert.equal(sent.at(-1).value['posts/group/fresh/historyGeneration'],1);
+records.set('e2eePolicy',{historyGeneration:1,sharedWritesFrozen:true});
+await assert.rejects(adapter.set(adapter.ref({},'posts/group/fresh'),{userId:'owner',body:'blocked'}),/being reset/);
+console.log('History write adapter checks passed: generation on full and partial writes, ciphertext, and maintenance freeze.');

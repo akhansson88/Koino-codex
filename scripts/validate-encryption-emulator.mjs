@@ -115,6 +115,26 @@ try {
   await denied(() => update(ref(member.database, postPath), { body: nextBody }));
   await adminDatabase(admin).ref(`e2eeSigners/${owner.identity.signingPublicKey}/active`).set(false);
   await denied(() => update(ref(owner.database, journalPath), { body }));
+  await adminDatabase(admin).ref(`e2eeSigners/${owner.identity.signingPublicKey}/active`).set(true);
+  await adminDatabase(admin).ref('e2eePolicy').set({encryptedGroupsOnly:true,historyGeneration:1,sharedWritesFrozen:true});
+  await denied(() => get(ref(owner.database, `userGroups/${owner.uid}`)));
+  await denied(() => get(ref(owner.database, 'groups/community')));
+  await denied(() => set(ref(owner.database, 'groups/new-legacy'), {ownerId:owner.uid}));
+  await denied(() => set(ref(owner.database, `prayerNotifications/${owner.uid}/legacy`), {userId:owner.uid,recipientUserId:owner.uid}));
+  await denied(() => set(ref(owner.database, `groupBiblePlanParticipantIds/${owner.uid}/legacy`), 'legacy'));
+  await denied(() => set(ref(owner.database, postPath), null));
+  await adminDatabase(admin).ref('encryptedData/posts').remove();
+  await adminDatabase(admin).ref('e2eePolicy/sharedWritesFrozen').set(false);
+  const fresh = {userId:owner.uid,body:crypto.encrypt('New conversation','posts/community/post1/body','group:community:2',key,owner.identity)};
+  await denied(() => set(ref(owner.database,postPath),fresh));
+  await denied(() => set(ref(owner.database,postPath),{...fresh,historyGeneration:0}));
+  await set(ref(owner.database,postPath),{...fresh,historyGeneration:1});
+  assert.equal((await get(ref(owner.database,postPath))).child('historyGeneration').val(),1);
+  await denied(() => update(ref(outsider.database,postPath),{historyGeneration:1}));
+  await adminDatabase(admin).ref(notificationPath).set({...notice,historyGeneration:1});
+  await update(ref(owner.database,notificationPath),{readAt:'2026-10-17'});
+  // Personal content remains writable after the community cutover.
+  await update(ref(owner.database,journalPath),{body});
   console.log("Encryption emulator checks passed: private/group access, plaintext rejection, authorized migration, metadata ownership, pagination, key versions, departure locks, and revocation.");
 } finally { apps.forEach((app) => goOffline(getDatabase(app))); await Promise.all(apps.map(deleteApp)); await deleteAdmin(admin); }
 process.exit(0);

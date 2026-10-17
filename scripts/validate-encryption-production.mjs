@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getDatabase, ref, set, get, goOffline } from 'firebase/database';
+import { getDatabase, ref, set, get, goOffline, goOnline } from 'firebase/database';
 import { crypto } from './encryption-test-helpers.mjs';
 if (!process.argv.includes('--project=koino-codex')) throw new Error('Explicit production project flag is required.');
 const run = promisify(execFile), users = [], images = [];
@@ -40,6 +40,8 @@ async function client(label) {
 let passed = false;
 try {
   const owner = await client('owner'), outsider = await client('outsider');
+  const policy = (await get(ref(owner.database,'e2eePolicy'))).val();
+  const historyMetadata = policy?.historyGeneration ? {historyGeneration:policy.historyGeneration} : {};
   const path = `journalEntries/${owner.uid}/fixture`, key = crypto.randomKey();
   const body = crypto.encrypt('Synthetic private content', `${path}/body`, `user:${owner.uid}:1`, key, owner.device);
   await set(ref(owner.database, `encryptedData/${path}`), { userId: owner.uid, body });
@@ -51,7 +53,7 @@ try {
   await assert.rejects(owner.operation(replay), /already processed/i);
   await call(owner, 'finishMigration', { scope: `user:${owner.uid}` });
   const followPath = `encryptedData/userDiscussionFollows/${owner.uid}/${groupId}/post_fixture`;
-  await set(ref(owner.database, followPath), { id: 'post_fixture', userId: owner.uid, targetType: 'post', targetId: 'fixture', createdAt: '2026-01-01' });
+  await set(ref(owner.database, followPath), { id: 'post_fixture', userId: owner.uid, targetType: 'post', targetId: 'fixture', createdAt: '2026-01-01', ...historyMetadata });
   await assert.rejects(get(ref(outsider.database, followPath)), /permission_denied|Permission denied/i);
   await assert.rejects(set(ref(owner.database, `${followPath}/body`), 'plaintext'), /permission_denied|Permission denied/i);
   const groupKey = crypto.randomKey();
@@ -59,6 +61,17 @@ try {
   group.signature = crypto.signature({ ...group, previous: null }, owner.root.signingPrivateKey);
   const membership = { id: 'test-membership', userId: owner.uid, groupId, role: 'owner' };
   await call(owner, 'createGroup', { group, records: { group: { id: groupId, ownerId: owner.uid, inviteCode: invite }, membership, userMembership: membership } });
+  const postPath=`posts/${groupId}/fresh`, postBody=crypto.encrypt('Synthetic new conversation',`${postPath}/body`,`group:${groupId}:1`,groupKey,owner.device);
+  if (policy?.encryptedGroupsOnly) {
+    await assert.rejects(get(ref(owner.database,'groups/retired')),/permission_denied|Permission denied/i);
+    await assert.rejects(set(ref(owner.database,`groups/${groupId}`),{id:groupId,ownerId:owner.uid}),/permission_denied|Permission denied/i);
+    await assert.rejects(set(ref(owner.database,`encryptedData/${postPath}`),{userId:owner.uid,body:postBody}),/permission_denied|Permission denied/i);
+  }
+  await set(ref(owner.database,`encryptedData/${postPath}`),{userId:owner.uid,body:postBody,...historyMetadata});
+  await assert.rejects(get(ref(outsider.database,`encryptedData/${postPath}`)),/permission_denied|Permission denied/i);
+  goOffline(owner.database); goOnline(owner.database);
+  const persistedPost=(await get(ref(owner.database,`encryptedData/${postPath}/body`))).val();
+  assert.equal(crypto.decrypt(persistedPost,`${postPath}/body`,groupKey,new Set([owner.device.signingPublicKey])),'Synthetic new conversation');
   for (const bucket of ['user-avatars', 'room-images']) {
     const objectPath = `${bucket === 'user-avatars' ? owner.uid : groupId}/fixture-${randomUUID()}.kenc`, imageKey = crypto.randomKey();
     const record = crypto.encrypt('Synthetic image bytes', `images/${bucket}/${objectPath}`, 'image:test', imageKey, owner.device);

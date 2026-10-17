@@ -52,6 +52,13 @@ const encryptedStorage = {
     const db = await database();
     await db.runAsync("DELETE FROM private_kv WHERE key NOT LIKE 'firebase:%' AND key NOT LIKE 'e2ee.%'");
   },
+  async clearLegacyCommunities() {
+    const matches = (key: string) => key.startsWith("e2ee.legacy-group.") || key.startsWith("e2ee.legacy-communities.") || key.startsWith("e2ee.image-migration.");
+    const db = await database();
+    await db.runAsync("DELETE FROM private_kv WHERE key LIKE 'e2ee.legacy-group.%' OR key LIKE 'e2ee.legacy-communities.%' OR key LIKE 'e2ee.image-migration.%'");
+    const keys = (await AsyncStorage.getAllKeys()).filter(matches);
+    if (keys.length) await AsyncStorage.multiRemove(keys);
+  },
   async migrateLegacy() {
     const keys = await AsyncStorage.getAllKeys();
     for (const key of keys.filter((value) => value.startsWith("koino.") || value.startsWith("firebase:"))) await encryptedStorage.getItem(key);

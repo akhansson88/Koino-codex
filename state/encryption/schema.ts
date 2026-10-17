@@ -1,7 +1,7 @@
 // Only these fields are service-readable. Everything else, including unknown
 // future content fields, must be encrypted. Rules use the same allowlist.
 export type CollectionPolicy = { depth: number; scope: "user" | "group" | "membership" | "routing"; metadata: readonly string[]; ownerIndex?: number };
-const routing = ["id", "userId", "groupId", "ownerId", "recipientUserId", "targetId", "targetType", "createdAt", "updatedAt"];
+const routing = ["id", "userId", "groupId", "ownerId", "recipientUserId", "targetId", "targetType", "createdAt", "updatedAt", "historyGeneration"];
 export const policies: Record<string, CollectionPolicy> = {
   profiles: { depth: 2, scope: "user", metadata: ["id", "createdAt", "currentGroupId"] },
   groups: { depth: 2, scope: "group", metadata: ["id", "ownerId", "createdAt", "updatedAt", "inviteCode"] },
@@ -28,8 +28,8 @@ export const policies: Record<string, CollectionPolicy> = {
   biblePlans: { depth: 3, scope: "user", metadata: [...routing, "announcementId"] },
   notificationPreferences: { depth: 2, scope: "routing", metadata: ["pushEnabled", "ownContent", "mentions", "followedDiscussions", "prayerActivity"] },
   pushTokens: { depth: 3, scope: "routing", metadata: ["token", "platform", "createdAt", "updatedAt"] },
-  checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt"] },
-  discussionFollowers: { depth: 5, scope: "routing", metadata: ["id", "userId", "targetType", "targetId", "createdAt"] },
+  checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt", "historyGeneration"] },
+  discussionFollowers: { depth: 5, scope: "routing", metadata: ["id", "userId", "targetType", "targetId", "createdAt", "historyGeneration"] },
   userDiscussionFollows: { depth: 4, scope: "routing", metadata: [...routing, "following"] },
   groupBiblePlanParticipantIds: { depth: 3, scope: "routing", metadata: [] },
   supportIntents: { depth: 3, scope: "routing", metadata: [...routing, "amount", "currency", "provider", "providerReference", "status"] },

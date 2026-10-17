@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 const stored = new Map(), subscribers = new Map();
 const fixture = globalThis.migrationFixture = {
   auth: { currentUser: { uid: 'alex' } }, state: { uid: 'alex' }, generation: 1, reads: [], operations: [], writes: [], values: {},
-  storage: { getItem: async (key) => stored.get(key) ?? null, setItem: async (key, value) => { stored.set(key, value); }, migrateLegacy: async () => {} },
+  storage: { getItem: async (key) => stored.get(key) ?? null, setItem: async (key, value) => { stored.set(key, value); }, clearLegacyCommunities: async () => { fixture.clearedLegacy = true; }, migrateLegacy: async () => {} },
   subscribe(path, callback, error) { const value = { callback, error }; subscribers.set(path, value); return () => { if (subscribers.get(path) === value) subscribers.delete(path); }; },
 };
 const snapshot = (value) => ({ val: () => value, exists: () => value !== null && value !== undefined, child: (key) => snapshot(value?.[key] ?? null) });
@@ -59,36 +59,16 @@ let last, errors = [];
 const stop = listenLegacyCommunities('alex', (value) => { last = value; }, (error) => errors.push(error));
 await Promise.resolve();
 deliver('e2eePendingGroups/alex', null);
-const membership = { id: 'membership', userId: 'alex', groupId: 'community', role: 'member', userName: 'Alex', createdAt: '2026-01-01', image: { url: 'legacy-image' } };
-deliver('userGroups/alex', { community: membership });
-assert.equal(last.ready, false);
-assert.equal(last.memberships[0].groupId, 'community', 'membership survives while community identity is loading');
-deliver('groupMembers/community', { joel: { userName: 'Joel' } });
-deliver('groups/community', { id: 'community', name: 'Alex and Joel', ownerId: 'joel', inviteCode: 'INVITE', createdAt: '2026-01-01', updatedAt: '2026-01-01', image: { url: 'legacy-image' } });
 assert.equal(last.ready, true);
-assert.equal(last.groups[0].migrationOwnerName, 'Joel', 'owner identity survives reversed callback order');
-assert.equal(last.groups[0].image, undefined);
-assert.equal(last.memberships[0].image, undefined);
+assert.deepEqual(last.groups, []);
+assert.equal(subscribers.has('userGroups/alex'), false, 'legacy membership is never read');
+assert.equal(fixture.clearedLegacy, true, 'cached legacy identities are purged');
 deliver('e2eePendingGroups/alex', { community: { inviteCode: 'INVITE' } });
-deliver('userGroups/alex', null);
-deliver('groups/community', null);
-assert.equal(last.ready, true);
-assert.equal(last.groups[0].name, 'Alex and Joel', 'encrypted local identity survives owner migration');
 assert.equal(last.groups[0].migrationAwaitingApproval, true);
 assert.equal(last.memberships[0].groupId, 'community');
 deliver('e2eePendingGroups/alex', null);
 assert.deepEqual(last.groups, []);
 assert.deepEqual(last.memberships, []);
 stop();
-
-const stopRace = listenLegacyCommunities('alex', (value) => { last = value; }, (error) => errors.push(error));
-await Promise.resolve();
-deliver('userGroups/alex', { community: membership });
-subscribers.get('groups/community').error(new Error('Permission denied'));
-assert.equal(last.ready, false);
-deliver('e2eePendingGroups/alex', { community: { inviteCode: 'INVITE' } });
-assert.equal(last.ready, true, 'pending marker resolves legacy access that closed before its callback arrived');
-assert.equal(last.groups[0].migrationAwaitingApproval, true);
-stopRace();
 assert.equal(subscribers.size, 0);
-console.log('Encryption migration checks passed: account-scoped completion, interruption retry, retained community membership, pending owner approval, callback ordering, and legacy access closure.');
+console.log('Encryption migration checks passed: personal completion, retry, session guards, legacy cache retirement, and pending encrypted admission.');

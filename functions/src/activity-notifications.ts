@@ -8,6 +8,7 @@ import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-
 import { activityUnreadCount, processExpoReceipts, pushAllowed, sendExpoPush, type PushCategory } from "./push-delivery";
 
 type Reply = {
+  historyGeneration?: number;
   id: string;
   userId: string;
   targetType: "post" | "check_in";
@@ -17,6 +18,7 @@ type Reply = {
 };
 
 type PrayerNotification = {
+  historyGeneration?: number;
   id: string;
   userId: string;
   recipientUserId: string;
@@ -37,6 +39,9 @@ export const createCommentNotification = onValueCreated(
     if (!reply || !groupId || !replyId) return;
 
     const database = getDatabase(adminApp);
+    const policy = (await database.ref("e2eePolicy").get()).val();
+    if (policy?.sharedWritesFrozen || policy?.historyGeneration && reply.historyGeneration !== policy.historyGeneration) return;
+    if (!(await database.ref(`encryptedData/replies/${groupId}/${replyId}`).get()).exists()) return;
     if ((await database.ref(`e2eeMigrations/group/${groupId}/importedEventIds/${replyId}`).get()).exists()) return;
     const targetCollection = reply.targetType === "post" ? "posts" : "checkIns";
     const targetSnapshot = await database.ref(`encryptedData/${targetCollection}/${groupId}/${reply.targetId}`).get();
@@ -77,6 +82,7 @@ export const createCommentNotification = onValueCreated(
         targetId: reply.targetId,
         replyId,
         createdAt: reply.createdAt,
+        ...(policy?.historyGeneration ? { historyGeneration: policy.historyGeneration } : {}),
       };
       const transaction = await notificationRef.transaction((current) => (current ? undefined : notification));
       if (!transaction.committed || !(await pushAllowed(database, recipientUserId, categoryForReason(reason)))) return;
@@ -104,6 +110,9 @@ export const sendPrayerNotification = onValueCreated(
     if (!notification || !recipientUserId || !notificationId || notification.recipientUserId !== recipientUserId) return;
 
     const database = getDatabase(adminApp);
+    const policy = (await database.ref("e2eePolicy").get()).val();
+    if (policy?.sharedWritesFrozen || policy?.historyGeneration && notification.historyGeneration !== policy.historyGeneration) return;
+    if (!(await database.ref(`encryptedData/prayerNotifications/${recipientUserId}/${notificationId}`).get()).exists()) return;
     if ((await database.ref(`e2eeMigrations/user/${recipientUserId}/importedEventIds/${notificationId}`).get()).exists()) return;
     if (!(await pushAllowed(database, recipientUserId, "prayerActivity"))) return;
     await sendExpoPush(database, recipientUserId, `prayer:${notificationId}`, buildPrayerPushMessage("", notificationId));

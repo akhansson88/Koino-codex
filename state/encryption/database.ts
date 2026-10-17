@@ -1,6 +1,7 @@
 import * as Firebase from "firebase/database";
 import { database as sessionDatabase } from "@/state/store/firebase";
 import { policy, policies, isEnvelope } from "./schema";
+import { historyRecord, type HistoryPolicy } from "./history-policy";
 import { resolveEncryptedImages } from "@/state/supabase-storage";
 import { crypto, session, prepareScope, keyForScope, ensureGroupDeviceSigners, sessionGeneration, account } from "./session";
 export { equalTo, orderByChild, endBefore, limitToLast } from "firebase/database";
@@ -9,6 +10,7 @@ export type { DatabaseReference, Query } from "firebase/database";
 const logicalPaths = new WeakMap<object, string>();
 const recordContexts = new Map<string, string>();
 const pendingGroupReads = new Map<string, Promise<void>>();
+let historyPolicy: HistoryPolicy = {};
 const parts = (path: string) => path.split("/").filter(Boolean);
 function logical(query: Firebase.Query): string {
   const path = logicalPaths.get(query);
@@ -98,6 +100,9 @@ function transform(path: string, value: unknown, mode: "encrypt" | "decrypt"): u
 export function encodeAt(path: string, value: unknown): unknown {
   const encoded = transform(path, value, "encrypt");
   const p = parts(path);
+  if (historyRecord(path) && p.length === policies[p[0]].depth && encoded && typeof encoded === "object" && historyPolicy.historyGeneration) {
+    (encoded as Record<string, unknown>).historyGeneration = historyPolicy.historyGeneration;
+  }
   if (["savedVerses", "bibleHighlights"].includes(p[0]) && p.length === 3 && value && typeof value === "object") {
     const { key, keyId } = keyForScope(`user:${p[1]}`);
     const physicalId = crypto.opaqueId(p[2], session().vault.personalKeys["1"]);
@@ -193,6 +198,10 @@ function prepareReadableGroup(groupId: string) {
 async function prepare(path: string, write: boolean, value?: unknown) {
   if (!path || path.startsWith(".info/")) return;
   const { definition, scope, parts: p } = policy(path);
+  if (write && historyRecord(path)) {
+    historyPolicy = (await Firebase.get(Firebase.ref(sessionDatabase, "e2eePolicy"))).val() ?? {};
+    if (historyPolicy.sharedWritesFrozen) throw new Error("Community history is being reset. Please try again shortly.");
+  }
   // An empty read has no encrypted fields or signers to resolve. In particular,
   // an empty membership index must not reload historical groups from the vault.
   if (!write && (value === null || value === undefined)) return;
@@ -292,6 +301,13 @@ export async function set(reference: Firebase.DatabaseReference, value: unknown)
   const path = logical(reference), token = sessionGeneration();
   await prepare(path, true);
   if (token !== sessionGeneration()) throw new Error("The encrypted session changed.");
+  if (historyRecord(path) && parts(path)[0] !== "activityNotifications" && parts(path).length > policies[parts(path)[0]].depth && historyPolicy.historyGeneration) {
+    const recordPath = parts(path).slice(0, policies[parts(path)[0]].depth).join("/");
+    return Firebase.update(Firebase.ref(sessionDatabase, "encryptedData"), {
+      [physical(path).slice(14)]: encodeAt(path, value),
+      [`${physical(recordPath).slice(14)}/historyGeneration`]: historyPolicy.historyGeneration,
+    });
+  }
   return Firebase.set(reference, encodeAt(path, value));
 }
 export async function update(reference: Firebase.DatabaseReference, values: Record<string, unknown>) {
@@ -299,13 +315,17 @@ export async function update(reference: Firebase.DatabaseReference, values: Reco
   const encoded: Record<string, unknown> = {};
   for (const [child, value] of Object.entries(values)) {
     const path = [base, child].filter(Boolean).join("/");
-    await prepare(path, value !== null);
+    await prepare(path, true);
     const relative = physical(path).slice("encryptedData/".length);
-    const rootBase = physical(base).slice("encryptedData/".length);
-    encoded[rootBase ? relative.slice(rootBase.length + 1) : relative] = encodeAt(path, value);
+    encoded[relative] = encodeAt(path, value);
+    if (historyRecord(path) && parts(path)[0] !== "activityNotifications" && parts(path).length > policies[parts(path)[0]].depth && historyPolicy.historyGeneration) {
+      const recordPath = parts(path).slice(0, policies[parts(path)[0]].depth).join("/");
+      const marker = `${physical(recordPath).slice(14)}/historyGeneration`;
+      encoded[marker] = historyPolicy.historyGeneration;
+    }
   }
   if (token !== sessionGeneration()) throw new Error("The encrypted session changed.");
-  return Firebase.update(reference, encoded);
+  return Firebase.update(Firebase.ref(sessionDatabase, "encryptedData"), encoded);
 }
 export const remove = (reference: Firebase.DatabaseReference) => set(reference, null);
 export async function runTransaction(reference: Firebase.DatabaseReference, action: (value: any) => unknown, options?: Firebase.TransactionOptions) {
