@@ -1,5 +1,31 @@
 # Encryption implementation and rollout
 
+## Retired access-request repair (2026-10-17)
+
+`e2eePendingGroups` was written only by legacy member migration; preserving its
+markers under an encrypted group ID incorrectly recreated a selectable
+"Request encrypted access" placeholder. The live legacy marker was removed.
+The client no longer subscribes to those markers, synthesizes community
+memberships, or automatically requests legacy admission during unlock. Cached
+legacy identities are cleared. Only authenticated encrypted membership records
+populate communities. Explicit new joins still use `e2eeJoinRequests` and require
+the owner's signed grant; no access is automatically approved.
+
+Migration/cache and startup membership regressions plus TypeScript passed. The
+preview APK profile now increments Android version codes. Root phone diagnostic
+images/XML are excluded from cloud build inputs. The runtime 2.0.1 cloud APK
+build completed: `b91c9539-f097-46e2-9496-64a93df5a843`, version code 21,
+package `com.akhansson.koinomvp`. The delivery copy is
+`.codex/KOINO-21-access-fix.apk` (167,204,215 bytes), signed with the existing
+local Android certificate. APK verification confirmed the expected package,
+version, certificate, native libsodium and absence of the retired pending-group
+lookup in the embedded bundle. SHA-256:
+`9FB963E7D2420D0D2C7E9A249C8B4DC65F86F5EB6226B12A398C7CFBB5CC548E`.
+The APK is staged in WhatsApp for the matched self-chat ending 0049; final sending
+awaits the Computer Use action-time confirmation. The local native build also
+passed, but targets the separate development package and is not the delivery APK.
+No phone was connected for installation testing.
+
 ## Encrypted-only community cutover (2026-10-17)
 
 The approved reset removes all legacy communities and clears all shared history

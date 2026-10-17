@@ -12,6 +12,7 @@
       }
     },
     "preview": {
+      "autoIncrement": true,
       "channel": "preview",
       "distribution": "internal",
       "android": {

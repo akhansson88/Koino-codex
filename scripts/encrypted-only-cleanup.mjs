@@ -51,7 +51,9 @@ export function planCleanup(source) {
   for (const [uid, groups] of entries(data.userGroups)) for (const [id] of entries(groups)) if (!ids.includes(id)) remove(`encryptedData/userGroups/${uid}/${id}`);
   for (const [id] of entries(data.groupMembers)) if (!ids.includes(id)) remove(`encryptedData/groupMembers/${id}`);
   for (const [code, invite] of entries(data.inviteCodes)) if (!ids.includes(invite.groupId)) remove(`encryptedData/inviteCodes/${code}`);
-  for (const [uid, groups] of entries(root.e2eePendingGroups)) for (const [id] of entries(groups)) if (!ids.includes(id)) remove(`e2eePendingGroups/${uid}/${id}`);
+  // This collection was written only by legacy member migration, even when
+  // the destination group has since become encrypted. New joins use requests.
+  remove('e2eePendingGroups');
   for (const [id] of entries(root.e2eeJoinRequests)) if (!ids.includes(id)) remove(`e2eeJoinRequests/${id}`);
   remove('e2eeMigrationGroups');
   for (const [id] of entries(root.e2eeMigrations?.group)) { if (!ids.includes(id)) remove(`e2eeMigrations/group/${id}`); else remove(`e2eeMigrations/group/${id}/importedEventIds`); }

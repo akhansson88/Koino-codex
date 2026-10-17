@@ -5,6 +5,7 @@ const source = {
   e2eeAccounts:{owner:{recovery:'protected'}},e2eeSigners:{device:{active:true}},
   e2eeGroups:{keep:{id:'keep',ownerId:'owner',members:{owner:{}},grants:{owner:'protected'}}},
   e2eePendingGroups:{owner:{old:{},keep:{inviteCode:'KEEP'}}},e2eeMigrationGroups:{owner:{old:true}},
+  e2eeJoinRequests:{keep:{new_member:{name:'sealed-request'}}},
   e2eeMigrations:{group:{old:{status:'copying'},keep:{status:'complete',importedEventIds:{reply:true}}}},
   encryptedData:{groups:{keep:{id:'keep',ownerId:'owner',name:{ciphertext:'protected'}}},groupMembers:{keep:{owner:{role:'owner'}}},userGroups:{owner:{keep:{role:'owner'},old:{role:'member'}}},inviteCodes:{KEEP:{groupId:'keep'}},
     profiles:{owner:{name:{ciphertext:'private'},currentGroupId:'old'}},journalEntries:{owner:{j:{body:'private'}}},privateCheckIns:{owner:{private:{body:'private'}}},
@@ -26,7 +27,8 @@ assert.deepEqual(result.root.encryptedData.journalEntries,source.encryptedData.j
 assert.deepEqual(result.root.encryptedData.biblePlans.owner,{personal:source.encryptedData.biblePlans.owner.personal});
 assert.deepEqual(result.root.encryptedData.checkInDailyClaims.owner.keep,{private:{visibility:'private'}});
 assert.equal(result.root.encryptedData.profiles.owner.currentGroupId,undefined);
-assert.deepEqual(result.root.e2eePendingGroups.owner,{keep:{inviteCode:'KEEP'}});
+assert.equal(result.root.e2eePendingGroups,undefined,'legacy admission markers must not survive under encrypted group IDs');
+assert.deepEqual(result.root.e2eeJoinRequests,source.e2eeJoinRequests,'explicit encrypted join requests remain available to the owner');
 assert.deepEqual(planCleanup(result.root).changes,[],'interrupted cleanup resumes without additional deletions');
 result.root.e2eePolicy={cutoverId,cleanupComplete:true};
 result.root.encryptedData.posts={keep:{fresh:{body:'new'}}};

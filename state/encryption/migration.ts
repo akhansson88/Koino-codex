@@ -3,7 +3,7 @@ import { updateProfile } from "firebase/auth";
 import { auth, database } from "@/state/store/firebase";
 import { policies } from "./schema";
 import { encodeAt, decodeAt, set, ref, physicalPath } from "./database";
-import { crypto, session, sessionGeneration, encryptedOperation, groupJoinRequest } from "./session";
+import { crypto, session, sessionGeneration, encryptedOperation } from "./session";
 import storage from "./local-storage";
 import { uploadRoomImage, uploadUserAvatar, deleteUserAvatar } from "@/state/supabase-storage";
 import { legacyPersonalCollections, legacyGroupCollections } from "./legacy-collections";
@@ -133,19 +133,5 @@ export async function migratePersonal(progress: MigrationProgress) {
   await storage.setItem(personalCompletionKey(state.uid), "true");
 }
 export async function migrateOwnedGroups(_progress: MigrationProgress) {
-  const state = session();
-  const ensureCurrent = migrationGuard();
   await storage.clearLegacyCommunities();
-  const pending = (await Raw.get(Raw.ref(database, `e2eePendingGroups/${state.uid}`))).val() as Record<string, { inviteCode: string }> | null;
-  ensureCurrent();
-  if (pending && Object.keys(pending).length) {
-    const profile = decodeAt(`profiles/${state.uid}`, (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).val()) as { name: string };
-    ensureCurrent();
-    for (const [groupId, entry] of Object.entries(pending)) {
-      const request = (await Raw.get(Raw.ref(database, `e2eeJoinRequests/${groupId}/${state.uid}`))).val();
-      ensureCurrent();
-      if (request?.publicKey === state.vault.identity.publicKey && request?.signingPublicKey === state.vault.identity.signingPublicKey) continue;
-      await groupJoinRequest(entry.inviteCode, profile.name);
-    }
-  }
 }
