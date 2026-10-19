@@ -1,0 +1,6 @@
+# These source/model bytes are verified against immutable SHA-256 locks.
+*.onnx -text
+*.tokenizer -text
+*.db -text
+sources/* -text
+*.json text eol=lf

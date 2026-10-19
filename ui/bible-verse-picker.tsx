@@ -6,17 +6,14 @@ import { BibleDatabaseBoundary } from "@/features/bible-database-provider";
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   displayBibleBookName,
   displayBibleReference,
-  normalizeScriptureQuery,
-  resolveBibleReference,
-  searchScripture,
-  type ScriptureSearchResult,
 } from "@/features/bible-search";
+import { ScriptureSearchContent } from "@/features/bible-search/search-content";
 import {
   bibleChapterVerses,
   bibleVersionFor,
@@ -31,9 +28,6 @@ import { IconButton, PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, typography } from "@/ui/theme";
 
-const SCRIPTURE_SEARCH_DEBOUNCE_MS = 180;
-const SCRIPTURE_SEARCH_MIN_LENGTH = 3;
-const SCRIPTURE_SEARCH_RESULT_LIMIT = 8;
 const OLD_TESTAMENT_BOOK_COUNT = 39;
 
 type BrowseStep = "books" | "chapters" | "verses";
@@ -66,12 +60,6 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
   const [selectionStart, setSelectionStart] = useState<number>();
   const [selectionEnd, setSelectionEnd] = useState<number>();
   const [pendingScrollVerse, setPendingScrollVerse] = useState<number>();
-  const [searchResultState, setSearchResultState] = useState<{ key: string; results: ScriptureSearchResult[] }>();
-  const [searchingKey, setSearchingKey] = useState<string>();
-  const [completedSearchKey, setCompletedSearchKey] = useState<string>();
-  const [searchErrorKey, setSearchErrorKey] = useState<string>();
-  const [searchRetry, setSearchRetry] = useState(0);
-  const searchRequestRef = useRef(0);
   const verseListRef = useRef<FlatList<BibleChapterVerse>>(null);
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? firstBook;
@@ -83,18 +71,7 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
     ? buildBibleVerse(selectedBook, selectedChapter, selectionStart, selectionEnd ?? selectionStart, bibleVersionId)
     : undefined;
   const bibleVersion = bibleVersionFor(bibleVersionId);
-  const normalizedScriptureQuery = normalizeScriptureQuery(scriptureQuery);
-  const normalizedSearchLength = normalizedScriptureQuery.replace(/[^\p{L}\p{N}]/gu, "").length;
-  const isDirectReference = Boolean(
-    normalizedScriptureQuery && resolveBibleReference(normalizedScriptureQuery, language, bibleVersionId),
-  );
-  const canSearchScripture = isDirectReference || normalizedSearchLength >= SCRIPTURE_SEARCH_MIN_LENGTH;
-  const searchKey = `${language}|${bibleVersionId}|${normalizedScriptureQuery}|${searchRetry}`;
-  const currentSearchResults = searchResultState?.key === searchKey ? searchResultState.results : [];
-  const isSearching = searchingKey === searchKey;
-  const hasCompletedSearch = completedSearchKey === searchKey;
-  const hasSearchError = searchErrorKey === searchKey;
-  const isShowingSearch = normalizedScriptureQuery.length > 0;
+  const isShowingSearch = scriptureQuery.trim().length > 0;
 
   const filteredBooks = useMemo(() => {
     const locale = language === "sv" ? "sv" : "en";
@@ -108,7 +85,6 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
 
   useEffect(() => {
     if (visible) return;
-    searchRequestRef.current += 1;
     setBrowseStep("books");
     setScriptureQuery("");
     setBookQuery("");
@@ -117,60 +93,7 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
     setSelectionStart(undefined);
     setSelectionEnd(undefined);
     setPendingScrollVerse(undefined);
-    setSearchResultState(undefined);
-    setSearchingKey(undefined);
-    setCompletedSearchKey(undefined);
-    setSearchErrorKey(undefined);
-    setSearchRetry(0);
   }, [firstBook, visible]);
-
-  useEffect(() => {
-    const requestId = ++searchRequestRef.current;
-    let active = true;
-    let searchTimer: ReturnType<typeof setTimeout> | undefined;
-
-    if (!visible || !canSearchScripture) {
-      setSearchResultState(undefined);
-      setSearchingKey(undefined);
-      setCompletedSearchKey(undefined);
-      setSearchErrorKey(undefined);
-      return;
-    }
-
-    setSearchResultState(undefined);
-    setSearchingKey(searchKey);
-    setCompletedSearchKey(undefined);
-    setSearchErrorKey(undefined);
-
-    async function runSearch() {
-      try {
-        const results = await searchScripture({
-          language,
-          limit: SCRIPTURE_SEARCH_RESULT_LIMIT,
-          query: normalizedScriptureQuery,
-          versionId: bibleVersionId,
-        });
-        if (!active || requestId !== searchRequestRef.current) return;
-        setSearchResultState({ key: searchKey, results });
-        setCompletedSearchKey(searchKey);
-      } catch {
-        if (!active || requestId !== searchRequestRef.current) return;
-        setSearchResultState({ key: searchKey, results: [] });
-        setCompletedSearchKey(searchKey);
-        setSearchErrorKey(searchKey);
-      } finally {
-        if (active && requestId === searchRequestRef.current) setSearchingKey(undefined);
-      }
-    }
-
-    if (isDirectReference) void runSearch();
-    else searchTimer = setTimeout(() => void runSearch(), SCRIPTURE_SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      active = false;
-      if (searchTimer) clearTimeout(searchTimer);
-    };
-  }, [bibleVersionId, canSearchScripture, isDirectReference, language, normalizedScriptureQuery, searchKey, visible]);
 
   useEffect(() => {
     if (browseStep !== "verses" || pendingScrollVerse === undefined || chapterVerses.length === 0) return;
@@ -206,8 +129,8 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
     setSelectionEnd(nextSelection.end);
   }
 
-  function openSearchResult(result: ScriptureSearchResult) {
-    const { book: resultBook, chapter, startVerse, endVerse } = result.verse;
+  function openSearchResult(verse: BibleVerse) {
+    const { book: resultBook, chapter, startVerse, endVerse } = verse;
     if (!resultBook || !chapter || !startVerse) return;
     setSelectedBook(resultBook);
     setSelectedChapter(chapter);
@@ -253,7 +176,6 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
                 autoCapitalize="sentences"
                 onChangeText={(value) => {
                   setScriptureQuery(value);
-                  setSearchRetry(0);
                 }}
                 placeholder={t("shared.scripturePicker.searchPlaceholder")}
                 returnKeyType="search"
@@ -297,17 +219,14 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
 
         <View style={{ borderTopColor: colors.line, borderTopWidth: 1, flex: 1 }}>
           {isShowingSearch ? (
-            <SearchResults
-              canSearch={canSearchScripture}
-              hasCompleted={hasCompletedSearch}
-              hasError={hasSearchError}
-              isSearching={isSearching}
-              language={language}
-              onClear={() => setScriptureQuery("")}
-              onRetry={() => setSearchRetry((value) => value + 1)}
+            <ScriptureSearchContent
+              bibleVersionId={bibleVersionId}
+              visible={visible}
+              limit={8}
+              query={scriptureQuery}
+              onQueryChange={setScriptureQuery}
+              showInput={false}
               onSelect={openSearchResult}
-              results={currentSearchResults}
-              t={t}
             />
           ) : browseStep === "books" ? (
             <BookBrowser
@@ -567,73 +486,5 @@ function VerseBrowser({ chapterVerses, listRef, onSelect, selectionEnd, selectio
       }}
       showsVerticalScrollIndicator={false}
     />
-  );
-}
-
-function SearchResults({ canSearch, hasCompleted, hasError, isSearching, language, onClear, onRetry, onSelect, results, t }: {
-  canSearch: boolean;
-  hasCompleted: boolean;
-  hasError: boolean;
-  isSearching: boolean;
-  language: "en" | "sv";
-  onClear: () => void;
-  onRetry: () => void;
-  onSelect: (result: ScriptureSearchResult) => void;
-  results: ScriptureSearchResult[];
-  t: ReturnType<typeof useAppTranslation>["t"];
-}) {
-  const bookLanguage = useBibleBookLanguage();
-  return (
-    <ScrollView contentContainerStyle={{ gap: 10, padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      {!canSearch ? (
-        <View style={{ alignItems: "center", gap: 8, paddingVertical: 34 }}>
-          <Feather color={colors.muted} name="search" size={25} />
-          <Text style={[typography.body, { color: colors.muted, textAlign: "center" }]}>{t("shared.scripturePicker.searchHint")}</Text>
-        </View>
-      ) : null}
-      {isSearching ? (
-        <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={{ alignItems: "center", gap: 10, paddingVertical: 34 }}>
-          <ActivityIndicator color={colors.olive} size="small" />
-          <Text style={[typography.body, { color: colors.muted }]}>{t("shared.scripturePicker.searching")}</Text>
-        </View>
-      ) : null}
-      {results.map((result) => (
-        <Pressable
-          accessibilityLabel={t("shared.scripturePicker.resultAccessibility", { reference: displayBibleReference(result.verse.reference, bookLanguage), text: result.verse.text })}
-          accessibilityRole="button"
-          key={`${result.verse.reference}-${result.verse.text}`}
-          onPress={() => onSelect(result)}
-          style={({ pressed }) => ({ backgroundColor: pressed ? colors.accentSubtle : colors.paper, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 6, minHeight: 78, paddingHorizontal: 14, paddingVertical: 12 })}
-        >
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <Text numberOfLines={1} style={[typography.label, { color: colors.olive, flex: 1 }]}>{displayBibleReference(result.verse.reference, bookLanguage)}</Text>
-            <Feather color={colors.muted} name="chevron-right" size={17} />
-          </View>
-          <Text numberOfLines={3} style={[typography.body, { color: colors.ink, fontSize: 14, lineHeight: 21 }]}>{result.verse.text}</Text>
-        </Pressable>
-      ))}
-      {hasCompleted && !hasError && results.length === 0 ? (
-        <SearchEmpty icon="book-open" message={t("shared.scripturePicker.noSearchResults")} action={t("shared.scripturePicker.clearSearchAction")} onAction={onClear} />
-      ) : null}
-      {hasError ? (
-        <SearchEmpty icon="alert-circle" message={t("shared.scripturePicker.searchError")} action={t("shared.scripturePicker.retrySearch")} onAction={onRetry} />
-      ) : null}
-    </ScrollView>
-  );
-}
-
-function SearchEmpty({ action, icon, message, onAction }: { action: string; icon: "alert-circle" | "book-open"; message: string; onAction: () => void }) {
-  return (
-    <View accessibilityLiveRegion="polite" style={{ alignItems: "center", gap: 12, paddingVertical: 34 }}>
-      <Feather color={colors.muted} name={icon} size={26} />
-      <Text style={[typography.body, { color: colors.muted, textAlign: "center" }]}>{message}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onAction}
-        style={({ pressed }) => ({ alignItems: "center", backgroundColor: pressed ? colors.accentSubtle : colors.paper, borderColor: colors.line, borderRadius: 999, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: 18 })}
-      >
-        <Text style={[typography.button, { color: colors.olive }]}>{action}</Text>
-      </Pressable>
-    </View>
   );
 }

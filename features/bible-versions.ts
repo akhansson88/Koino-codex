@@ -1,6 +1,6 @@
 export const bibleVersions = [
-  { id: "kjv", label: "KJV", translation: "KJV" },
-  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026" },
+  { id: "kjv", label: "KJV", translation: "KJV", hasAudio: false },
+  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", hasAudio: true },
 ] as const;
 
 export type BibleVersionId = (typeof bibleVersions)[number]["id"];

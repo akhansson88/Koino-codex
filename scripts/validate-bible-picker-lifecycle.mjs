@@ -59,9 +59,10 @@ const mocks = {
   "@/features/bible-kjv": `
     export const kjvBooks = [{ name: "Genesis", chapters: [1] }];
     export const bibleVersionFor = () => ({ label: "KJV" });
-    export const bibleChapterVerses = () => [{ verse: 1, text: "In the beginning", footnotes: [] }];
-    export const buildBibleVerse = () => ({ reference: "Genesis 1:1", text: "In the beginning", translation: "kjv" });
+    export const bibleChapterVerses = () => [{ verse: 1, text: "In the beginning", footnotes: [] }, { verse: 2, text: "And the earth", footnotes: [] }];
+    export const buildBibleVerse = (book, chapter, startVerse, endVerse) => ({ book, chapter, startVerse, endVerse, reference: "Genesis " + chapter + ":" + startVerse + (endVerse > startVerse ? "-" + endVerse : ""), text: endVerse > startVerse ? "In the beginning And the earth" : "In the beginning", translation: "kjv" });
   `,
+  "@/features/bible-search/search-content": `export const ScriptureSearchContent = "ScriptureSearchContent";`,
   "@/features/bible-search": `
     export const displayBibleBookName = value => value, displayBibleReference = value => value;
     export const normalizeScriptureQuery = value => value.trim();
@@ -136,7 +137,16 @@ try {
   assert.equal(lifecycle.mounts, 3);
   assert.equal(lifecycle.unmounts, 3);
   assert.equal(selections.length, 1);
-  console.log("Bible picker lifecycle validation passed: cold load, selection, reopen, and loading cancellation.");
+  // Shared search returns complete ranges; opening a result must keep both boundaries.
+  lifecycle.ready = true;
+  await press("SecondaryButton");
+  await act(async () => { renderer.root.findAllByType("TextInputField").find(node => node.props.accessibilityLabel === "shared.scripturePicker.searchAccessibility").props.onChangeText("creation"); });
+  await act(async () => { renderer.root.findByType("ScriptureSearchContent").props.onSelect({ book: "Genesis", chapter: 1, startVerse: 1, endVerse: 2, reference: "Genesis 1:1-2", text: "In the beginning And the earth", translation: "kjv" }); });
+  await press("PrimaryButton");
+  assert.equal(selections.at(-1).at(-1).reference, "Genesis 1:1-2");
+  assert.equal(selections.at(-1).at(-1).endVerse, 2);
+  assert.equal(selections.at(-1).at(-1).text, "In the beginning And the earth");
+  console.log("Bible picker lifecycle validation passed: cold load, selection, reopen, loading cancellation, and full search ranges.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   delete globalThis.__pickerLifecycle;

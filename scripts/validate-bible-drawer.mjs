@@ -27,7 +27,7 @@ const mocks = {
   "@/features/bible-kjv": `export { kjvBooks, normalizeBiblePosition } from ${JSON.stringify(path.resolve("features/bible-canon.ts"))}; export const buildBibleVerse=()=>undefined, searchBibleText=async()=>[];`,
   "@/features/bible-search": `export const biblePositionFromSearchQuery=()=>undefined, displayBibleBookName=name=>name, displayBibleReference=name=>name;`,
   "@/features/bible-reader/verse-helpers": `import { kjvBooks } from "@/features/bible-kjv"; export const testamentForBook=name=>kjvBooks.findIndex(book=>book.name===name)<39?"old":"new"; export const biblePositionFromVerse=()=>undefined, highlightTime=()=>0, chapterLabel=()=>"John 6", referenceLabel=()=>"";`,
-  "@/features/bible-reader/topics-api": `export const suggestedTopics=[];`,
+  "@/features/bible-search/search-content": `export const ScriptureSearchContent="ScriptureSearchContent";`,
   "@/features/bible-reader/sheet-primitives": `export const BibleSheetTop="BibleSheetTop", bibleSheetHorizontalPadding=20;`,
   "@/features/bible-reader/header": `export const ReaderCircleButton="ReaderCircleButton";`,
   "@/features/bible-reader/verse-actions": `export const SavedVerseActionSheet="SavedVerseActionSheet";`,
@@ -115,7 +115,7 @@ try {
   await act(async () => { root().findByType("sheet").props.onBack(); });
   assert.equal(state.closes, closes + 1, "Android back closes the root list");
   await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, initialStage: "search" })); });
-  assert.equal(root().findByType("DrawerSearchBox").props.placeholder, "bible.navigator.searchPlaceholder", "Header search still works");
+  assert.equal(root().findAllByType("ScriptureSearchContent").length, 1, "Legacy drawer search uses the shared search view");
   const saved = { id: "saved-john", reference: "John 1:3-4", text: "The entire saved passage remains visible, including its final words.", translation: "Reformationsbibeln 2026", savedAt: "2026-10-07T10:00:00Z" };
   await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, initialStage: "myPlaces", savedVerses: [saved] })); });
   assert.equal(state.catalogRefreshes, 0, "Audio catalog is refreshed only when saved verses open");

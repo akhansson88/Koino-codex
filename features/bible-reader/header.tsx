@@ -55,6 +55,7 @@ export function BibleReaderHeader({
   onOpenSearch,
   onOpenSettings,
   onOpenAudio,
+  audioAvailable,
   onOpenMyPlaces,
   onOpenVersionPicker,
   palette,
@@ -72,6 +73,7 @@ export function BibleReaderHeader({
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onOpenAudio: () => void;
+  audioAvailable: boolean;
   onOpenMyPlaces: () => void;
   onOpenVersionPicker: () => void;
   palette: ReaderPalette;
@@ -146,7 +148,7 @@ export function BibleReaderHeader({
         <View style={{ flex: 1 }} />
         <View style={{ flexDirection: "row", gap: 6 }}>
           <ReaderCircleButton accessibilityLabel={t("bible.navigator.myPlaces")} icon="bookmark" onPress={onOpenMyPlaces} palette={palette} />
-          <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} />
+          {audioAvailable ? <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} /> : null}
         </View>
       </View>
     </View>

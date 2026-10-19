@@ -44,3 +44,8 @@ __pycache__/
 /test_screen*.png
 /modal_state.png
 /*.xml
+
+# Search generation caches and source downloads are not native build inputs.
+/assets/bible/search/.cache/
+/assets/bible/search/sources/
+/scripts/hybrid-search/.deps/

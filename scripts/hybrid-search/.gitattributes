@@ -1,0 +1,4 @@
+# Preserve vendored upstream bytes; sources.lock.json verifies their SHA-256.
+vendor/*.mjs -text
+vendor/*.js -text
+*.json text eol=lf

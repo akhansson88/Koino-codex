@@ -34,6 +34,8 @@ globalThis.__audioRestoreTest = {
     isAudioPassage: value => { scenario.validatedPassage = value; return scenario.passageValid; },
     setSpeed: async speed => { scenario.speed = speed; },
     start: async (...args) => { scenario.start = args; },
+    selectChapter: async selection => { scenario.selected = selection; },
+    playSelectedChapter: async refresh => { scenario.selectedCatalog = await refresh(); },
     startPassage: () => {}, stop: async () => {}, savePosition: async () => {},
     adjacent: () => undefined,
   },
@@ -48,7 +50,7 @@ const result = await build({
     builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path }) => ({ contents: path === "react-native"
       ? `export const AppState = { currentState: "active", addEventListener: () => ({ remove: () => {} }) };`
       : path === "./engine"
-        ? `export const {subscribe,getSnapshot,getSessionGeneration,setAudioCatalog,applyAudioCatalog,observeForeground,loadTopicPreferences,restoreTopicPlayback,startTopicPlaylist,setTopicPause,setTopicLoop,moveTopicPassage,hasNativeQueue,ensurePlayer,syncFromNative,isAudioPassage,setSpeed,start,startPassage,stop,savePosition,adjacent,toggle,move,moveChapter,seek,setContinuous,setSleep,retry}=globalThis.__audioRestoreTest.engine;`
+        ? `export const {subscribe,getSnapshot,getSessionGeneration,setAudioCatalog,applyAudioCatalog,observeForeground,loadTopicPreferences,restoreTopicPlayback,startTopicPlaylist,setTopicPause,setTopicLoop,moveTopicPassage,hasNativeQueue,ensurePlayer,syncFromNative,isAudioPassage,setSpeed,start,selectChapter,playSelectedChapter,startPassage,stop,savePosition,adjacent,toggle,move,moveChapter,seek,setContinuous,setSleep,retry}=globalThis.__audioRestoreTest.engine;`
         : `export default globalThis.__audioRestoreTest.storage;`, loader: "js" }));
   } }],
 });
@@ -65,7 +67,7 @@ async function restore(saved, overrides, verify) {
       renderer = create(React.createElement(BibleAudioProvider, null, React.createElement(Consumer)));
       await new Promise(resolve => setImmediate(resolve));
     });
-    verify(scenario);
+    await verify(scenario);
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
   }
@@ -116,4 +118,18 @@ await restore(topicState, { nativeQueue: true }, value => {
 await restore(topicState, { advanceGeneration: true }, value => {
   assert.equal(value.topicRestored, undefined, "a newer request prevents stale topic restoration");
 });
-console.log("Bible audio restoration validation passed: topic preferences/restoration, paused passage restore, legacy compatibility, invalid metadata, native queue precedence, and session generation guard.");
+await restore(saved, { advanceGeneration: true }, async value => {
+  const selection = { book: 'John', chapter: 1, verse: 2 };
+  assert.equal(controller.selectChapter, globalThis.__audioRestoreTest.engine.selectChapter);
+  await controller.selectChapter(selection);
+  assert.deepEqual(value.selected, selection);
+  await act(async () => { await controller.playSelectedChapter(); });
+  assert.equal(value.selectedCatalog, catalog, 'selected playback can refresh the catalog through the provider');
+  value.selectedCatalog = undefined;
+  snapshot.chapterSelection = selection;
+  try {
+    await act(async () => { await controller.retry(); });
+    assert.equal(value.selectedCatalog, catalog, 'selected retry also retains catalog discovery');
+  } finally { delete snapshot.chapterSelection; }
+});
+console.log("Bible audio restoration validation passed: selected playback/catalog retries, topic preferences/restoration, paused passage restore, legacy compatibility, invalid metadata, native queue precedence, and session generation guard.");

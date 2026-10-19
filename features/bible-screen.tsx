@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -26,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   initialBibleHistory,
   moveBibleHistory,
+  sameBiblePosition,
   updateBibleHistoryPosition,
   visitBiblePosition,
   type BibleHistory,
@@ -63,14 +66,11 @@ import {
   type BibleReaderFontId,
   type BibleReaderThemePreference,
   type SelectedBibleFootnote,
-  type BibleTopicResult,
-  type BibleTopicVoteValue,
   type ReaderToast,
   type PendingVerseComposerAction,
   type ChapterSwipeDirection,
   type BibleReaderPreferences,
   type VerseQuickAction,
-  type BibleTopicReference,
 } from "@/features/bible-reader/types";
 import {
   defaultPosition,
@@ -99,15 +99,7 @@ import {
   verseRangesOverlap,
   chapterLabel,
   bibleVersionShortLabel,
-  biblePositionFromReference,
 } from "@/features/bible-reader/verse-helpers";
-import {
-  fetchBibleTopic,
-  searchBibleTopicText,
-  bibleTopicVoteKey,
-  submitBibleTopicVote,
-  bibleTopicKey,
-} from "@/features/bible-reader/topics-api";
 import { BibleReaderHeader } from "@/features/bible-reader/header";
 import { BiblePlanReaderPanel } from "@/features/bible-reader/plan-panel";
 import { BibleText } from "@/features/bible-reader/chapter-text";
@@ -120,7 +112,8 @@ import { ReadingSettingsSheet } from "@/features/bible-reader/reading-settings";
 import { BibleVersionSheet } from "@/features/bible-reader/version-sheet";
 import { CrossReferenceSheet, FootnoteSheet } from "@/features/bible-reader/reference-sheets";
 import { BibleDrawer } from "@/features/bible-reader/drawer";
-import { BibleTopicsModal } from "@/features/bible-reader/topics-modal";
+import { ScriptureSearchContent } from "@/features/bible-search/search-content";
+import { ReaderCircleButton } from "@/features/bible-reader/header";
 
 function isChapterSwipeGesture(dx: number, dy: number) {
   return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
@@ -176,7 +169,6 @@ export function BibleScreen() {
   const historyRef = useRef<BibleHistory>(initialBibleHistory(defaultPosition));
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const topicRequestRef = useRef(0);
   const chapterSwipeX = useRef(new Animated.Value(0)).current;
   const chapterSwipeAnimatingRef = useRef(false);
   const chapterSwipeBlockedByScrollRef = useRef(false);
@@ -205,15 +197,8 @@ export function BibleScreen() {
   const [reflectionText, setReflectionText] = useState("");
   const [crossReferencePosition, setCrossReferencePosition] = useState<BiblePosition | undefined>();
   const [selectedFootnote, setSelectedFootnote] = useState<SelectedBibleFootnote | undefined>();
-  const [topicsVisible, setTopicsVisible] = useState(false);
-  const [topicDetailVisible, setTopicDetailVisible] = useState(false);
-  const [selectedTopic, setSelectedTopic] = useState("");
-  const [topicResult, setTopicResult] = useState<BibleTopicResult | undefined>();
-  const [topicError, setTopicError] = useState<string | undefined>();
-  const [topicLoading, setTopicLoading] = useState(false);
-  const [topicUserVotes, setTopicUserVotes] = useState<Record<string, BibleTopicVoteValue>>({});
-  const [topicVotePending, setTopicVotePending] = useState("");
-  const [topicVoteError, setTopicVoteError] = useState<string | undefined>();
+  const [searchVisible, setSearchVisible] = useState(false);
+  const browseAfterSearchDismiss = useRef(false);
   const [scriptureComposerVisible, setScriptureComposerVisible] = useState(false);
   const [scriptureComposerIntent, setScriptureComposerIntent] = useState<BibleComposerIntent>("reflect");
   const [scriptureComposerContext, setScriptureComposerContext] = useState<"journal" | "room">("journal");
@@ -260,8 +245,10 @@ export function BibleScreen() {
   const activelyFollowingAudio = followAudio && !boundedAudioPending && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
   const [audioMiniHeight, setAudioMiniHeight] = useState(82);
   const [audioMiniTop, setAudioMiniTop] = useState<number | undefined>();
-  const spokenVerse = audio.session?.chapter.verses[audio.session.index].verse;
-  const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audio.session?.chapter.book === position.book && audio.session.chapter.chapter === position.chapter;
+  const audioChapter = audio.chapterSelection ?? audio.session?.chapter;
+  const hasAudioSelection = !!(audio.chapterSelection || audio.session);
+  const spokenVerse = audio.chapterSelection?.verse ?? audio.session?.chapter.verses[audio.session.index].verse;
+  const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audioChapter?.book === position.book && audioChapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
   const [loadedChapter, setLoadedChapter] = useState<{ key: string; value: BibleChapter }>();
   const [chapterLoadError, setChapterLoadError] = useState(false);
@@ -366,12 +353,12 @@ export function BibleScreen() {
   const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const chapterControlsVisible = !selectedVerseBarVisible && !(audio.session && activelyFollowingAudio);
+  const chapterControlsVisible = !selectedVerseBarVisible && !(hasAudioSelection && activelyFollowingAudio);
   const floatingControlsBottom = tabBarHeight(insets.bottom) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
     : chapterControlsVisible ? chapterControlsHeight : 0;
-  const readerBottomPadding = (audio.session ? audioMiniHeight + 12 : 0) + Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
+  const readerBottomPadding = (hasAudioSelection ? audioMiniHeight + 12 : 0) + Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
   const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
   const readerCanGoBack = navigation.canGoBack();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -729,7 +716,7 @@ export function BibleScreen() {
   const jumpToPosition = useCallback(
     (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = false, fromAudio = false) => {
       if (!fromAudio) { setFollowAudio(false); audioFollowScroll.current.cancel(); }
-      const normalized = normalizeBiblePosition(nextPosition);
+      const normalized = normalizeBiblePosition(nextPosition, fromAudio ? "reformationsbibeln2026" : bibleVersionId);
       const current = positionRef.current;
       programmaticScrollVerseRef.current = undefined;
       const nextHistory = visitBiblePosition(historyRef.current, normalized);
@@ -758,7 +745,7 @@ export function BibleScreen() {
         showTemporaryHighlight(normalized);
       }
     },
-    [showTemporaryHighlight, tryScrollToVerse],
+    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse],
   );
 
   const hadAudioSession = useRef(false);
@@ -772,32 +759,32 @@ export function BibleScreen() {
 
   useEffect(() => {
     if (audio.session && !audio.session.passage && !audio.session.topic && !boundedAudioPending && !hadAudioSession.current) setFollowAudio(true);
-    if (!audio.session) {
+    if (!hasAudioSelection) {
       audioFollowScroll.current.cancel();
       setFollowedAudioPassageKey(undefined);
       if (hadAudioSession.current && !boundedAudioPending) setFollowAudio(true);
     }
-    hadAudioSession.current = !!audio.session;
-  }, [audio.session, boundedAudioPending]);
+    hadAudioSession.current = hasAudioSelection;
+  }, [audio.session, hasAudioSelection, boundedAudioPending]);
 
   useEffect(() => {
-    const session = audio.session;
-    if (!session || !activelyFollowingAudio || !isAudioPageFocused || !spokenVerse) { audioFollowScroll.current.cancel(); return; }
+    if (!audioChapter || !activelyFollowingAudio || !isAudioPageFocused || !spokenVerse) { audioFollowScroll.current.cancel(); return; }
     pendingScrollVerseRef.current = undefined;
-    const targetKey = `reformationsbibeln2026:${session.chapter.book}:${session.chapter.chapter}`;
+    const targetKey = `reformationsbibeln2026:${audioChapter.book}:${audioChapter.chapter}`;
     audioFollowScroll.current.request(targetKey, spokenVerse);
     if (bibleVersionId !== "reformationsbibeln2026") setBibleVersionId("reformationsbibeln2026");
-    if (positionRef.current.book !== session.chapter.book || positionRef.current.chapter !== session.chapter.chapter) {
-      jumpToPosition({ book: session.chapter.book, chapter: session.chapter.chapter, verse: spokenVerse }, false, false, true);
+    if (positionRef.current.book !== audioChapter.book || positionRef.current.chapter !== audioChapter.chapter) {
+      jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse }, false, false, true);
     }
     const frame = requestAnimationFrame(scrollToAudioVerse);
     return () => { cancelAnimationFrame(frame); audioFollowScroll.current.cancel(); };
-  }, [audio.session?.entry.manifestUrl, audioPassageKey, spokenVerse, audio.navigationRevision, audio.playWhenReady, activelyFollowingAudio, isAudioPageFocused, bibleVersionId, scrollToAudioVerse, jumpToPosition]);
+  }, [audioChapter?.book, audioChapter?.chapter, audio.session?.entry.manifestUrl, audioPassageKey, spokenVerse, audio.navigationRevision, audio.playWhenReady, activelyFollowingAudio, isAudioPageFocused, bibleVersionId, scrollToAudioVerse, jumpToPosition]);
 
   const travelHistory = useCallback((direction: -1 | 1) => {
     setFollowAudio(false); audioFollowScroll.current.cancel();
-    const nextHistory = moveBibleHistory(historyRef.current, direction);
-    if (nextHistory === historyRef.current) return;
+    const movedHistory = moveBibleHistory(historyRef.current, direction);
+    if (movedHistory === historyRef.current) return;
+    const nextHistory = updateBibleHistoryPosition(movedHistory, normalizeBiblePosition(movedHistory.entries[movedHistory.index], bibleVersionId));
     historyRef.current = nextHistory;
     setHistory(nextHistory);
     const destination = nextHistory.entries[nextHistory.index];
@@ -813,7 +800,7 @@ export function BibleScreen() {
     if (sameChapter) requestAnimationFrame(() => tryScrollToVerse(destination.verse, true));
     positionRef.current = destination;
     setPosition(destination);
-  }, [tryScrollToVerse]);
+  }, [bibleVersionId, tryScrollToVerse]);
 
   useEffect(() => {
     if (!preferencesReady || !planParams.planId || !planParams.planJump || handledPlanJump.current === planParams.planJump) return;
@@ -846,6 +833,20 @@ export function BibleScreen() {
 
   const chooseBibleVersion = useCallback((nextVersionId: BibleVersionId) => {
     setFollowAudio(false); audioFollowScroll.current.cancel();
+    const nextPosition = normalizeBiblePosition(positionRef.current, nextVersionId);
+    positionRef.current = nextPosition;
+    setPosition(nextPosition);
+    const entries: BiblePosition[] = [];
+    let index = 0;
+    historyRef.current.entries.forEach((entry, entryIndex) => {
+      const normalized = normalizeBiblePosition(entry, nextVersionId);
+      if (!entries.length || !sameBiblePosition(entries[entries.length - 1], normalized)) entries.push(normalized);
+      if (entryIndex === historyRef.current.index) index = entries.length - 1;
+    });
+    const nextHistory = { entries, index };
+    historyRef.current = nextHistory;
+    setHistory(nextHistory);
+    setSelectedVerseNumbers([]);
     setBibleVersionId(nextVersionId);
     notifyBibleVersionPreferenceChanged(nextVersionId);
   }, []);
@@ -863,10 +864,10 @@ export function BibleScreen() {
 
   const openCrossReferences = useCallback(
     (verse: number) => {
-      const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+      const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse }, bibleVersionId);
       setCrossReferencePosition(nextPosition);
     },
-    [],
+    [bibleVersionId],
   );
 
   const readCrossReferenceChapter = useCallback(
@@ -932,7 +933,7 @@ export function BibleScreen() {
       return;
     }
 
-    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse }, bibleVersionId);
     positionRef.current = nextPosition;
     setPosition(nextPosition);
     const nextHistory = updateBibleHistoryPosition(historyRef.current, nextPosition);
@@ -946,12 +947,12 @@ export function BibleScreen() {
 
       return [...current, verse].sort((a, b) => a - b);
     });
-  }, []);
+  }, [bibleVersionId]);
 
   const handleVerseLongPress = useCallback((verse: number) => {
     actionReturnFocusRef.current = verseRowsRef.current[verse] ?? null;
     verseLongPressActiveRef.current = true;
-    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse });
+    const nextPosition = normalizeBiblePosition({ book: positionRef.current.book, chapter: positionRef.current.chapter, verse }, bibleVersionId);
     positionRef.current = nextPosition;
     setPosition(nextPosition);
     const nextHistory = updateBibleHistoryPosition(historyRef.current, nextPosition);
@@ -964,7 +965,7 @@ export function BibleScreen() {
     }
     setHighlightedPosition(undefined);
     setSelectedVersePosition(nextPosition);
-  }, []);
+  }, [bibleVersionId]);
 
   const verseForPosition = useCallback(
     (target?: BiblePosition) => {
@@ -1303,86 +1304,8 @@ export function BibleScreen() {
     return () => clearTimeout(timeout);
   }, [readerToast]);
 
-  const openTopic = useCallback((topic: string) => {
-    const nextTopic = topic.trim();
-    if (!nextTopic) return;
-
-    setFollowAudio(false);
-    audioFollowScroll.current.cancel();
-
-    const requestId = topicRequestRef.current + 1;
-    topicRequestRef.current = requestId;
-    setSelectedTopic(nextTopic);
-    setTopicsVisible(true);
-    setTopicDetailVisible(true);
-    setTopicResult(undefined);
-    setTopicError(undefined);
-    setTopicLoading(true);
-    setTopicVoteError(undefined);
-    setTopicVotePending("");
-
-    void fetchBibleTopic(nextTopic)
-      .then((result) => {
-        if (topicRequestRef.current !== requestId) return;
-        setTopicResult(result);
-      })
-      .catch(async (error: unknown) => {
-        if (topicRequestRef.current !== requestId) return;
-        try {
-          const references = await searchBibleTopicText(nextTopic, bibleVersionId);
-          if (topicRequestRef.current !== requestId) return;
-          if (references.length > 0) {
-            setTopicResult({ count: references.length, references, source: "text-search", sourceUrl: "", topic: nextTopic });
-            return;
-          }
-        } catch {
-          // Preserve the original OpenBible error below.
-        }
-        setTopicError(error instanceof Error ? error.message : "Could not load this topic.");
-      })
-      .finally(() => {
-        if (topicRequestRef.current === requestId) {
-          setTopicLoading(false);
-        }
-      });
-  }, [bibleVersionId]);
-
-  async function castTopicVote(reference: BibleTopicReference, value: BibleTopicVoteValue) {
-    if (!reference.voteId || topicVotePending) return;
-    const voteTopic = selectedTopic;
-    const voteKey = bibleTopicVoteKey(voteTopic, reference.voteId);
-    const topicSession = topicRequestRef.current;
-    if (topicUserVotes[voteKey]) return;
-
-    setTopicVotePending(voteKey);
-    setTopicVoteError(undefined);
-    try {
-      await submitBibleTopicVote(voteTopic, reference.voteId, value);
-      setTopicUserVotes((current) => ({ ...current, [voteKey]: value }));
-      setTopicResult((current) => {
-        if (!current || bibleTopicKey(current.topic) !== bibleTopicKey(voteTopic)) return current;
-        return {
-          ...current,
-          references: current.references.map((item) =>
-            item.voteId === reference.voteId ? { ...item, votes: Math.max(0, item.votes + value) } : item,
-          ),
-        };
-      });
-    } catch (error) {
-      if (topicRequestRef.current === topicSession) {
-        setTopicVoteError(error instanceof Error ? error.message : "Could not submit this vote.");
-      }
-    } finally {
-      if (topicRequestRef.current === topicSession) setTopicVotePending("");
-    }
-  }
-
-  function closeTopics() {
-    topicRequestRef.current += 1;
-    setTopicsVisible(false);
-    setTopicDetailVisible(false);
-    setTopicLoading(false);
-    setTopicVotePending("");
+  function closeSearch() {
+    setSearchVisible(false);
   }
 
   function changeFontSize(delta: number) {
@@ -1417,10 +1340,28 @@ export function BibleScreen() {
           setPickerVisible(true);
         }}
         onOpenSearch={() => {
-          setPickerInitialStage("search");
-          setPickerVisible(true);
+          setFollowAudio(false);
+          audioFollowScroll.current.cancel();
+          setSearchVisible(true);
         }}
-        onOpenAudio={() => setAudioVisible(true)}
+        audioAvailable={bibleVersion.hasAudio}
+        onOpenAudio={() => {
+          if (!bibleVersion.hasAudio) return;
+          let verse = pendingScrollVerseRef.current ?? programmaticScrollVerseRef.current ?? positionRef.current.verse;
+          if (!pendingScrollVerseRef.current && programmaticScrollVerseRef.current === undefined) {
+            verse = chapterVerses[0]?.verse ?? verse;
+            for (const item of chapterVerses) {
+              const offset = verseOffsetsRef.current[item.verse];
+              if (typeof offset !== "number") continue;
+              if (offset > readerScrollOffsetRef.current + 24) break;
+              verse = item.verse;
+            }
+          }
+          setAudioVisible(false);
+          setFollowedAudioPassageKey(undefined);
+          setFollowAudio(true);
+          void audio.selectChapter({ ...positionRef.current, verse });
+        }}
         onOpenMyPlaces={() => {
           setFollowAudio(false);
           audioFollowScroll.current.cancel();
@@ -1450,7 +1391,7 @@ export function BibleScreen() {
           directionalLockEnabled
           keyboardShouldPersistTaps="handled"
           onScroll={handleScroll}
-          onScrollBeginDrag={() => { setFollowAudio(false); audioFollowScroll.current.cancel(); pendingScrollVerseRef.current = undefined; handleReaderScrollBeginDrag(); }}
+          onScrollBeginDrag={() => { setFollowAudio(false); audioFollowScroll.current.cancel(); pendingScrollVerseRef.current = undefined; programmaticScrollVerseRef.current = undefined; handleReaderScrollBeginDrag(); }}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
@@ -1522,13 +1463,13 @@ export function BibleScreen() {
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
         bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={activelyFollowingAudio}
         onFollow={() => {
-          if (audio.session && !boundedAudioPending) {
-            if (audio.session.topic) closeTopics();
-            setFollowedAudioPassageKey(audio.session.passage || audio.session.topic ? audioPassageKey : undefined);
+          if (audioChapter && !boundedAudioPending) {
+            if (audio.session?.topic) closeSearch();
+            setFollowedAudioPassageKey(audio.session?.passage || audio.session?.topic ? audioPassageKey : undefined);
             setBibleVersionId("reformationsbibeln2026");
             setFollowAudio(true);
-            jumpToPosition({ book: audio.session.chapter.book, chapter: audio.session.chapter.chapter, verse: spokenVerse ?? 1 }, false, false, true);
-            audioFollowScroll.current.request(`reformationsbibeln2026:${audio.session.chapter.book}:${audio.session.chapter.chapter}`, spokenVerse ?? 1);
+            jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse ?? 1 }, false, false, true);
+            audioFollowScroll.current.request(`reformationsbibeln2026:${audioChapter.book}:${audioChapter.chapter}`, spokenVerse ?? 1);
             requestAnimationFrame(scrollToAudioVerse);
           }
         }} />
@@ -1649,16 +1590,6 @@ export function BibleScreen() {
           setPickerVisible(false);
           router.push(`/me/${entryId}` as never);
         }}
-        onOpenTopic={(topic) => {
-          setFollowAudio(false);
-          audioFollowScroll.current.cancel();
-          setPickerVisible(false);
-          if (topic) {
-            openTopic(topic);
-            return;
-          }
-          setTopicsVisible(true);
-        }}
         onRemoveSavedVerse={async (id) => {
           await dispatch({ type: "removeSavedVerse", id });
           setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
@@ -1672,33 +1603,34 @@ export function BibleScreen() {
         versionLabel={bibleVersion.label}
         visible={pickerVisible}
       />
-      <BibleTopicsModal
-        bibleVersionId={bibleVersionId}
-        bibleVersionLabel={bibleVersion.label}
-        detailVisible={topicDetailVisible}
-        error={topicError}
-        loading={topicLoading}
-        onBack={() => {
-          setTopicDetailVisible(false);
-        }}
-        onClose={closeTopics}
-        onSelectTopic={openTopic}
-        onSelectReference={(reference) => {
-          const nextPosition = biblePositionFromReference(reference);
-          if (!nextPosition) return;
-          closeTopics();
-          jumpToPosition(nextPosition);
-        }}
-        onVote={(reference, value) => void castTopicVote(reference, value)}
-        palette={readerPalette}
-        references={topicResult?.references ?? []}
-        source={topicResult?.source ?? "openbible"}
-        topic={selectedTopic}
-        userVotes={topicUserVotes}
-        visible={topicsVisible}
-        voteError={topicVoteError}
-        votePending={topicVotePending}
-      />
+      <Modal animationType="slide" visible={searchVisible} onRequestClose={closeSearch} onDismiss={() => {
+        if (!browseAfterSearchDismiss.current) return;
+        browseAfterSearchDismiss.current = false;
+        setPickerInitialStage("home");
+        setPickerVisible(true);
+      }}>
+        {searchVisible ? <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: readerPalette.background }}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingHorizontal: 20, paddingVertical: 12 }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={{ color: readerPalette.text, fontSize: 22, fontWeight: "800" }}>{t("bible.search.title")}</Text>
+              <Text style={{ color: readerPalette.muted, fontSize: 12 }}>{bibleVersion.label}</Text>
+            </View>
+            <ReaderCircleButton accessibilityLabel={t("shared.scripturePicker.close")} icon="x" onPress={closeSearch} palette={readerPalette} />
+          </View>
+          <ScriptureSearchContent bibleVersionId={bibleVersionId} visible={searchVisible} palette={readerPalette}
+            onBrowse={() => {
+              // iOS must finish dismissing one native modal before presenting the drawer.
+              if (Platform.OS === "ios") browseAfterSearchDismiss.current = true;
+              closeSearch();
+              if (Platform.OS !== "ios") { setPickerInitialStage("home"); setPickerVisible(true); }
+            }}
+            onSelect={(verse) => {
+              if (!verse.book || !verse.chapter || !verse.startVerse) return;
+              closeSearch();
+              jumpToPosition({ book: verse.book, chapter: verse.chapter, verse: verse.startVerse }, true, true);
+            }} />
+        </View> : null}
+      </Modal>
       <SharedComposer
         bibleIntent={scriptureComposerIntent}
         visible={scriptureComposerVisible}

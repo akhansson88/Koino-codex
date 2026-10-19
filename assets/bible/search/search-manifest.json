@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "databaseSha256": "bd2b6d7d1f50b151469d5c79f4c37310f5079299f8d9ffdc5642bc6067089666",
+  "modelRevision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+  "dimensions": 384,
+  "vectorType": "int8",
+  "semanticMinSimilarity": 0.72,
+  "model": {
+    "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+    "dimensions": 384,
+    "maxTokens": 512
+  },
+  "assets": {
+    "model": {
+      "file": "multilingual-e5-small-int8.onnx",
+      "bytes": 118054593,
+      "sha256": "4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c",
+      "md5": "740088a6e59766f3d4b0dfd777c56f75"
+    },
+    "tokenizer": {
+      "file": "multilingual-e5-small.tokenizer",
+      "bytes": 17082730,
+      "sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+      "md5": "5a903c8df2ed2e71ae185cd0393e1625"
+    },
+    "tokenizerConfig": {
+      "file": "multilingual-e5-small-config.tokenizer",
+      "bytes": 443,
+      "sha256": "a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b",
+      "md5": "faf88bf063cd1a68807966a38234bd78"
+    },
+    "database": {
+      "file": "koino-search-v1.db",
+      "bytes": 282501120,
+      "sha256": "bd2b6d7d1f50b151469d5c79f4c37310f5079299f8d9ffdc5642bc6067089666",
+      "md5": "df22e8be1bbe8f2a03753afbb071bac6"
+    }
+  },
+  "counts": {
+    "documents": 98730,
+    "topics": 6752,
+    "verses": 62272,
+    "correspondences": 62210
+  },
+  "buildFingerprint": "360b028b75bbfa4ee8265d9f86c9e0133c33175a5474fb09938c70a8580313d9",
+  "readerSha256": "c7e494466a6553e33807b076744e46b1d9cda3b898dd2e816b7c2cf4e1b91cbc",
+  "mappingRevision": "koino-kjv-rfb-2026-10-18-v1"
+}

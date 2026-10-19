@@ -10,5 +10,14 @@ if (!fs.existsSync(bibleDatabase)) {
 }
 
 const config = getDefaultConfig(__dirname);
+// Keep the model and tokenizer JSON as file assets; importing tokenizer JSON as
+// JavaScript would parse its 250k-token vocabulary during application startup.
+config.resolver.assetExts = [...new Set([...config.resolver.assetExts, "onnx", "tokenizer"])];
+const existingBlockList = config.resolver.blockList;
+config.resolver.blockList = [
+  ...(Array.isArray(existingBlockList) ? existingBlockList : existingBlockList ? [existingBlockList] : []),
+  /[\\/]assets[\\/]bible[\\/]search[\\/]\.cache[\\/]/,
+  /[\\/]scripts[\\/]hybrid-search[\\/]\.deps[\\/]/,
+];
 
 module.exports = config;

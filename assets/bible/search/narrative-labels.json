@@ -1,0 +1,14 @@
+{
+  "provenance": "Koino-authored descriptive search metadata based on the cited Scripture passages. These labels describe corpus content and are not query-to-result overrides.",
+  "labels": [
+    {"en":"People worship Jesus; Jesus receives worship","sv":"Människor tillber Jesus; Jesus blir tillbedd","references":[[40,2,11,11],[40,14,33,33],[40,28,9,9],[40,28,17,17],[43,9,38,38],[58,1,6,6]]},
+    {"en":"Jesus commands his angels; authority over angels","sv":"Jesus befaller sina änglar; makt över änglarna","references":[[40,13,41,41],[40,24,31,31],[53,1,7,7],[51,1,16,16],[60,3,22,22],[66,22,16,16]]},
+    {"en":"Elisha makes a borrowed iron axe head float","sv":"Elisa får huvudet på en lånad yxa av järn att flyta","references":[[12,6,1,7]]},
+    {"en":"Elijah mocks the prophets of Baal; no answer to their prayers","sv":"Elia hånar Baals profeter; inget svar på deras böner","references":[[11,18,20,40]]},
+    {"en":"Balaam and the talking donkey","sv":"Bileam och den talande åsnan","references":[[4,22,21,33],[61,2,16,16]]},
+    {"en":"Grace; salvation as God's gift","sv":"Nåd; frälsningen som Guds gåva","references":[[49,2,8,9],[43,1,14,17],[47,12,9,9],[45,3,24,24],[45,5,20,21],[56,2,11,11]]},
+    {"en":"People see angels; angels appear","sv":"Människor ser änglar; änglar visar sig","references":[[43,1,51,51],[43,20,12,12],[1,28,12,12],[12,6,17,17],[42,2,9,15],[44,12,7,9]]},
+    {"en":"The Holy Spirit speaks and gives guidance","sv":"Den helige Ande talar och ger vägledning","references":[[44,8,29,29],[44,10,19,20],[44,13,2,2],[44,28,25,25],[54,4,1,1],[58,3,7,7]]},
+    {"en":"Jesus is transfigured; his face shines; Moses and Elijah appear","sv":"Jesus förklaras; hans ansikte lyser; Mose och Elia visar sig","references":[[40,17,1,8],[41,9,2,8],[42,9,28,36]]}
+  ]
+}

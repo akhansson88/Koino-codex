@@ -52,4 +52,8 @@ assert.deepEqual(readBibleHistory(JSON.parse(JSON.stringify(history)), at(1)), h
 assert.deepEqual(readBibleHistory(undefined, at(1)), initialBibleHistory(at(1)));
 assert.deepEqual(readBibleHistory({ entries: [{ book: "No book", chapter: 1, verse: 1 }], index: 0 }, at(1)), initialBibleHistory(at(1)));
 assert.deepEqual(readBibleHistory({ entries: [at(1)], index: 2 }, at(1)), initialBibleHistory(at(1)));
+const swedishPsalm = { book: "Psalms", chapter: 3, verse: 9 };
+const swedishHistory = initialBibleHistory(swedishPsalm);
+assert.deepEqual(readBibleHistory(swedishHistory, at(1), "reformationsbibeln2026"), swedishHistory, "Swedish-only verse numbers survive stored history");
+assert.deepEqual(readBibleHistory(swedishHistory, at(1), "kjv"), initialBibleHistory(at(1)), "KJV cannot restore a verse absent from its translation");
 console.log("Bible navigation history validation passed.");

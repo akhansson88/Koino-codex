@@ -38,3 +38,4 @@ __pycache__/
 .codex/encryption-export/
 .codex/encryption-functions-deploy/
 .codex/audit-legacy-collections.cjs
+.codex/search-*

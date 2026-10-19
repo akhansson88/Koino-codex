@@ -48,9 +48,10 @@ const baseConfig = {
     "expo-web-browser",
     "expo-notifications",
     "expo-font",
-    ["expo-sqlite", { enableFTS: true, useSQLCipher: true }],
+    ["expo-sqlite", { enableFTS: true, useSQLCipher: true, withSQLiteVecExtension: true }],
     "expo-secure-store",
     ["react-native-libsodium", {}],
+    "./plugins/with-variant-android-scheme.cjs",
   ],
   experiments: {
     typedRoutes: true,
@@ -62,7 +63,7 @@ const baseConfig = {
     },
   },
   // A concrete runtime version works in both generated native projects and EAS.
-  runtimeVersion: "2.0.1",
+  runtimeVersion: "2.1.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
   },

@@ -1,0 +1,8 @@
+assets/bible/search/*.onnx filter=lfs diff=lfs merge=lfs -text
+assets/bible/search/*.db filter=lfs diff=lfs merge=lfs -text
+scripts/native/sqlite-vec/** text eol=lf
+scripts/hybrid-search/vendor/** text eol=lf
+scripts/hybrid-search/*.mjs text eol=lf
+scripts/hybrid-search/*.py text eol=lf
+scripts/hybrid-search/*.json text eol=lf
+features/bible-search/embedding-core.mjs text eol=lf

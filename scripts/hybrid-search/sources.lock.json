@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "modelRevision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+  "upstreamModelRevision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "sources": [
+    {
+      "path": "assets/bible/search/multilingual-e5-small-int8.onnx",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26aab4e9ac3899aa1fa78/onnx/model_int8.onnx",
+      "license": "MIT; converted from intfloat/multilingual-e5-small",
+      "sha256": "4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c",
+      "bytes": 118054593
+    },
+    {
+      "path": "assets/bible/search/multilingual-e5-small.tokenizer",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26aab4e9ac3899aa1fa78/tokenizer.json",
+      "license": "MIT",
+      "sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+      "bytes": 17082730
+    },
+    {
+      "path": "assets/bible/search/multilingual-e5-small-config.tokenizer",
+      "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26aab4e9ac3899aa1fa78/tokenizer_config.json",
+      "license": "MIT",
+      "sha256": "a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b",
+      "bytes": 443
+    },
+    {
+      "path": "assets/bible/search/sources/topic-votes.txt",
+      "url": "https://a.openbible.info/data/topic-votes.txt",
+      "license": "CC BY 4.0",
+      "attribution": "OpenBible.info; https://www.openbible.info/topics/; snapshot downloaded 2026-10-18",
+      "sha256": "44c4f72921f48074452611883b373dbb52b093e12c1ab567edfdf0bd5e0429b2",
+      "bytes": 13784385
+    },
+    {
+      "path": "assets/bible/search/sources/bsb_usfm.zip",
+      "url": "https://bereanbible.com/bsb_usfm.zip",
+      "license": "Public domain; https://berean.bible/terms.htm",
+      "sha256": "f0c56438eb89c98e8f62c5c00461e25cc35b098ad5b179bc350cede759ee5f87",
+      "bytes": 1598038
+    },
+    {
+      "path": "scripts/hybrid-search/vendor/swedish-stemmer.mjs",
+      "url": "https://snowballstem.org/js/swedish-stemmer.js",
+      "license": "BSD-3-Clause; https://snowballstem.org/license.html",
+      "sha256": "44fad90c1f84ea3250817a071581bd98da43babebde657d525e05d18bd4feaea",
+      "bytes": 2336
+    },
+    {
+      "path": "scripts/hybrid-search/vendor/base-stemmer.js",
+      "url": "https://snowballstem.org/js/base-stemmer.js",
+      "license": "BSD-3-Clause",
+      "sha256": "0a645d4a7b1cf57200345cf323cbfa0fe79d872590b5d0261a7271ff293b74b6",
+      "bytes": 2979
+    }
+  ]
+}

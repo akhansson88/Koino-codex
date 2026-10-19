@@ -1,0 +1,1462 @@
+{
+  "maximumAllowedLoss": 0.02,
+  "metric": "Mean judged relevant verse coverage in the first 10 documents, plus query hit rate. Assessed independently by query language across both selected translations.",
+  "languages": {
+    "en": {
+      "floatRecallAt10": 0.24388891070846713,
+      "int8RecallAt10": 0.2417199858832923,
+      "floatHitRateAt10": 0.5125,
+      "int8HitRateAt10": 0.5
+    },
+    "sv": {
+      "floatRecallAt10": 0.31113977979905394,
+      "int8RecallAt10": 0.30987264415691834,
+      "floatHitRateAt10": 0.5125,
+      "int8HitRateAt10": 0.5375
+    }
+  },
+  "queryCount": 160,
+  "selectedVectorType": "int8",
+  "results": [
+    {
+      "query": "Who worshipped Jesus?",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Who worshipped Jesus?",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Vilka tillbad Jesus?",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Vilka tillbad Jesus?",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus gives orders to angels",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus gives orders to angels",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus ger order till änglar",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.16666666666666666,
+      "int8RecallAt10": 0.16666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus ger order till änglar",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.3333333333333333,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A borrowed iron tool is lost in the water",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.2857142857142857,
+      "int8RecallAt10": 0.2857142857142857,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A borrowed iron tool is lost in the water",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ett lånat järnredskap försvinner i vattnet",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ett lånat järnredskap försvinner i vattnet",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A prophet makes fun of an idol's priests",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A prophet makes fun of an idol's priests",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En profet driver med avgudens präster",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En profet driver med avgudens präster",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "An animal talks to its rider",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "An animal talks to its rider",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ett djur talar med sin ryttare",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ett djur talar med sin ryttare",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Salvation is a gift rather than something we earn",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Salvation is a gift rather than something we earn",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Frälsning är en gåva som vi inte kan förtjäna",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Frälsning är en gåva som vi inte kan förtjäna",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "People meet heavenly messengers",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.15384615384615385,
+      "int8RecallAt10": 0.07692307692307693,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "People meet heavenly messengers",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Människor möter himmelska budbärare",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Människor möter himmelska budbärare",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "The Holy Spirit tells people what to do",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.2857142857142857,
+      "int8RecallAt10": 0.2857142857142857,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "The Holy Spirit tells people what to do",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Den helige Ande säger vad människor ska göra",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Den helige Ande säger vad människor ska göra",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus shines on a mountain",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.041666666666666664,
+      "int8RecallAt10": 0.041666666666666664,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus shines on a mountain",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.08333333333333333,
+      "int8RecallAt10": 0.08333333333333333,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus lyser på ett berg",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus lyser på ett berg",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.16666666666666666,
+      "int8RecallAt10": 0.16666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Forgive someone who has wronged me",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.25,
+      "int8RecallAt10": 0.125,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Forgive someone who has wronged me",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0.0625,
+      "floatHitAt10": 0,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Förlåta någon som har gjort mig illa",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Förlåta någon som har gjort mig illa",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Do not worry about tomorrow",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Do not worry about tomorrow",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.1,
+      "int8RecallAt10": 0.1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Oroa dig inte för morgondagen",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Oroa dig inte för morgondagen",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.1,
+      "int8RecallAt10": 0.1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A shepherd searches for a lost sheep",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.875,
+      "int8RecallAt10": 0.875,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A shepherd searches for a lost sheep",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En herde letar efter ett förlorat får",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0.125,
+      "floatHitAt10": 0,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En herde letar efter ett förlorat får",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.75,
+      "int8RecallAt10": 0.875,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A father welcomes his son home",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.045454545454545456,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 1,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A father welcomes his son home",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En far välkomnar sin son hem",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En far välkomnar sin son hem",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.18181818181818182,
+      "int8RecallAt10": 0.18181818181818182,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Love your enemies and pray for them",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.5454545454545454,
+      "int8RecallAt10": 0.45454545454545453,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Love your enemies and pray for them",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Älska dina fiender och be för dem",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Älska dina fiender och be för dem",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "God cares for those who are grieving",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "God cares for those who are grieving",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.5,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud bryr sig om dem som sörjer",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Gud bryr sig om dem som sörjer",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 0,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A man survives in a den of lions",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.625,
+      "int8RecallAt10": 0.625,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A man survives in a den of lions",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En man överlever i en grop med lejon",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En man överlever i en grop med lejon",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.125,
+      "int8RecallAt10": 0.125,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Three men are saved from a fiery furnace",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Three men are saved from a fiery furnace",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.5555555555555556,
+      "int8RecallAt10": 0.5555555555555556,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Tre män räddas ur en brinnande ugn",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Tre män räddas ur en brinnande ugn",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus calms a storm at sea",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus calms a storm at sea",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus stillar en storm på havet",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.75,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus stillar en storm på havet",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A woman draws water at a well",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.2692307692307692,
+      "int8RecallAt10": 0.2692307692307692,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A woman draws water at a well",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.07692307692307693,
+      "int8RecallAt10": 0.07692307692307693,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En kvinna hämtar vatten vid en brunn",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.038461538461538464,
+      "int8RecallAt10": 0.038461538461538464,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En kvinna hämtar vatten vid en brunn",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.5384615384615384,
+      "int8RecallAt10": 0.5384615384615384,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A stranger helps an injured traveller",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A stranger helps an injured traveller",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En främling hjälper en skadad resenär",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.3076923076923077,
+      "int8RecallAt10": 0.3076923076923077,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En främling hjälper en skadad resenär",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.3076923076923077,
+      "int8RecallAt10": 0.3076923076923077,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "The earth is created in the beginning",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.12903225806451613,
+      "int8RecallAt10": 0.12903225806451613,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "The earth is created in the beginning",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.12903225806451613,
+      "int8RecallAt10": 0.12903225806451613,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jorden skapas i begynnelsen",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.12903225806451613,
+      "int8RecallAt10": 0.12903225806451613,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jorden skapas i begynnelsen",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.8387096774193549,
+      "int8RecallAt10": 0.8387096774193549,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "God sends bread from heaven in the wilderness",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "God sends bread from heaven in the wilderness",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Gud sänder bröd från himlen i öknen",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Gud sänder bröd från himlen i öknen",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A young shepherd defeats a giant",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "A young shepherd defeats a giant",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En ung herde besegrar en jätte",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En ung herde besegrar en jätte",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "God calls a child in the night",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "God calls a child in the night",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Gud kallar på ett barn på natten",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0.05555555555555555,
+      "floatHitAt10": 0,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud kallar på ett barn på natten",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Wisdom is more valuable than riches",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Wisdom is more valuable than riches",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Vishet är mer värdefull än rikedom",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.6666666666666666,
+      "int8RecallAt10": 0.6666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Vishet är mer värdefull än rikedom",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A widow gives everything she has",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.75,
+      "int8RecallAt10": 0.875,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A widow gives everything she has",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.125,
+      "int8RecallAt10": 0.125,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En änka ger allt hon äger",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En änka ger allt hon äger",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A person is healed after touching Jesus' clothes",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.5625,
+      "int8RecallAt10": 0.5625,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A person is healed after touching Jesus' clothes",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En människa blir frisk efter att ha rört Jesu kläder",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.625,
+      "int8RecallAt10": 0.625,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En människa blir frisk efter att ha rört Jesu kläder",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.625,
+      "int8RecallAt10": 0.625,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus raises a dead friend",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.06818181818181818,
+      "int8RecallAt10": 0.06818181818181818,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus raises a dead friend",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.022727272727272728,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 1,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus uppväcker en död vän",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus uppväcker en död vän",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.2727272727272727,
+      "int8RecallAt10": 0.3181818181818182,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "God promises a new heaven and a new earth",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "God promises a new heaven and a new earth",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.8333333333333334,
+      "int8RecallAt10": 0.8333333333333334,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud lovar en ny himmel och en ny jord",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.8333333333333334,
+      "int8RecallAt10": 0.8333333333333334,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud lovar en ny himmel och en ny jord",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Patience and kindness are part of love",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Patience and kindness are part of love",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Tålamod och vänlighet hör till kärleken",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Tålamod och vänlighet hör till kärleken",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Care for widows and orphans",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Care for widows and orphans",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ta hand om änkor och föräldralösa",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Ta hand om änkor och föräldralösa",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Speak truthfully and keep your promises",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Speak truthfully and keep your promises",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Tala sanning och håll dina löften",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Tala sanning och håll dina löften",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.16666666666666666,
+      "int8RecallAt10": 0.16666666666666666,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Money cannot satisfy the heart",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Money cannot satisfy the heart",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Pengar kan inte tillfredsställa hjärtat",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Pengar kan inte tillfredsställa hjärtat",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.75,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 1,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "There is a time for every season of life",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "There is a time for every season of life",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.75,
+      "int8RecallAt10": 0.75,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Det finns en tid för varje skede i livet",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Det finns en tid för varje skede i livet",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A prisoner sings praises at midnight",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.5,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A prisoner sings praises at midnight",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "En fånge sjunger lovsång vid midnatt",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.5,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En fånge sjunger lovsång vid midnatt",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.5,
+      "int8RecallAt10": 0.5,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Love is greater than faith and hope",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Love is greater than faith and hope",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Kärleken är större än tro och hopp",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Kärleken är större än tro och hopp",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "God strengthens people who are tired",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "God strengthens people who are tired",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.25,
+      "int8RecallAt10": 0.25,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud ger kraft åt dem som är trötta",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.25,
+      "int8RecallAt10": 0.25,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Gud ger kraft åt dem som är trötta",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "The Lord is my shepherd",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "The Lord is my shepherd",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Herren är min herde",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Herren är min herde",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A rainbow is a sign of a covenant",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "A rainbow is a sign of a covenant",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.14285714285714285,
+      "int8RecallAt10": 0.14285714285714285,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En regnbåge är ett tecken på ett förbund",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0.8571428571428571,
+      "int8RecallAt10": 0.5714285714285714,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "En regnbåge är ett tecken på ett förbund",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 1,
+      "int8RecallAt10": 1,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus teaches his disciples how to pray",
+      "language": "en",
+      "translation": 1,
+      "floatRecallAt10": 0.1111111111111111,
+      "int8RecallAt10": 0.1111111111111111,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus teaches his disciples how to pray",
+      "language": "en",
+      "translation": 2,
+      "floatRecallAt10": 0.1111111111111111,
+      "int8RecallAt10": 0.1111111111111111,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    },
+    {
+      "query": "Jesus lär sina lärjungar att be",
+      "language": "sv",
+      "translation": 1,
+      "floatRecallAt10": 0,
+      "int8RecallAt10": 0,
+      "floatHitAt10": 0,
+      "int8HitAt10": 0
+    },
+    {
+      "query": "Jesus lär sina lärjungar att be",
+      "language": "sv",
+      "translation": 2,
+      "floatRecallAt10": 0.1111111111111111,
+      "int8RecallAt10": 0.1111111111111111,
+      "floatHitAt10": 1,
+      "int8HitAt10": 1
+    }
+  ]
+}

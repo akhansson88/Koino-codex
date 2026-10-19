@@ -13,6 +13,9 @@ import {
   queryBibleChapterAsync,
   queryBibleCrossReferences,
   queryBibleText,
+  queryBibleVerseRangesAsync,
+  type BibleDatabaseVerseRange,
+  type BibleDatabaseVerseRow,
 } from "@/features/bible-database";
 import { bibleVersionFor, bibleVersions, isBibleVersionId, type BibleVersionId } from "@/features/bible-versions";
 import type { BibleVerse } from "@/state/types";
@@ -169,19 +172,30 @@ export function buildBibleVerse(book: string, chapter: number, startVerse: numbe
   const lastVerse = Math.max(startVerse, endVerse);
   const version = bibleVersionFor(versionId);
   const chapterRows = queryBibleChapter(version.id, normalizedBook, chapter).verses;
-  const selectedRows = chapterRows.filter((row) => row.verse >= firstVerse && row.verse <= lastVerse);
+  return bibleVerseFromRows(normalizedBook, chapter, firstVerse, lastVerse, chapterRows, version);
+}
+
+function bibleVerseFromRows(book: string, chapter: number, firstVerse: number, lastVerse: number, rows: readonly BibleDatabaseVerseRow[], version: ReturnType<typeof bibleVersionFor>): BibleVerse | undefined {
+  const selectedRows = rows.filter((row) => row.verse >= firstVerse && row.verse <= lastVerse);
   if (selectedRows.length !== lastVerse - firstVerse + 1) return undefined;
 
   return {
-    book: normalizedBook,
+    book,
     chapter,
     endVerse: lastVerse,
-    reference: `${normalizedBook} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
-    referenceText: `${normalizedBook} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
+    reference: `${book} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
+    referenceText: `${book} ${chapter}:${firstVerse}${lastVerse > firstVerse ? `-${lastVerse}` : ""}`,
     startVerse: firstVerse,
     text: selectedRows.map((row) => row.text).join(" "),
     translation: version.translation,
   };
+}
+
+export async function bibleVersesFromRanges(ranges: readonly BibleDatabaseVerseRange[], versionId?: BibleVersionId): Promise<(BibleVerse | undefined)[]> {
+  const version = bibleVersionFor(versionId);
+  const normalized = ranges.map((range) => ({ ...range, book: normalizeBibleBookName(range.book), startVerse: Math.min(range.startVerse, range.endVerse), endVerse: Math.max(range.startVerse, range.endVerse) }));
+  const rows = await queryBibleVerseRangesAsync(version.id, normalized);
+  return normalized.map((range, index) => bibleVerseFromRows(range.book, range.chapter, range.startVerse, range.endVerse, rows[index], version));
 }
 
 export function bibleVerseFromReference(reference: string, versionId?: BibleVersionId): BibleVerse | undefined {

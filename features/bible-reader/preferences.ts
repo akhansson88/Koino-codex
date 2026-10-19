@@ -72,11 +72,12 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
 
   try {
     const parsed = JSON.parse(value) as Partial<BibleReaderPreferences> | null;
-    const position = normalizeBiblePosition(parsed?.position);
-    const history = readBibleHistory(parsed?.history, position);
+    const bibleVersionId = isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId;
+    const position = normalizeBiblePosition(parsed?.position, bibleVersionId);
+    const history = readBibleHistory(parsed?.history, position, bibleVersionId);
     return {
       appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
-      bibleVersionId: isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId,
+      bibleVersionId,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position: history.entries[history.index],

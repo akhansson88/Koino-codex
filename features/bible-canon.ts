@@ -1,3 +1,6 @@
+import translationVerseCounts from "@/features/bible-verse-counts.json";
+import type { BibleVersionId } from "@/features/bible-versions";
+
 export type BibleBook = {
   name: string;
   chapters: number[];
@@ -91,9 +94,6 @@ export const kjvBooks: BibleBook[] = bibleBookStructure.map((book) => ({
 }));
 
 const bookIndexByName = new Map(kjvBooks.map((book, index) => [book.name, index]));
-const verseCountsByBook = new Map<string, readonly number[]>(
-  bibleBookStructure.map((book) => [book.name, book.verseCounts]),
-);
 const defaultBook = kjvBooks[0] ?? { name: "Genesis", chapters: [1] };
 
 function bookAliasKey(value: string) {
@@ -117,19 +117,20 @@ export function normalizeBibleBookName(book: string) {
   return bibleBookAliases.get(bookAliasKey(book)) ?? book.trim();
 }
 
-export function verseCountForChapter(book: string, chapter: number) {
-  return verseCountsByBook.get(book)?.[chapter - 1] ?? 0;
+export function verseCountForChapter(book: string, chapter: number, versionId: BibleVersionId = "kjv") {
+  const counts = translationVerseCounts[versionId] as Record<string, number[]>;
+  return counts[normalizeBibleBookName(book)]?.[chapter - 1] ?? 0;
 }
 
-export function versesForChapter(book: string, chapter: number) {
-  return Array.from({ length: verseCountForChapter(book, chapter) }, (_, index) => index + 1);
+export function versesForChapter(book: string, chapter: number, versionId: BibleVersionId = "kjv") {
+  return Array.from({ length: verseCountForChapter(book, chapter, versionId) }, (_, index) => index + 1);
 }
 
-export function normalizeBiblePosition(position?: Partial<BiblePosition> | null): BiblePosition {
+export function normalizeBiblePosition(position?: Partial<BiblePosition> | null, versionId: BibleVersionId = "kjv"): BiblePosition {
   const normalizedBookName = typeof position?.book === "string" ? normalizeBibleBookName(position.book) : undefined;
   const book = kjvBooks.find((item) => item.name === normalizedBookName) ?? defaultBook;
   const chapter = book.chapters.includes(Number(position?.chapter)) ? Number(position?.chapter) : book.chapters[0] ?? 1;
-  const verseCount = verseCountForChapter(book.name, chapter);
+  const verseCount = verseCountForChapter(book.name, chapter, versionId);
   const requestedVerse = Number(position?.verse);
   const verse = Number.isInteger(requestedVerse) && requestedVerse >= 1 && requestedVerse <= verseCount ? requestedVerse : 1;
 

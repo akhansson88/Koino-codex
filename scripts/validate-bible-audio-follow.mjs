@@ -21,7 +21,7 @@ globalThis.cancelAnimationFrame = id => frames.delete(id);
 const mocks = {
   "react-native": `
     export const ActivityIndicator = "ActivityIndicator", Pressable = "Pressable",
-      ScrollView = "ScrollView", Text = "Text", View = "View";
+      ScrollView = "ScrollView", Text = "Text", View = "View", Modal = "Modal";
     export const Platform = { OS: "android", select: values => values.android ?? values.default };
     export const useWindowDimensions = () => ({ height: 900, width: 420 });
     export const PanResponder = { create: () => ({ panHandlers: {} }) };
@@ -68,7 +68,7 @@ const mocks = {
   "@/features/bible-kjv": `
     export { kjvBooks, normalizeBiblePosition, previousBibleChapter, nextBibleChapter } from "@/features/bible-canon";
     export { bibleVersionFor, isBibleVersionId } from "@/features/bible-versions";
-    export const bibleChapterAsync = async () => ({ verses: [{ verse: 1, text: "Fixture text" }], subtitles: [] });
+    export const bibleChapterAsync = async () => ({ verses: Array.from({ length: 40 }, (_, index) => ({ verse: index + 1, text: "Fixture text" })), subtitles: [] });
     export const bibleCrossReferences = () => [], buildBibleVerse = () => undefined,
       bibleVerseFromReference = () => undefined;
   `,
@@ -90,7 +90,7 @@ const mocks = {
 };
 const childBoundaries = {
   "@/features/bible-audio/player": ["BibleAudioPlayer"],
-  "@/features/bible-reader/header": ["BibleReaderHeader"],
+  "@/features/bible-reader/header": ["BibleReaderHeader", "ReaderCircleButton"],
   "@/features/bible-reader/plan-panel": ["BiblePlanReaderPanel"],
   "@/features/bible-reader/chapter-text": ["BibleText"],
   "@/features/bible-reader/swipe-indicator": ["ChapterSwipeIndicator"],
@@ -103,6 +103,7 @@ const childBoundaries = {
   "@/features/bible-reader/reference-sheets": ["CrossReferenceSheet", "FootnoteSheet"],
   "@/features/bible-reader/drawer": ["BibleDrawer"],
   "@/features/bible-reader/topics-modal": ["BibleTopicsModal"],
+  "@/features/bible-search/search-content": ["ScriptureSearchContent"],
   "@/ui/shared-composer": ["SharedComposer"],
 };
 for (const [moduleName, exports] of Object.entries(childBoundaries)) {
@@ -129,7 +130,12 @@ new Function("require", "module", "exports", result.outputFiles[0].text)(require
 const { BibleScreen } = module.exports;
 
 const emptyPlayback = () => ({ navigationRevision: 0, loading: false, playing: false, playWhenReady: false,
-  commandPending: false, position: 0, problem: null, speed: 1, continuous: true, sleep: 0 });
+  commandPending: false, position: 0, problem: null, speed: 1, continuous: true, sleep: 0,
+  selectChapter: async selection => {
+    audio.snapshot = { ...audio.snapshot, chapterSelection: selection, session: undefined, pendingRequest: undefined, pendingTopic: undefined,
+      playing: false, playWhenReady: false, loading: false, position: 0 };
+    for (const listener of audio.listeners) listener();
+  } });
 function session(book, chapterNumber, passage, verse = passage?.startVerse ?? 1) {
   const entry = { bookId: 43, book, bookName: book, chapter: chapterNumber, manifestUrl: `fixture:${book}:${chapterNumber}` };
   return { entry, index: verse - 1, passage,
@@ -197,6 +203,62 @@ async function unmount() {
 }
 
 try {
+  await mount();
+  assert.equal(props("BibleReaderHeader").audioAvailable, false, "KJV has no headphones entry point");
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  assert.equal(audio.snapshot.chapterSelection, undefined, "unsupported translations cannot stage audio");
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
+  await flushFrames();
+  assert.equal(props("BibleReaderHeader").audioAvailable, true);
+  await act(async () => {
+    for (let verse = 1; verse <= 40; verse++) props("BibleText").onVerseLayout(verse, (verse - 1) * 100);
+  });
+  await flushFrames();
+  const scrollView = () => renderer.root.findByType("ScrollView").props;
+  const realNow = Date.now;
+  Date.now = () => realNow() + 1000;
+  try {
+    await act(async () => {
+      // Clear the initial programmatic scroll, then make two rapid user scrolls.
+      scrollView().onScroll({ nativeEvent: { contentOffset: { y: 300 } } });
+      scrollView().onScrollBeginDrag();
+      scrollView().onScroll({ nativeEvent: { contentOffset: { y: 700 } } });
+      scrollView().onScroll({ nativeEvent: { contentOffset: { y: 1100 } } });
+    });
+    assert.notEqual(reader().position.verse, 12, "reader position is still throttled after rapid scrolling");
+    await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  } finally { Date.now = realNow; }
+  await flushFrames();
+  assert.deepEqual(audio.snapshot.chapterSelection, { book: "Philippians", chapter: 4, verse: 12 }, "headphones uses the latest scroll offset instead of throttled position");
+  assert.equal(props("BibleAudioPlayer").visible, false, "headphones opens the compact player directly");
+  assert.equal(props("BibleAudioPlayer").follow, true);
+  assert.equal(props("BibleText").spokenVerse, 12, "selected verse is highlighted before the audio loads");
+  assert.equal(renderer.root.findAllByType("BibleBottomReadingControls").length, 0, "paused Follow reserves the normal audio controls area");
+  await publish({ chapterSelection: undefined, session: session("Philippians", 4, undefined, 12), playWhenReady: true });
+  assert.equal(props("BibleAudioPlayer").follow, true, "Follow survives the selection-to-playing transition");
+  await publish({ session: { ...audio.snapshot.session, index: 12 }, navigationRevision: 1 });
+  assert.equal(props("BibleText").spokenVerse, 13);
+  await act(async () => { scrollView().onScrollBeginDrag(); });
+  assert.equal(props("BibleAudioPlayer").follow, false);
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  assert.equal(audio.snapshot.playWhenReady, false, "another header tap replaces existing playing audio with a paused selection");
+  assert.equal(audio.snapshot.session, undefined);
+  assert.equal(props("BibleAudioPlayer").follow, true);
+  await act(async () => { scrollView().onScrollBeginDrag(); });
+  await publish({ chapterSelection: undefined, session: session("Philippians", 4, undefined, 12), playWhenReady: true });
+  assert.equal(props("BibleAudioPlayer").follow, false, "manual browsing while loading is not overridden when playback begins");
+  await act(async () => {
+    for (let verse = 1; verse <= 40; verse++) props("BibleText").onVerseLayout(verse, 80 + (verse - 1) * 100);
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 700 } } });
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 0 } } });
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 1, "returning to the chapter heading selects verse 1 even before the first verse reaches the viewport top");
+  await unmount();
+
   // A restored saved passage must not override the current reading translation
   // or position, even though ordinary chapter playback follows by default.
   await mount({ session: first });
@@ -269,29 +331,45 @@ try {
   assertUnchanged(pendingTopicBaseline, "Failed topic request does not follow stale chapter");
   await publish({ pendingTopic: undefined, problem: null, session: topicSession(first), playWhenReady: true });
   assertUnchanged(pendingTopicBaseline, "Prepared topic does not inherit chapter following");
-  await act(async () => { props("BibleDrawer").onOpenTopic("Hope"); });
+  await act(async () => { props("BibleReaderHeader").onOpenSearch(); });
   await flushFrames();
   const topicReader = reader();
-  assert.equal(props("BibleTopicsModal").visible, true);
+  assert.equal(props("Modal").visible, true);
   await publish({ session: topicSession({ ...first, index: 16 }, 0, "gap"), navigationRevision: 2 });
   assert.deepEqual(reader(), topicReader, "Topic controls preserve reader position and translation");
-  assert.equal(props("BibleTopicsModal").visible, true, "Playing a topic leaves its page open");
+  assert.equal(props("Modal").visible, true, "Playing search passages leaves search open");
   await publish({ session: topicSession(second, 1), navigationRevision: 3 });
   assert.deepEqual(reader(), topicReader, "Moving to another topic passage does not navigate the reader");
-  assert.equal(props("BibleTopicsModal").detailVisible, true);
+  assert.equal(props("Modal").visible, true);
   await act(async () => { props("BibleAudioPlayer").onFollow(); });
   await flushFrames();
-  assert.equal(props("BibleTopicsModal").visible, false, "Explicit Follow closes the topic view");
+  assert.equal(props("Modal").visible, false, "Explicit Follow closes the search view");
   assert.deepEqual(reader(), { position: { book: "Romans", chapter: 8, verse: 28 }, version: "reformationsbibeln2026" });
   assert.equal(props("BibleAudioPlayer").follow, true);
   await publish({ session: topicSession(first), navigationRevision: 4 });
   assert.deepEqual(reader(), { position: { book: "John", chapter: 3, verse: 16 }, version: "reformationsbibeln2026" }, "Explicit topic Follow spans passage changes and loops");
-  await act(async () => { props("BibleDrawer").onOpenTopic("Hope"); });
+  await act(async () => { props("BibleReaderHeader").onOpenSearch(); });
   await flushFrames();
   const reopenedTopicReader = reader();
   await publish({ session: topicSession(second, 1), navigationRevision: 5 });
-  assert.deepEqual(reader(), reopenedTopicReader, "Reopening topics suspends explicit topic Follow");
+  assert.deepEqual(reader(), reopenedTopicReader, "Reopening search suspends explicit topic Follow");
   assert.equal(props("BibleAudioPlayer").follow, false);
+  await unmount();
+
+  // Search navigation uses selected-translation bounds rather than the KJV verse ceiling.
+  await mount();
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
+  await act(async () => { props("BibleReaderHeader").onOpenSearch(); });
+  assert.equal(props("Modal").visible, true);
+  await act(async () => { props("ScriptureSearchContent").onSelect({ book: "Psalms", chapter: 3, startVerse: 9, endVerse: 9, reference: "Psalms 3:9", text: "Swedish-only final verse", translation: "Reformationsbibeln 2026" }); });
+  assert.equal(props("Modal").visible, false);
+  assert.deepEqual(reader().position, { book: "Psalms", chapter: 3, verse: 9 });
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("kjv"); });
+  assert.deepEqual(reader().position, { book: "Psalms", chapter: 3, verse: 1 }, "Translation changes keep positions inside the selected Bible");
+  await act(async () => { props("BibleReaderHeader").onHistoryBack(); });
+  assert.deepEqual(reader().position, { book: "Philippians", chapter: 4, verse: 4 }, "Translation changes preserve previous reading stops");
+  await act(async () => { props("BibleReaderHeader").onHistoryForward(); });
+  assert.deepEqual(reader().position, { book: "Psalms", chapter: 3, verse: 1 });
   await unmount();
 
   // Preserve ordinary chapter startup behavior.
@@ -315,7 +393,7 @@ try {
   assert.equal(measuredScrolls.length, scrollCount + 2, "Already-visible verse stays still after player layout changes");
   assert.equal(audio.navigations.length, 0, "Playback does not navigate to another app route");
   await unmount();
-  console.log("Bible audio follow validation passed: saved/topic playback preserves reader and open views, explicit topic Follow closes topics and spans passages, and chapter auto-follow remains intact.");
+  console.log("Bible audio follow validation passed: saved/topic playback preserves reader and open views, explicit playlist Follow closes search and spans passages, and chapter auto-follow remains intact.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   globalThis.requestAnimationFrame = originalRequestFrame;

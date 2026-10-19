@@ -73,23 +73,23 @@ export function chapterLabel(position: BiblePosition, language: AppLanguage = "e
   return `${displayBibleBookName(position.book, language)} ${position.chapter}`;
 }
 
-export function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "reference" | "startVerse">) {
+export function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "reference" | "startVerse">, versionId: BibleVersionId = "kjv") {
   if (!verse) return undefined;
   if (verse.book && typeof verse.chapter === "number" && typeof verse.startVerse === "number") {
-    return normalizeBiblePosition({ book: verse.book, chapter: verse.chapter, verse: verse.startVerse });
+    return normalizeBiblePosition({ book: verse.book, chapter: verse.chapter, verse: verse.startVerse }, versionId);
   }
 
-  const resolvedVerse = bibleVerseFromReference(verse.reference);
+  const resolvedVerse = bibleVerseFromReference(verse.reference, versionId);
   if (!resolvedVerse?.book || typeof resolvedVerse.chapter !== "number" || typeof resolvedVerse.startVerse !== "number") {
     return undefined;
   }
 
-  return normalizeBiblePosition({ book: resolvedVerse.book, chapter: resolvedVerse.chapter, verse: resolvedVerse.startVerse });
+  return normalizeBiblePosition({ book: resolvedVerse.book, chapter: resolvedVerse.chapter, verse: resolvedVerse.startVerse }, versionId);
 }
 
-export function biblePositionFromReference(reference?: string) {
+export function biblePositionFromReference(reference?: string, versionId: BibleVersionId = "kjv") {
   if (!reference) return undefined;
-  return biblePositionFromVerse(bibleVerseFromReference(reference));
+  return biblePositionFromVerse(bibleVerseFromReference(reference, versionId), versionId);
 }
 
 export function testamentForBook(bookName: string): TestamentFilter {

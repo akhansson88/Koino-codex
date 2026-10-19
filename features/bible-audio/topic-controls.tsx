@@ -424,7 +424,7 @@ export function TopicPlaybackPanel({ definition, palette, insets }: { definition
                 {definition.title}
               </Text>
               <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
-                {t("bible.topics.passage.count", { count: available.length })}
+                {t(available.length === 1 ? "bible.topics.passage.one" : "bible.topics.passage.count", { count: available.length })}
               </Text>
             </View>
 

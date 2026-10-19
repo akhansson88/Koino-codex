@@ -1,4 +1,5 @@
 import { kjvBooks, normalizeBiblePosition, type BiblePosition } from "@/features/bible-canon";
+import type { BibleVersionId } from "@/features/bible-versions";
 
 export type BibleHistory = { entries: BiblePosition[]; index: number };
 const limit = 10;
@@ -11,7 +12,7 @@ export function initialBibleHistory(position: BiblePosition): BibleHistory {
   return { entries: [position], index: 0 };
 }
 
-export function readBibleHistory(value: unknown, fallback: BiblePosition): BibleHistory {
+export function readBibleHistory(value: unknown, fallback: BiblePosition, versionId: BibleVersionId = "kjv"): BibleHistory {
   if (!value || typeof value !== "object") return initialBibleHistory(fallback);
   const candidate = value as Partial<BibleHistory>;
   if (!Array.isArray(candidate.entries) || candidate.entries.length < 1 || candidate.entries.length > limit ||
@@ -24,7 +25,7 @@ export function readBibleHistory(value: unknown, fallback: BiblePosition): Bible
         !kjvBooks.some((book) => book.name === item.book) || !Number.isInteger(item.chapter) || !Number.isInteger(item.verse)) {
       return initialBibleHistory(fallback);
     }
-    const normalized = normalizeBiblePosition(item);
+    const normalized = normalizeBiblePosition(item, versionId);
     if (!sameBiblePosition(item, normalized) || (entries.length && sameBiblePosition(entries[entries.length - 1], normalized))) {
       return initialBibleHistory(fallback);
     }

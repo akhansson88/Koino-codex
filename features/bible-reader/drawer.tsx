@@ -2,18 +2,16 @@ import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   buildBibleVerse,
   kjvBooks,
   normalizeBiblePosition,
-  searchBibleText,
   type BiblePosition,
-  type BibleTextSearchResult,
   type BibleVersionId,
 } from "@/features/bible-kjv";
-import { biblePositionFromSearchQuery, displayBibleBookName, displayBibleReference } from "@/features/bible-search";
+import { displayBibleBookName, displayBibleReference } from "@/features/bible-search";
 import type { BibleHighlight, JournalEntry, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { type ReaderPalette, type PickerStage } from "@/features/bible-reader/types";
@@ -22,9 +20,8 @@ import {
   testamentForBook,
   highlightTime,
   chapterLabel,
-  referenceLabel,
 } from "@/features/bible-reader/verse-helpers";
-import { suggestedTopics } from "@/features/bible-reader/topics-api";
+import { ScriptureSearchContent } from "@/features/bible-search/search-content";
 import { BibleSheetTop, bibleSheetHorizontalPadding } from "@/features/bible-reader/sheet-primitives";
 import { ReaderCircleButton } from "@/features/bible-reader/header";
 import {
@@ -50,7 +47,6 @@ export function BibleDrawer({
   onClose,
   onOpenPlans: openPlans,
   onOpenReflection: openReflection,
-  onOpenTopic: openTopic,
   onRemoveSavedVerse,
   onSelect: selectPosition,
   palette,
@@ -67,7 +63,6 @@ export function BibleDrawer({
   onClose: () => void;
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
-  onOpenTopic: (topic?: string) => void;
   onRemoveSavedVerse: (id: string) => Promise<void>;
   onSelect: (position: BiblePosition) => void;
   palette: ReaderPalette;
@@ -83,7 +78,6 @@ export function BibleDrawer({
   const sheetHeight = Math.min(Math.round(height * 0.84), 720);
   const sheetRef = useRef<AppSheetHandle>(null);
   const drawerScrollRef = useRef<ScrollView>(null);
-  const phraseSearchRequestRef = useRef(0);
   const [stage, setStage] = useState<PickerStage>(initialStage === "home" ? "book" : initialStage);
   useEffect(() => {
     if (visible && stage === "saved") void refreshAudioCatalog();
@@ -121,8 +115,6 @@ export function BibleDrawer({
       if (bookScrollFrame.current !== undefined) cancelAnimationFrame(bookScrollFrame.current);
     };
   }, [stage, visible]);
-  const [phraseSearchLoading, setPhraseSearchLoading] = useState(false);
-  const [phraseSearchResults, setPhraseSearchResults] = useState<BibleTextSearchResult[]>([]);
   const [savedVerseMenu, setSavedVerseMenu] = useState<SavedVerse | undefined>();
   const [hiddenSavedVerseIds, setHiddenSavedVerseIds] = useState<string[]>([]);
   const visibleSavedVerses = useMemo(
@@ -133,12 +125,11 @@ export function BibleDrawer({
   const onSelect = useCallback((position: BiblePosition) => sheetRef.current?.dismiss(() => selectPosition(position)), [selectPosition]);
   const onOpenPlans = () => sheetRef.current?.dismiss(openPlans);
   const onOpenReflection = (id: string) => sheetRef.current?.dismiss(() => openReflection(id));
-  const onOpenTopic = (topic?: string) => sheetRef.current?.dismiss(() => openTopic(topic));
 
 
   useLayoutEffect(() => {
     if (!visible) return;
-    const normalized = normalizeBiblePosition(initialPosition);
+    const normalized = normalizeBiblePosition(initialPosition, bibleVersionId);
     setStage(initialStage === "home" ? "book" : initialStage);
     setBookQuery("");
     setBookParentStage(initialStage === "search" ? "search" : "book");
@@ -147,18 +138,18 @@ export function BibleDrawer({
     bookOffsets.current = {};
     bookScrollOffset.current = 0;
     setSavedVerseMenu(undefined);
-  }, [initialPosition, initialStage, visible]);
+  }, [bibleVersionId, initialPosition, initialStage, visible]);
 
   useEffect(() => {
     setHiddenSavedVerseIds((current) => current.filter((id) => savedVerses.some((verse) => verse.id === id)));
   }, [savedVerses]);
 
   const openSavedVerse = useCallback((verse: SavedVerse) => {
-    const nextPosition = biblePositionFromVerse(verse);
+    const nextPosition = biblePositionFromVerse(verse, bibleVersionId);
     if (!nextPosition) return;
     setSavedVerseMenu(undefined);
     onSelect(nextPosition);
-  }, [onSelect]);
+  }, [bibleVersionId, onSelect]);
 
   const removeSavedVerse = useCallback((verse: SavedVerse) => {
     setSavedVerseMenu(undefined);
@@ -177,58 +168,11 @@ export function BibleDrawer({
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
   const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
-  const searchPosition = biblePositionFromSearchQuery(bookQuery, language, bibleVersionId);
   const selectableBooks = kjvBooks.filter((item) => {
     const displayName = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language);
     const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
     return matchesQuery;
   });
-  const matchingTopics = normalizedQuery
-    ? suggestedTopics.filter((topic) => {
-        const title = t(topic.titleKey).toLocaleLowerCase(language);
-        const subtitle = t(topic.subtitleKey).toLocaleLowerCase(language);
-        return title.includes(normalizedQuery) || subtitle.includes(normalizedQuery) || topic.apiTopic.toLowerCase().includes(normalizedQuery);
-      })
-    : [];
-  const phraseSearchEligible = Boolean(
-    stage === "search" &&
-    normalizedQuery &&
-    !searchPosition &&
-    selectableBooks.length === 0 &&
-    matchingTopics.length === 0,
-  );
-
-  useEffect(() => {
-    const requestId = phraseSearchRequestRef.current + 1;
-    phraseSearchRequestRef.current = requestId;
-    if (!visible || !phraseSearchEligible) {
-      setPhraseSearchLoading(false);
-      setPhraseSearchResults([]);
-      return;
-    }
-
-    setPhraseSearchLoading(true);
-    setPhraseSearchResults([]);
-    const timeout = setTimeout(() => {
-      void searchBibleText(bookQuery, bibleVersionId)
-        .then((results) => {
-          if (phraseSearchRequestRef.current !== requestId) return;
-          setPhraseSearchResults(results);
-        })
-        .catch(() => {
-          if (phraseSearchRequestRef.current !== requestId) return;
-          setPhraseSearchResults([]);
-        })
-        .finally(() => {
-          if (phraseSearchRequestRef.current === requestId) {
-            setPhraseSearchLoading(false);
-          }
-        });
-    }, 180);
-
-    return () => clearTimeout(timeout);
-  }, [bibleVersionId, bookQuery, phraseSearchEligible, visible]);
-
   const recentHighlights = useMemo(() => [...highlights].sort((a, b) => highlightTime(b) - highlightTime(a)).slice(0, 12), [highlights]);
   const bibleReflections = useMemo(
     () =>
@@ -289,7 +233,7 @@ export function BibleDrawer({
   }
 
   function chooseChapter(chapter: number) {
-    onSelect(normalizeBiblePosition({ book: selectedBook, chapter, verse: 1 }));
+    onSelect(normalizeBiblePosition({ book: selectedBook, chapter, verse: 1 }, bibleVersionId));
   }
 
   return (
@@ -326,8 +270,11 @@ export function BibleDrawer({
               />
             </View>
           ) : null}
-          {/* This fixed-height drawer scrolls independently of the sheet's animated scroll controller. */}
-          <ScrollView
+          {stage === "search" ? <ScriptureSearchContent
+            bibleVersionId={bibleVersionId} visible={visible} palette={palette}
+            onBrowse={() => setStage("book")}
+            onSelect={(verse) => { const position = biblePositionFromVerse(verse, bibleVersionId); if (position) onSelect(position); }}
+          /> : <ScrollView
             key={stage}
             ref={drawerScrollRef}
             style={{ flex: 1, minHeight: 0 }}
@@ -400,93 +347,6 @@ export function BibleDrawer({
                     title={t("bible.navigator.plans")}
                   />
                 </DrawerSection>
-              </>
-            ) : null}
-
-            {stage === "search" ? (
-              <>
-                <DrawerSearchBox
-                  onChangeText={setBookQuery}
-                  onSubmit={() => searchPosition && onSelect(searchPosition)}
-                  palette={palette}
-                  placeholder={t("bible.navigator.searchPlaceholder")}
-                  value={bookQuery}
-                />
-                {!normalizedQuery ? (
-                  <>
-                    <DrawerRow
-                      icon="compass"
-                      onPress={() => onOpenTopic()}
-                      palette={palette}
-                      subtitle={t("bible.topics.exploreSubtitle")}
-                      title={t("bible.topics.explore")}
-                    />
-                    <DrawerEmptyState palette={palette} text={t("bible.navigator.searchIntro")} />
-                  </>
-                ) : null}
-                {searchPosition ? (
-                  <DrawerRow
-                    icon="search"
-                    onPress={() => onSelect(searchPosition)}
-                    palette={palette}
-                    subtitle={t("bible.navigator.openPassageSubtitle")}
-                    title={t("bible.navigator.openPassage", { reference: referenceLabel(searchPosition, bookLanguage) })}
-                  />
-                ) : null}
-                {normalizedQuery && !searchPosition && selectableBooks.length ? (
-                  <View style={{ gap: 8 }}>
-                    {selectableBooks.slice(0, 12).map((item) => (
-                      <DrawerBookRow
-                        key={item.name}
-                        book={item}
-                        language={language}
-                        onPress={() => chooseBook(item.name)}
-                        palette={palette}
-                        selected={item.name === initialPosition.book}
-                        t={t}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-                {matchingTopics.length ? (
-                  <DrawerSection title={t("bible.topics.suggested")} palette={palette}>
-                    {matchingTopics.map((topic) => (
-                      <DrawerRow
-                        icon="compass"
-                        key={topic.apiTopic}
-                        onPress={() => onOpenTopic(topic.apiTopic)}
-                        palette={palette}
-                        subtitle={t(topic.subtitleKey)}
-                        title={t(topic.titleKey)}
-                      />
-                    ))}
-                  </DrawerSection>
-                ) : null}
-                {phraseSearchEligible && phraseSearchLoading ? (
-                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 8 }}>
-                    <ActivityIndicator color={palette.accent} size="small" />
-                    <Text style={{ color: palette.muted, fontSize: 13, fontWeight: "700" }}>
-                      {t("bible.navigator.searchingText", { translation: versionLabel })}
-                    </Text>
-                  </View>
-                ) : null}
-                {phraseSearchEligible && !phraseSearchLoading && phraseSearchResults.length > 0 ? (
-                  <View style={{ gap: 8 }}>
-                    {phraseSearchResults.map((result) => (
-                      <DrawerVerseRow
-                        key={`${bibleVersionId}-${result.reference}`}
-                        meta={versionLabel}
-                        onPress={() => onSelect(result.position)}
-                        palette={palette}
-                        reference={displayBibleReference(result.reference, bookLanguage)}
-                        text={result.text}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-                {phraseSearchEligible && !phraseSearchLoading && phraseSearchResults.length === 0 ? (
-                  <DrawerEmptyState palette={palette} text={t("bible.navigator.searchTextNoResults")} />
-                ) : null}
               </>
             ) : null}
 
@@ -587,7 +447,7 @@ export function BibleDrawer({
                       <DrawerVerseRow
                         accentColor={highlight.color}
                         key={highlight.id}
-                        onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }))}
+                        onPress={() => onSelect(normalizeBiblePosition({ book: highlight.book, chapter: highlight.chapter, verse: highlight.startVerse }, bibleVersionId))}
                         palette={palette}
                         reference={displayBibleReference(highlight.reference, bookLanguage)}
                         meta={highlight.translation && highlight.translation !== versionLabel ? highlight.translation : undefined}
@@ -621,7 +481,7 @@ export function BibleDrawer({
                 )}
               </View>
             ) : null}
-          </ScrollView>
+          </ScrollView>}
         </View>
 
       <SavedVerseActionSheet

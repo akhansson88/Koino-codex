@@ -33,9 +33,13 @@ RSA authorization prompt. Confirm that `adb devices` reports `device`, then run:
 npm run android:dev
 ```
 
-That first run generates the native Android project, compiles the debug app,
-installs it on the selected device, configures USB port forwarding, and starts
-Metro. For normal JavaScript or TypeScript changes after installation, only
+Every run reconciles the native Android project with the development variant,
+compiles for the connected device, and checks the generated package ID and the
+actual APK package before installation. It then installs that verified APK,
+configures USB port forwarding, and starts Metro. If multiple devices are
+connected, select one with `npm run android:dev -- --device <adb-serial>`.
+Setting `APP_VARIANT` alone does not update an already generated native project.
+For normal JavaScript or TypeScript changes after installation, only
 start Metro:
 
 ```sh
@@ -113,6 +117,58 @@ Use `npm run start:tunnel` only when LAN discovery is unavailable, and
 
 The `functions/` directory contains the Firebase backend used by app services.
 It is separate from the Expo client and is not a website.
+
+## Offline bilingual Bible search
+
+Bible search combines local keyword ranking, multilingual E5 embeddings, passage
+windows, topics and cross-references. English and Swedish queries work with
+either packaged translation. The reader and Scripture attachment picker share
+the same engine, and every displayed quotation comes from the selected local
+Bible text.
+
+The model, tokenizer and complete search database are bundled with the native
+app. Large `.onnx` and search `.db` assets use Git LFS; run `git lfs pull` after
+cloning. Search requires runtime `2.1.0` or newer and a fresh native build with
+ONNX Runtime and SQLite's vector extension. The existing Expo Go binary cannot
+provide these native modules.
+
+Rebuild search explicitly after changing its source data or preprocessing:
+
+```sh
+npm run bible:search:build
+npm run validate:hybrid-search
+npm run validate:bible-search-ui
+node --test scripts/embedding-core.test.mjs
+```
+
+The build verifies pinned source hashes, generates translation-specific passage
+documents, and caches embeddings under `assets/bible/search/.cache` so interrupted
+builds can resume. Initial generation is CPU intensive. Normal Expo startup never
+downloads models or regenerates search. See `scripts/hybrid-search/README.md` for
+source attribution, the build pipeline and validation details.
+
+After building a self-contained Android release APK, verify its native libraries
+and all four bundled search assets against the generated manifest:
+
+```sh
+python scripts/native/validate-android-search.py android/app/build/outputs/apk/release/app-release.apk --manifest assets/bible/search/search-manifest.json
+```
+
+The check streams APK contents to verify asset sizes and SHA-256 even when Expo
+renames them, and checks 16 KB ELF and ZIP alignment for ARM64 libraries. Add
+`--abi x86_64` when validating a release that includes that ABI. Omit `--manifest`
+for a debug development client whose JavaScript and assets are served by Metro.
+
+The shared search footer provides offline source attribution and complete
+licenses. After changing the tracked notices or licenses, regenerate its small
+bundled asset with `node scripts/generate-search-credits.mjs`; verify it with
+the same command followed by `--check`.
+
+Search initializes inference after its UI first appears and shows text matches
+while preparing semantic results. If inference is unavailable, a localized text
+search status is shown. Validate cold preparation, warm search latency, memory,
+airplane mode and background/resume on physical Android and iOS devices before
+release. Audio streaming still requires its existing audio catalog and network.
 
 ## Donations
 

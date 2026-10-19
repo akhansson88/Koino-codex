@@ -3,6 +3,9 @@ export { displayBibleBookName, displayBibleReference } from "@/features/bible-bo
 import {
   bibleVersionFor,
   bibleVerseFromReference,
+  bibleVersesFromRanges,
+  bibleChapterVerses,
+  buildBibleVerse,
   kjvBooks,
   searchBibleText,
   type BiblePosition,
@@ -10,10 +13,20 @@ import {
 } from "@/features/bible-kjv";
 import type { BibleVerse } from "@/state/types";
 import type { AppLanguage } from "@/ui/localization";
+import { collapseSearchRanges, type RankedDocument, type ScriptureSearchBackend, type SearchSource } from "./bible-search/retrieval";
 
 export type ScriptureSearchResult = {
-  matchType: "reference" | "text";
+  id: string;
+  matchType: "reference" | "text" | "semantic" | "topic";
+  kind: "verse" | "passage";
+  sources: SearchSource[];
   verse: BibleVerse;
+};
+
+export type ScriptureSearchResponse = {
+  results: ScriptureSearchResult[];
+  mode: "hybrid" | "lexical";
+  semanticState: "loading" | "ready" | "unavailable";
 };
 
 export type SearchScriptureOptions = {
@@ -21,7 +34,19 @@ export type SearchScriptureOptions = {
   limit?: number;
   query: string;
   versionId: BibleVersionId;
+  signal?: AbortSignal;
+  onPartialResults?: (response: ScriptureSearchResponse) => void;
 };
+
+let backendForTesting: ScriptureSearchBackend | undefined;
+export function setScriptureSearchBackendForTesting(backend?: ScriptureSearchBackend) { backendForTesting = backend; }
+
+function abortIfNeeded(signal?: AbortSignal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Search cancelled");
+  error.name = "AbortError";
+  throw error;
+}
 
 
 const englishBookAliases: ReadonlyArray<readonly [string, string]> = [
@@ -117,8 +142,7 @@ const englishAliasMap = makeBookAliasMap("en");
 const swedishAliasMap = makeBookAliasMap("sv");
 
 function canonicalBibleBookName(value: string, language: AppLanguage) {
-  const aliases = language === "sv" ? swedishAliasMap : englishAliasMap;
-  return aliases.get(bookAliasKey(value));
+  return swedishAliasMap.get(bookAliasKey(value)) ?? englishAliasMap.get(bookAliasKey(value));
 }
 
 export function normalizeScriptureQuery(query: string) {
@@ -133,7 +157,7 @@ export function normalizeScriptureQuery(query: string) {
 
 function canonicalReferenceFromQuery(query: string, language: AppLanguage) {
   const normalizedQuery = normalizeScriptureQuery(query);
-  const match = normalizedQuery.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+  const match = normalizedQuery.match(/^(.+?)\s*(\d+):(\d+)(?:-(\d+))?$/);
   if (!match) return undefined;
 
   const book = canonicalBibleBookName(match[1], language);
@@ -156,7 +180,7 @@ export function biblePositionFromSearchQuery(query: string, language: AppLanguag
     return { book: verse.book, chapter: verse.chapter, verse: verse.startVerse };
   }
 
-  const chapterMatch = normalizeScriptureQuery(query).match(/^(.+?)\s+(\d+)$/);
+  const chapterMatch = normalizeScriptureQuery(query).match(/^(.+?)\s*(\d+)$/);
   if (!chapterMatch) return undefined;
   const bookName = canonicalBibleBookName(chapterMatch[1], bibleBookLanguage(language, versionId));
   const chapter = Number(chapterMatch[2]);
@@ -166,26 +190,72 @@ export function biblePositionFromSearchQuery(query: string, language: AppLanguag
   return { book: book.name, chapter, verse: 1 };
 }
 
-export async function searchScripture({ language, limit = 20, query, versionId }: SearchScriptureOptions): Promise<ScriptureSearchResult[]> {
+export async function searchScripture({ language, limit = 20, query, versionId, signal, onPartialResults }: SearchScriptureOptions): Promise<ScriptureSearchResponse> {
+  abortIfNeeded(signal);
   const normalizedQuery = normalizeScriptureQuery(query);
-  if (!normalizedQuery || !Number.isFinite(limit) || limit <= 0) return [];
+  const empty: ScriptureSearchResponse = { results: [], mode: "lexical", semanticState: "ready" };
+  if (!normalizedQuery || !Number.isFinite(limit) || limit <= 0) return empty;
+  const boundedLimit = Math.min(100, Math.floor(limit));
+  if (boundedLimit === 0) return empty;
 
-  const referenceVerse = resolveBibleReference(normalizedQuery, language, versionId);
-  if (referenceVerse) return [{ matchType: "reference", verse: referenceVerse }];
+  let referenceVerse = resolveBibleReference(normalizedQuery, language, versionId);
+  const chapterQuery = normalizedQuery.match(/^(.+?)\s*(\d+)$/);
+  if (!referenceVerse && chapterQuery && canonicalBibleBookName(chapterQuery[1], language)) {
+    const position = biblePositionFromSearchQuery(normalizedQuery, language, versionId);
+    if (position) {
+      const rows = bibleChapterVerses(position.book, position.chapter, versionId);
+      referenceVerse = rows.length ? buildBibleVerse(position.book, position.chapter, rows[0].verse, rows.at(-1)!.verse, versionId) : undefined;
+    }
+    if (!position) return empty;
+  }
+  if (referenceVerse) return { ...empty, results: [{ id: `${versionId}:${referenceVerse.reference}`, matchType: "reference", kind: referenceVerse.startVerse === referenceVerse.endVerse ? "verse" : "passage", sources: ["reference"], verse: referenceVerse }] };
+  if (/\d\s*:\s*\d/.test(normalizedQuery)) return empty;
 
-  const textResults = await searchBibleText(normalizedQuery, versionId, Math.floor(limit));
-  const translation = bibleVersionFor(versionId).translation;
-  return textResults.map((result) => ({
-    matchType: "text",
-    verse: {
-      book: result.position.book,
-      chapter: result.position.chapter,
-      endVerse: result.position.verse,
-      reference: result.reference,
-      referenceText: result.reference,
-      startVerse: result.position.verse,
-      text: result.text,
-      translation,
-    },
-  }));
+  const verseCache = new Map<string, BibleVerse | undefined>();
+  const resolveResults = async (ranked: RankedDocument[]) => {
+    const candidates = collapseSearchRanges(ranked, boundedLimit).map((item) => ({ ...item,
+      reference: `${item.document.book} ${item.document.chapter}:${item.document.start_verse}${item.document.end_verse > item.document.start_verse ? `-${item.document.end_verse}` : ""}`,
+    }));
+    const missing = [...new Map(candidates.filter((item) => !verseCache.has(item.reference)).map((item) => [item.reference, item])).values()];
+    if (missing.length) {
+      const verses = await bibleVersesFromRanges(missing.map(({ document }) => ({ book: document.book, chapter: document.chapter, startVerse: document.start_verse, endVerse: document.end_verse })), versionId);
+      abortIfNeeded(signal);
+      missing.forEach((item, index) => verseCache.set(item.reference, verses[index]));
+    }
+    return candidates.flatMap(({ document, sources, reference }): ScriptureSearchResult[] => {
+      const verse = verseCache.get(reference);
+      return verse ? [{ id: `${versionId}:${reference}`, matchType: sources.includes("lexical") ? "text" : sources.includes("topic") ? "topic" : "semantic", kind: document.start_verse === document.end_verse ? "verse" : "passage", sources, verse }] : [];
+    });
+  };
+
+  let backend: ScriptureSearchBackend;
+  try {
+    backend = backendForTesting ?? await (await import("./bible-search/native-backend")).getNativeSearchBackend();
+  } catch {
+    abortIfNeeded(signal);
+    const translation = bibleVersionFor(versionId).translation;
+    const textResults = await searchBibleText(normalizedQuery, versionId, boundedLimit);
+    abortIfNeeded(signal);
+    return { mode: "lexical", semanticState: "unavailable", results: textResults.map((result) => ({
+      id: `${versionId}:${result.reference}`, matchType: "text", kind: "verse", sources: ["lexical"],
+      verse: { book: result.position.book, chapter: result.position.chapter, startVerse: result.position.verse, endVerse: result.position.verse, reference: result.reference, referenceText: result.reference, text: result.text, translation },
+    })) };
+  }
+  abortIfNeeded(signal);
+  const translationId = versionId === "reformationsbibeln2026" ? 2 : 1;
+  const lexical = await backend.lexical(normalizedQuery, translationId, boundedLimit);
+  abortIfNeeded(signal);
+  const partial: ScriptureSearchResponse = { results: await resolveResults(lexical), mode: "lexical", semanticState: "loading" };
+  abortIfNeeded(signal);
+  onPartialResults?.(partial);
+  try {
+    const results = await backend.hybrid(normalizedQuery, translationId, lexical, boundedLimit, signal);
+    abortIfNeeded(signal);
+    const resolved = await resolveResults(results);
+    abortIfNeeded(signal);
+    return { results: resolved, mode: "hybrid", semanticState: "ready" };
+  } catch (error) {
+    abortIfNeeded(signal);
+    return { ...partial, semanticState: "unavailable" };
+  }
 }

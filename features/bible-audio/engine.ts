@@ -7,13 +7,14 @@ import { isTopicDefinition, isTopicLoop, isTopicTrackMetadata, normalizeTopicPau
 import { ensureTopicSilence } from "./topic-silence";
 
 export type AudioPassage = { startVerse: number; endVerse: number; savedVerseId: string };
-export type AudioRequest = { entry: AudioChapterEntry; index?: number; offset: number; autoplay: boolean; passage?: AudioPassage };
+export type AudioChapterSelection = { book: string; chapter: number; verse: number };
+export type AudioRequest = { entry: AudioChapterEntry; index?: number; startVerse?: number; offset: number; autoplay: boolean; passage?: AudioPassage };
 type VerseTrack = Track & { entry: AudioChapterEntry; verseIndex: number; passage?: AudioPassage; topic?: TopicTrackMetadata };
 // Keep each manifest once; embedding it in every native track makes long queues quadratic.
 const chapters = new Map<string, AudioChapter>();
 const chapterLoads = new Map<string, Promise<AudioChapter>>();
 export type AudioSession = { chapter: AudioChapter; entry: AudioChapterEntry; index: number; passage?: AudioPassage; topic?: TopicSession };
-type Snapshot = { session?: AudioSession; pendingRequest?: AudioRequest; pendingTopic?: { definition: TopicDefinition; options: TopicOptions }; topicPauseSeconds: number; navigationRevision: number; playing: boolean; playWhenReady: boolean; loading: boolean; buffering: boolean; commandPending: boolean; position: number; problem: "network" | "unavailable" | null; speed: number; continuous: boolean; sleep: number | "chapter" };
+type Snapshot = { session?: AudioSession; chapterSelection?: AudioChapterSelection; pendingRequest?: AudioRequest; pendingTopic?: { definition: TopicDefinition; options: TopicOptions }; topicPauseSeconds: number; navigationRevision: number; playing: boolean; playWhenReady: boolean; loading: boolean; buffering: boolean; commandPending: boolean; position: number; problem: "network" | "unavailable" | null; speed: number; continuous: boolean; sleep: number | "chapter" };
 let snapshot: Snapshot = { topicPauseSeconds: 3, navigationRevision: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, position: 0, problem: null, speed: 1, continuous: true, sleep: 0 };
 const listeners = new Set<() => void>();
 export const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -28,6 +29,14 @@ export function setAudioCatalog(value: AudioCatalog) { catalog = value; }
 export async function applyAudioCatalog(value: AudioCatalog) {
   catalog = value;
   const available = (entry: AudioChapterEntry) => value.chapters[`${entry.bookId}:${entry.chapter}`]?.manifestUrl === entry.manifestUrl;
+  if (snapshot.chapterSelection) {
+    if (pending && !available(pending.entry)) {
+      const paused = selectChapter(snapshot.chapterSelection);
+      update({ problem: "unavailable" });
+      await paused;
+    }
+    return;
+  }
   if (!pendingTopic && (pending ? !available(pending.entry) : snapshot.session && !available(snapshot.session.entry))) {
     await stop();
     return;
@@ -244,7 +253,55 @@ async function prepareNext() {
 export function startPassage(entry: AudioChapterEntry, passage: AudioPassage) {
   return start(entry, undefined, 0, true, passage);
 }
-export async function start(entry: AudioChapterEntry, index?: number, offset = 0, autoplay = true, passage?: AudioPassage) {
+
+// A reader selection is visible immediately, before a manifest or audio is loaded.
+// Keep native synchronization closed until Play replaces the old queue.
+export async function selectChapter(selection: AudioChapterSelection) {
+  const token = ++generation;
+  ++readRevision;
+  closing = true;
+  pending = undefined; pendingTopic = undefined; activeTopic = undefined;
+  topicCommandProblem = false; deadline = 0;
+  commands.clear();
+  resetPauseRebuild();
+  update({ chapterSelection: { ...selection }, session: undefined, pendingRequest: undefined, pendingTopic: undefined,
+    position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
+  await serial(async () => {
+    if (token !== generation) return;
+    if (!setup) {
+      if (!await hasNativeQueue() || token !== generation) return;
+      await ensurePlayer();
+    } else await setup;
+    if (token !== generation) return;
+    await TrackPlayer.pause();
+    await TrackPlayer.reset();
+  });
+  savedWrites = savedWrites.then(async () => { if (token === generation) await AsyncStorage.removeItem(POSITION_KEY); }).catch(() => {});
+  await savedWrites;
+}
+
+export async function playSelectedChapter(refreshCatalog?: () => Promise<AudioCatalog | undefined>) {
+  const selection = snapshot.chapterSelection;
+  if (!selection || snapshot.loading) return;
+  const token = generation;
+  update({ loading: true, problem: null });
+  try {
+    let entry = Object.values(catalog?.chapters ?? {}).find(value => value.book === selection.book && value.chapter === selection.chapter);
+    if (!entry && refreshCatalog) {
+      const refreshed = await refreshCatalog();
+      if (token !== generation) return;
+      if (!refreshed) throw new Error("Audio catalog unavailable");
+      entry = Object.values(refreshed.chapters).find(value => value.book === selection.book && value.chapter === selection.chapter);
+    }
+    if (token !== generation) return;
+    if (!entry) throw new UnavailablePassageError("Chapter unavailable");
+    await start(entry, undefined, 0, true, undefined, selection.verse);
+  } catch (error) {
+    if (token === generation) update({ loading: false, problem: error instanceof UnavailablePassageError ? "unavailable" : "network" });
+  }
+}
+
+export async function start(entry: AudioChapterEntry, index?: number, offset = 0, autoplay = true, passage?: AudioPassage, startVerse?: number) {
   const current = catalog?.chapters[`${entry.bookId}:${entry.chapter}`];
   entry = current ?? entry;
   const token = ++generation;
@@ -252,14 +309,18 @@ export async function start(entry: AudioChapterEntry, index?: number, offset = 0
   closing = false;
   pendingTopic = undefined; activeTopic = undefined;
   topicCommandProblem = false;
-  pending = { entry, index, offset, autoplay, passage: passage ? { ...passage } : undefined };
+  const selection = startVerse === undefined ? undefined : snapshot.chapterSelection;
+  pending = { entry, index, startVerse, offset, autoplay, passage: passage ? { ...passage } : undefined };
   const request = pending;
   commands.clear();
-  update({ pendingRequest: request, pendingTopic: undefined, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null });
+  update({ chapterSelection: selection, pendingRequest: request, pendingTopic: undefined, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null });
   try {
     await ensurePlayer();
     await serial(async () => { if (token === generation) await TrackPlayer.pause(); });
     if ((catalog && !current) || (passage !== undefined && !isAudioPassage(passage))) throw new UnavailablePassageError("Unavailable passage");
+    const requestedIndex = startVerse === undefined ? index : (await getChapter(entry)).verses.findIndex(verse => verse.verse === startVerse);
+    if (token !== generation) return;
+    if (requestedIndex === -1) throw new UnavailablePassageError("Verse unavailable");
     const tracks = await downloadChapter(entry, token, request.passage);
     await serial(async () => {
       if (token !== generation) return;
@@ -268,13 +329,13 @@ export async function start(entry: AudioChapterEntry, index?: number, offset = 0
       await updateCapabilities(false);
       await TrackPlayer.add(tracks);
       const first = tracks[0].verseIndex;
-      const selectedVerse = Number.isInteger(index) ? Math.max(first, Math.min(index!, tracks[tracks.length - 1].verseIndex)) : first;
+      const selectedVerse = Number.isInteger(requestedIndex) ? Math.max(first, Math.min(requestedIndex!, tracks[tracks.length - 1].verseIndex)) : first;
       const selected = tracks.findIndex((track) => track.verseIndex === selectedVerse);
       await TrackPlayer.skip(selected, Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)));
       await TrackPlayer.setRate(snapshot.speed);
       if (token !== generation) return;
       pending = undefined;
-      update({ session: { chapter: chapters.get(entry.manifestUrl)!, entry, index: tracks[selected].verseIndex, passage: request.passage }, pendingRequest: undefined, position: Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)), loading: false });
+      update({ chapterSelection: undefined, session: { chapter: chapters.get(entry.manifestUrl)!, entry, index: tracks[selected].verseIndex, passage: request.passage }, pendingRequest: undefined, position: Math.max(0, Math.min(offset, tracks[selected].duration! - 0.05)), loading: false });
       if (autoplay) await TrackPlayer.play();
     });
     if (token === generation) { await syncFromNative(); void prepareNext(); }
@@ -284,7 +345,7 @@ export async function stop() {
   ++generation; ++readRevision; pending = undefined; pendingTopic = undefined; activeTopic = undefined; topicCommandProblem = false; deadline = 0; closing = true;
   commands.clear();
   resetPauseRebuild();
-  update({ session: undefined, pendingRequest: undefined, pendingTopic: undefined, position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
+  update({ chapterSelection: undefined, session: undefined, pendingRequest: undefined, pendingTopic: undefined, position: 0, playing: false, playWhenReady: false, loading: false, buffering: false, commandPending: false, problem: null, sleep: 0 });
   await serial(async () => { if (setup) { await ensurePlayer(); await TrackPlayer.reset(); } });
   await savedWrites;
   if (closing) await AsyncStorage.removeItem(POSITION_KEY);
@@ -405,9 +466,10 @@ export async function setSleep(sleep: number | "chapter") {
   if (sleep === "chapter") await trimUpcoming(); else await prepareNext();
 }
 export function retry() {
+  if (snapshot.chapterSelection) return playSelectedChapter();
   if (pendingTopic) return beginTopic(pendingTopic.definition, pendingTopic.options, pendingTopic.restore);
   const request = pending;
-  if (request) return start(request.entry, request.index, request.offset, request.autoplay, request.passage);
+  if (request) return start(request.entry, request.index, request.offset, request.autoplay, request.passage, request.startVerse);
   if (snapshot.session?.topic) {
     const session = snapshot.session;
     const topic = session.topic!;
@@ -754,7 +816,7 @@ async function beginTopic(definition: TopicDefinition, options: TopicOptions, re
   const frozen = isTopicDefinition(definition) ? { ...definition, items: definition.items.map((item) => ({ ...item })) } : definition;
   const request: PendingTopic = { definition: frozen, options: { ...options, pauseSeconds: normalizeTopicPause(options.pauseSeconds ?? snapshot.topicPauseSeconds), loop: options.loop ?? "off" }, restore };
   pendingTopic = request; commands.clear(); resetPauseRebuild();
-  update({ pendingRequest: undefined, pendingTopic: { definition: frozen, options: request.options }, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null, sleep: snapshot.sleep === "chapter" ? 0 : snapshot.sleep });
+  update({ chapterSelection: undefined, pendingRequest: undefined, pendingTopic: { definition: frozen, options: request.options }, loading: true, commandPending: false, playing: false, playWhenReady: false, buffering: false, problem: null, sleep: snapshot.sleep === "chapter" ? 0 : snapshot.sleep });
   try {
     await ensurePlayer();
     await serial(async () => { if (token === generation) await TrackPlayer.pause(); });

@@ -9,6 +9,13 @@ export type BibleDatabaseVerseRow = {
   verse: number;
 };
 
+export type BibleDatabaseVerseRange = {
+  book: string;
+  chapter: number;
+  startVerse: number;
+  endVerse: number;
+};
+
 export type BibleDatabaseFootnote = {
   marker: string;
   text: string;
@@ -107,6 +114,29 @@ export function setBibleDatabaseForTesting(nextDatabase: BibleDatabaseConnection
   chapterCache.clear();
   crossReferenceChapterCache.clear();
   pendingChapters.clear();
+}
+
+/** Search excerpts need exact verse text, without loading chapter decorations. */
+export async function queryBibleVerseRangesAsync(translation: string, ranges: readonly BibleDatabaseVerseRange[]): Promise<BibleDatabaseVerseRow[][]> {
+  if (!ranges.length) return [];
+  const groups: BibleDatabaseVerseRow[][] = ranges.map(() => []);
+  const connection = requireDatabase();
+  // Keep every statement below SQLite's conservative 999-variable limit.
+  for (let offset = 0; offset < ranges.length; offset += 100) {
+    const batch = ranges.slice(offset, offset + 100);
+    const rows = await connection.getAllAsync<BibleDatabaseVerseRow & { request_index: number }>(
+      `WITH requested(request_index,book,chapter,first,last) AS (VALUES ${batch.map(() => "(?,?,?,?,?)").join(",")})
+       SELECT requested.request_index,books.name AS book,verses.chapter,verses.verse,verses.text
+         FROM requested
+         JOIN books ON books.name=requested.book
+         JOIN translations ON translations.code=?
+         JOIN verses ON verses.book_id=books.id AND verses.translation_id=translations.id
+                    AND verses.chapter=requested.chapter AND verses.verse BETWEEN requested.first AND requested.last
+        ORDER BY requested.request_index,verses.verse`,
+      ...batch.flatMap((range, index) => [index, range.book, range.chapter, range.startVerse, range.endVerse]), translation);
+    for (const { request_index, ...row } of rows) groups[offset + request_index].push(row);
+  }
+  return groups;
 }
 
 export function queryBibleChapterAsync(translation: string, book: string, chapter: number): Promise<BibleDatabaseChapter> {

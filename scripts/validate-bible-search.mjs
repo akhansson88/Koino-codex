@@ -51,10 +51,14 @@ try {
     logLevel: "silent",
     outfile: bundlePath,
     platform: "node",
+    plugins: [{ name: "native-search-boundary", setup(builder) {
+      builder.onResolve({ filter: /bible-search\/native-backend$/ }, () => ({ path: "koino-native-search-not-installed-in-node", external: true }));
+    } }],
     stdin: {
       contents: `
         export * from "./features/bible-search.ts";
-        export { bibleChapter, bibleCrossReferences, hasBibleCrossReferences } from "./features/bible-kjv.ts";
+        export { bibleChapter, bibleCrossReferences } from "./features/bible-kjv.ts";
+        export { bibleChapterHasCrossReference } from "./features/bible-database.ts";
         export { bibleTextSegments } from "./features/bible-footnotes.ts";
         export { setBibleDatabaseForTesting } from "./features/bible-database.ts";
       `,
@@ -71,11 +75,12 @@ try {
     bibleTextSegments,
     displayBibleBookName,
     displayBibleReference,
-    hasBibleCrossReferences,
+    bibleChapterHasCrossReference,
     resolveBibleReference,
-    searchScripture,
+    searchScripture: runScriptureSearch,
     setBibleDatabaseForTesting,
   } = await import(`${pathToFileURL(bundlePath).href}?${Date.now()}`);
+  const searchScripture = async (options) => (await runScriptureSearch(options)).results;
 
   setBibleDatabaseForTesting({
     getAllAsync: async (source, ...params) => nativeDatabase.prepare(source).all(...params),
@@ -135,6 +140,9 @@ try {
     ["john 3:16", "John 3:16"],
     ["JOHN 3 : 16", "John 3:16"],
     ["Jn 3:16", "John 3:16"],
+    ["Jn3:16", "John 3:16"],
+    ["Joh3:16", "John 3:16"],
+    ["1Joh3:16", "1 John 3:16"],
     ["Romans 8:28", "Romans 8:28"],
     ["Rom 8:28", "Romans 8:28"],
     ["1 Corinthians 13:4", "1 Corinthians 13:4"],
@@ -162,6 +170,7 @@ try {
   assert.deepEqual(biblePositionFromSearchQuery("Psalm 23", "en", "kjv"), { book: "Psalms", chapter: 23, verse: 1 });
   assert.deepEqual(biblePositionFromSearchQuery("Psaltaren 23", "sv", "kjv"), { book: "Psalms", chapter: 23, verse: 1 });
   assert.equal(biblePositionFromSearchQuery("Fakebook 3", "en", "kjv"), undefined);
+  assert.equal((await searchScripture({ language: "en", query: "Joh3", versionId: "kjv" }))[0]?.verse.reference, "John 3:1-36");
   assert.equal(biblePositionFromSearchQuery("John 999", "en", "kjv"), undefined);
   assert.equal(displayBibleBookName("John", "en", "reformationsbibeln2026"), "Johannesevangeliet");
   assert.equal(displayBibleBookName("John", "en", "kjv"), "John");
@@ -193,7 +202,7 @@ try {
   assert.equal(partialResults[0]?.verse.reference, "Matthew 6:34");
 
   const crossReferencePosition = { book: "John", chapter: 3, verse: 16 };
-  assert.equal(hasBibleCrossReferences(crossReferencePosition), true, "The compact source index must preserve cross-reference indicators");
+  assert.equal(bibleChapterHasCrossReference(crossReferencePosition.book, crossReferencePosition.chapter, crossReferencePosition.verse), true, "The compact source index must preserve cross-reference indicators");
   const crossReferences = bibleCrossReferences(crossReferencePosition, "kjv");
   assert.ok(crossReferences.length > 0, "Full cross-references must load on demand");
   assert.ok(crossReferences.every((reference) => reference.text && reference.reference), "Lazy cross-reference records must resolve normally");
@@ -214,6 +223,7 @@ try {
   assert.ok(limitedResults.every((result) => result.matchType === "text"));
 
   assert.deepEqual(await searchScripture({ language: "en", limit: 0, query: "John 3:16", versionId: "kjv" }), []);
+  assert.deepEqual(await searchScripture({ language: "en", limit: 0.5, query: "John 3:16", versionId: "kjv" }), []);
 
   console.log("Bible search validation passed.");
 } finally {

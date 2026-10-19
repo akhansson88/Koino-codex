@@ -62,3 +62,4 @@ if (await databaseIsCurrent(fingerprint)) {
   await buildDatabase();
   await writeFile(fingerprintPath, `${fingerprint}\n`, "utf8");
 }
+await import("./generate-bible-verse-counts.mjs");

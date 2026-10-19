@@ -40,7 +40,7 @@ for (let index = 0; index < decimalVerses.length; index++) {
 }
 
 const storage = new Map(), files = new Map(), handlers = new Map();
-let queue = [], active = 0, position = 0, state = 'paused', downloads = 0, setups = 0, plays = 0;
+let queue = [], active = 0, position = 0, state = 'paused', downloads = 0, setups = 0, plays = 0, manifestReads = 0;
 let blockDownload, failDownload = false, dropEvents = false, initialized = false, intent = false, rate = 1, progressRead;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const emit = (event, payload) => { if (dropEvents) return; for (const fn of handlers.get(event) ?? []) fn(payload); };
@@ -72,7 +72,7 @@ globalThis.__audioTest = {
 const nextEntry = { ...entry, chapter: 2, manifestUrl: entry.manifestUrl.replace('audio-test', 'audio-test2') };
 const nextChapter = { ...chapter, ...nextEntry, verses: chapter.verses.map((verse) => ({ ...verse, url: verse.url.replace('audio-test', 'audio-test2') })) };
 const manifests = new Map([[entry.manifestUrl, chapter], [nextEntry.manifestUrl, nextChapter]]);
-globalThis.fetch = async (url) => ({ ok: manifests.has(url), json: async () => manifests.get(url) });
+globalThis.fetch = async (url) => { manifestReads++; return { ok: manifests.has(url), json: async () => manifests.get(url) }; };
 const mockPlugin = { name: 'native-audio-mocks', setup(build) {
   build.onResolve({ filter: /^(react-native-track-player|expo-file-system\/legacy|@react-native-async-storage\/async-storage|@\/state\/encryption\/local-storage)$/ }, ({ path }) => ({ path, namespace: 'mock' }));
   build.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path }) => ({ contents: path === 'react-native-track-player'
@@ -83,6 +83,18 @@ const mockPlugin = { name: 'native-audio-mocks', setup(build) {
 const engine = await bundle('features/bible-audio/engine.ts', [mockPlugin]);
 await engine.setContinuous(false);
 engine.setAudioCatalog(catalog);
+await engine.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+assert.equal(setups, 0, 'selecting a reader verse must not initialize an unused native player');
+assert.equal(manifestReads, 0, 'selecting a reader verse must not load its manifest');
+assert.equal(downloads, 0, 'selecting a reader verse must not download audio');
+assert.equal(plays, 0, 'selecting a reader verse must stay paused');
+assert.equal(engine.getSnapshot().chapterSelection.verse, 2);
+assert.equal(engine.getSnapshot().session, undefined);
+await engine.playSelectedChapter();
+assert.equal(engine.getSnapshot().session.index, 1, 'Play starts the selected verse');
+assert.equal(position, 0, 'selected playback begins at the start of the verse');
+assert.equal(engine.getSnapshot().chapterSelection, undefined);
+await engine.stop();
 await engine.start(entry);
 assert.equal(downloads, 2, 'fetch every verse before playback');
 assert.equal(queue.length, 2);
@@ -514,7 +526,7 @@ const uiMocks = { name: 'audio-ui-mocks', setup(build) {
       '@/ui/theme': `export const brandPalette={deepNavy:'#0B1220',warmPersika:'#FFC79A'},radius={lg:16};`,
       '@/ui/app-sheet': `import {createElement} from 'react'; export const AppSheet=({visible,children,onClose})=>createElement('AppSheet',{onClose},visible?children:null);`,
       '@/ui/app-language': `export const useAppTranslation=()=>({t:(key,args)=>key==='audio.verse'?'Verse '+args.verse:key});`,
-      './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,catalogState:'ready',refresh,start:engine.start,retry:engine.retry,previousChapter:engine.adjacent(-1),nextChapter:engine.adjacent(1),toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
+      './provider': `import {useSyncExternalStore} from 'react'; const {engine,catalog,refresh}=globalThis.__audioTest.ui; export const useBibleAudio=()=>({...useSyncExternalStore(engine.subscribe,engine.getSnapshot),catalog,catalogState:'ready',refresh,start:engine.start,playSelectedChapter:engine.playSelectedChapter,retry:engine.retry,previousChapter:engine.adjacent(-1),nextChapter:engine.adjacent(1),toggle:engine.toggle,seek:engine.seek,move:engine.move,moveChapter:engine.moveChapter,stop:engine.stop,setSleep:engine.setSleep,setSpeed:engine.setSpeed,setContinuous:engine.setContinuous});`,
     };
     return { contents: modules[path], loader: 'js' };
   });
@@ -819,4 +831,140 @@ try {
   globalThis.requestAnimationFrame = originalRAF;
   globalThis.cancelAnimationFrame = originalCancelRAF;
 }
-console.log('Audio validation passed: bounded saved-passage queues, replay, retries, restoration, range timelines, background chapter continuation, service controls, sleep timer, native synchronization, stale reads and verse following.');
+// Reader selections render a paused card even without a loaded audio session.
+fresh.setAudioCatalog(catalog);
+await fresh.setContinuous(false);
+await fresh.start(entry, 0, 4, true);
+const selectionPlays = plays, selectionDownloads = downloads;
+await act(async () => {
+  await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+  ui = create(React.createElement(BibleAudioPlayer, { ...props, visible: false }));
+});
+assert.equal(intent, false, 'selecting the reader verse pauses existing playback');
+assert.equal(queue.length, 0, 'old chapter or passage tracks cannot take over a selection');
+assert.equal(plays, selectionPlays);
+assert.equal(downloads, selectionDownloads, 'cached selections also wait for Play');
+assert.equal(ui.root.findByType('Slider').props.disabled, true, 'duration seeking waits for the manifest');
+assert.equal(ui.root.findByProps({ accessibilityLabel: 'audio.play', accessibilityRole: 'button' }).props.disabled, false);
+assert.equal(ui.root.findAllByProps({ accessibilityLabel: 'audio.follow', accessibilityRole: 'button' }).length, 0, 'Follow is already enabled');
+assert.ok(ui.root.findAllByType('Text').some(node => node.props.children === 'Verse 2'));
+assert.equal(await fresh.syncFromNative(), false, 'native synchronization cannot replace a staged selection');
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, { ...props, visible: true })); });
+assert.equal(ui.root.findByProps({ accessibilityRole: 'header' }).props.children, 'Johannesevangeliet 1');
+assert.equal(ui.root.findByProps({ accessibilityLabel: 'audio.previousChapter', accessibilityRole: 'button' }).props.disabled, true);
+assert.equal(ui.root.findByProps({ accessibilityLabel: 'audio.nextChapter', accessibilityRole: 'button' }).props.disabled, true);
+assert.equal(ui.root.findByType('Switch').props.value, false, 'settings remain available before Play');
+await act(async () => { ui.update(React.createElement(BibleAudioPlayer, { ...props, visible: false })); });
+await act(async () => {
+  ui.root.findByProps({ accessibilityLabel: 'audio.play', accessibilityRole: 'button' }).props.onPress();
+  await flush(); await flush();
+});
+assert.equal(fresh.getSnapshot().session.index, 1);
+assert.equal(position, 0);
+assert.equal(intent, true);
+await act(async () => { ui.unmount(); await fresh.stop(); });
+
+// Verse numbers need not be contiguous: select by number, never verse - 1.
+const sparseEntry = { ...entry, revision: 'sparse', manifestUrl: entry.manifestUrl.replace('audio-test', 'audio-sparse') };
+const sparseChapter = { ...chapter, revision: 'sparse', expectedVerses: [1, 3], verses: chapter.verses.map((verse, index) => ({ ...verse, verse: index ? 3 : 1 })) };
+manifests.set(sparseEntry.manifestUrl, sparseChapter);
+fresh.setAudioCatalog({ ...catalog, chapters: { '43:1': sparseEntry } });
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 3 });
+await fresh.playSelectedChapter();
+assert.equal(fresh.getSnapshot().session.index, 1);
+assert.equal(fresh.getSnapshot().session.chapter.verses[1].verse, 3);
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+const unavailablePlays = plays;
+await fresh.playSelectedChapter();
+assert.equal(fresh.getSnapshot().problem, 'unavailable');
+assert.equal(fresh.getSnapshot().chapterSelection.verse, 2);
+assert.equal(plays, unavailablePlays, 'a missing verse must not silently play verse 1');
+
+// Network retries and catalog discovery retain the original reader selection.
+fresh.setAudioCatalog({ ...catalog, chapters: {} });
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+await fresh.playSelectedChapter(async () => undefined);
+assert.equal(fresh.getSnapshot().problem, 'network');
+assert.equal(fresh.getSnapshot().loading, false);
+await fresh.playSelectedChapter(async () => { fresh.setAudioCatalog(catalog); return catalog; });
+assert.equal(fresh.getSnapshot().session.index, 1);
+files.clear(); failDownload = true;
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+await fresh.playSelectedChapter();
+assert.equal(fresh.getSnapshot().problem, 'network');
+assert.equal(fresh.getSnapshot().chapterSelection.verse, 2);
+failDownload = false;
+await fresh.retry();
+assert.equal(fresh.getSnapshot().session.index, 1, 'retry retains the selected verse');
+assert.equal(position, 0);
+
+// Closing or choosing another verse wins over delayed downloads and catalog reads.
+files.clear();
+let releaseSelectedDownload;
+blockDownload = new Promise(resolve => { releaseSelectedDownload = resolve; });
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+const beforeSelectedDownload = downloads, beforeSelectedClose = plays;
+const selectedWork = fresh.playSelectedChapter();
+await until(() => downloads > beforeSelectedDownload, 'selected chapter begins loading after Play');
+await fresh.stop();
+releaseSelectedDownload(); blockDownload = undefined;
+await selectedWork;
+assert.equal(plays, beforeSelectedClose);
+assert.equal(fresh.getSnapshot().chapterSelection, undefined);
+assert.equal(queue.length, 0);
+
+files.clear();
+blockDownload = new Promise(resolve => { releaseSelectedDownload = resolve; });
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+const beforeReplacementDownload = downloads;
+const replacedWork = fresh.playSelectedChapter();
+await until(() => downloads > beforeReplacementDownload, 'replacement scenario starts downloading');
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 1 });
+releaseSelectedDownload(); blockDownload = undefined;
+await replacedWork;
+assert.equal(fresh.getSnapshot().chapterSelection.verse, 1, 'a later header tap wins over a delayed download');
+assert.equal(fresh.getSnapshot().loading, false);
+assert.equal(plays, beforeSelectedClose);
+failDownload = true;
+await fresh.playSelectedChapter();
+failDownload = false;
+await fresh.applyAudioCatalog({ ...catalog, chapters: {} });
+assert.equal(fresh.getSnapshot().chapterSelection.verse, 1, 'catalog withdrawal retains the selected reference');
+assert.equal(fresh.getSnapshot().problem, 'unavailable');
+assert.equal(fresh.getSnapshot().loading, false);
+
+let releaseCatalog;
+fresh.setAudioCatalog({ ...catalog, chapters: {} });
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 1 });
+const catalogWork = fresh.playSelectedChapter(() => new Promise(resolve => { releaseCatalog = resolve; }));
+await fresh.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+releaseCatalog(catalog);
+await catalogWork;
+assert.equal(fresh.getSnapshot().chapterSelection.verse, 2);
+assert.equal(fresh.getSnapshot().loading, false);
+assert.equal(plays, beforeSelectedClose, 'stale catalog completion cannot start playback');
+fresh.setAudioCatalog(catalog);
+await fresh.startPassage(entry, { startVerse: 1, endVerse: 1, savedVerseId: 'replacement' });
+assert.equal(fresh.getSnapshot().chapterSelection, undefined, 'saved audio replaces a staged reader selection');
+await fresh.stop();
+
+// A surviving native queue may exist before this process adopts its player.
+await fresh.start(entry);
+const stagedRecovery = await bundle('features/bible-audio/engine.ts', [mockPlugin]);
+const beforeRecoverySelection = { reads: manifestReads, downloads, setups };
+await stagedRecovery.selectChapter({ book: 'John', chapter: 1, verse: 2 });
+assert.equal(intent, false, 'selecting during native restoration pauses surviving playback');
+assert.equal(queue.length, 0);
+assert.deepEqual({ reads: manifestReads, downloads, setups }, beforeRecoverySelection, 'adopting a surviving queue needs no manifests, downloads or new native player');
+assert.equal(stagedRecovery.getSnapshot().chapterSelection.verse, 2);
+await stagedRecovery.stop();
+await fresh.stop();
+
+const { BibleReaderHeader } = await bundle('features/bible-reader/header.tsx', [uiMocks]);
+let header;
+await act(async () => { header = create(React.createElement(BibleReaderHeader, { palette: {}, audioAvailable: false })); });
+assert.equal(header.root.findAllByProps({ accessibilityLabel: 'audio.open', accessibilityRole: 'button' }).length, 0, 'unsupported versions hide headphones');
+await act(async () => { header.update(React.createElement(BibleReaderHeader, { palette: {}, audioAvailable: true })); });
+assert.equal(header.root.findAllByProps({ accessibilityLabel: 'audio.open', accessibilityRole: 'button' }).length, 1, 'audio versions show headphones');
+await act(async () => { header.unmount(); });
+console.log('Audio validation passed: paused reader selection, deferred loading, verse-number selection, retries and cancellation; saved passages, restoration, timelines, background continuation and native synchronization.');

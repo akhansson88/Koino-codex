@@ -30,7 +30,7 @@ const result = await build({
   bundle: true,
   entryPoints: [path.join(projectRoot, "features", "home-screen.tsx")],
   format: "esm",
-  loader: { ".db": "file" },
+  loader: { ".db": "file", ".onnx": "file", ".tokenizer": "file" },
   logLevel: "silent",
   metafile: true,
   outdir: "out",
@@ -46,7 +46,7 @@ assert.ok(homeOutput, "Home entry output was not generated");
 
 const forbiddenHomeInputs = Object.keys(homeOutput.inputs).filter((input) =>
   /(^|\/)features\/bible-(database|database-provider|kjv|screen|search)\.[jt]sx?$/.test(input.replaceAll("\\", "/")) ||
-  /(^|\/)features\/bible-reader\//.test(input.replaceAll("\\", "/")) ||
+  /(^|\/)features\/bible-(reader|search)\//.test(input.replaceAll("\\", "/")) ||
   /(^|\/)ui\/bible-verse-picker\.tsx$/.test(input.replaceAll("\\", "/")),
 );
 assert.deepEqual(
