@@ -42,6 +42,7 @@ const mocks = {
     export const router = { push: value => globalThis.__bibleAudioFollowTest.navigations.push(value) };
   `,
   "expo-clipboard": `export const setStringAsync = async () => {};`,
+  "@/ui/native-pressable": `export const NativePressable = "NativePressable";`,
   "@/state/encryption/local-storage": `export default { getItem: async () => null, setItem: async () => {} };`,
   "@/features/bible-audio/provider": `
     import { useSyncExternalStore } from "react";
@@ -91,7 +92,7 @@ const mocks = {
 const childBoundaries = {
   "@/features/bible-audio/player": ["BibleAudioPlayer"],
   "@/features/bible-reader/header": ["BibleReaderHeader", "ReaderCircleButton"],
-  "@/features/bible-reader/plan-panel": ["BiblePlanReaderPanel"],
+  "@/features/bible-reader/plan-panel": ["BiblePlanReaderPanel", "BiblePlanInlineMarker"],
   "@/features/bible-reader/chapter-text": ["BibleText"],
   "@/features/bible-reader/swipe-indicator": ["ChapterSwipeIndicator"],
   "@/features/bible-reader/reading-controls": ["BibleBottomReadingControls"],
@@ -110,24 +111,27 @@ for (const [moduleName, exports] of Object.entries(childBoundaries)) {
   mocks[moduleName] = exports.map(name => `export const ${name} = "${name}";`).join("\n");
 }
 
-const result = await build({
-  entryPoints: [path.join(projectRoot, "features/bible-screen.tsx")],
-  bundle: true, format: "cjs", platform: "node", jsx: "automatic", write: false,
-  tsconfig: path.join(projectRoot, "tsconfig.json"), logLevel: "silent",
-  plugins: [{
-    name: "screen-test-boundaries",
-    setup(builder) {
-      builder.onResolve({ filter: /.*/ }, ({ path: name }) => {
-        if (name in mocks) return { path: name, namespace: "mock" };
-        if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
-      });
-      builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "js", resolveDir: projectRoot }));
-    },
-  }],
-});
-const module = { exports: {} };
-new Function("require", "module", "exports", result.outputFiles[0].text)(require, module, module.exports);
-const { BibleScreen } = module.exports;
+async function loadComponent(entryPoint) {
+  const result = await build({
+    entryPoints: [path.join(projectRoot, entryPoint)],
+    bundle: true, format: "cjs", platform: "node", jsx: "automatic", write: false,
+    tsconfig: path.join(projectRoot, "tsconfig.json"), logLevel: "silent",
+    plugins: [{
+      name: "screen-test-boundaries",
+      setup(builder) {
+        builder.onResolve({ filter: /.*/ }, ({ path: name }) => {
+          if (name in mocks) return { path: name, namespace: "mock" };
+          if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
+        });
+        builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "js", resolveDir: projectRoot }));
+      },
+    }],
+  });
+  const module = { exports: {} };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(require, module, module.exports);
+  return module.exports;
+}
+const { BibleScreen } = await loadComponent("features/bible-screen.tsx");
 
 const emptyPlayback = () => ({ navigationRevision: 0, loading: false, playing: false, playWhenReady: false,
   commandPending: false, position: 0, problem: null, speed: 1, continuous: true, sleep: 0,
@@ -157,6 +161,29 @@ const pendingTopic = { definition: topicDefinition, options: { mode: "all" } };
 const request = value => ({ entry: value.entry, offset: 0, autoplay: true, passage: value.passage });
 let renderer;
 const measuredScrolls = [];
+let simulatedScroll = 0;
+let deferredMeasurements;
+const geometry = new Map();
+const scrollView = () => {
+  const native = renderer.root.findByType("ScrollView").props;
+  return { ...native, onScroll: event => {
+    simulatedScroll = event.nativeEvent.contentOffset.y;
+    native.onScroll(event);
+  } };
+};
+function layoutVerses(start = 0, step = 100, rowHeight = step) {
+  for (let verse = 1; verse <= 40; verse++) {
+    geometry.set(verse, { offset: start + (verse - 1) * step, height: rowHeight });
+    props("BibleText").onVerseLayout(verse, start + (verse - 1) * step);
+    props("BibleText").onVerseRef(verse, { measureInWindow: done => {
+      const { offset, height } = geometry.get(verse);
+      // Capture a native measurement now, even if delivery is delayed.
+      const y = 100 + offset - simulatedScroll;
+      if (deferredMeasurements) deferredMeasurements.push(() => done(0, y, 380, height));
+      else done(0, y, 380, height);
+    } });
+  }
+}
 
 async function flushFrames() {
   for (let count = 0; frames.size; count++) {
@@ -167,10 +194,14 @@ async function flushFrames() {
   }
 }
 async function mount(playback = {}) {
+  simulatedScroll = 0;
+  deferredMeasurements = undefined;
+  geometry.clear();
   audio.snapshot = { ...emptyPlayback(), ...playback };
   await act(async () => { renderer = create(React.createElement(BibleScreen), { createNodeMock: element => element.type === "ScrollView"
     ? { scrollTo: value => measuredScrolls.push(value) }
     : { measureInWindow: done => done(0, 100, 420, 800) } }); });
+  await act(async () => { props("AnimatedView").onLayout({ nativeEvent: { layout: { y: 0 } } }); });
   await flushFrames();
 }
 async function publish(changes) {
@@ -211,10 +242,9 @@ try {
   await flushFrames();
   assert.equal(props("BibleReaderHeader").audioAvailable, true);
   await act(async () => {
-    for (let verse = 1; verse <= 40; verse++) props("BibleText").onVerseLayout(verse, (verse - 1) * 100);
+    layoutVerses();
   });
   await flushFrames();
-  const scrollView = () => renderer.root.findByType("ScrollView").props;
   const realNow = Date.now;
   Date.now = () => realNow() + 1000;
   try {
@@ -249,7 +279,7 @@ try {
   await publish({ chapterSelection: undefined, session: session("Philippians", 4, undefined, 12), playWhenReady: true });
   assert.equal(props("BibleAudioPlayer").follow, false, "manual browsing while loading is not overridden when playback begins");
   await act(async () => {
-    for (let verse = 1; verse <= 40; verse++) props("BibleText").onVerseLayout(verse, 80 + (verse - 1) * 100);
+    layoutVerses(80);
     scrollView().onScrollBeginDrag();
     scrollView().onScroll({ nativeEvent: { contentOffset: { y: 700 } } });
     scrollView().onScroll({ nativeEvent: { contentOffset: { y: 0 } } });
@@ -258,6 +288,162 @@ try {
   await flushFrames();
   assert.equal(audio.snapshot.chapterSelection.verse, 1, "returning to the chapter heading selects verse 1 even before the first verse reaches the viewport top");
   await unmount();
+
+  // Native geometry, rather than the reading-position cache or scroll target,
+  // determines the selection. Rows are deliberately different heights here.
+  await mount();
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
+  await flushFrames();
+  await act(async () => { layoutVerses(80, 100, 80); });
+  await flushFrames();
+  await act(async () => {
+    props("AnimatedView").onLayout({ nativeEvent: { layout: { y: 18 } } });
+    props("BibleDrawer").onSelect({ book: "Philippians", chapter: 4, verse: 20 });
+  });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 1980, "cached verse offsets include the surrounding content origin");
+  await act(async () => {
+    props("AnimatedView").onLayout({ nativeEvent: { layout: { y: 38 } } });
+    props("BibleDrawer").onSelect({ book: "Philippians", chapter: 4, verse: 20 });
+  });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 2000, "moving the content origin refreshes cached offsets without row layout events");
+  await act(async () => { props("AnimatedView").onLayout({ nativeEvent: { layout: { y: 0 } } }); });
+  for (const [y, expected, message] of [
+    [425, 4, "partially visible top row"],
+    [460, 5, "gap after a fully scrolled-off row"],
+    [480, 5, "exact row boundary"],
+    [0, 1, "chapter heading"],
+    [4500, 40, "padding below the final verse"],
+  ]) {
+    await act(async () => {
+      scrollView().onScrollBeginDrag();
+      scrollView().onScroll({ nativeEvent: { contentOffset: { y } } });
+      props("BibleReaderHeader").onOpenAudio();
+    });
+    await flushFrames();
+    assert.equal(audio.snapshot.chapterSelection.verse, expected, message);
+    assert.equal(audio.snapshot.playWhenReady, false, "headphones stages paused audio");
+  }
+  // Leave a pending scroll-to-1 target, then report a different visible row.
+  await act(async () => {
+    props("BibleDrawer").onSelect({ book: "Philippians", chapter: 4, verse: 1 });
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 980 } } });
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 10, "a stale programmatic target cannot override the viewport");
+  await act(async () => {
+    for (let verse = 1; verse <= 40; verse++) props("BibleText").onVerseLayout(verse, 9000 + verse * 100);
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 10, "incorrect cached offsets cannot fall back to verse 1 when native rows show verse 10");
+
+  // A font/layout change invalidates in-flight native measurements.
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const beforeFontChange = deferredMeasurements;
+  deferredMeasurements = undefined;
+  await act(async () => {
+    props("ReadingSettingsSheet").onFontSizeChange(26);
+    layoutVerses(80, 200, 180);
+    beforeFontChange.forEach(deliver => deliver());
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 5, "font reflow discards old row measurements");
+
+  // Scroll changes while native callbacks are in flight must be remeasured.
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const beforeScroll = deferredMeasurements;
+  deferredMeasurements = undefined;
+  await act(async () => {
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 2080 } } });
+    beforeScroll.forEach(deliver => deliver());
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 11, "scrolling during measurement selects the latest top row");
+
+  // A newer tap wins even if the first native callback arrives last.
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const superseded = deferredMeasurements;
+  deferredMeasurements = undefined;
+  await act(async () => {
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 3080 } } });
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 16);
+  await act(async () => { superseded.forEach(deliver => deliver()); });
+  assert.equal(audio.snapshot.chapterSelection.verse, 16, "superseded callbacks cannot replace a newer selection");
+
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const beforeChapterChange = deferredMeasurements;
+  deferredMeasurements = undefined;
+  const existingSelection = audio.snapshot.chapterSelection;
+  const oldVerseLayout = props("BibleText").onVerseLayout;
+  await act(async () => {
+    props("BibleDrawer").onSelect({ book: "John", chapter: 3, verse: 16 });
+    beforeChapterChange.forEach(deliver => deliver());
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection, existingSelection, "navigation cancels an in-flight selection");
+  await act(async () => {
+    oldVerseLayout(1, 9000);
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection, existingSelection, "a new chapter waits for its own rows rather than using old refs or verse 1");
+  await act(async () => {
+    layoutVerses();
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 1250 } } });
+  });
+  await flushFrames();
+  assert.deepEqual(audio.snapshot.chapterSelection, { book: "John", chapter: 3, verse: 13 }, "layout callbacks resume a waiting headphones selection");
+
+  const beforeZeroHeight = audio.snapshot.chapterSelection;
+  await act(async () => {
+    layoutVerses(0, 100, 0);
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection, beforeZeroHeight, "unmeasured native rows wait for layout instead of selecting verse 1");
+  await act(async () => { layoutVerses(); });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 13);
+
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const beforeTranslationChange = deferredMeasurements;
+  deferredMeasurements = undefined;
+  const selectedBeforeTranslation = audio.snapshot.chapterSelection;
+  await act(async () => {
+    props("BibleVersionSheet").onChangeBibleVersion("kjv");
+    beforeTranslationChange.forEach(deliver => deliver());
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection, selectedBeforeTranslation, "translation changes cancel delayed selections");
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
+  await flushFrames();
+  await act(async () => { layoutVerses(); });
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const beforeUnmount = deferredMeasurements;
+  deferredMeasurements = undefined;
+  await unmount();
+  await act(async () => { beforeUnmount.forEach(deliver => deliver()); });
+  assert.equal(audio.snapshot.chapterSelection, selectedBeforeTranslation, "unmounting cancels delayed selections");
 
   // A restored saved passage must not override the current reading translation
   // or position, even though ordinary chapter playback follows by default.
@@ -393,7 +579,42 @@ try {
   assert.equal(measuredScrolls.length, scrollCount + 2, "Already-visible verse stays still after player layout changes");
   assert.equal(audio.navigations.length, 0, "Playback does not navigate to another app route");
   await unmount();
-  console.log("Bible audio follow validation passed: saved/topic playback preserves reader and open views, explicit playlist Follow closes search and spans passages, and chapter auto-follow remains intact.");
+  // Exercise the real text component as well as the screen. Reporting verse
+  // positions must work regardless of native parent/child layout event order.
+  const { BibleText } = await loadComponent("features/bible-reader/chapter-text.tsx");
+  const reportedOffsets = [];
+  const textProps = {
+    chapterHighlightByVerse: {}, onVerseLayout: (...args) => reportedOffsets.push(args), onVerseRef() {},
+    palette: {}, planMarkers: [], position: { book: "John", chapter: 1, verse: 1 },
+    readerLineHeight: 24, readerTextStyle: { fontSize: 18 }, selectedVerseNumbers: [], showVerseNumbers: true,
+    subtitles: [], verses: [{ verse: 1, reference: "John 1:1", text: "Fixture", footnotes: [] }],
+  };
+  let text;
+  try {
+    await act(async () => { text = create(React.createElement(BibleText, { ...textProps, key: "John:1" })); });
+    const layoutNodes = () => text.root.findAllByType("View").filter(node => node.props.onLayout);
+    const layout = y => ({ nativeEvent: { layout: { y } } });
+    await act(async () => { layoutNodes()[1].props.onLayout(layout(100)); });
+    assert.deepEqual(reportedOffsets, [], "child-first layout waits for the text container origin");
+    await act(async () => { layoutNodes()[0].props.onLayout(layout(300)); });
+    assert.deepEqual(reportedOffsets.at(-1), [1, 400], "late parent layout publishes the correct combined verse position");
+    await act(async () => { layoutNodes()[0].props.onLayout(layout(500)); });
+    assert.deepEqual(reportedOffsets.at(-1), [1, 600], "a moved plan panel refreshes positions without verse row layout changes");
+    await act(async () => {
+      text.update(React.createElement(BibleText, { ...textProps, readerTextStyle: { fontSize: 26 }, key: "John:1" }));
+      layoutNodes()[1].props.onLayout(layout(200));
+    });
+    assert.deepEqual(reportedOffsets.at(-1), [1, 700], "font reflow refreshes a verse position under the current parent origin");
+    await act(async () => { text.update(React.createElement(BibleText, { ...textProps, key: "John:2", position: { book: "John", chapter: 2, verse: 1 } })); });
+    const reportCount = reportedOffsets.length;
+    await act(async () => { layoutNodes()[1].props.onLayout(layout(25)); });
+    assert.equal(reportedOffsets.length, reportCount, "chapter remount discards the preceding text origin");
+    await act(async () => { layoutNodes()[0].props.onLayout(layout(10)); });
+    assert.deepEqual(reportedOffsets.at(-1), [1, 35]);
+  } finally {
+    if (text) await act(async () => { text.unmount(); });
+  }
+  console.log("Bible audio follow validation passed: native top-visible selection, rapid scrolling, delayed/stale measurements, chapter/translation cancellation, layout ordering/reflow, and saved/topic/chapter Follow behavior.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   globalThis.requestAnimationFrame = originalRequestFrame;

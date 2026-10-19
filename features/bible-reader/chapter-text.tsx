@@ -71,7 +71,8 @@ export function BibleText({
   verses: BibleChapterVerse[];
 }) {
   const bookLanguage = useBibleBookLanguage();
-  const textOffsetRef = useRef(0);
+  const textOffsetRef = useRef<number | undefined>(undefined);
+  const verseOffsetsRef = useRef<Record<number, number>>({});
   const verseFontSize = Math.max(10, Number(readerTextStyle.fontSize ?? defaultFontSize) * 0.7);
   const verseNumberStyle: TextStyle = {
     color: palette.accent,
@@ -86,6 +87,9 @@ export function BibleText({
     <View
       onLayout={(event) => {
         textOffsetRef.current = event.nativeEvent.layout.y;
+        for (const [verse, offset] of Object.entries(verseOffsetsRef.current)) {
+          onVerseLayout(Number(verse), textOffsetRef.current + offset);
+        }
       }}
       style={{ gap: 7 }}
     >
@@ -127,7 +131,12 @@ export function BibleText({
         return (
           <View
             key={item.reference}
-            onLayout={(event) => onVerseLayout(item.verse, textOffsetRef.current + event.nativeEvent.layout.y)}
+            collapsable={false}
+            onLayout={(event) => {
+              const offset = event.nativeEvent.layout.y;
+              verseOffsetsRef.current[item.verse] = offset;
+              if (textOffsetRef.current !== undefined) onVerseLayout(item.verse, textOffsetRef.current + offset);
+            }}
             ref={(node) => onVerseRef(item.verse, node)}
             style={{ gap: 5, borderLeftWidth: 3, borderLeftColor: item.verse === spokenVerse ? palette.accent : "transparent", backgroundColor: item.verse === spokenVerse ? palette.peach : undefined }}
           >
