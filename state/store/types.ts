@@ -59,6 +59,7 @@ export type Action =
   | { type: "removeSavedVerse"; id: Id }
   | { type: "highlightVerses"; color: BibleHighlightColor; colorId?: Id; verses: BibleVerse[] }
   | { type: "removeBibleHighlight"; id: Id }
+  | { type: "removeBibleHighlights"; ids: Id[] }
   | { type: "saveBibleHighlightColor"; hex: BibleHighlightColor; id?: Id; label?: string }
   | { type: "deleteBibleHighlightColor"; id: Id }
   | { type: "createBiblePlan"; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }

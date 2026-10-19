@@ -19,9 +19,12 @@ export function createCrypto(sodium: Sodium) {
   const encode = (bytes: Uint8Array) => sodium.to_base64(bytes, sodium.base64_variants.URLSAFE_NO_PADDING);
   const decode = (value: string) => sodium.from_base64(value, sodium.base64_variants.URLSAFE_NO_PADDING);
   const randomKey = () => encode(sodium.randombytes_buf(32));
+  // Keep the existing English collation used by signed records. Constructing
+  // an ICU collator for every localeCompare call is very expensive on Android.
+  const compareKeys = new Intl.Collator("en").compare;
   const canonical = (value: unknown): string => {
     if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-    if (value !== null && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b, "en")).map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(",")}}`;
+    if (value !== null && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => compareKeys(a, b)).map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(",")}}`;
     return JSON.stringify(value);
   };
   const fingerprint = (publicKey: string) => sodium.to_hex(sodium.crypto_generichash(20, decode(publicKey), null)).match(/.{1,8}/g)!.join(" ");

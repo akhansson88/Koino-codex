@@ -1,0 +1,85 @@
+import assert from "node:assert/strict";
+import { build } from "esbuild";
+
+const bundle = await build({ entryPoints: ["state/store/bible-highlights.ts"], bundle: true, platform: "node", format: "esm", write: false });
+const { createBibleHighlightMutations } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const deferred = () => { let resolve, reject; const promise = new Promise((done, fail) => { resolve = done; reject = fail; }); return { promise, resolve, reject }; };
+const flush = () => new Promise(resolve => setImmediate(resolve));
+const original = { id: "john", book: "John", chapter: 3, startVerse: 16, endVerse: 16, reference: "John 3:16", translation: "KJV", color: "#FFC166", createdAt: "2026-01-01", updatedAt: "2026-01-01" };
+const red = { ...original, color: "#FF0000", updatedAt: "2026-01-02" };
+const blue = { ...original, color: "#0000FF", updatedAt: "2026-01-03" };
+const other = { ...original, id: "other", startVerse: 18, endVerse: 20, reference: "John 3:18-20" };
+let visible, publications = 0;
+const store = createBibleHighlightMutations(records => { visible = records; publications++; });
+store.receive([original, other]);
+const baselinePublications = publications;
+store.receive([structuredClone(original), structuredClone(other)]);
+assert.equal(publications, baselinePublications, "identical verified snapshots must not rerender the reader");
+const current = () => true;
+let invalidWriteStarted = false;
+for (const id of ["", " ", "nested/id"]) await assert.rejects(store.mutate({ [id]: null }, () => { invalidWriteStarted = true; return Promise.resolve(); }, current), /selected highlights/);
+assert.equal(invalidWriteStarted, false, "invalid IDs must not turn a record deletion into a collection deletion");
+
+let first = deferred(), second = deferred();
+const writes = [];
+const firstWrite = store.mutate({ john: red }, () => { writes.push("red"); return first.promise; }, current);
+assert.equal(visible.find(record => record.id === "john").color, red.color, "paint the color synchronously before starting the network request");
+store.receive([original, other]);
+assert.equal(visible.find(record => record.id === "john").color, red.color, "a previous snapshot cannot erase the pending color");
+const secondWrite = store.mutate({ john: blue }, () => { writes.push("blue"); return second.promise; }, current);
+assert.equal(visible.find(record => record.id === "john").color, blue.color, "allow a newer color while saving the previous one");
+await flush();
+assert.deepEqual(writes, ["red"], "writes use the user's order");
+const optimisticPublications = publications;
+store.receive([red, other]);
+assert.equal(publications, optimisticPublications, "the local Firebase echo must not repaint an already visible color");
+first.resolve(); await firstWrite; await flush();
+assert.deepEqual(writes, ["red", "blue"]);
+assert.equal(visible.find(record => record.id === "john").color, blue.color, "an earlier acknowledgement cannot overwrite a newer choice");
+store.receive([blue, other]); second.reject(new Error("permission denied"));
+await assert.rejects(secondWrite, /permission denied/);
+assert.deepEqual(visible, [red, other], "rejecting an echoed write immediately restores the confirmed color");
+store.receive([red, other]);
+
+first = deferred(); second = deferred();
+const rejectedA = store.mutate({ john: blue }, () => first.promise, current);
+const rejectedB = store.mutate({ john: original }, () => second.promise, current);
+const checkedA = assert.rejects(rejectedA), checkedB = assert.rejects(rejectedB);
+await flush(); store.receive([blue, other]); first.reject(new Error("offline failure")); await checkedA;
+assert.equal(visible.find(record => record.id === "john").color, original.color, "failure of the old request preserves the newer pending color");
+await flush(); store.receive([original, other]); second.reject(new Error("offline failure")); await checkedB;
+assert.deepEqual(visible, [red, other], "two rejected changes cannot restore an earlier failed optimistic value");
+
+const deletion = deferred();
+const deleted = store.mutate({ john: null, other: null }, () => deletion.promise, current);
+assert.deepEqual(visible, [], "batch deletion removes all selected ranges immediately");
+await flush(); store.receive([]); deletion.reject(new Error("denied"));
+await assert.rejects(deleted);
+assert.deepEqual(visible, [red, other], "a failed batch restores every affected range");
+
+const success = deferred();
+const added = store.mutate({ john: blue, other }, () => success.promise, current);
+await flush(); success.resolve(); await added;
+assert.deepEqual(visible, [blue, other], "acknowledgement before snapshot decoding must not flicker");
+store.receive([blue, other]);
+const remote = { ...red, updatedAt: "2026-01-04" };
+store.receive([remote, other]);
+assert.equal(visible[0].color, red.color, "a later remote edit wins after confirmation");
+
+const conflict = deferred();
+const edited = store.mutate({ john: blue }, () => conflict.promise, current);
+await flush(); store.receive([blue, other]); store.receive([remote, other]); conflict.resolve(); await edited;
+assert.deepEqual(visible, [remote, other], "a remote update observed after the local echo survives a delayed acknowledgement");
+
+const outstanding = deferred(); let accountCurrent = true;
+const disposed = store.mutate({ john: blue }, () => outstanding.promise, () => accountCurrent);
+await flush();
+let queuedWriteStarted = false;
+const queued = store.mutate({ john: original }, () => { queuedWriteStarted = true; return Promise.resolve(); }, () => accountCurrent);
+const checkedQueued = assert.rejects(queued, /session changed/);
+const lastVisible = visible;
+accountCurrent = false; store.dispose(); outstanding.resolve(); await disposed; await checkedQueued;
+assert.equal(visible, lastVisible, "old-account completions never publish into the new account");
+assert.equal(queuedWriteStarted, false, "queued writes are cancelled before sending after account change");
+assert.deepEqual(store.snapshot(), [], "dispose drops cached private content");
+console.log("Bible highlight mutations passed: immediate feedback, ordered rapid colors, stale snapshots, rejection rollback, atomic range deletion, remote conflicts, and account cancellation.");

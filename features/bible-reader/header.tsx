@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useAppTranslation } from "@/ui/app-language";
 import { type FeatherName, type ReaderPalette } from "@/features/bible-reader/types";
@@ -44,7 +45,7 @@ export function ReaderCircleButton({
   );
 }
 
-export function BibleReaderHeader({
+export const BibleReaderHeader = memo(function BibleReaderHeader({
   canGoBack,
   canGoHistoryBack,
   canGoHistoryForward,
@@ -153,4 +154,4 @@ export function BibleReaderHeader({
       </View>
     </View>
   );
-}
+});

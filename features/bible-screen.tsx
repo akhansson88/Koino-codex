@@ -43,6 +43,7 @@ import {
   previousBibleChapter,
   type BibleChapter,
   type BibleCrossReference,
+  type BibleFootnote,
   type BiblePosition,
   type BibleVersionId,
 } from "@/features/bible-kjv";
@@ -213,6 +214,14 @@ export function BibleScreen() {
   const [scriptureComposerVerses, setScriptureComposerVerses] = useState<BibleVerse[]>([]);
   const [readerToast, setReaderToast] = useState<ReaderToast | undefined>();
   const [selectionSaving, setSelectionSaving] = useState(false);
+  const highlightFeedbackRef = useRef({ revision: 0, reported: 0, active: true, userId: state.currentUserId });
+  if (highlightFeedbackRef.current.userId !== state.currentUserId) {
+    highlightFeedbackRef.current = { revision: highlightFeedbackRef.current.revision + 1, reported: 0, active: true, userId: state.currentUserId };
+  }
+  useEffect(() => {
+    highlightFeedbackRef.current.active = true;
+    return () => { highlightFeedbackRef.current.active = false; };
+  }, []);
   const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
   const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
@@ -234,7 +243,7 @@ export function BibleScreen() {
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
   const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
-  const readerPalette = readerPaletteFor(effectiveReaderTheme);
+  const readerPalette = useMemo(() => readerPaletteFor(effectiveReaderTheme), [effectiveReaderTheme]);
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);
@@ -309,7 +318,7 @@ export function BibleScreen() {
   }, [selectedPlan, selectedPlanDayNumber]);
   const selectedPlanMarkers = useMemo(
     () => (selectedPlan ? planMarkersForChapter(selectedPlan, position, selectedPlanCurrentDay?.day) : []),
-    [position, selectedPlan, selectedPlanCurrentDay],
+    [position.book, position.chapter, selectedPlan, selectedPlanCurrentDay],
   );
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
@@ -1052,31 +1061,47 @@ export function BibleScreen() {
     }
   }, [dispatch, selectedPassages, selectedVerseNumbers.length, selectedVerseRanges.length, selectionSaving, state.savedVerses, t]);
 
+  const performHighlightMutation = useCallback(async (
+    action: Extract<Parameters<typeof dispatch>[0], { type: "highlightVerses" | "removeBibleHighlights" }>,
+    success: Omit<ReaderToast, "tone">,
+  ) => {
+    const feedback = highlightFeedbackRef.current;
+    const revision = ++feedback.revision;
+    try {
+      await dispatch(action);
+      if (highlightFeedbackRef.current === feedback && feedback.active && feedback.revision === revision) {
+        feedback.reported = revision;
+        setReaderToast({ ...success, tone: "success" });
+      }
+    } catch {
+      if (highlightFeedbackRef.current === feedback && feedback.active && revision >= feedback.reported) {
+        feedback.reported = revision;
+        setReaderToast({
+          message: language === "sv" ? "Markeringen kunde inte sparas" : "Could not save highlight",
+          detail: language === "sv" ? "Ändringen har återställts. Försök igen." : "The change was reverted. Please try again.",
+          tone: "error",
+        });
+      }
+    }
+  }, [dispatch, language]);
+
   const handleHighlightSelectedVerses = useCallback(async (color: BibleHighlightColor, colorId?: string) => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
 
-    const selectedVerses = selectedVerseRanges
-      .map((range) => buildBibleVerse(position.book, position.chapter, range.start, range.end, bibleVersionId))
-      .filter((verse): verse is BibleVerse => Boolean(verse));
+    const selectedVerses = selectedPassages;
 
     if (selectedVerses.length === 0) {
       setReaderToast({ detail: "Try selecting the verses again.", message: "Could not highlight selection", tone: "error" });
       return;
     }
 
-    setSelectionSaving(true);
-    try {
-      await dispatch({ type: "highlightVerses", color, colorId, verses: selectedVerses });
-      setSelectedVerseNumbers([]);
-      setReaderToast({
-        detail: selectedVerses.length === 1 ? "Highlight saved to this Bible." : "Highlights saved to this Bible.",
-        message: selectedVerses.length === 1 ? "Verse highlighted" : "Verses highlighted",
-        tone: "success",
-      });
-    } finally {
-      setSelectionSaving(false);
-    }
-  }, [bibleVersionId, dispatch, position.book, position.chapter, selectedVerseRanges, selectionSaving]);
+    setSelectedVerseNumbers([]);
+    setReaderToast(undefined);
+    await performHighlightMutation({ type: "highlightVerses", color, colorId, verses: selectedVerses }, {
+      detail: selectedVerses.length === 1 ? "Highlight saved to this Bible." : "Highlights saved to this Bible.",
+      message: selectedVerses.length === 1 ? "Verse highlighted" : "Verses highlighted",
+    });
+  }, [performHighlightMutation, selectedPassages, selectedVerseRanges.length, selectionSaving]);
 
   const handleHighlightWithPaletteColor = useCallback(
     (paletteColor: BibleHighlightPaletteColor) => {
@@ -1088,19 +1113,13 @@ export function BibleScreen() {
   const handleDeleteSelectedHighlights = useCallback(async () => {
     if (selectionSaving || selectedHighlightIds.length === 0) return;
 
-    setSelectionSaving(true);
-    try {
-      await Promise.all(selectedHighlightIds.map((id) => dispatch({ type: "removeBibleHighlight", id })));
-      setSelectedVerseNumbers([]);
-      setReaderToast({
-        detail: selectedHighlightIds.length === 1 ? "Highlight removed from this Bible." : "Highlights removed from this Bible.",
-        message: selectedHighlightIds.length === 1 ? "Highlight deleted" : "Highlights deleted",
-        tone: "success",
-      });
-    } finally {
-      setSelectionSaving(false);
-    }
-  }, [dispatch, selectedHighlightIds, selectionSaving]);
+    setSelectedVerseNumbers([]);
+    setReaderToast(undefined);
+    await performHighlightMutation({ type: "removeBibleHighlights", ids: selectedHighlightIds }, {
+      detail: selectedHighlightIds.length === 1 ? "Highlight removed from this Bible." : "Highlights removed from this Bible.",
+      message: selectedHighlightIds.length === 1 ? "Highlight deleted" : "Highlights deleted",
+    });
+  }, [performHighlightMutation, selectedHighlightIds, selectionSaving]);
 
   const openScriptureComposer = useCallback((intent: BibleComposerIntent, context: "journal" | "room", kind: EntryKind, verse: BibleVerse) => {
     setScriptureComposerIntent(intent);
@@ -1153,14 +1172,12 @@ export function BibleScreen() {
     }
     if (action === "highlight") {
       const color = state.bibleHighlightColors[0];
-      void dispatch({ type: "highlightVerses", color: color?.hex ?? "#FFC166", colorId: color?.id, verses: [selectedVerse] }).then(() => {
-        setReaderToast({ message: "Verse highlighted", tone: "success" });
-      });
+      void performHighlightMutation({ type: "highlightVerses", color: color?.hex ?? "#FFC166", colorId: color?.id, verses: [selectedVerse] }, { message: "Verse highlighted" });
       return;
     }
 
     setPendingVerseComposerAction({ action, verse: selectedVerse });
-  }, [bibleVersion.translation, dispatch, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
+  }, [bibleVersion.translation, dispatch, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
 
   const handleVerseActionSheetClosed = useCallback(() => {
     if (!pendingVerseComposerAction) return;
@@ -1357,13 +1374,27 @@ export function BibleScreen() {
     return Boolean(selectedVerse && state.savedVerses.some((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse)));
   }, [selectedVersePosition, state.savedVerses, verseForPosition]);
 
-  const readerTextStyle: TextStyle = {
+  const handleFootnotePress = useCallback((marker: string, footnote: BibleFootnote, verse: number) => {
+    setSelectedFootnote({ footnote, marker, position: { book: position.book, chapter: position.chapter, verse } });
+  }, [position.book, position.chapter]);
+
+  const readerTextStyle: TextStyle = useMemo(() => ({
     color: readerPalette.text,
     fontFamily: readerFontFamily,
     fontSize,
     fontWeight: "400",
     lineHeight: readerLineHeight,
-  };
+  }), [readerPalette.text, readerFontFamily, fontSize, readerLineHeight]);
+
+  const headerActions = useMemo(() => ({
+    onHistoryBack: () => travelHistory(-1),
+    onHistoryForward: () => travelHistory(1),
+    onOpenPicker: () => { setPickerInitialStage("home"); setPickerVisible(true); },
+    onOpenSearch: () => { setFollowAudio(false); audioFollowScroll.current.cancel(); setSearchVisible(true); },
+    onOpenMyPlaces: () => { setFollowAudio(false); audioFollowScroll.current.cancel(); setPickerInitialStage("myPlaces"); setPickerVisible(true); },
+    onOpenSettings: () => setSettingsVisible(true),
+    onOpenVersionPicker: () => setVersionPickerVisible(true),
+  }), [travelHistory]);
 
   return (
     <BibleBookVersionContext.Provider value={bibleVersionId}>
@@ -1373,27 +1404,9 @@ export function BibleScreen() {
         canGoHistoryBack={history.index > 0}
         canGoHistoryForward={history.index < history.entries.length - 1}
         onBack={handleReaderBack}
-        onHistoryBack={() => travelHistory(-1)}
-        onHistoryForward={() => travelHistory(1)}
-        onOpenPicker={() => {
-          setPickerInitialStage("home");
-          setPickerVisible(true);
-        }}
-        onOpenSearch={() => {
-          setFollowAudio(false);
-          audioFollowScroll.current.cancel();
-          setSearchVisible(true);
-        }}
+        {...headerActions}
         audioAvailable={bibleVersion.hasAudio}
         onOpenAudio={selectVisibleAudioVerse}
-        onOpenMyPlaces={() => {
-          setFollowAudio(false);
-          audioFollowScroll.current.cancel();
-          setPickerInitialStage("myPlaces");
-          setPickerVisible(true);
-        }}
-        onOpenSettings={() => setSettingsVisible(true)}
-        onOpenVersionPicker={() => setVersionPickerVisible(true)}
         palette={readerPalette}
         title={chapterLabel(position, bookLanguage)}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
@@ -1457,13 +1470,7 @@ export function BibleScreen() {
               chapterHeading={chapter.heading}
               chapterHighlightByVerse={chapterHighlightByVerse}
               highlightedPosition={highlightedPosition}
-              onFootnotePress={(marker, footnote, verse) => {
-                setSelectedFootnote({
-                  footnote,
-                  marker,
-                  position: { book: position.book, chapter: position.chapter, verse },
-                });
-              }}
+              onFootnotePress={handleFootnotePress}
               onVersePress={handleVersePress}
               onVersePressIn={handleVersePressIn}
               onVerseLayout={handleVerseLayout}

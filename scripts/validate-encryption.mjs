@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { build } from "esbuild";
 import { crypto, sodium } from "./encryption-test-helpers.mjs";
 
 const identity = crypto.identity(), stranger = crypto.identity(), key = crypto.randomKey();
@@ -7,6 +8,16 @@ const path = "journalEntries/user-1/entry-1/body";
 const message = "A private prayer about family and health — åäö 🙏";
 const ciphertext = crypto.encrypt(message, path, "user:user-1:1", key, identity, undefined, '{"subject":"user-1"}');
 const trusted = new Set([identity.signingPublicKey]);
+// Build the previous implementation as an independent compatibility fixture.
+const legacySource = readFileSync("state/encryption/crypto.ts", "utf8").replace("compareKeys(a, b)", 'a.localeCompare(b, "en")');
+assert.ok(legacySource.includes('a.localeCompare(b, "en")'), "the compatibility fixture must use the previous comparator");
+const legacyBundle = await build({ stdin: { contents: legacySource, loader: "ts" }, bundle: true, format: "esm", platform: "node", write: false });
+const legacy = (await import(`data:text/javascript;base64,${Buffer.from(legacyBundle.outputFiles[0].text).toString("base64")}`)).createCrypto(sodium);
+const keys = ["a", "A", "å", "ä", "ö", "é", "e\u0301", "Å", "z", "2", "10", "_id", "__id", "-x", "😀", "signature", "keyId"];
+const unicodeRecord = Object.fromEntries(keys.map((name, index) => [name, { nested: [index, message], [keys[(index + 1) % keys.length]]: true }]));
+assert.equal(crypto.canonical(unicodeRecord), legacy.canonical(unicodeRecord), "canonical bytes and English Unicode ordering remain unchanged");
+assert.deepEqual(crypto.decrypt(legacy.encrypt(unicodeRecord, path, "user:user-1:1", key, identity), path, key, trusted), unicodeRecord);
+assert.deepEqual(legacy.decrypt(crypto.encrypt(unicodeRecord, path, "user:user-1:1", key, identity), path, key, trusted), unicodeRecord);
 assert.equal(crypto.decrypt(ciphertext, path, key, trusted), message);
 assert.ok(!JSON.stringify(ciphertext).includes(message));
 assert.notEqual(crypto.encrypt(message, path, ciphertext.keyId, key, identity).nonce, ciphertext.nonce);

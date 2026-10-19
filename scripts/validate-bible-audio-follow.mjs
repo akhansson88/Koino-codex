@@ -63,14 +63,14 @@ const mocks = {
   "@/state/koino-store": `
     const state = { bibleHighlightColors: [], bibleHighlights: [], biblePlans: [], groups: [],
       journalEntries: [], savedVerses: [], theme: "light" };
-    const actions = { dispatch: async () => {} };
-    export const useKoinoFields = () => state, useKoinoActions = () => actions;
+    const actions = { dispatch: action => globalThis.__bibleAudioFollowTest.dispatch?.(action) ?? Promise.resolve() };
+    export const useKoinoFields = () => ({ ...state, ...globalThis.__bibleAudioFollowTest.store }), useKoinoActions = () => actions;
   `,
   "@/features/bible-kjv": `
     export { kjvBooks, normalizeBiblePosition, previousBibleChapter, nextBibleChapter } from "@/features/bible-canon";
     export { bibleVersionFor, isBibleVersionId } from "@/features/bible-versions";
     export const bibleChapterAsync = async () => ({ verses: Array.from({ length: 40 }, (_, index) => ({ verse: index + 1, text: "Fixture text" })), subtitles: [] });
-    export const bibleCrossReferences = () => [], buildBibleVerse = () => undefined,
+    export const bibleCrossReferences = () => [], buildBibleVerse = (...args) => globalThis.__bibleAudioFollowTest.buildVerse?.(...args),
       bibleVerseFromReference = () => undefined;
   `,
   "@/features/bible-search": `
@@ -579,6 +579,49 @@ try {
   assert.equal(measuredScrolls.length, scrollCount + 2, "Already-visible verse stays still after player layout changes");
   assert.equal(audio.navigations.length, 0, "Playback does not navigate to another app route");
   await unmount();
+  // Highlight callbacks must clear selection before the write settles, allow
+  // the next selection, report actual errors, and batch disjoint deletions.
+  const pendingWrites = [];
+  audio.store = { currentUserId: 'highlight-user' };
+  audio.dispatch = action => new Promise((resolve, reject) => pendingWrites.push({ action, resolve, reject }));
+  audio.buildVerse = (book, chapter, startVerse, endVerse) => ({ book, chapter, startVerse, endVerse, reference: `${book} ${chapter}:${startVerse}-${endVerse}`, text: 'Fixture', translation: 'KJV' });
+  await mount();
+  await act(async () => { props('BibleText').onVersePress(1); props('BibleText').onVersePress(3); });
+  assert.equal(props('SelectedVerseSuggestionBar').saving, false);
+  await act(async () => { props('SelectedVerseSuggestionBar').onHighlight({ id: 'red', hex: '#FF0000' }); });
+  assert.deepEqual(props('BibleText').selectedVerseNumbers, [], 'clear the selection while the write is pending');
+  assert.equal(pendingWrites[0].action.type, 'highlightVerses');
+  assert.equal(pendingWrites[0].action.verses.length, 2, 'nonadjacent selections preserve both ranges');
+  assert.equal(props('ReaderToastMessage').toast, undefined, 'do not announce success before the server acknowledges');
+  await act(async () => { props('BibleText').onVersePress(2); });
+  assert.equal(props('SelectedVerseSuggestionBar').saving, false, 'a slow write must not disable the next selection');
+  await act(async () => { props('SelectedVerseSuggestionBar').onHighlight({ id: 'blue', hex: '#0000FF' }); });
+  await act(async () => { pendingWrites[0].reject(new Error('earlier failure')); });
+  assert.equal(props('ReaderToastMessage').toast.tone, 'error', 'a failed earlier write is reported while the newer selection is still pending');
+  await act(async () => { pendingWrites[1].resolve(); });
+  assert.equal(props('ReaderToastMessage').toast.tone, 'success');
+  await act(async () => { props('BibleText').onVersePress(4); });
+  await act(async () => { props('SelectedVerseSuggestionBar').onHighlight({ id: 'red', hex: '#FF0000' }); });
+  await act(async () => { pendingWrites[2].reject(new Error('permission denied')); });
+  assert.equal(props('ReaderToastMessage').toast.tone, 'error', 'a rejected write must display an error');
+  audio.store.bibleHighlights = [1, 3].map(verse => ({ ...props('BibleText').position, id: `highlight-${verse}`, startVerse: verse, endVerse: verse, translation: 'KJV', color: '#FF0000', createdAt: '2026-01-01' }));
+  await act(async () => { props('BibleText').onVersePress(1); props('BibleText').onVersePress(3); });
+  await act(async () => { void props('SelectedVerseSuggestionBar').onDeleteHighlight(); });
+  assert.deepEqual(pendingWrites[3].action, { type: 'removeBibleHighlights', ids: ['highlight-1', 'highlight-3'] }, 'delete all selected highlights with one action');
+  await act(async () => { pendingWrites[3].resolve(); });
+  await act(async () => { props('BibleText').onVersePress(5); });
+  await act(async () => { props('SelectedVerseSuggestionBar').onHighlight({ id: 'red', hex: '#FF0000' }); });
+  audio.store.currentUserId = 'next-user';
+  await act(async () => { renderer.update(React.createElement(BibleScreen)); });
+  await act(async () => { pendingWrites[4].reject(new Error('previous account failed')); });
+  assert.equal(props('ReaderToastMessage').toast, undefined, 'previous-account failures never display in the new account');
+  await act(async () => { props('BibleText').onVersePress(6); });
+  await act(async () => { props('SelectedVerseSuggestionBar').onHighlight({ id: 'blue', hex: '#0000FF' }); });
+  await unmount();
+  await act(async () => { pendingWrites[5].reject(new Error('screen closed')); });
+  delete audio.dispatch; delete audio.buildVerse; delete audio.store;
+  console.log('Bible highlight screen checks passed: immediate selection clearing, unlocked controls, multiple ranges, acknowledgement/error feedback, stale feedback, and batch deletion.');
+
   // Exercise the real text component as well as the screen. Reporting verse
   // positions must work regardless of native parent/child layout event order.
   const { BibleText } = await loadComponent("features/bible-reader/chapter-text.tsx");
@@ -587,11 +630,19 @@ try {
     chapterHighlightByVerse: {}, onVerseLayout: (...args) => reportedOffsets.push(args), onVerseRef() {},
     palette: {}, planMarkers: [], position: { book: "John", chapter: 1, verse: 1 },
     readerLineHeight: 24, readerTextStyle: { fontSize: 18 }, selectedVerseNumbers: [], showVerseNumbers: true,
-    subtitles: [], verses: [{ verse: 1, reference: "John 1:1", text: "Fixture", footnotes: [] }],
+    subtitles: [], verses: [{ verse: 1, reference: "John 1:1", text: "Fixture", footnotes: [] }, { verse: 2, reference: "John 1:2", text: "Another verse", footnotes: [] }],
   };
   let text;
   try {
     await act(async () => { text = create(React.createElement(BibleText, { ...textProps, key: "John:1" })); });
+    const firstPressableProps = text.root.findAllByType('NativePressable')[0].props;
+    await act(async () => { text.update(React.createElement(BibleText, { ...textProps, key: 'John:1' })); });
+    assert.equal(text.root.findAllByType('NativePressable')[0].props, firstPressableProps, 'unchanged chapter props do not rebuild verses or detach their native refs');
+    const secondPressableProps = text.root.findAllByType('NativePressable')[1].props;
+    await act(async () => { text.update(React.createElement(BibleText, { ...textProps, chapterHighlightByVerse: { 1: '#FF0000' }, selectedVerseNumbers: [1], key: 'John:1' })); });
+    assert.equal(text.root.findAllByType('NativePressable')[1].props, secondPressableProps, 'highlighting or selecting one verse must not rebuild another verse');
+    assert.equal(text.root.findAllByType('NativePressable')[0].props.accessibilityState.selected, true);
+    await act(async () => { text.update(React.createElement(BibleText, { ...textProps, key: 'John:1' })); });
     const layoutNodes = () => text.root.findAllByType("View").filter(node => node.props.onLayout);
     const layout = y => ({ nativeEvent: { layout: { y } } });
     await act(async () => { layoutNodes()[1].props.onLayout(layout(100)); });

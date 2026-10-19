@@ -3,7 +3,7 @@ import { database as sessionDatabase } from "@/state/store/firebase";
 import { policy, policies, isEnvelope } from "./schema";
 import { historyRecord, type HistoryPolicy } from "./history-policy";
 import { resolveEncryptedImages } from "@/state/supabase-storage";
-import { crypto, session, prepareScope, keyForScope, ensureGroupDeviceSigners, sessionGeneration, account } from "./session";
+import { crypto, session, prepareScope, keyForScope, ensureGroupDeviceSigners, sessionGeneration, subscribeEncryption, account } from "./session";
 export { equalTo, orderByChild, endBefore, limitToLast } from "firebase/database";
 export type { DatabaseReference, Query } from "firebase/database";
 
@@ -125,8 +125,20 @@ function decodeObservedValue(path: string, value: unknown) {
   try { return decodeAt(path, value); }
   finally { reportDatabaseTiming("database decode", path, value, started); }
 }
-const pendingRecordDecodes: (() => void)[] = [];
+type VerifiedRecord = { encoded: string; decoded: [string, unknown][] };
+type HighlightDecodeCache = { context: string; records: Map<string, VerifiedRecord> };
+function highlightCacheContext(path: string) {
+  const state = session();
+  return JSON.stringify([
+    sessionGeneration(), state.uid, state.vault.personalEpoch, state.vault.personalKeys,
+    [...keyForScope(policy(path).scope).trusted].sort(),
+  ]);
+}
+// A task decodes one record and returns false to rejoin the end of the queue.
+// Requeue synchronously: awaiting each record would add a 16 ms timer per row.
+const pendingRecordDecodes: (() => boolean)[] = [];
 let decodeTurnScheduled = false;
+let decodeTurn = 0;
 function scheduleDecodeTurn() {
   if (decodeTurnScheduled) return;
   decodeTurnScheduled = true;
@@ -134,51 +146,62 @@ function scheduleDecodeTurn() {
   // consume a full frame each and collectively starve React's initial commit.
   setTimeout(() => {
     decodeTurnScheduled = false;
+    decodeTurn++;
     const started = diagnosticClock();
     while (pendingRecordDecodes.length) {
-      pendingRecordDecodes.shift()!();
+      const work = pendingRecordDecodes.shift()!;
+      if (!work()) pendingRecordDecodes.push(work);
       if (diagnosticClock() - started >= 8) break;
     }
     if (pendingRecordDecodes.length) scheduleDecodeTurn();
   }, 16);
 }
-function decodeInTurn<T>(work: () => T): Promise<T> {
-  return new Promise((resolve, reject) => {
-    pendingRecordDecodes.push(() => {
-      try { resolve(work()); } catch (error) { reject(error); }
-    });
-    scheduleDecodeTurn();
-  });
-}
-async function decodeReadableValue(path: string, value: unknown, isCurrent: () => boolean): Promise<unknown> {
+async function decodeReadableValue(path: string, value: unknown, isCurrent: () => boolean, cache?: HighlightDecodeCache): Promise<unknown> {
   const checkCurrent = () => { if (!isCurrent()) throw new Error("The encrypted session changed."); };
   checkCurrent();
-  if (!path || path.startsWith(".info/") || !value || typeof value !== "object" || Array.isArray(value)) return decodeObservedValue(path, value);
+  if (!path || path.startsWith(".info/") || !value || typeof value !== "object" || Array.isArray(value)) {
+    cache?.records.clear();
+    return decodeObservedValue(path, value);
+  }
   const { definition, parts: p } = policy(path);
   if (p.length >= definition.depth) return decodeObservedValue(path, value);
   const started = diagnosticClock();
   let decodeMs = 0;
   const decoded: [string, unknown][] = [];
   const entries = Object.entries(value);
-  for (let index = 0; index < entries.length; index++) {
-    checkCurrent();
-    const [id, record] = entries[index];
-    // Decode through the parent so saved verse/highlight opaque IDs retain the
-    // same reconstruction and authenticated paths as a complete snapshot.
-    const row = await decodeInTurn(() => {
-      checkCurrent();
-      const recordStarted = diagnosticClock();
-      const result = decodeAt(path, { [id]: record }) as Record<string, unknown>;
-      decodeMs += diagnosticClock() - recordStarted;
-      return result;
+  const verified = new Map<string, VerifiedRecord>();
+  let index = 0, turns = 0, lastTurn = -1, changedRecords = 0;
+  if (entries.length) await new Promise<void>((resolve, reject) => {
+    pendingRecordDecodes.push(() => {
+      try {
+        checkCurrent();
+        if (lastTurn !== decodeTurn) { turns++; lastTurn = decodeTurn; }
+        const [id, record] = entries[index++];
+        const encoded = cache ? JSON.stringify(record) : "";
+        const previous = cache?.records.get(id);
+        let row = previous?.encoded === encoded ? previous.decoded : undefined;
+        if (!row) {
+          const recordStarted = diagnosticClock();
+          // Decode through the parent to authenticate opaque IDs and paths.
+          row = Object.entries(decodeAt(path, { [id]: record }) as Record<string, unknown>);
+          decodeMs += diagnosticClock() - recordStarted;
+          changedRecords++;
+        }
+        decoded.push(...row);
+        if (cache) verified.set(id, { encoded, decoded: row });
+        if (index < entries.length) return false;
+        checkCurrent();
+        resolve();
+      } catch (error) { reject(error); }
+      return true;
     });
-    checkCurrent();
-    decoded.push(...Object.entries(row));
-  }
+    scheduleDecodeTurn();
+  });
   checkCurrent();
+  if (cache) cache.records = verified;
   const elapsedMs = diagnosticClock() - started;
   if (elapsedMs > 50) console.info("[encryption] database collection decode", {
-    collection: p[0], records: entries.length, elapsedMs: Math.round(elapsedMs), decodeMs: Math.round(decodeMs), yields: entries.length,
+    collection: p[0], records: entries.length, changedRecords, elapsedMs: Math.round(elapsedMs), decodeMs: Math.round(decodeMs), turns,
   });
   return Object.fromEntries(decoded);
 }
@@ -274,6 +297,10 @@ export async function get(reference: Firebase.Query) {
 export function onValue(reference: Firebase.Query, listener: (snapshot: Firebase.DataSnapshot) => unknown, onError?: (error: Error) => unknown) {
   const path = logical(reference);
   let active = true, revision = 0;
+  const cache: HighlightDecodeCache | undefined = parts(path)[0] === "bibleHighlights" && parts(path).length === 2
+    ? { context: "", records: new Map() } : undefined;
+  const clearCache = () => { if (cache) { cache.context = ""; cache.records.clear(); } };
+  const stopEncryption = cache ? subscribeEncryption(clearCache) : undefined;
   const unsubscribe = Firebase.onValue(reference, (raw) => {
     const request = ++revision, token = sessionGeneration();
     const materializationStarted = diagnosticClock();
@@ -281,7 +308,10 @@ export function onValue(reference: Firebase.Query, listener: (snapshot: Firebase
     reportDatabaseTiming("snapshot materialization", path, value, materializationStarted);
     void prepare(path, false, value).then(async () => {
       if (!active || revision !== request || token !== sessionGeneration()) return;
-      const decoded = await decodeReadableValue(path, value, () => active && revision === request && token === sessionGeneration());
+      const context = cache ? highlightCacheContext(path) : "";
+      if (cache && cache.context !== context) { clearCache(); cache.context = context; }
+      const decoded = await decodeReadableValue(path, value, () => active && revision === request && token === sessionGeneration()
+        && (!cache || (cache.context === context && highlightCacheContext(path) === context)), cache);
       if (!active || revision !== request || token !== sessionGeneration()) return;
       const initial = imagePlaceholders(decoded);
       if (!initial.pending) return listener(decodedSnapshot(raw, path, decoded));
@@ -295,7 +325,7 @@ export function onValue(reference: Firebase.Query, listener: (snapshot: Firebase
       return listener(decodedSnapshot(raw, path, hydrated));
     }).catch((error: Error) => { if (active && revision === request && token === sessionGeneration()) onError?.(error); });
   }, onError);
-  return () => { active = false; revision++; unsubscribe(); };
+  return () => { active = false; revision++; unsubscribe(); stopEncryption?.(); clearCache(); };
 }
 export async function set(reference: Firebase.DatabaseReference, value: unknown) {
   const path = logical(reference), token = sessionGeneration();

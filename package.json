@@ -27,6 +27,7 @@
     "validate:bible-search": "node scripts/validate-bible-search.mjs",
     "validate:bible-async": "node scripts/validate-bible-async.mjs",
     "validate:bible-verse-selection": "node scripts/validate-bible-verse-selection.mjs",
+    "validate:bible-highlights": "node scripts/validate-bible-highlights.mjs",
     "validate:bible-picker": "node scripts/validate-bible-picker-lifecycle.mjs",
     "validate:bible-history": "node scripts/validate-bible-history.mjs",
     "validate:startup": "node scripts/validate-startup-dependencies.mjs",

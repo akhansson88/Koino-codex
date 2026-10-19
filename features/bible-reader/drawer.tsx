@@ -167,12 +167,13 @@ export function BibleDrawer({
   }, [stage, visible]);
 
   const book = kjvBooks.find((item) => item.name === selectedBook) ?? kjvBooks[0];
-  const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
-  const selectableBooks = kjvBooks.filter((item) => {
-    const displayName = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language);
-    const matchesQuery = !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
-    return matchesQuery;
-  });
+  const selectableBooks = useMemo(() => {
+    const normalizedQuery = bookQuery.trim().toLocaleLowerCase(language);
+    return kjvBooks.filter((item) => {
+      const displayName = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language);
+      return !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery) || displayName.includes(normalizedQuery);
+    });
+  }, [bookLanguage, bookQuery, language]);
   const recentHighlights = useMemo(() => [...highlights].sort((a, b) => highlightTime(b) - highlightTime(a)).slice(0, 12), [highlights]);
   const bibleReflections = useMemo(
     () =>

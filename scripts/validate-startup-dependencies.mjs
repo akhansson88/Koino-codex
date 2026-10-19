@@ -107,7 +107,7 @@ let tree;
 try {
   const outfile = path.join(temporary, "provider.cjs");
   await build({ jsx: "automatic", entryPoints: [path.join(projectRoot, "state/koino-store.tsx")], bundle: true, platform: "node", format: "cjs", packages: "external", outfile, plugins: [{ name: "provider-native-boundaries", setup(builder) {
-    builder.onResolve({ filter: /^@\/|^@firebase\/auth$|^firebase\/database$/ }, ({ path: specifier }) => specifier === "@/state/selective-store" ? undefined : { path: specifier, namespace: "fixture" });
+    builder.onResolve({ filter: /^@\/|^@firebase\/auth$|^firebase\/database$/ }, ({ path: specifier }) => ["@/state/selective-store", "@/state/store/bible-highlights"].includes(specifier) ? undefined : { path: specifier, namespace: "fixture" });
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path: specifier }) => {
       const names = new Set([...(imports.get(specifier) ?? []), ...Object.keys(fixture.modules[specifier] ?? {}).filter((name) => name !== "default")]);
       return { loader: "js", contents: `const m=globalThis.startupProviderFixture.modules[${JSON.stringify(specifier)}]??{}; const noop=()=>{}; ${[...names].map((name) => `export const ${name}=m.${name}??noop;`).join(" ")} export default m.default??noop;` };
@@ -116,7 +116,7 @@ try {
   const require = createRequire(import.meta.url);
   const { KoinoProvider, useKoinoFields } = require(outfile);
   function HomeReadiness() {
-    const state = useKoinoFields(["profileReady", "userGroupsReady", "privateCheckInsReady"]);
+    const state = useKoinoFields(["profileReady", "userGroupsReady", "privateCheckInsReady", "bibleHighlights"]);
     React.useEffect(() => { commits.push(state); }, [state]);
     return React.createElement("Home", state);
   }
@@ -133,7 +133,10 @@ try {
   assert.equal(timers.size, 1);
   await act(async () => { const scheduled = [...timers.values()]; timers.clear(); scheduled.forEach((callback) => callback()); });
   for (const collection of ["journalEntries", "prayerSessions", "savedVerses", "bibleHighlights", "biblePlans"]) assert.ok(subscriptions.has(`${collection}/alex`), `${collection} remains live after Home commits`);
+  await act(async () => { deliver("bibleHighlights/alex", { fixture: { id: "fixture", color: "#FFC166", createdAt: "2026-01-01" } }); });
+  assert.equal(commits.at(-1).bibleHighlights.length, 1);
   await act(async () => authenticate("joel"));
+  assert.deepEqual(commits.at(-1).bibleHighlights, [], "account changes clear the previous user's highlights before the next history arrives");
   assert.equal([...subscriptions.keys()].some((key) => key.endsWith("/alex")), false, "account changes must stop the previous account's histories");
   await act(async () => { deliver("profiles/joel", { id: "joel", name: "Joel", createdAt: "2026-10-06" }); deliver("userGroups/joel", null); });
   const cancelledTimer = [...timers.values()][0];

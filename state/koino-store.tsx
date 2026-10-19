@@ -40,6 +40,7 @@ import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
+import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
 import { roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import { applyTheme, normalizeTheme, ThemeName } from "@/ui/theme";
 import {
@@ -96,7 +97,7 @@ import {
   profileAndMembershipImageUpdates,
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
-import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup } from "@/state/encryption/session";
+import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup, sessionGeneration } from "@/state/encryption/session";
 import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
@@ -289,6 +290,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
+  const bibleHighlightMutationsRef = useRef<ReturnType<typeof createBibleHighlightMutations> | null>(null);
+  const bibleHighlightUserRef = useRef<string | undefined>(undefined);
+  if (!bibleHighlightMutationsRef.current) bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
   const [bibleHighlightColors, setBibleHighlightColors] = useState<BibleHighlightPaletteColor[]>([]);
   const [biblePlans, setBiblePlans] = useState<BiblePlan[]>([]);
   const [groupBiblePlanAnnouncements, setGroupBiblePlanAnnouncements] = useState<GroupBiblePlanAnnouncement[]>([]);
@@ -359,6 +363,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setJournalEntries([]);
     setSavedVerses([]);
     setBibleHighlights([]);
+    bibleHighlightMutationsRef.current?.dispose();
+    bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
     setBibleHighlightColors([]);
     setBiblePlans([]);
     setGroupBiblePlanAnnouncements([]);
@@ -414,6 +420,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     });
   }, [clearUserSession]);
+
+  useEffect(() => {
+    if (bibleHighlightUserRef.current === firebaseUser?.uid) return;
+    bibleHighlightUserRef.current = firebaseUser?.uid;
+    bibleHighlightMutationsRef.current?.dispose();
+    bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
+    setBibleHighlights([]);
+  }, [firebaseUser?.uid]);
 
   useEffect(() => {
     themeRef.current = theme;
@@ -666,6 +680,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const notificationPreferencesRef = ref(database, `notificationPreferences/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
+    bibleHighlightMutationsRef.current?.dispose();
+    const highlightMutations = createBibleHighlightMutations(setBibleHighlights);
+    bibleHighlightMutationsRef.current = highlightMutations;
     const bibleHighlightColorsRef = ref(database, `bibleHighlightColors/${firebaseUser.uid}`);
     const bibleHighlightColorSettingsRef = ref(database, `bibleHighlightColorSettings/${firebaseUser.uid}`);
     const biblePlansRef = ref(database, `biblePlans/${firebaseUser.uid}`);
@@ -726,11 +743,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             });
         }
       }),
-      onValue(bibleHighlightsRef, (snapshot) =>
-        setBibleHighlights(
-          asArray<BibleHighlight>(snapshot.val()).sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt)),
-        ),
-      ),
+      onValue(bibleHighlightsRef, (snapshot) => {
+        if (active && auth.currentUser?.uid === firebaseUser.uid) highlightMutations.receive(asArray<BibleHighlight>(snapshot.val()));
+      }, (error) => { if (active && auth.currentUser?.uid === firebaseUser.uid) setAuthError(authMessage(error)); }),
       onValue(bibleHighlightColorsRef, async (snapshot) => {
         if (snapshot.exists()) {
           setBibleHighlightColors(asArray<BibleHighlightPaletteColor>(snapshot.val()).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.label.localeCompare(b.label)));
@@ -761,7 +776,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(supportRef, (snapshot) => setSupportIntents(asArray<SupportIntent>(snapshot.val()))),
     ];
 
-    return () => { active = false; unsubs.forEach((unsubscribe) => unsubscribe()); };
+    return () => {
+      active = false;
+      unsubs.forEach((unsubscribe) => unsubscribe());
+      highlightMutations.dispose();
+      if (bibleHighlightMutationsRef.current === highlightMutations) bibleHighlightMutationsRef.current = null;
+    };
   }, [firebaseUser?.uid, personalHistoryUid]);
 
   useEffect(() => {
@@ -1052,9 +1072,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     userGroupsReady,
   ]);
 
+  const persistBibleHighlights = useCallback((changes: BibleHighlightChanges) => {
+    const uid = firebaseUser?.uid;
+    const mutations = bibleHighlightMutationsRef.current;
+    const generation = sessionGeneration();
+    if (!uid || !mutations) return Promise.reject(new Error("Sign in before highlighting verses."));
+    return mutations.mutate(changes, () => update(ref(database), Object.fromEntries(
+      Object.entries(changes).map(([id, record]) => [`bibleHighlights/${uid}/${id}`, record]),
+    )), () => bibleHighlightMutationsRef.current === mutations && auth.currentUser?.uid === uid && sessionGeneration() === generation);
+  }, [firebaseUser?.uid]);
+
   const dispatch = useCallback(
     async (action: Action) => {
       setAuthError(undefined);
+      const generation = sessionGeneration();
+      const highlightAction = action.type === "highlightVerses" || action.type === "removeBibleHighlight" || action.type === "removeBibleHighlights";
 
       try {
         const groupMutationTypes: Action["type"][] = [
@@ -1903,14 +1935,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "highlightVerses": {
-              if (!firebaseUser || !isBibleHighlightColor(action.color)) return;
+              if (!firebaseUser || !isBibleHighlightColor(action.color)) throw new Error("Could not highlight these verses.");
               const timestamp = now();
               const color = normalizeHighlightColor(action.color);
+              const existingHighlights = new Map(bibleHighlightMutationsRef.current?.snapshot().map((highlight) => [highlight.id, highlight]));
               const highlights = action.verses
                 .map((verse): BibleHighlight | undefined => {
                   const key = bibleReferenceStorageId(verse);
                   if (!key || !verse.book || typeof verse.chapter !== "number" || typeof verse.startVerse !== "number") return undefined;
-                  const existing = bibleHighlights.find((highlight) => highlight.id === key);
+                  const existing = existingHighlights.get(key);
                   return {
                     id: key,
                     book: verse.book,
@@ -1927,17 +1960,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 })
                 .filter((item): item is BibleHighlight => Boolean(item));
 
-              if (highlights.length === 0) return;
-
-              const updates = Object.fromEntries(
-                highlights.map((highlight) => [`bibleHighlights/${firebaseUser.uid}/${highlight.id}`, highlight]),
-              );
-              await update(ref(database), updates);
+              if (highlights.length === 0) throw new Error("Could not highlight these verses.");
+              await persistBibleHighlights(Object.fromEntries(highlights.map((highlight) => [highlight.id, highlight])));
               return;
             }
-            case "removeBibleHighlight": {
-              if (!firebaseUser) return;
-              await remove(ref(database, `bibleHighlights/${firebaseUser.uid}/${action.id}`));
+            case "removeBibleHighlight":
+            case "removeBibleHighlights": {
+              const ids = action.type === "removeBibleHighlight" ? [action.id] : [...new Set(action.ids)];
+              if (ids.length) await persistBibleHighlights(Object.fromEntries(ids.map((id) => [id, null])));
               return;
             }
             case "saveBibleHighlightColor": {
@@ -2373,8 +2403,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
           }
       } catch (error) {
-        setAuthError(authMessage(error));
+        if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
+          highlightAction ||
           action.type === "createBiblePlan" ||
           action.type === "pauseBiblePlan" ||
           action.type === "rescheduleBiblePlan" ||
@@ -2404,6 +2435,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     [
       bibleHighlightColors,
       bibleHighlights,
+      persistBibleHighlights,
       biblePlans,
       checkIns,
       clearUserSession,

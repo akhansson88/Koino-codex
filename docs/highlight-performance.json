@@ -1,0 +1,1145 @@
+{
+  "date": "2026-10-19",
+  "timezone": "Europe/Stockholm",
+  "device": "Pixel 11 Pro",
+  "os": "Android 17",
+  "app": "com.akhansson.koinomvp.dev",
+  "build": "Expo development client; Hermes; JavaScript served locally",
+  "metric": "Palette callback to matching highlight state in the committed React tree, followed by two animation frames. Invoked through React Native DevTools; excludes touchscreen and input-dispatch time.",
+  "scenario": "15 single-verse and 15 adjacent two-verse color changes, same reader and translation. Before: each visible change already followed server acknowledgement. Final after: wait for acknowledgement between trials, outside the measured interval.",
+  "percentile": "Nearest rank, ceil(0.95 * N)",
+  "baselineHighlightCount": 122,
+  "finalHighlightCount": 122,
+  "maximumAdditionalTestRecords": 2,
+  "restorationVerified": true,
+  "measurements": {
+    "before": {
+      "phase": "before",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 38614.912578999996,
+      "p95Ms": 40419.697373986244,
+      "maxMs": 40485.25588899851,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 21556.81731301546
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 21727.89877396822
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 22475.503696024418
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 26973.610697984695
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 34134.54417300224
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 31118.10514998436
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 21797.882481992245
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 27916.723342001438
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 36057.388446033
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 28546.302630007267
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 33394.605250000954
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 35567.54300904274
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 34508.29599100351
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 33934.307066977024
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 33041.99169701338
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 39125.82793700695
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 39908.26982796192
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 39077.130766034126
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 39701.025820970535
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 39262.96022802591
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 39593.72044098377
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 38844.78684800863
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 40419.697373986244
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 39106.08621895313
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 39464.553766965866
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 38880.21833103895
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 40407.454077005386
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 40485.25588899851
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 38614.912578999996
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 39909.51805704832
+        }
+      ]
+    },
+    "after": {
+      "phase": "after",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 56.64494800567627,
+      "p95Ms": 91.50846302509308,
+      "maxMs": 114.46354001760483,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 58.007254004478455,
+          "saveFeedback": null
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 58.68761396408081,
+          "saveFeedback": null
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 56.64494800567627,
+          "saveFeedback": null
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 48.248176991939545,
+          "saveFeedback": null
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 55.64122301340103,
+          "saveFeedback": null
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 91.50846302509308,
+          "saveFeedback": null
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 53.07872301340103,
+          "saveFeedback": null
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 60.49348998069763,
+          "saveFeedback": null
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 55.738331973552704,
+          "saveFeedback": null
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 53.87098902463913,
+          "saveFeedback": null
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 66.22786402702332,
+          "saveFeedback": null
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 62.46833199262619,
+          "saveFeedback": null
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 52.10253596305847,
+          "saveFeedback": null
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 54.914113998413086,
+          "saveFeedback": null
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 73.34671801328659,
+          "saveFeedback": null
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 52.3968740105629,
+          "saveFeedback": null
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 58.38664001226425,
+          "saveFeedback": null
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 52.88697898387909,
+          "saveFeedback": null
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 60.00940102338791,
+          "saveFeedback": null
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 53.38096296787262,
+          "saveFeedback": null
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 62.02075397968292,
+          "saveFeedback": null
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 114.46354001760483,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 58.686796963214874,
+          "saveFeedback": null
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 51.779739022254944,
+          "saveFeedback": null
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 56.74979102611542,
+          "saveFeedback": null
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 55.33965998888016,
+          "saveFeedback": null
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 55.100858986377716,
+          "saveFeedback": null
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 53.794427037239075,
+          "saveFeedback": null
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 55.94619804620743,
+          "saveFeedback": null
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 56.727567970752716,
+          "saveFeedback": null
+        }
+      ]
+    },
+    "burst": {
+      "phase": "after",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 58.61588501930237,
+      "p95Ms": 101.42590999603271,
+      "maxMs": 109.16134202480316,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 67.11895704269409,
+          "saveFeedback": null
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 53.485936999320984,
+          "saveFeedback": null
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 50.75843703746796,
+          "saveFeedback": null
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 50.68955701589584,
+          "saveFeedback": null
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 58.073489010334015,
+          "saveFeedback": null
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 59.31664001941681,
+          "saveFeedback": null
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 109.16134202480316,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 59.88294303417206,
+          "saveFeedback": null
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 50.409790992736816,
+          "saveFeedback": null
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 50.92606699466705,
+          "saveFeedback": null
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 55.06429499387741,
+          "saveFeedback": null
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 53.97549396753311,
+          "saveFeedback": null
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 60.27491998672485,
+          "saveFeedback": null
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 52.65591102838516,
+          "saveFeedback": null
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 101.42590999603271,
+          "saveFeedback": null
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 59.95611900091171,
+          "saveFeedback": null
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 63.4950670003891,
+          "saveFeedback": null
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 53.01301997900009,
+          "saveFeedback": null
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 57.04168301820755,
+          "saveFeedback": null
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 54.48945200443268,
+          "saveFeedback": null
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 61.160795986652374,
+          "saveFeedback": null
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 53.42070299386978,
+          "saveFeedback": null
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 56.95856696367264,
+          "saveFeedback": null
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 60.34749001264572,
+          "saveFeedback": null
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 62.705909967422485,
+          "saveFeedback": null
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 61.20155203342438,
+          "saveFeedback": null
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 53.904008984565735,
+          "saveFeedback": null
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 58.61588501930237,
+          "saveFeedback": null
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 65.23498904705048,
+          "saveFeedback": null
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 60.20205599069595,
+          "saveFeedback": null
+        }
+      ]
+    },
+    "offline": {
+      "phase": "offline",
+      "samples": 1,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 57.869677007198334,
+      "p95Ms": 57.869677007198334,
+      "maxMs": 57.869677007198334,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 57.869677007198334,
+          "saveFeedback": null
+        }
+      ]
+    }
+  },
+  "intermediateMeasurements": {
+    "encryptionAndOptimisticState": {
+      "phase": "after",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 311.24239099025726,
+      "p95Ms": 413.0728600025177,
+      "maxMs": 437.7997080087662,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 413.0728600025177,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 437.7997080087662,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 323.08554297685623,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 313.01984000205994,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 302.14734095335007,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 299.06760001182556,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 361.65874499082565,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 303.29924100637436,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 288.27950102090836,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 297.0574699640274,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 298.15950095653534,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 296.6627669930458,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 300.61556899547577,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 287.96257400512695,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 298.4108819961548,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 308.6037979722023,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 325.46556800603867,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 304.83713203668594,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 300.67788702249527,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 336.51025599241257,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 307.35293900966644,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 411.4385360479355,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 383.4846059679985,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 311.6313139796257,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 370.84223502874374,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 311.24239099025726,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 376.26377099752426,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 322.575178027153,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 357.1250219941139,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 307.9530539512634,
+          "saveFeedback": "success"
+        }
+      ]
+    },
+    "chapterMemoAndBookList": {
+      "phase": "after",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 90.96702998876572,
+      "p95Ms": 135.7193209528923,
+      "maxMs": 138.47510200738907,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 104.03977400064468,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 97.08185797929764,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 79.60346299409866,
+          "saveFeedback": null
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 78.99825501441956,
+          "saveFeedback": null
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 93.54572802782059,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 105.18919199705124,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 94.16283798217773,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 73.9289830327034,
+          "saveFeedback": null
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 86.95085799694061,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 89.81322801113129,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 93.45257598161697,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 88.42567598819733,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 89.86468601226807,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 89.14747303724289,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 87.13752502202988,
+          "saveFeedback": null
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 138.47510200738907,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 89.11321198940277,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 89.85319101810455,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 92.33564901351929,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 91.59859299659729,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 92.47192496061325,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 89.95836800336838,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 91.13978099822998,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 88.45296800136566,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 93.81439900398254,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 89.47455698251724,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 90.86697900295258,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 92.19218701124191,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 90.96702998876572,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 135.7193209528923,
+          "saveFeedback": null
+        }
+      ]
+    },
+    "verseRowMemoBeforeHeader": {
+      "phase": "after",
+      "samples": 30,
+      "metric": "color callback to matching React commit plus two animation frames",
+      "medianMs": 62.71281200647354,
+      "p95Ms": 109.88058698177338,
+      "maxMs": 112.51356500387192,
+      "results": [
+        {
+          "trial": 1,
+          "verses": 1,
+          "paintMs": 74.91291600465775,
+          "saveFeedback": null
+        },
+        {
+          "trial": 2,
+          "verses": 1,
+          "paintMs": 77.42942601442337,
+          "saveFeedback": null
+        },
+        {
+          "trial": 3,
+          "verses": 1,
+          "paintMs": 55.20762902498245,
+          "saveFeedback": null
+        },
+        {
+          "trial": 4,
+          "verses": 1,
+          "paintMs": 61.8931759595871,
+          "saveFeedback": null
+        },
+        {
+          "trial": 5,
+          "verses": 1,
+          "paintMs": 70.20528602600098,
+          "saveFeedback": null
+        },
+        {
+          "trial": 6,
+          "verses": 1,
+          "paintMs": 61.2403119802475,
+          "saveFeedback": null
+        },
+        {
+          "trial": 7,
+          "verses": 1,
+          "paintMs": 75.83223801851273,
+          "saveFeedback": null
+        },
+        {
+          "trial": 8,
+          "verses": 1,
+          "paintMs": 67.87299400568008,
+          "saveFeedback": null
+        },
+        {
+          "trial": 9,
+          "verses": 1,
+          "paintMs": 62.522786021232605,
+          "saveFeedback": null
+        },
+        {
+          "trial": 10,
+          "verses": 1,
+          "paintMs": 57.95091098546982,
+          "saveFeedback": null
+        },
+        {
+          "trial": 11,
+          "verses": 1,
+          "paintMs": 62.23700404167175,
+          "saveFeedback": null
+        },
+        {
+          "trial": 12,
+          "verses": 1,
+          "paintMs": 56.6389319896698,
+          "saveFeedback": null
+        },
+        {
+          "trial": 13,
+          "verses": 1,
+          "paintMs": 59.448827028274536,
+          "saveFeedback": null
+        },
+        {
+          "trial": 14,
+          "verses": 1,
+          "paintMs": 56.31492203474045,
+          "saveFeedback": null
+        },
+        {
+          "trial": 15,
+          "verses": 1,
+          "paintMs": 63.98691600561142,
+          "saveFeedback": null
+        },
+        {
+          "trial": 16,
+          "verses": 2,
+          "paintMs": 62.28544104099274,
+          "saveFeedback": null
+        },
+        {
+          "trial": 17,
+          "verses": 2,
+          "paintMs": 56.69736897945404,
+          "saveFeedback": null
+        },
+        {
+          "trial": 18,
+          "verses": 2,
+          "paintMs": 60.047446966171265,
+          "saveFeedback": null
+        },
+        {
+          "trial": 19,
+          "verses": 2,
+          "paintMs": 65.974180996418,
+          "saveFeedback": null
+        },
+        {
+          "trial": 20,
+          "verses": 2,
+          "paintMs": 109.88058698177338,
+          "saveFeedback": "success"
+        },
+        {
+          "trial": 21,
+          "verses": 2,
+          "paintMs": 60.494607985019684,
+          "saveFeedback": null
+        },
+        {
+          "trial": 22,
+          "verses": 2,
+          "paintMs": 58.111275017261505,
+          "saveFeedback": null
+        },
+        {
+          "trial": 23,
+          "verses": 2,
+          "paintMs": 64.87064903974533,
+          "saveFeedback": null
+        },
+        {
+          "trial": 24,
+          "verses": 2,
+          "paintMs": 62.84937399625778,
+          "saveFeedback": null
+        },
+        {
+          "trial": 25,
+          "verses": 2,
+          "paintMs": 64.44916599988937,
+          "saveFeedback": null
+        },
+        {
+          "trial": 26,
+          "verses": 2,
+          "paintMs": 112.51356500387192,
+          "saveFeedback": null
+        },
+        {
+          "trial": 27,
+          "verses": 2,
+          "paintMs": 63.747316002845764,
+          "saveFeedback": null
+        },
+        {
+          "trial": 28,
+          "verses": 2,
+          "paintMs": 65.37080597877502,
+          "saveFeedback": null
+        },
+        {
+          "trial": 29,
+          "verses": 2,
+          "paintMs": 59.53051996231079,
+          "saveFeedback": null
+        },
+        {
+          "trial": 30,
+          "verses": 2,
+          "paintMs": 62.71281200647354,
+          "saveFeedback": null
+        }
+      ]
+    }
+  }
+}

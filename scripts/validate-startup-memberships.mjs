@@ -81,7 +81,7 @@ try {
     plugins: [{ name: "native-test-boundaries", setup(builder) {
       builder.onResolve({ filter: /.*/ }, ({ path: name }) => {
         if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
-        if (name === "@/state/selective-store") return;
+        if (["@/state/selective-store", "@/state/store/bible-highlights"].includes(name)) return;
         if (name in mocks || imports.has(name)) return { path: name, namespace: "mock" };
         if (name === "@/features/bible-audio/engine") return { path: name, namespace: "mock" };
       });

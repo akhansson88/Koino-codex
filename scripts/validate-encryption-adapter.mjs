@@ -9,6 +9,7 @@ const records = new Map(), listeners = new Map();
 const snapshot = (reference, value) => ({ ref: reference, key: reference.path.split('/').at(-1), val: () => value, exists: () => value != null });
 const fixture = globalThis.encryptionFixture = {
   crypto, state, generation: 1,
+  encryptionListeners: new Set(),
   selected(scope, keyId) { const group = scope.startsWith('group:'); return { key: group ? groupKey : privateKey, keyId: keyId ?? `${scope}:1`, trusted: new Set([device.signingPublicKey]) }; },
   prepareScope: async () => {}, ensureGroupDeviceSigners: async () => {}, account: async () => {}, resolveEncryptedImages: async (value) => value,
   get: async (reference) => snapshot(reference, records.get(reference.path) ?? null),
@@ -21,7 +22,7 @@ const fixture = globalThis.encryptionFixture = {
 };
 const bundled = await build({ entryPoints: ['state/encryption/database.ts'], bundle: true, platform: 'node', format: 'esm', write: false, plugins: [{ name: 'native-boundaries', setup(builder) {
   builder.onResolve({ filter: /^firebase\/database$|^@\/state\/store\/firebase$|^@\/state\/supabase-storage$|^\.\/session$/ }, (args) => ({ path: args.path, namespace: 'fixture' }));
-  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents: path === './session' ? 'const fixture=globalThis.encryptionFixture; export const crypto=fixture.crypto, session=()=>fixture.state, keyForScope=fixture.selected, prepareScope=(...args)=>fixture.prepareScope(...args), ensureGroupDeviceSigners=(...args)=>fixture.ensureGroupDeviceSigners(...args), account=(...args)=>fixture.account(...args), sessionGeneration=()=>fixture.generation;' : path.includes('supabase') ? 'export const resolveEncryptedImages=(...args)=>globalThis.encryptionFixture.resolveEncryptedImages(...args);' : path.includes('store/firebase') ? 'export const database={};' : 'const fixture=globalThis.encryptionFixture; export const ref=(_db,path)=>({path}), query=(r)=>r, equalTo=()=>{}, orderByChild=()=>{}, endBefore=()=>{}, limitToLast=()=>{}, get=(r)=>fixture.get(r), set=(r,v)=>fixture.set?.(r,v), update=(r,v)=>fixture.update?.(r,v), onValue=(...args)=>fixture.onValue(...args), runTransaction=()=>{};' }));
+  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents: path === './session' ? 'const fixture=globalThis.encryptionFixture; export const crypto=fixture.crypto, session=()=>fixture.state, keyForScope=(...args)=>fixture.selected(...args), prepareScope=(...args)=>fixture.prepareScope(...args), ensureGroupDeviceSigners=(...args)=>fixture.ensureGroupDeviceSigners(...args), account=(...args)=>fixture.account(...args), sessionGeneration=()=>fixture.generation, subscribeEncryption=listener=>{fixture.encryptionListeners.add(listener);return()=>fixture.encryptionListeners.delete(listener);};' : path.includes('supabase') ? 'export const resolveEncryptedImages=(...args)=>globalThis.encryptionFixture.resolveEncryptedImages(...args);' : path.includes('store/firebase') ? 'export const database={};' : 'const fixture=globalThis.encryptionFixture; export const ref=(_db,path)=>({path}), query=(r)=>r, equalTo=()=>{}, orderByChild=()=>{}, endBefore=()=>{}, limitToLast=()=>{}, get=(r)=>fixture.get(r), set=(r,v)=>fixture.set?.(r,v), update=(r,v)=>fixture.update?.(r,v), onValue=(...args)=>fixture.onValue(...args), runTransaction=()=>{};' }));
 } }] });
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 const record = { id: 'post', userId: 'owner', groupId: 'group', createdAt: '2026-01-01', body: 'Private prayer', verses: [{ book: 'John', chapter: 3, text: 'Secret verse' }], futureContent: { nested: 'Private future data' } };
@@ -211,6 +212,78 @@ try {
   else delete globalThis.performance;
 }
 console.log('Encryption adapter checks passed: content authentication, membership fanout, recipient rotation, shared group preparation, nonblocking avatars, budgeted collection decoding, opaque IDs, and stale session guards.');
+
+// A local edit must not authenticate an account's entire highlight history.
+const highlightsRef = adapter.ref({}, 'bibleHighlights/owner');
+const baseHighlight = { id: 'highlight-0', book: 'John', chapter: 3, startVerse: 16, endVerse: 16, reference: 'John 3:16', translation: 'KJV', color: '#FFC166', createdAt: '2026-01-01', updatedAt: '2026-01-01' };
+const highlightPair = record => [adapter.physicalPath(`bibleHighlights/owner/${record.id}`).split('/').at(-1), adapter.encodeAt(`bibleHighlights/owner/${record.id}`, record)];
+const realDecrypt = crypto.decrypt, realSelected = fixture.selected, realTimeout = globalThis.setTimeout;
+const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+let decryptedFields = 0, scheduledTurns = 0;
+crypto.decrypt = (...args) => { decryptedFields++; return realDecrypt(...args); };
+Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => 0 } });
+globalThis.setTimeout = (callback, ms, ...args) => { if (ms === 16) scheduledTurns++; return realTimeout(callback, ms, ...args); };
+try {
+  for (const count of [123, 1000]) {
+    let next;
+    const delivered = [];
+    const stop = adapter.onValue(highlightsRef, snapshot => { delivered.push(snapshot.val()); next.resolve(snapshot.val()); }, error => next.reject(error));
+    const emit = async value => {
+      next = deferred(); decryptedFields = 0; scheduledTurns = 0;
+      fixture.emit(highlightsRef, value);
+      const decoded = await next.promise;
+      return { decoded, fields: decryptedFields, turns: scheduledTurns };
+    };
+    const values = Object.fromEntries(Array.from({ length: count }, (_, index) => highlightPair({ ...baseHighlight, id: `highlight-${index}` })));
+    const cold = await emit(values);
+    assert.equal(Object.keys(cold.decoded).length, count);
+    assert.equal(cold.turns, 1, 'fast records fill a shared slice instead of scheduling one timer per record');
+    assert.equal((await emit(structuredClone(values))).fields, 0, 'identical snapshots reuse authenticated records');
+    const [physicalId, edited] = highlightPair({ ...baseHighlight, color: '#FF0000' });
+    values[physicalId] = edited;
+    const change = await emit(values);
+    assert.equal(change.fields, cold.fields / count, `one edit among ${count} records only decrypts that record`);
+    assert.equal(change.decoded['highlight-0'].color, '#FF0000');
+    values[physicalId] = { ...edited, updatedAt: '2026-01-02' };
+    assert.equal((await emit(values)).fields, change.fields, 'cache equality includes cleartext metadata');
+    delete values[physicalId];
+    const removed = await emit(values);
+    assert.equal(removed.fields, 0);
+    assert.equal(Object.keys(removed.decoded).length, count - 1, 'deleted records are pruned from the cache');
+    values[physicalId] = edited;
+    assert.equal((await emit(values)).fields, change.fields, 'a removed record is authenticated again when reintroduced');
+
+    const emissions = delivered.length;
+    values[physicalId] = { ...edited, color: { ...edited.color, signature: 'invalid' } };
+    await assert.rejects(emit(values), /authenticated/);
+    assert.equal(delivered.length, emissions, 'tampering cannot publish a partial or cached collection');
+    values[physicalId] = edited;
+    await emit(values);
+
+    state.vault.personalKeys['2'] = crypto.randomKey();
+    assert.equal((await emit(values)).fields, cold.fields, 'key changes invalidate even unchanged ciphertext');
+    delete state.vault.personalKeys['2'];
+    await emit(values);
+    fixture.selected = (...args) => { const selected = realSelected(...args); return { ...selected, trusted: new Set([...selected.trusted, identity.signingPublicKey]) }; };
+    assert.equal((await emit(values)).fields, cold.fields, 'trust changes invalidate previously verified records');
+    fixture.selected = (...args) => ({ ...realSelected(...args), trusted: new Set() });
+    await assert.rejects(emit(values), /authenticated/, 'removing a trusted signer cannot reuse cached plaintext');
+    fixture.selected = realSelected;
+    fixture.generation++; for (const listener of fixture.encryptionListeners) listener();
+    assert.equal((await emit(values)).fields, cold.fields, 'session changes invalidate the whole cache');
+    stop();
+    assert.equal(fixture.encryptionListeners.size, 0, 'unsubscribe removes the session listener');
+    const stopAgain = adapter.onValue(highlightsRef, snapshot => next.resolve(snapshot.val()), error => next.reject(error));
+    assert.equal((await emit(values)).fields, cold.fields, 'a new subscription cannot retain the previous private cache');
+    await emit(null);
+    assert.equal((await emit(values)).fields, cold.fields, 'an emptied collection drops all cached records');
+    stopAgain();
+  }
+} finally {
+  crypto.decrypt = realDecrypt; fixture.selected = realSelected; globalThis.setTimeout = realTimeout;
+  if (originalPerformance) Object.defineProperty(globalThis, 'performance', originalPerformance); else delete globalThis.performance;
+}
+console.log('Highlight decode checks passed: 123/1000 records, one-record updates, bounded scheduling, metadata, deletions, tampering, key/trust/session invalidation, and subscription cleanup.');
 
 records.set('e2eePolicy',{historyGeneration:1});
 const sent=[];
