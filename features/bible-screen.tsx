@@ -5,7 +5,6 @@ import { useBibleAudio } from "@/features/bible-audio/provider";
 import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { tabBarHeight } from "@/ui/navigation-layout";
 import AsyncStorage from "@/state/encryption/local-storage";
-import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1164,12 +1163,6 @@ export function BibleScreen() {
       });
       return;
     }
-    if (action === "copy") {
-      void Clipboard.setStringAsync(`${selectedVerse.text}\n${displayBibleReference(selectedVerse.reference, bookLanguage)} (${selectedVerse.translation ?? bibleVersion.translation})`).then(() => {
-        setReaderToast({ message: "Verse copied", tone: "success" });
-      });
-      return;
-    }
     if (action === "highlight") {
       const color = state.bibleHighlightColors[0];
       void performHighlightMutation({ type: "highlightVerses", color: color?.hex ?? "#FFC166", colorId: color?.id, verses: [selectedVerse] }, { message: "Verse highlighted" });
@@ -1177,7 +1170,7 @@ export function BibleScreen() {
     }
 
     setPendingVerseComposerAction({ action, verse: selectedVerse });
-  }, [bibleVersion.translation, dispatch, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
+  }, [dispatch, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
 
   const handleVerseActionSheetClosed = useCallback(() => {
     if (!pendingVerseComposerAction) return;

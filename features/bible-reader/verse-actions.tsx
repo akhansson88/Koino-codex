@@ -259,7 +259,7 @@ export function VerseActionSheet({
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
   const bottomPadding = Math.max(28, insets.bottom + 20);
-  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 7 * 72 + bottomPadding;
+  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 6 * 72 + bottomPadding;
   const sheetHeight = Math.min(height * 0.78, contentHeight);
 
   useEffect(() => {
@@ -289,7 +289,6 @@ export function VerseActionSheet({
                 <VerseSheetAction icon="edit-3" onPress={() => onAction("journal")} palette={palette} subtitle={t("bible.actions.reflectSubtitle")} title={t("bible.actions.reflect")} />
                 <VerseSheetAction icon="heart" onPress={() => onAction("pray")} palette={palette} subtitle={t("bible.actions.praySubtitle")} title={t("bible.actions.pray")} />
                 <VerseSheetAction icon="users" onPress={() => onAction("share")} palette={palette} subtitle={t("bible.actions.shareSubtitle")} title={t("bible.actions.share")} />
-                <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
                 <VerseSheetAction icon="edit-2" onPress={() => onAction("highlight")} palette={palette} subtitle={t("bible.actions.highlightSubtitle")} title={t("bible.actions.highlight")} />
               </SheetScrollView>
             ) : (
@@ -355,7 +354,7 @@ function VerseSheetAction({
   title,
   tone = "default",
 }: {
-  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
+  icon: "book-open" | "bookmark" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
   onPress: () => void;
   palette: ReaderPalette;
   subtitle: string;

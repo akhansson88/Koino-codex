@@ -18,7 +18,7 @@ export type PickerStage = "home" | "myPlaces" | "search" | "book" | "chapter" | 
 
 export type TestamentFilter = "all" | "old" | "new";
 
-export type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save" | "share";
+export type VerseQuickAction = "highlight" | "journal" | "pray" | "save" | "share";
 
 export type BibleReaderPreferences = {
   appTheme?: ThemeName;
