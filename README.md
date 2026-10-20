@@ -61,6 +61,52 @@ Use EAS Update only for JavaScript and asset changes compatible with the
 installed native runtime. Native dependency or app-config changes require a new
 binary.
 
+## Android debugging over Tailscale
+
+With Tailscale connected on both devices, Codex can use Android debugging over
+the phone's private Tailscale address. The phone uses Android's paired TLS
+wireless debugging, with Metro forwarded through that ADB connection. No public
+port, router forwarding, or Windows inbound Metro firewall rule is needed.
+
+```sh
+npm run android:tailscale
+npm run start:tailscale
+npm run android:tailscale:logs
+```
+
+The first command reconnects and opens **KOINO Dev** if Metro is already running.
+The second also starts Metro when needed. The third reads phone logs. Existing
+Metro sessions on port 8081 are reused. For screenshots, shell commands, native
+installation, or other debugging, use `adb -s <address:port>` with the endpoint
+printed by the reconnect command; USB and wireless may both appear in the device
+list, so always select the device explicitly. Rebuild native changes with
+`npm run android:dev -- --device <address:port>` after reconnecting.
+
+Local device selection is stored in the ignored file
+`.codex/tailscale-android.local.json`, containing the Tailscale Android peer `ID`
+as `peerId`, its USB serial as `usbSerial`, and its wireless debugging `port`.
+It contains no credentials. The reconnect command checks that this peer is online
+in the current tailnet and connects only to its Tailscale IP. Local discovery
+can refresh the port when both devices are on the same Wi-Fi.
+
+After a phone restart or network change, open **Settings > System > Developer
+options > Wireless debugging** and enable it if necessary. Android can change
+the port. Read the port under **IP address and port** (not the pairing port), then:
+
+```sh
+npm run android:tailscale -- --port <new-port>
+```
+
+If Android forgets the computer, use **Pair device with pairing code**, then
+`adb pair <phone-tailscale-ip>:<pairing-port>` and enter the displayed code.
+Reconnect using the separate debugging port. Wireless debugging depends on
+Android's Wi-Fi and developer settings; Tailscale alone cannot keep it enabled
+through every restart or guarantee debugging on cellular-only connections.
+
+Windows Tailscale is configured to run unattended. Keep Tailscale connected on
+Android; its battery optimization exemption helps it remain available in the
+background. This setup is for Codex sessions running on this computer.
+
 ## Run in Expo Go
 
 Install dependencies and start the development server:

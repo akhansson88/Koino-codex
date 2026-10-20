@@ -181,7 +181,7 @@ const BibleVerseRow = memo(function BibleVerseRow({
     collapsable={false}
     onLayout={handleLayout}
     ref={handleRef}
-    style={{ gap: 5, borderLeftWidth: 3, borderLeftColor: spoken ? palette.accent : "transparent", backgroundColor: spoken ? palette.peach : undefined }}
+    style={{ gap: 5, paddingLeft: 12, borderLeftWidth: 3, borderLeftColor: spoken ? palette.accent : "transparent", backgroundColor: spoken ? palette.peach : undefined }}
   >
   {subtitlesBefore.map((subtitle) => (
     <Text
