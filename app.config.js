@@ -75,6 +75,12 @@ module.exports = {
   ...baseConfig,
   name: isDevelopment ? "KOINO Dev" : baseConfig.name,
   scheme: isDevelopment ? "koino-dev" : baseConfig.scheme,
+  ios: {
+    ...baseConfig.ios,
+    bundleIdentifier: isDevelopment
+      ? "com.akhansson.koino.dev"
+      : baseConfig.ios.bundleIdentifier,
+  },
   android: {
     ...baseConfig.android,
     package: isDevelopment
