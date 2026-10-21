@@ -168,10 +168,19 @@ try {
   const readerPreferencesRef = ref(member.database, `bibleReaderPreferences/${member.uid}`);
   await set(readerPreferencesRef, readerPreferences);
   assert.deepEqual((await get(readerPreferencesRef)).val(), readerPreferences);
+  for (const flowingParagraphText of [true, false]) {
+    await set(readerPreferencesRef, { ...readerPreferences, flowingParagraphText });
+    assert.equal((await get(readerPreferencesRef)).val().flowingParagraphText, flowingParagraphText);
+  }
+  for (const flowingParagraphText of ["true", 1, { enabled: true }]) {
+    await assert.rejects(() => set(readerPreferencesRef, { ...readerPreferences, flowingParagraphText }), /permission_denied|Permission denied/i);
+  }
+  // Older clients can still save records without the optional layout field.
+  await set(readerPreferencesRef, readerPreferences);
   const readerPreferenceUpdates = [];
   const stopReaderPreferenceListener = onValue(
     ref(memberDevice.database, `bibleReaderPreferences/${member.uid}`),
-    (snapshot) => readerPreferenceUpdates.push(snapshot.val()?.fontSize),
+    (snapshot) => readerPreferenceUpdates.push(snapshot.val()),
   );
   try {
     await new Promise((resolve, reject) => {
@@ -180,10 +189,10 @@ try {
       }, 20);
       setTimeout(() => { clearInterval(timer); reject(new Error("Reader preferences listener timed out")); }, 5000);
     });
-    await set(readerPreferencesRef, { ...readerPreferences, fontSize: 24, updatedAt: readerPreferences.updatedAt + 1 });
+    await set(readerPreferencesRef, { ...readerPreferences, fontSize: 24, flowingParagraphText: true, updatedAt: readerPreferences.updatedAt + 1 });
     await new Promise((resolve, reject) => {
       const timer = setInterval(() => {
-        if (readerPreferenceUpdates.at(-1) === 24) { clearInterval(timer); resolve(); }
+        if (readerPreferenceUpdates.at(-1)?.fontSize === 24 && readerPreferenceUpdates.at(-1)?.flowingParagraphText === true) { clearInterval(timer); resolve(); }
       }, 20);
       setTimeout(() => { clearInterval(timer); reject(new Error("Reader preferences did not sync to the second device")); }, 5000);
     });

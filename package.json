@@ -33,6 +33,7 @@
     "validate:bible-highlights": "node scripts/validate-bible-highlights.mjs",
     "validate:bible-picker": "node scripts/validate-bible-picker-lifecycle.mjs",
     "validate:bible-history": "node scripts/validate-bible-history.mjs",
+    "validate:bible-reading-layout": "node scripts/validate-bible-reading-layout.mjs",
     "validate:startup": "node scripts/validate-startup-dependencies.mjs",
     "validate:bible-startup": "node scripts/validate-bible-startup.mjs",
     "validate:startup-memberships": "node scripts/validate-startup-memberships.mjs",

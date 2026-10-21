@@ -25,6 +25,8 @@ import {
 export function ReadingSettingsSheet({
   fontId,
   fontSize,
+  flowingParagraphText,
+  onChangeFlowingParagraphText,
   onChangeFont,
   onChangeReaderTheme,
   onChangeShowVerseNumbers,
@@ -37,6 +39,8 @@ export function ReadingSettingsSheet({
 }: {
   fontId: BibleReaderFontId;
   fontSize: number;
+  flowingParagraphText: boolean;
+  onChangeFlowingParagraphText: (value: boolean) => void;
   onChangeFont: (fontId: BibleReaderFontId) => void;
   onChangeReaderTheme: (theme: BibleReaderThemeId) => void;
   onChangeShowVerseNumbers: (value: boolean) => void;
@@ -125,6 +129,7 @@ export function ReadingSettingsSheet({
 
             <SettingsGroup palette={palette} title={t("bible.settings.options")}>
               <View style={{ gap: 2 }}>
+                <SettingsToggle label={t("bible.settings.flowingParagraphText")} onChange={onChangeFlowingParagraphText} palette={palette} value={flowingParagraphText} />
                 <SettingsToggle label={t("bible.settings.showVerseNumbers")} onChange={onChangeShowVerseNumbers} palette={palette} value={showVerseNumbers} />
               </View>
             </SettingsGroup>

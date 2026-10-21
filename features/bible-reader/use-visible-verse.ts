@@ -1,14 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
 import type { View } from "react-native";
+import type { MeasurableView } from "@/features/bible-reader/types";
 
 type Bounds = { y: number; height: number };
 type Reader = {
   chapterKey: string;
+  layoutKey?: string;
   ready: boolean;
   enabled: boolean;
   verses: readonly { verse: number }[];
   viewport: RefObject<View | null>;
-  rows: RefObject<Record<number, View | null>>;
+  rows: RefObject<Record<number, MeasurableView | null>>;
   offset: RefObject<number>;
   onSelect: (verse: number) => void;
 };
@@ -87,6 +89,7 @@ export function useVisibleVerseSelection(reader: Reader) {
     latest.current = reader;
     retry();
   });
+  useLayoutEffect(() => { layoutChanged(); }, [reader.layoutKey, layoutChanged]);
   useLayoutEffect(() => cancel, [reader.chapterKey, reader.enabled, cancel]);
 
   const select = useCallback(() => {

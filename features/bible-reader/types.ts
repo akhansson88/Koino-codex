@@ -29,6 +29,7 @@ export type BibleReaderPreferences = {
   history: BibleHistory;
   readerTheme: BibleReaderThemeId;
   showVerseNumbers: boolean;
+  flowingParagraphText: boolean;
 };
 
 export type BibleReaderThemePreference = Pick<BibleReaderPreferences, "appTheme" | "readerTheme">;
@@ -89,7 +90,12 @@ export type SelectedVerseRange = {
   start: number;
 };
 
-export type MeasurableView = View;
+// Paragraph verses share a native text node; expose their own line bounds while
+// retaining a real native view for accessibility focus restoration.
+export type MeasurableView = View | {
+  measureInWindow: View["measureInWindow"];
+  focusTarget: View | null;
+};
 
 export type ReaderPalette = {
   accent: string;

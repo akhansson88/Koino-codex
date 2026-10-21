@@ -32,6 +32,11 @@ export type BibleChapterVerse = {
   verse: number;
 };
 
+export type BiblePassage = {
+  verse: BibleVerse;
+  verses: Pick<BibleChapterVerse, "verse" | "text">[];
+};
+
 export type BibleFootnote = {
   marker: string;
   text: string;
@@ -192,10 +197,18 @@ function bibleVerseFromRows(book: string, chapter: number, firstVerse: number, l
 }
 
 export async function bibleVersesFromRanges(ranges: readonly BibleDatabaseVerseRange[], versionId?: BibleVersionId): Promise<(BibleVerse | undefined)[]> {
+  return (await biblePassagesFromRanges(ranges, versionId)).map((passage) => passage?.verse);
+}
+
+/** Keep verse boundaries alongside the combined excerpt without another database read. */
+export async function biblePassagesFromRanges(ranges: readonly BibleDatabaseVerseRange[], versionId?: BibleVersionId): Promise<(BiblePassage | undefined)[]> {
   const version = bibleVersionFor(versionId);
   const normalized = ranges.map((range) => ({ ...range, book: normalizeBibleBookName(range.book), startVerse: Math.min(range.startVerse, range.endVerse), endVerse: Math.max(range.startVerse, range.endVerse) }));
   const rows = await queryBibleVerseRangesAsync(version.id, normalized);
-  return normalized.map((range, index) => bibleVerseFromRows(range.book, range.chapter, range.startVerse, range.endVerse, rows[index], version));
+  return normalized.map((range, index) => {
+    const verse = bibleVerseFromRows(range.book, range.chapter, range.startVerse, range.endVerse, rows[index], version);
+    return verse ? { verse, verses: rows[index].map(({ verse, text }) => ({ verse, text })) } : undefined;
+  });
 }
 
 export function bibleVerseFromReference(reference: string, versionId?: BibleVersionId): BibleVerse | undefined {

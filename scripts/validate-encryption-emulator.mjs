@@ -33,6 +33,15 @@ try {
     : crypto.encrypt(value, path, `user:${owner.uid}:1`, key, owner.identity);
   const preferences = { bibleVersionId: 'kjv', fontId: 'serif', fontSize: 20, readerTheme: 'light', showVerseNumbers: true, position: { book: 'John', chapter: 3, verse: 16 }, history: { entries: [{ book: 'John', chapter: 3, verse: 16 }], index: 0 } };
   await set(ref(owner.database, `encryptedData/bibleReaderPreferences/${owner.uid}`), { ...encryptPreferences(preferences, `bibleReaderPreferences/${owner.uid}`), updatedAt: 1 });
+  const layoutPath = `bibleReaderPreferences/${owner.uid}/flowingParagraphText`;
+  for (const flowingParagraphText of [true, false]) {
+    await update(ref(owner.database, `encryptedData/bibleReaderPreferences/${owner.uid}`), {
+      flowingParagraphText: encryptPreferences(flowingParagraphText, layoutPath), updatedAt: flowingParagraphText ? 2 : 3,
+    });
+    const storedLayout = await get(ref(owner.database, `encryptedData/${layoutPath}`));
+    assert.equal(crypto.decrypt(storedLayout.val(), layoutPath, key, new Set([owner.identity.signingPublicKey])), flowingParagraphText);
+  }
+  await denied(() => get(ref(outsider.database, `encryptedData/bibleReaderPreferences/${owner.uid}`)));
   const legacyTokens = `pushTokens/${owner.uid}`;
   await adminDatabase(admin).ref(legacyTokens).set({ device: { token: 'synthetic-token', platform: 'android' } });
   await denied(() => get(ref(owner.database, legacyTokens)));

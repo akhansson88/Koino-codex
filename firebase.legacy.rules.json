@@ -488,6 +488,7 @@
         "fontSize": { ".validate": "newData.val() == 16 || newData.val() == 18 || newData.val() == 20 || newData.val() == 22 || newData.val() == 24 || newData.val() == 26 || newData.val() == 28" },
         "readerTheme": { ".validate": "newData.val() == 'light' || newData.val() == 'sepia' || newData.val() == 'dark'" },
         "showVerseNumbers": { ".validate": "newData.isBoolean()" },
+        "flowingParagraphText": { ".validate": "newData.isBoolean()" },
         "updatedAt": { ".validate": "newData.isNumber()" },
         "position": {
           ".validate": "newData.val() == null || newData.hasChildren(['book', 'chapter', 'verse'])",

@@ -3,12 +3,13 @@ export { displayBibleBookName, displayBibleReference } from "@/features/bible-bo
 import {
   bibleVersionFor,
   bibleVerseFromReference,
-  bibleVersesFromRanges,
+  biblePassagesFromRanges,
   bibleChapterVerses,
   buildBibleVerse,
   kjvBooks,
   searchBibleText,
   type BiblePosition,
+  type BiblePassage,
   type BibleVersionId,
 } from "@/features/bible-kjv";
 import type { BibleVerse } from "@/state/types";
@@ -21,6 +22,7 @@ export type ScriptureSearchResult = {
   kind: "verse" | "passage";
   sources: SearchSource[];
   verse: BibleVerse;
+  verses: BiblePassage["verses"];
 };
 
 export type ScriptureSearchResponse = {
@@ -208,23 +210,28 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
     }
     if (!position) return empty;
   }
-  if (referenceVerse) return { ...empty, results: [{ id: `${versionId}:${referenceVerse.reference}`, matchType: "reference", kind: referenceVerse.startVerse === referenceVerse.endVerse ? "verse" : "passage", sources: ["reference"], verse: referenceVerse }] };
+  if (referenceVerse) {
+    const verses = bibleChapterVerses(referenceVerse.book!, referenceVerse.chapter!, versionId)
+      .filter(({ verse }) => verse >= referenceVerse.startVerse! && verse <= referenceVerse.endVerse!)
+      .map(({ verse, text }) => ({ verse, text }));
+    return { ...empty, results: [{ id: `${versionId}:${referenceVerse.reference}`, matchType: "reference", kind: referenceVerse.startVerse === referenceVerse.endVerse ? "verse" : "passage", sources: ["reference"], verse: referenceVerse, verses }] };
+  }
   if (/\d\s*:\s*\d/.test(normalizedQuery)) return empty;
 
-  const verseCache = new Map<string, BibleVerse | undefined>();
+  const verseCache = new Map<string, BiblePassage | undefined>();
   const resolveResults = async (ranked: RankedDocument[]) => {
     const candidates = collapseSearchRanges(ranked, boundedLimit).map((item) => ({ ...item,
       reference: `${item.document.book} ${item.document.chapter}:${item.document.start_verse}${item.document.end_verse > item.document.start_verse ? `-${item.document.end_verse}` : ""}`,
     }));
     const missing = [...new Map(candidates.filter((item) => !verseCache.has(item.reference)).map((item) => [item.reference, item])).values()];
     if (missing.length) {
-      const verses = await bibleVersesFromRanges(missing.map(({ document }) => ({ book: document.book, chapter: document.chapter, startVerse: document.start_verse, endVerse: document.end_verse })), versionId);
+      const verses = await biblePassagesFromRanges(missing.map(({ document }) => ({ book: document.book, chapter: document.chapter, startVerse: document.start_verse, endVerse: document.end_verse })), versionId);
       abortIfNeeded(signal);
       missing.forEach((item, index) => verseCache.set(item.reference, verses[index]));
     }
     return candidates.flatMap(({ document, sources, reference }): ScriptureSearchResult[] => {
-      const verse = verseCache.get(reference);
-      return verse ? [{ id: `${versionId}:${reference}`, matchType: sources.includes("lexical") ? "text" : sources.includes("topic") ? "topic" : "semantic", kind: document.start_verse === document.end_verse ? "verse" : "passage", sources, verse }] : [];
+      const passage = verseCache.get(reference);
+      return passage ? [{ id: `${versionId}:${reference}`, matchType: sources.includes("lexical") ? "text" : sources.includes("topic") ? "topic" : "semantic", kind: document.start_verse === document.end_verse ? "verse" : "passage", sources, ...passage }] : [];
     });
   };
 
@@ -239,6 +246,7 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
     return { mode: "lexical", semanticState: "unavailable", results: textResults.map((result) => ({
       id: `${versionId}:${result.reference}`, matchType: "text", kind: "verse", sources: ["lexical"],
       verse: { book: result.position.book, chapter: result.position.chapter, startVerse: result.position.verse, endVerse: result.position.verse, reference: result.reference, referenceText: result.reference, text: result.text, translation },
+      verses: [{ verse: result.position.verse, text: result.text }],
     })) };
   }
   abortIfNeeded(signal);

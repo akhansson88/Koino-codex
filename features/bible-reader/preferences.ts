@@ -33,6 +33,8 @@ const defaultReaderTheme: BibleReaderThemeId = "light";
 
 export const defaultShowVerseNumbers = true;
 
+export const defaultFlowingParagraphText = false;
+
 export const minFontSize = 16;
 
 export const maxFontSize = 28;
@@ -67,6 +69,7 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
       history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
       showVerseNumbers: defaultShowVerseNumbers,
+      flowingParagraphText: defaultFlowingParagraphText,
     };
   }
 
@@ -84,6 +87,7 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
       history,
       readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
       showVerseNumbers: typeof parsed?.showVerseNumbers === "boolean" ? parsed.showVerseNumbers : defaultShowVerseNumbers,
+      flowingParagraphText: typeof parsed?.flowingParagraphText === "boolean" ? parsed.flowingParagraphText : defaultFlowingParagraphText,
     };
   } catch {
     return {
@@ -94,6 +98,7 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
       history: initialBibleHistory(defaultPosition),
       readerTheme: defaultReaderTheme,
       showVerseNumbers: defaultShowVerseNumbers,
+      flowingParagraphText: defaultFlowingParagraphText,
     };
   }
 }

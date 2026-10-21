@@ -508,6 +508,22 @@ const beforeClearVerse = scrolls.length;
 follow.request('John:2', 4);
 follow.tryScroll('John:2', (_, done) => done({ verse: { y: 650, height: 40 }, viewport: { y: 80, height: 900 }, offset: 100, controlsTop: 720 }), scroll);
 assert.equal(scrolls.length, beforeClearVerse, 'verse above the player clearance stays still');
+for (const invalid of [
+  { verse: { y: NaN, height: 40 } },
+  { verse: { y: 900, height: 0 } },
+  { viewport: { y: 100, height: NaN } },
+  { offset: Infinity },
+  { controlsTop: 110 },
+]) {
+  follow.request('John:2', 5);
+  const valid = { verse: { y: 900, height: 40 }, viewport: { y: 100, height: 900 }, offset: 100, controlsTop: 720 };
+  const before = scrolls.length;
+  follow.tryScroll('John:2', (_, done) => done({ ...valid, ...invalid }), scroll);
+  assert.equal(scrolls.length, before, 'incomplete native geometry cannot trigger a scroll');
+  follow.tryScroll('John:2', (_, done) => done(valid), scroll);
+  assert.deepEqual(scrolls.at(-1), { offset: 882, verse: 5 }, 'invalid geometry leaves the follow request pending for a valid layout');
+  assert.equal(scrolls.length, before + 1);
+}
 // Exercise the real main/mini player components against the synchronized engine.
 const React = require('react');
 const { act, create } = require('react-test-renderer');
