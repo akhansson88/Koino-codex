@@ -8,7 +8,7 @@ import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { markStartupMilestone } from "@/features/startup-performance";
-import { checkInExistsForDay } from "@/state/check-ins";
+import { checkInForDay } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -75,7 +75,7 @@ export function HomeScreen() {
   const [heartMood, setHeartMood] = useState<HeartMood>();
   const [checkInText, setCheckInText] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
-  const [shareCheckIn, setShareCheckIn] = useState(true);
+  const [shareCheckIn, setShareCheckIn] = useState(false);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
@@ -91,7 +91,7 @@ export function HomeScreen() {
   const communityMigrationPending = Boolean(group?.migrationPending);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
-  const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
+  const todaysCheckIn = checkInForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const communityMembers = useMemo(
@@ -174,7 +174,7 @@ export function HomeScreen() {
     setHeartMood(undefined);
     setCheckInText("");
     setCheckInVerses([]);
-    setShareCheckIn(true);
+    setShareCheckIn(false);
   }
 
   function openCheckIn() {
@@ -288,7 +288,13 @@ export function HomeScreen() {
           </View>
         )}
 
-        {checkInStatusReady && !todaysCheckIn ? <HeartCheckInCard onPress={openCheckIn} /> : null}
+        {checkInStatusReady ? todaysCheckIn ? (
+          <CompletedHeartCheckInCard
+            shared={todaysCheckIn.visibility === "group"}
+            communityName={group?.name ?? t("tabs.community")}
+            onPress={() => router.push({ pathname: "/me/[id]", params: { id: todaysCheckIn.id } })}
+          />
+        ) : <HeartCheckInCard onPress={openCheckIn} /> : null}
 
         {communityMigrationPending ? <Card style={{ gap: 8 }}>
           <Text style={[typography.cardTitle, { color: colors.ink }]}>{group?.name}</Text>
@@ -435,6 +441,25 @@ function ProfileGreetingSkeleton() {
       <View style={{ backgroundColor: colors.line, borderRadius: 8, height: 22, width: 190 }} />
       <View style={{ backgroundColor: colors.line, borderRadius: 7, height: 14, width: 250 }} />
     </View>
+  );
+}
+
+function CompletedHeartCheckInCard({ shared, communityName, onPress }: { shared: boolean; communityName: string; onPress: () => void }) {
+  const { t } = useAppTranslation();
+  return (
+    <Card style={{ gap: 6, padding: 14 }}>
+      <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("home.checkIn.title")}</Text>
+      <BodyText muted>{t("home.checkIn.completed")}</BodyText>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+        <Feather name={shared ? "users" : "lock"} size={14} color={colors.muted} />
+        <Text style={[typography.caption, { color: colors.muted }]}>
+          {shared ? t("community.checkIn.sharedWithCommunity", { name: communityName }) : t("home.checkIn.private")}
+        </Text>
+      </View>
+      <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 44, justifyContent: "center" }}>
+        <Text style={[typography.label, { color: colors.olive }]}>{t("home.checkIn.view")}</Text>
+      </Pressable>
+    </Card>
   );
 }
 

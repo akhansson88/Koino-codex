@@ -132,6 +132,7 @@ function CommunityTypeSelector({
 }
 
 export function SharedComposer({
+  audienceLocked = false,
   bibleIntent,
   body,
   context,
@@ -152,6 +153,7 @@ export function SharedComposer({
   verses,
   visible,
 }: {
+  audienceLocked?: boolean;
   bibleIntent?: BibleComposerIntent;
   body: string;
   context: "journal" | "today" | "room";
@@ -177,7 +179,7 @@ export function SharedComposer({
   const [submissionAttempted, setSubmissionAttempted] = useState(false);
   const bibleOrigin = Boolean(bibleIntent);
   const isCommunityShare = context === "room";
-  const showVisibility = context !== "room";
+  const showVisibility = context !== "room" && !audienceLocked;
   const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
   const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
   const scriptureRequired = isCommunityShare && kind === "scripture";
@@ -328,6 +330,9 @@ export function SharedComposer({
             <SectionHeading>
               {t(context === "journal" ? "community.composer.journal.privacy" : "community.composer.shareWith")}
             </SectionHeading>
+          ) : null}
+          {audienceLocked ? (
+            <Text style={[typography.caption, { color: colors.muted }]}>{t("community.composer.checkInAudienceFixed")}</Text>
           ) : null}
           {showVisibility ? (
             <FilterChips

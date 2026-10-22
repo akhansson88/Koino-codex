@@ -36,6 +36,23 @@ assert.ok(!JSON.stringify(encrypted).includes('Secret verse'));
 assert.deepEqual(adapter.decodeAt('posts/group/post', encrypted), record);
 assert.throws(() => adapter.decodeAt('posts/group/copied', encrypted));
 assert.throws(() => adapter.decodeAt('posts/group/post', { ...encrypted, userId: 'intruder' }));
+// Check-in audiences select distinct encryption scopes; journal references
+// remain encrypted content rather than a way to move data between scopes.
+for (const [recordPath, visibility, keyPrefix] of [
+  ['privateCheckIns/owner/checkin', 'private', 'user:owner:'],
+  ['checkIns/group/checkin', 'group', 'group:group:'],
+]) {
+  const checkIn = { id: 'checkin', userId: 'owner', groupId: 'group', dayKey: '2026-10-22', visibility, mood: 4, readToday: true, reflectionText: 'Secret check-in', createdAt: '2026-10-22' };
+  const encoded = adapter.encodeAt(recordPath, checkIn);
+  assert.equal(encoded.visibility, visibility);
+  assert.ok(JSON.stringify(encoded).includes(keyPrefix));
+  assert.ok(!JSON.stringify(encoded).includes('Secret check-in'));
+  assert.deepEqual(adapter.decodeAt(recordPath, encoded), checkIn);
+}
+const checkInJournal = { id: 'journal-checkin', userId: 'owner', source: 'private_check_in', journalType: 'heart_checkin', body: 'Secret journal check-in', sharedPostId: 'existing-post', isPrivate: false, createdAt: '2026-10-22' };
+const journalCipher = adapter.encodeAt('journalEntries/owner/journal-checkin', checkInJournal);
+assert.ok(!JSON.stringify(journalCipher).includes('existing-post'));
+assert.deepEqual(adapter.decodeAt('journalEntries/owner/journal-checkin', journalCipher), checkInJournal);
 const archive = { sourceCollection: 'privateBiblePlanProgress', createdAt: '2026-01-01', content: JSON.stringify({ secret_plan_name: { '2026-05-28': { passage: 'Private old passage', complete: true } } }) };
 const archiveCipher = adapter.encodeAt('legacyUserArchives/owner/privateBiblePlanProgress', archive);
 assert.ok(!JSON.stringify(archiveCipher).includes('secret_plan_name'));

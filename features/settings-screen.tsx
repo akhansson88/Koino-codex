@@ -140,7 +140,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [heartMood, setHeartMood] = useState<HeartMood>();
   const [checkInText, setCheckInText] = useState("");
   const [checkInVerses, setCheckInVerses] = useState<BibleVerse[]>([]);
-  const [shareCheckIn, setShareCheckIn] = useState(true);
+  const [shareCheckIn, setShareCheckIn] = useState(false);
   const [submittedCheckInKey, setSubmittedCheckInKey] = useState<string>();
   const [communityFeedRevealState, setCommunityFeedRevealState] = useState<CommunityFeedRevealState>({});
   const [communityFeedClock, setCommunityFeedClock] = useState(Date.now);
@@ -748,7 +748,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setHeartMood(undefined);
     setCheckInText("");
     setCheckInVerses([]);
-    setShareCheckIn(true);
+    setShareCheckIn(false);
   }
 
   function openCheckInComposer() {

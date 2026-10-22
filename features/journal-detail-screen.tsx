@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { isCheckInJournalEntry } from "@/state/check-ins";
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
@@ -42,7 +43,10 @@ export function JournalDetailScreen() {
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const entry = useMemo<DetailEntry | undefined>(() => {
     if (!routeId) return undefined;
-    const privateEntry = state.journalEntries.find((item) => item.id === routeId && item.userId === state.currentUserId);
+    const privateCheckIn = state.privateCheckIns.find((item) => item.id === routeId && item.userId === state.currentUserId && item.groupId === state.currentGroupId);
+    const privateEntry = state.journalEntries.find((item) => item.userId === state.currentUserId && (
+      item.id === routeId || (privateCheckIn && item.source === "private_check_in" && item.createdAt === privateCheckIn.createdAt)
+    ));
     if (privateEntry) return { ...privateEntry, displaySource: privateEntry.source === "private_check_in" ? "Check-in" : "Journal" };
     const sharedCheckIn = state.checkIns.find((item) => item.id === routeId && item.userId === state.currentUserId && item.groupId === state.currentGroupId);
     return sharedCheckIn
@@ -65,7 +69,7 @@ export function JournalDetailScreen() {
           isSharedCheckIn: true,
         }
       : undefined;
-  }, [routeId, state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries]);
+  }, [routeId, state.checkIns, state.currentGroupId, state.currentUserId, state.journalEntries, state.privateCheckIns]);
 
   useEffect(() => {
     detailScrollRef.current?.scrollTo({ animated: false, y: 0 });
@@ -86,6 +90,8 @@ export function JournalDetailScreen() {
   const storedType = journalEntryTypeFor(currentEntry);
   const presentation = journalEntryPresentation(currentEntry, t);
   const isSharedCheckIn = Boolean(currentEntry.isSharedCheckIn);
+  const audienceLocked = isCheckInJournalEntry(currentEntry);
+  const isSharedEntry = isSharedCheckIn || (audienceLocked && Boolean(currentEntry.sharedPostId));
 
   function openEditor() {
     setJournalType(storedType);
@@ -108,7 +114,8 @@ export function JournalDetailScreen() {
       title,
       verse: primaryBibleVerse(verses),
       verses,
-      sharedPostId: entryVisibility === visibility.room ? currentEntry.sharedPostId : undefined,
+      ...(audienceLocked ? { heartMood: currentEntry.heartMood } : {}),
+      sharedPostId: audienceLocked ? currentEntry.sharedPostId : entryVisibility === visibility.room ? currentEntry.sharedPostId : undefined,
     });
     setComposerVisible(false);
   }
@@ -198,8 +205,8 @@ export function JournalDetailScreen() {
       </View>
       <VerseList verse={currentEntry.verse} verses={currentEntry.verses} maxLines={99} showFullText />
       <View style={{ gap: 8 }}>
-        <SectionHeading>{t(isSharedCheckIn ? "me.journey.detail.sharedWith" : "me.journey.detail.privacy")}</SectionHeading>
-        {isSharedCheckIn ? (
+        <SectionHeading>{t(isSharedEntry ? "me.journey.detail.sharedWith" : "me.journey.detail.privacy")}</SectionHeading>
+        {isSharedEntry ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
             <RoomImage image={group?.image} name={group?.name ?? t("tabs.community")} size={34} />
             <View style={{ flex: 1 }}>
@@ -227,6 +234,7 @@ export function JournalDetailScreen() {
         title={title}
         body={body}
         verses={verses}
+        audienceLocked={audienceLocked}
         editing
         onKind={setEntryKind}
         onVisibility={setEntryVisibility}

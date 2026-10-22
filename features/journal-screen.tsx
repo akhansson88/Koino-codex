@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { isCheckInJournalEntry } from "@/state/check-ins";
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
@@ -86,6 +87,7 @@ export function JournalScreen() {
   const [historyVisible, setHistoryVisible] = useState(false);
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
+  const editingCheckIn = Boolean(editingEntry && isCheckInJournalEntry(editingEntry));
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const entries = useMemo<JournalEntry[]>(() => {
     return state.journalEntries
@@ -138,7 +140,9 @@ export function JournalScreen() {
         title,
         verse: primaryBibleVerse(verses),
         verses,
-        sharedPostId: entryVisibility === visibility.room ? editingEntry.sharedPostId : undefined,
+        ...(editingCheckIn ? { heartMood: editingEntry.heartMood } : {}),
+        sharedPostId: editingCheckIn
+          ? editingEntry.sharedPostId : entryVisibility === visibility.room ? editingEntry.sharedPostId : undefined,
       });
     } else {
       await dispatch({
@@ -199,6 +203,7 @@ export function JournalScreen() {
         title={title}
         body={body}
         verses={verses}
+        audienceLocked={editingCheckIn}
         editing={Boolean(editingEntry)}
         onKind={(kind) => {
           setEntryKind(kind);

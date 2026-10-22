@@ -198,7 +198,13 @@ export function CheckInModal({
               <BibleVerseField label={t("community.checkIn.scriptureOptional")} verses={verses} onChange={onVerses} />
               <View style={{ gap: 8, marginTop: 8 }}>
                 <SectionHeading>{t("community.checkIn.shareWith")}</SectionHeading>
-                <Pressable accessibilityRole="button" onPress={() => onShare(!share)}>
+                <Pressable
+                  accessibilityLabel={t("community.checkIn.sharedWithCommunity", { name: roomName })}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: share, disabled: submitting }}
+                  disabled={submitting}
+                  onPress={() => onShare(!share)}
+                >
                   <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
                     <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
                     <View style={{ flex: 1 }}>
@@ -207,7 +213,7 @@ export function CheckInModal({
                         {share ? t("community.checkIn.sharedWithCommunity", { name: roomName }) : t("community.checkIn.privateOnly")}
                       </Text>
                     </View>
-                    <Feather name="chevron-down" size={18} color={colors.muted} />
+                    <Feather name={share ? "check-circle" : "circle"} size={18} color={colors.muted} />
                   </Card>
                 </Pressable>
               </View>

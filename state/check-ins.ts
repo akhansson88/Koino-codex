@@ -10,8 +10,12 @@ export class CheckInSubmissionError extends Error {
 }
 
 export function checkInExistsForDay(checkIns: CheckIn[], userId: string | undefined, groupId: string | undefined, dayKey: string) {
-  if (!userId || !groupId) return false;
-  return checkIns.some((item) =>
+  return Boolean(checkInForDay(checkIns, userId, groupId, dayKey));
+}
+
+export function checkInForDay(checkIns: CheckIn[], userId: string | undefined, groupId: string | undefined, dayKey: string) {
+  if (!userId || !groupId) return undefined;
+  return checkIns.find((item) =>
     item.userId === userId &&
     item.groupId === groupId &&
     (item.dayKey === dayKey || localDayKey(item.createdAt) === dayKey),
@@ -35,4 +39,9 @@ export function hasLinkedPrivateCheckInJournal(checkIn: CheckIn, journalEntries:
 
 export function activePrivateCheckIns(privateCheckIns: CheckIn[], journalEntries: JournalEntry[]) {
   return privateCheckIns.filter((checkIn) => hasLinkedPrivateCheckInJournal(checkIn, journalEntries));
+}
+
+// Older journal check-ins can be identified by kind even without journalType.
+export function isCheckInJournalEntry(entry: Pick<JournalEntry, "source" | "journalType" | "entryKind">) {
+  return entry.source === "private_check_in" || entry.journalType === "heart_checkin" || entry.entryKind === "update";
 }
