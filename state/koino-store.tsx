@@ -129,7 +129,7 @@ async function releaseCheckInClaim(userId: string, groupId: string, dayKey: stri
 function releaseDeletedCheckInClaim(userId: string, groupId: string, dayKey: string, checkInId: string) {
   return runTransaction(
     ref(database, checkInClaimPath(userId, groupId, dayKey)),
-    (current: CheckInDailyClaim | null) => current?.checkInId === checkInId ? null : undefined,
+    (current: CheckInDailyClaim | null) => current?.checkInId === checkInId && !current.moderated ? null : undefined,
   );
 }
 
@@ -162,6 +162,7 @@ async function claimCheckInDay(
 
   const existing = create.snapshot.val() as CheckInDailyClaim | null;
   if (!existing) throw new CheckInSubmissionError("in_progress");
+  if (existing.moderated) throw new CheckInSubmissionError("already_submitted");
 
   const existingPath = existing.visibility === "group"
     ? `checkIns/${groupId}/${existing.checkInId}`
@@ -314,6 +315,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const olderJournalEntriesRef = useRef<JournalEntry[]>([]);
   const olderPrivateCheckInsRef = useRef<CheckIn[]>([]);
   const olderPrayerNotificationsRef = useRef<PrayerNotification[]>([]);
+  const [moderationState, setModerationState] = useState<{ groupId: string; targets: Record<string, Record<string, unknown>> }>();
   const olderCheckInsRef = useRef<CheckIn[]>([]);
   const olderPostsRef = useRef<Post[]>([]);
   const olderRepliesRef = useRef<Reply[]>([]);
@@ -813,6 +815,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     const groupId = profile.currentGroupId;
     let active = true;
+    let tombstonesReady = false;
     let membersReady = false;
     let checkInsReady = false;
     let postsReady = false;
@@ -846,6 +849,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const markCommunityFeedReady = () => {
       if (
         !active ||
+        !tombstonesReady ||
         !membersReady ||
         !checkInsReady ||
         !postsReady ||
@@ -876,6 +880,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const planParticipationsRef = ref(database, `groupBiblePlanParticipation/${groupId}`);
 
     const unsubs = [
+      FirebaseDatabase.onValue(FirebaseDatabase.ref(database, `moderationTombstones/${groupId}`), snapshot => {
+        if (!active) return;
+        setModerationState({ groupId, targets: snapshot.val() ?? {} });
+        tombstonesReady = true;
+        markCommunityFeedReady();
+      }, handleCommunityFeedError),
       onValue(connectedRef, (snapshot) => {
         if (!active) return;
         setCommunityFeedOffline(snapshot.val() === false);
@@ -966,6 +976,27 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     };
   }, [firebaseUser, profile?.currentGroupId, currentGroupEncrypted]);
 
+  // Filter every published snapshot, including paginated records retained in
+  // older-page refs. A delayed snapshot cannot resurrect a moderated ID.
+  const visibleShared = useMemo(() => {
+    const targets = moderationState?.groupId === profile?.currentGroupId ? moderationState?.targets : undefined;
+    const hidden = (type: string, id: string) => Boolean(targets?.[type] && Object.hasOwn(targets[type], id));
+    const targetHidden = (record: { targetType: string; targetId: string }) => hidden(record.targetType, record.targetId);
+    const retain = <T,>(items: T[], predicate: (item: T) => boolean) => {
+      const result = items.filter(predicate);
+      return result.length === items.length ? items : result;
+    };
+    return {
+      checkIns: retain(checkIns, item => !hidden("check_in", item.id)),
+      posts: retain(posts, item => !hidden("post", item.id)),
+      replies: retain(replies, item => !hidden("reply", item.id) && !targetHidden(item)),
+      prayerReactions: retain(prayerReactions, item => !targetHidden(item)),
+      postReactions: retain(postReactions, item => !targetHidden(item)),
+      activityNotifications: retain(activityNotifications, item => item.groupId !== profile?.currentGroupId || (!targetHidden(item) && !hidden("reply", item.replyId))),
+      discussionFollows: retain(discussionFollows, item => !targetHidden(item)),
+    };
+  }, [moderationState, profile?.currentGroupId, checkIns, posts, replies, prayerReactions, postReactions, activityNotifications, discussionFollows]);
+
   const state = useMemo<KoinoState>(() => {
     const visibleMemberships = currentGroupMigrationPending ? legacyMemberships.filter((member) => member.groupId === profile?.currentGroupId) : memberships;
     const memberUsers = visibleMemberships.map<User>((membership) => ({
@@ -1002,17 +1033,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       groups,
       groupMemberCounts,
       memberships: visibleMemberships,
-      checkIns,
+      checkIns: visibleShared.checkIns,
       privateCheckIns,
-      posts,
+      posts: visibleShared.posts,
       prayerSessions,
       prayerNotifications,
-      activityNotifications,
+      activityNotifications: visibleShared.activityNotifications,
       notificationPreferences,
-      prayerReactions,
-      postReactions,
-      replies,
-      discussionFollows,
+      prayerReactions: visibleShared.prayerReactions,
+      postReactions: visibleShared.postReactions,
+      replies: visibleShared.replies,
+      discussionFollows: visibleShared.discussionFollows,
       journalEntries,
       savedVerses,
       bibleHighlights,
@@ -1024,6 +1055,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       supportIntents,
     };
   }, [
+    visibleShared,
     authError,
     activityNotifications,
     notificationPreferences,

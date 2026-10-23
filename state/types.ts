@@ -314,6 +314,7 @@ export type JournalEntry = {
 };
 
 export type CheckInDailyClaim = {
+  moderated?: boolean;
   dayKey: string;
   checkInId: Id;
   visibility: CheckIn["visibility"];

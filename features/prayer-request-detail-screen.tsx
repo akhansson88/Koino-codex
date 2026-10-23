@@ -1,3 +1,4 @@
+import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
@@ -44,6 +45,7 @@ export type PrayerRequestDetailPrayerState = {
 
 export type PrayerRequestEncouragement = {
   authorImage?: GroupImage;
+  authorId?: string;
   authorName: string;
   body: string;
   canDelete: boolean;
@@ -76,7 +78,7 @@ function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function PrayerRequestHeader({ onBack, onOpenOptions }: { onBack: () => void; onOpenOptions?: () => void }) {
+function PrayerRequestHeader({ onBack, onOpenOptions, item }: { onBack: () => void; onOpenOptions?: () => void; item?: PrayerRequestDetailItem }) {
   const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
@@ -87,7 +89,7 @@ function PrayerRequestHeader({ onBack, onOpenOptions }: { onBack: () => void; on
       {onOpenOptions ? (
         <IconButton accessibilityLabel={t("community.prayer.ownerActions")} icon="more-horizontal" onPress={onOpenOptions} />
       ) : (
-        <View style={{ width: 38 }} />
+        item ? <CommunityRemovalMenu groupId={item.groupId} targetType="post" targetId={item.id} authorId={item.userId} /> : <View style={{ width: 38 }} />
       )}
     </View>
   );
@@ -222,7 +224,7 @@ export function PrayerRequestDetailScreen({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ backgroundColor: colors.cream, flex: 1 }}>
       <AppScreen>
-      <PrayerRequestHeader onBack={onBack} onOpenOptions={ownsItem ? onOpenOwnerActions : undefined} />
+      <PrayerRequestHeader onBack={onBack} item={item} onOpenOptions={ownsItem ? onOpenOwnerActions : undefined} />
       <View style={{ alignItems: "center", gap: 8 }}>
         <Avatar image={authorImage} name={authorName} size={58} tone="green" />
         <View style={{ alignItems: "center", gap: 3 }}>
@@ -311,7 +313,7 @@ export function PrayerRequestDetailScreen({
                     >
                       <Feather name="trash-2" size={16} color={colors.danger} />
                     </Pressable>
-                  ) : null}
+                  ) : encouragement.authorId ? <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={encouragement.id} authorId={encouragement.authorId} /> : null}
                 </View>
                 <LinkPreviewContent text={encouragement.body}>
                   {({ hiddenUrl, preview }) => (
@@ -446,6 +448,7 @@ export function PrayerRequestDetailRouteScreen() {
               authorName: userById.get(reply.userId) ?? t("common.someone"),
               body: reply.body,
               canDelete: reply.userId === state.currentUserId,
+              authorId: reply.userId,
               createdAt: reply.createdAt,
             }))
         : [],

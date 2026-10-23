@@ -1,3 +1,4 @@
+import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { useRef, useState } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
@@ -454,7 +455,7 @@ export function PrayerRequestCard({
       }
       bodyFallback={t("community.card.noWords")}
       item={item}
-      headerAccessory={menuButton}
+      headerAccessory={menuButton ?? <CommunityRemovalMenu groupId={item.groupId} targetType={"post"} targetId={item.id} authorId={item.userId} />}
       onOpen={() => {
         if (menuOpen || suppressOpenRef.current) {
           setMenuOpen(false);

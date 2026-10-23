@@ -1,3 +1,4 @@
+import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { useMemo, useState } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -363,7 +364,7 @@ export function FeedDetailScreen() {
               >
                 <Feather name="trash-2" size={16} color={colors.danger} />
               </Pressable>
-            ) : null}
+            ) : <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={reply.id} authorId={reply.userId} />}
           </View>
           <LinkPreviewContent text={reply.body}>
             {({ hiddenUrl, preview }) => (
@@ -432,7 +433,7 @@ export function FeedDetailScreen() {
               <Feather name="more-horizontal" size={22} color={colors.ink} />
             </Pressable>
           ) : (
-            <View style={{ height: 44, width: 44 }} />
+            <CommunityRemovalMenu groupId={item.groupId} targetType={item.type} targetId={item.id} authorId={item.userId} />
           )}
         </View>
         {usesAlignedDetailFrame ? (

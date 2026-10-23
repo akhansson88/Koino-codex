@@ -1,3 +1,4 @@
+import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { Feather } from "@expo/vector-icons";
 import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -250,7 +251,7 @@ export function CheckInCard({
           )}
         </LinkPreviewContent>
       ) : undefined}
-      headerAccessory={menuButton}
+      headerAccessory={menuButton ?? <CommunityRemovalMenu groupId={item.groupId} targetType={"check_in"} targetId={item.id} authorId={item.userId} />}
       item={item}
       onOpen={() => {
         if (menuOpen || suppressOpenRef.current) {

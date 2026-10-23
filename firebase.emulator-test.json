@@ -1,8 +1,26 @@
 {
-  "database": { "rules": "firebase.rules.json" },
+  "database": {
+    "rules": "firebase.rules.json"
+  },
   "emulators": {
-    "auth": { "port": 9099 },
-    "database": { "port": 9001 },
-    "ui": { "enabled": false }
+    "auth": {
+      "port": 9099,
+      "host": "127.0.0.1"
+    },
+    "database": {
+      "port": 9001,
+      "host": "127.0.0.1"
+    },
+    "ui": {
+      "enabled": false
+    },
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4400
+    },
+    "logging": {
+      "host": "127.0.0.1",
+      "port": 4500
+    }
   }
 }

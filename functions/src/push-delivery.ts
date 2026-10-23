@@ -106,6 +106,10 @@ export async function sendExpoPush(
   message: ExpoPushMessage,
   fetchImpl: typeof fetch = fetch,
 ) {
+  if (message.data.groupId && sourceId.startsWith("comment:")) {
+    const groupId = String(message.data.groupId), replyId = sourceId.slice("comment:".length);
+    if ((await database.ref(`moderationTombstones/${groupId}/reply/${replyId}`).get()).exists()) return { accepted: 0, devices: 0 };
+  }
   const tokensSnapshot = await database.ref(`encryptedData/pushTokens/${recipientUserId}`).get();
   const tokenEntries = Object.entries((tokensSnapshot.val() ?? {}) as Record<string, PushTokenRecord>)
     .filter((entry): entry is [string, { token: string; platform?: "android" | "ios" }] => typeof entry[1]?.token === "string");

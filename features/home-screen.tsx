@@ -91,6 +91,7 @@ export function HomeScreen() {
   const communityMigrationPending = Boolean(group?.migrationPending);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
+  const moderatedToday = state.checkInDailyClaims.some(claim => claim.dayKey === todayKey && claim.moderated);
   const todaysCheckIn = checkInForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
@@ -178,7 +179,7 @@ export function HomeScreen() {
   }
 
   function openCheckIn() {
-    if (!checkInStatusReady || todaysCheckIn) return;
+    if (!checkInStatusReady || todaysCheckIn || moderatedToday) return;
     resetCheckIn();
     setCheckInVisible(true);
   }
@@ -288,7 +289,7 @@ export function HomeScreen() {
           </View>
         )}
 
-        {checkInStatusReady ? todaysCheckIn ? (
+        {checkInStatusReady && moderatedToday ? <Card><BodyText muted>{t("community.moderation.checkInRemoved")}</BodyText></Card> : checkInStatusReady ? todaysCheckIn ? (
           <CompletedHeartCheckInCard
             shared={todaysCheckIn.visibility === "group"}
             communityName={group?.name ?? t("tabs.community")}

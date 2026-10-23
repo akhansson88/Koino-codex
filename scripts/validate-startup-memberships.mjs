@@ -31,6 +31,10 @@ const mocks = {
   `,
   "@/state/store/firebase": `export const auth = { currentUser: { uid: "alex" } }, database = {};`,
   "firebase/database": `
+    export const onValue = (reference, listener, onError) => {
+      globalThis.__membershipStartup.listeners.set(reference.path, { listener, onError });
+      return () => globalThis.__membershipStartup.listeners.delete(reference.path);
+    };
     export const ref = (_, path) => ({ path });
     export const get = async () => {
       const harness = globalThis.__membershipStartup;
@@ -147,6 +151,16 @@ try {
   assert.equal(harness.current.state.groups[0].migrationPending, undefined, "Encrypted metadata must replace transitional legacy identity");
   assert.equal(harness.writes.length, 0, "A restored membership must preserve the selected group");
 
+  const oldPost = { id: "moderated", groupId: "old-community", userId: "joel", body: "Removed content", createdAt: "2026-01-01" };
+  const specialPosts = Object.fromEntries(["__proto__", "constructor", "prototype"].map(id => [id, { ...oldPost, id }]));
+  await emit("posts/old-community", { moderated: oldPost, ...specialPosts });
+  assert.equal(harness.current.state.posts.length, 4);
+  await emit("moderationTombstones/old-community", { post: { moderated: { removedAt: "2026-10-22" } } });
+  assert.deepEqual(harness.current.state.posts.map(item => item.id).sort(), Object.keys(specialPosts).sort(), "Only real own tombstones may hide content; inherited keys are not tombstones");
+  await emit("posts/old-community", { moderated: oldPost, ...specialPosts });
+  assert.deepEqual(harness.current.state.posts.map(item => item.id).sort(), Object.keys(specialPosts).sort(), "Stale snapshots must not resurrect removed content");
+  await emit("replies/old-community", { late: { id: "late", userId: "alex", targetType: "post", targetId: "moderated" } });
+  assert.equal(harness.current.state.replies.length, 0, "Replies to moderated parents must stay hidden");
   harness.deferPresence = true;
   await emit("userGroups/alex", null);
   assert.equal(typeof harness.resolvePresence, "function");

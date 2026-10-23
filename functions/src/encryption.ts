@@ -1,3 +1,4 @@
+import { moderationReference, removeCommunityContent } from "./community-moderation";
 import sodium from "libsodium-wrappers";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -15,7 +16,8 @@ function storageHeaders() {
   catch { throw new HttpsError("failed-precondition", "Configure a Supabase backend secret key or the project's legacy service_role credential."); }
 }
 const db = () => getDatabase(adminApp);
-async function rootTransaction(action: (root: Obj | null) => any) {
+export const ROOT_UNCHANGED = Symbol("root-unchanged");
+export async function rootTransaction(action: (root: Obj | null) => any) {
   // The Admin SDK's root transaction stalled against the deployed database.
   // REST ETags keep the same atomic comparisons with bounded retries and no
   // dependency on the SDK's overlapping local transaction cache.
@@ -33,6 +35,7 @@ async function rootTransaction(action: (root: Obj | null) => any) {
     if (!etag) throw new HttpsError("unavailable", "Database comparison token is missing.");
     if (root === null) return { committed: false };
     const next = action(root);
+    if (next === ROOT_UNCHANGED) return { committed: true };
     if (next === undefined || next === null) return { committed: false };
     const write = await fetch(endpoint, { method: "PUT", headers: { ...headers, "if-match": etag }, body: JSON.stringify(next), signal: AbortSignal.timeout(10_000) });
     await write.body?.cancel();
@@ -116,7 +119,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
   if (policy?.encryptedGroupsOnly && (payload.operation === "stageLegacyMembers" || ["beginMigration", "finishMigration"].includes(payload.operation) && String(data.scope).startsWith("group:") || payload.operation === "readLegacyArchive" && data.kind === "group" || payload.operation === "legacyImage" && data.bucket === "room-images")) {
     throw new HttpsError("failed-precondition", "Legacy communities have been retired. Use an encrypted community.");
   }
-  if (policy?.sharedWritesFrozen && ["createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
+  if (policy?.sharedWritesFrozen && ["removeCommunityContent", "createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
     throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
   }
   const firstOperations = ["setup", "recover", "requestDevice"];
@@ -126,9 +129,29 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [stora
   }
   // Requests are signed with random IDs and a bounded lifetime. A transaction
   // prevents replay of destructive operations while preserving retries safely.
-  const replay = await db().ref(`e2eeRequests/${uid}/${payload.requestId}`).transaction((value) => value ? undefined : payload.timestamp);
-  if (!replay.committed) throw new HttpsError("already-exists", "This request was already processed. Reload its result.");
+  if (payload.operation !== "removeCommunityContent") {
+    const replay = await db().ref(`e2eeRequests/${uid}/${payload.requestId}`).transaction((value) => value ? undefined : payload.timestamp);
+    if (!replay.committed) throw new HttpsError("already-exists", "This request was already processed. Reload its result.");
+  }
   switch (payload.operation) {
+    case "removeCommunityContent": {
+      const target = moderationReference(data);
+      // Reject unauthorized callers before downloading the database root.
+      // The transaction still repeats all checks against its current snapshot.
+      await requireGroup(target.groupId, uid, true);
+      if ((await db().ref(`moderationTombstones/${target.groupId}/${target.targetType}/${target.targetId}`).get()).exists()) return { removed: true };
+      const timestamp = new Date().toISOString();
+      const result = await rootTransaction(root => {
+        if (!root) return;
+        const alreadyRemoved = Object.hasOwn(root.moderationTombstones?.[target.groupId]?.[target.targetType] ?? {}, target.targetId);
+        removeCommunityContent(root, uid, payload.deviceId, account!.devices[payload.deviceId].signingPublicKey, data, timestamp);
+        // Authorization is still checked for retries, but a successful read-only
+        // retry does not upload the entire database or contend with new writes.
+        return alreadyRemoved ? ROOT_UNCHANGED : root;
+      });
+      if (!result.committed) throw new HttpsError("aborted", "Community changed. Retry removal.");
+      return { removed: true };
+    }
     case "setup": {
       if (account) throw new HttpsError("already-exists", "Encryption is already configured.");
       publicKey(data.publicKey); publicKey(data.signingPublicKey); envelope(data.recovery);
