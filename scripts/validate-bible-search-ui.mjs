@@ -6,7 +6,7 @@ import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const fixture = globalThis.__scriptureSearchUI = { calls: [], prepares: 0, language: "en", refreshes: 0, selections: [] };
+const fixture = globalThis.__scriptureSearchUI = { calls: [], pageCalls: [], prepares: 0, language: "en", refreshes: 0, selections: [] };
 const frames = new Map();
 let frameId = 0;
 const originalRequestFrame = globalThis.requestAnimationFrame;
@@ -38,7 +38,8 @@ async function bundle(file, mocks = {}) {
 
 const { useScriptureSearch, useScriptureSearchSession } = await bundle("features/bible-search/use-search.ts", {
   "./semantic-runtime": `export const prepareSemanticRuntime=async()=>{globalThis.__scriptureSearchUI.prepares++;};`,
-  "@/features/bible-search": `export const normalizeScriptureQuery=value=>value.trim(); export function searchScripture(options) {return new Promise((resolve,reject)=>{globalThis.__scriptureSearchUI.calls.push({options,resolve,reject});});}`,
+  "@/features/bible-kjv": `export const biblePassagesFromRanges=async(ranges)=>{globalThis.__scriptureSearchUI.hydrations=(globalThis.__scriptureSearchUI.hydrations||0)+1; if(globalThis.__scriptureSearchUI.failHydration) throw new Error('reader unavailable'); return ranges.map(range=>({verse:{...range,reference:range.book+' '+range.chapter+':'+range.startVerse,text:'Restored text',translation:'Reformationsbibeln 2026'},verses:[{verse:range.startVerse,text:'Restored text'}]}));};`,
+  "@/features/bible-search": `export const normalizeScriptureQuery=value=>value.trim(); export function createScriptureSearchPageSession(options) {return { firstPage(signal,onPartialResults) {return new Promise((resolve,reject)=>{globalThis.__scriptureSearchUI.calls.push({options:{...options,signal,onPartialResults},resolve:value=>resolve({hasMore:false,...value}),reject});});}, nextPage(signal){return new Promise((resolve,reject)=>globalThis.__scriptureSearchUI.pageCalls.push({signal,resolve,reject}));},suspend(){},dispose(){} };}`,
 });
 let tree;
 function Harness(props) { fixture.latest = useScriptureSearch(props); return null; }
@@ -59,11 +60,56 @@ try {
   assert.equal(fixture.latest.response.results.length, 0, "An obsolete response cannot replace the new query");
   await settleDebounce();
   const second = fixture.calls[1];
-  await act(async () => { second.resolve(response()); });
+  await act(async () => { second.resolve({ ...response(), hasMore: true }); });
   assert.equal(fixture.latest.loading, false);
   assert.equal(fixture.latest.response.results[0].verse.endVerse, 17);
+  await act(async () => { fixture.latest.loadMore(); fixture.latest.loadMore(); });
+  assert.equal(fixture.pageCalls.length, 1, "Repeated end-of-list notifications share one in-flight page");
+  assert.equal(fixture.latest.loadingMore, true);
+  await act(async () => { fixture.pageCalls[0].reject(new Error("read failed")); });
+  assert.equal(fixture.latest.moreError, true);
+  await act(async () => { fixture.latest.loadMore(); });
+  assert.equal(fixture.pageCalls.length, 1, "A failed page waits for explicit retry");
+  await act(async () => { fixture.latest.retryMore(); });
+  assert.equal(fixture.pageCalls.length, 2);
+  const pageResult = { ...result, id: "reformationsbibeln2026:Romans 8:28", verse: { ...verse, reference: "Romans 8:28" } };
+  await act(async () => { fixture.pageCalls[1].resolve({ ...response([pageResult]), hasMore: false }); });
+  assert.deepEqual(fixture.latest.response.results.map((item) => item.id), [result.id, pageResult.id]);
+  assert.equal(fixture.latest.hasMore, false);
   await act(async () => { tree.unmount(); });
   assert.equal(second.options.signal.aborted, true, "Closing search cancels outstanding work");
+  tree = undefined;
+
+  // Long result lists keep compact off-screen metadata and reload old excerpts.
+  const numberedResults = (start, count) => Array.from({ length: count }, (_, offset) => {
+    const n = start + offset + 1;
+    return { ...result, id: `reformationsbibeln2026:John ${n}:1`, kind: "verse", verse: { ...verse, book: "John", chapter: n, startVerse: 1, endVerse: 1, reference: `John ${n}:1`, text: `Text ${n}` }, verses: [{ verse: 1, text: `Text ${n}` }] };
+  });
+  await act(async () => { tree = create(React.createElement(Harness, hookProps)); });
+  await settleDebounce();
+  await act(async () => { fixture.calls.at(-1).resolve({ ...response(numberedResults(0, 20)), hasMore: true }); });
+  for (let page = 1; page <= 9; page++) {
+    await act(async () => { fixture.latest.onVisibleResults([page * 20 - 1]); fixture.latest.loadMore(); });
+    await act(async () => { fixture.pageCalls.at(-1).resolve({ ...response(numberedResults(page * 20, 20)), hasMore: true }); });
+    await act(async () => { fixture.latest.onVisibleResults([page * 20]); });
+  }
+  assert.equal(fixture.latest.response.results.length, 200);
+  assert.equal(fixture.latest.response.results[0].contentState, "evicted", "Distant passages release their text");
+  assert.equal(fixture.latest.response.results[0].verse.text, "");
+  fixture.failHydration = true;
+  await act(async () => { fixture.latest.onVisibleResults([0]); });
+  assert.equal(fixture.latest.response.results[0].contentState, "error", "A failed local reload is shown for retry");
+  fixture.failHydration = false;
+  await act(async () => { fixture.latest.retryExcerpt(0); });
+  assert.equal(fixture.latest.response.results[0].verse.text, "Restored text", "Returning to an old page reloads its local excerpt");
+  assert.equal(fixture.latest.response.results[0].contentState, undefined);
+  await act(async () => { fixture.latest.loadMore(); });
+  const stalePage = fixture.pageCalls.at(-1);
+  await act(async () => { tree.update(React.createElement(Harness, { ...hookProps, query: "new query" })); });
+  assert.equal(stalePage.signal.aborted, true, "Changing query cancels an in-flight page");
+  await act(async () => { stalePage.resolve({ ...response(numberedResults(200, 20)), hasMore: false }); });
+  assert.equal(fixture.latest.response.results.length, 0, "A stale page cannot enter the replacement search");
+  await act(async () => { tree.unmount(); });
   tree = undefined;
 
   const callsBeforeStrictMount = fixture.calls.length;
@@ -79,11 +125,11 @@ try {
   fixture.response = response();
   fixture.audio = { refresh: async () => { fixture.refreshes++; }, session: undefined, pendingTopic: undefined };
   const { ScriptureSearchContent } = await bundle("features/bible-search/search-content.tsx", {
-    "react-native": `export const ActivityIndicator="ActivityIndicator",Pressable="Pressable",ScrollView="ScrollView",Text="Text",TextInput="TextInput",View="View";`,
+    "react-native": `import React from "react"; export const ActivityIndicator="ActivityIndicator",Pressable="Pressable",ScrollView="ScrollView",Text="Text",TextInput="TextInput",View="View"; export const FlatList=React.forwardRef((props,ref)=>React.createElement("FlatList",{...props,ref},props.ListHeaderComponent,props.data.map((item,index)=>React.createElement(React.Fragment,{key:item.id},props.renderItem({item,index}))),props.ListFooterComponent));`,
     "react-native-safe-area-context": `export const useSafeAreaInsets=()=>({bottom:0,top:0});`,
     "@expo/vector-icons": `export const Feather="Feather";`,
     "@/features/bible-search": `export {displayBibleReference} from "@/features/bible-book-names";`,
-    "./use-search": `export const useScriptureSearch=()=>({response:globalThis.__scriptureSearchUI.response,loading:false,error:false,eligible:true,retry:()=>{}});`,
+    "./use-search": `export const useScriptureSearch=()=>({response:globalThis.__scriptureSearchUI.response,loading:false,error:false,eligible:true,retry:()=>{},loadMore:()=>{globalThis.__scriptureSearchUI.loads=(globalThis.__scriptureSearchUI.loads||0)+1;},retryMore:()=>{globalThis.__scriptureSearchUI.retries=(globalThis.__scriptureSearchUI.retries||0)+1;},...globalThis.__scriptureSearchUI.searchOverrides});`,
     "@/features/bible-audio/provider": `export const useBibleAudio=()=>globalThis.__scriptureSearchUI.audio;`,
     "@/features/bible-audio/topic-controls": `export const TopicPassageAudioControl="TopicPassageAudioControl",TopicPlaybackPanel="TopicPlaybackPanel";`,
     "@/ui/app-language": `import {translateMessage} from "@/ui/localization"; export const useAppTranslation=()=>({language:globalThis.__scriptureSearchUI.language,t:(key,values)=>translateMessage(globalThis.__scriptureSearchUI.language,key,values)});`,
@@ -92,7 +138,17 @@ try {
   });
   const palette = { background: "white", surface: "white", text: "black", muted: "gray", accent: "#273247", buttonText: "black", line: "gray" };
   const uiProps = { bibleVersionId: "reformationsbibeln2026", visible: true, query: "hope", palette, onSelect: (selection) => fixture.selections.push(selection) };
+  fixture.searchOverrides = { sessionId: "reader-search", hasMore: true };
   await act(async () => { tree = create(React.createElement(ScriptureSearchContent, uiProps)); });
+  await act(async () => { tree.root.findByType("FlatList").props.onEndReached(); });
+  assert.equal(fixture.loads, 1, "Approaching the end requests the next page");
+  assert.ok(tree.root.findAllByType("Pressable").some((node) => node.findAllByType("Text").some((text) => text.props.children === "Load more results")), "An accessible load-more control is available");
+  fixture.searchOverrides.moreError = true;
+  await act(async () => { tree.update(React.createElement(ScriptureSearchContent, uiProps)); });
+  const pageRetry = tree.root.findAllByType("Pressable").find((node) => node.findAllByType("Text").some((text) => text.props.children === "Try again"));
+  await act(async () => { pageRetry.props.onPress(); });
+  assert.equal(fixture.retries, 1);
+  fixture.searchOverrides.moreError = false;
   const sources = () => tree.root.findAllByType("Pressable").find((node) => ["Search sources", "Sökkällor"].includes(node.props.accessibilityLabel));
   assert.equal(sources().props.accessibilityState.expanded, false, "Legal notices stay collapsed in the main search flow");
   assert.equal(tree.root.findAllByType("Text").some((node) => node.props.children === "Multilingual E5-small"), false);
@@ -140,9 +196,14 @@ try {
   const changedDefinition = tree.root.findByType("TopicPlaybackPanel").props.definition;
   assert.notEqual(changedDefinition.id, firstDefinition.id, "A changed result list cannot masquerade as an older audio session");
   fixture.audio.session = { topic: { definition: changedDefinition, itemIndex: 0 } };
+  fixture.response = response([...fixture.response.results, tripleDigit]);
+  await act(async () => { tree.update(React.createElement(ScriptureSearchContent, uiProps)); });
+  assert.equal(tree.root.findByType("TopicPlaybackPanel").props.definition.id, changedDefinition.id, "Appending results keeps playback attached to its original snapshot");
+  const newRowControl = tree.root.findAllByType("TopicPassageAudioControl").find((node) => node.props.itemId === tripleDigit.id);
+  assert.equal(newRowControl.props.definition.items.length, 3, "Newly loaded passages can start a new snapshot");
   fixture.audio.pendingRequest = { passage: { startVerse: 5, endVerse: 5 } };
   await act(async () => { tree.update(React.createElement(ScriptureSearchContent, uiProps)); });
-  const firstCard = tree.root.findAllByType("View").find((node) => node.props.onLayout && node.props.style?.borderWidth);
+  const firstCard = tree.root.findAllByType("View").find((node) => node.props.style?.borderWidth && node.props.style?.padding === 16);
   assert.equal(firstCard.props.style.borderWidth, 1, "A replacement passage request suppresses the stale active-row highlight");
   fixture.audio.session = undefined;
   fixture.audio.pendingRequest = undefined;
@@ -159,6 +220,7 @@ try {
   assert.ok(tree.root.findAllByType("Text").some((node) => typeof node.props.children === "string" && node.props.children.includes("Search by meaning is unavailable")), "Unavailable semantic search is explained even when word search has no matches");
   await act(async () => { tree.unmount(); });
   tree = undefined;
+  fixture.searchOverrides = undefined;
 
   // Keep the real session above content that genuinely unmounts, as native Modal does.
   const laterResult = { ...result, id: "reformationsbibeln2026:Romans 8:28", verse: { ...verse, book: "Romans", chapter: 8, startVerse: 28, endVerse: 28, reference: "Romans 8:28" } };
@@ -175,15 +237,12 @@ try {
       onSelect: (selection) => { fixture.selections.push(selection); fixture.hide(); },
     }) : null;
   }
-  const scrollProps = () => tree.root.findByType("ScrollView").props;
-  const cards = () => tree.root.findAllByType("View").filter((node) => node.props.onLayout && node.props.style?.borderWidth);
+  const scrollProps = () => tree.root.findByType("FlatList").props;
   const openResult = () => tree.root.findAllByType("Pressable").find((node) => node.props.accessibilityLabel?.includes("3:16-17"));
   const retryButton = () => tree.root.findAllByType("Pressable").find((node) => node.findAllByType("Text").some((text) => text.props.children === "Try again"));
   const measureSearch = async () => {
     await act(async () => {
       scrollProps().onLayout({ nativeEvent: { layout: { height: 400 } } });
-      // Rows can lay out before the final content-size event reaches JS.
-      cards().forEach((card, index) => card.props.onLayout({ nativeEvent: { layout: { y: 100 + 1500 * index } } }));
       scrollProps().onContentSizeChange(400, 2400);
     });
     await flushFrames();
@@ -191,7 +250,7 @@ try {
   fixture.language = "en";
   fixture.audio = { refresh: async () => {}, session: undefined, pendingTopic: undefined };
   await act(async () => { tree = create(React.createElement(SessionHarness, sessionProps), {
-    createNodeMock: (element) => element.type === "ScrollView" ? { scrollTo: (value) => scrolls.push(value) } : null,
+    createNodeMock: (element) => element.type === "FlatList" ? { scrollToOffset: (value) => scrolls.push(value), scrollToIndex: (value) => scrolls.push(value) } : null,
   }); });
   await act(async () => { fixture.owner.setQuery("hope"); });
   await settleDebounce();
@@ -207,9 +266,9 @@ try {
       scrollProps().onScroll({ nativeEvent: { contentOffset: { y: 720 } } });
       openResult().props.onPress();
     });
-    assert.equal(tree.root.findAllByType("ScrollView").length, 0, "Opening a result unmounts the search content");
+    assert.equal(tree.root.findAllByType("FlatList").length, 0, "Opening a result unmounts the search content");
     assert.equal(fixture.owner.query, "hope");
-    assert.equal(fixture.owner.search.response, retainedResponse);
+    assert.deepEqual(fixture.owner.search.response, retainedResponse);
     assert.equal(retainedRequest.options.signal.aborted, true);
     fixture.audio.session = playback === "paused" || playback === "playing" ? { topic: { definition: playlist, itemIndex: 1 } } : undefined;
     fixture.audio.playWhenReady = playback === "playing";
@@ -229,7 +288,7 @@ try {
     await flushFrames();
     assert.equal(scrolls.length, 0, "An incomplete content layout does not consume restoration");
     await measureSearch();
-    assert.deepEqual(scrolls, [{ y: 720, animated: false }], `${playback}: restore once without following the current audio`);
+    assert.deepEqual(scrolls, [{ offset: 720, animated: false }], `${playback}: restore once without following the current audio`);
     await measureSearch();
     await settleDebounce();
     assert.equal(scrolls.length, 1, "Later native layout events do not repeat restoration");
@@ -238,12 +297,26 @@ try {
       const sync = tree.root.findAllByType("Pressable").find((node) => node.findAllByType("Text").some((text) => text.props.children === "Sync with audio"));
       assert.ok(sync, "Returning while playing, paused, or pending offers explicit Sync");
       await act(async () => { sync.props.onPress(); });
-      assert.deepEqual(scrolls.at(-1), { y: 1588, animated: true }, "Sync explicitly resumes following the current passage");
+      assert.deepEqual(scrolls.at(-1), { index: 1, viewOffset: 12, animated: true }, "Sync explicitly resumes following the current passage");
     }
   }
 
   fixture.audio.session = undefined;
   fixture.audio.pendingTopic = undefined;
+  await act(async () => {
+    scrollProps().onScrollBeginDrag();
+    scrollProps().onViewableItemsChanged({ viewableItems: [{ isViewable: true, index: 1 }] });
+    scrollProps().onScroll({ nativeEvent: { contentOffset: { y: 1500 } } });
+    fixture.hide();
+  });
+  scrolls.length = 0;
+  await act(async () => { fixture.show(); });
+  await measureSearch();
+  assert.deepEqual(scrolls, [{ index: 1, animated: false }], "A virtualized list first restores its visible item");
+  await act(async () => { scrollProps().onViewableItemsChanged({ viewableItems: [{ isViewable: true, index: 1 }] }); });
+  await flushFrames();
+  assert.deepEqual(scrolls, [{ index: 1, animated: false }], "The visible anchor is kept rather than applying a stale estimated offset");
+  await act(async () => { scrollProps().onViewableItemsChanged({ viewableItems: [{ isViewable: true, index: 0 }] }); });
   await act(async () => {
     scrollProps().onScrollBeginDrag();
     scrollProps().onScroll({ nativeEvent: { contentOffset: { y: 1900 } } });
@@ -253,11 +326,10 @@ try {
   await act(async () => { fixture.show(); });
   await act(async () => {
     scrollProps().onLayout({ nativeEvent: { layout: { height: 650 } } });
-    cards().forEach((card, index) => card.props.onLayout({ nativeEvent: { layout: { y: 100 + 1500 * index } } }));
     scrollProps().onContentSizeChange(400, 2400);
   });
   await flushFrames();
-  assert.deepEqual(scrolls, [{ y: 1750, animated: false }], "A larger returned viewport clamps restoration to the available content");
+  assert.deepEqual(scrolls, [{ offset: 1750, animated: false }], "A larger returned viewport clamps restoration to the available content");
   await act(async () => { fixture.owner.setQuery("peace"); });
   await settleDebounce();
   const interruptedRequest = fixture.calls.at(-1);

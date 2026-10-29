@@ -184,6 +184,7 @@ Rebuild search explicitly after changing its source data or preprocessing:
 npm run bible:search:build
 npm run validate:hybrid-search
 npm run validate:bible-search-ui
+npm run test:bible-search-pagination
 node --test scripts/embedding-core.test.mjs
 ```
 
@@ -215,6 +216,13 @@ while preparing semantic results. If inference is unavailable, a localized text
 search status is shown. Validate cold preparation, warm search latency, memory,
 airplane mode and background/resume on physical Android and iOS devices before
 release. Audio streaming still requires its existing audio catalog and network.
+
+The reader, drawer and verse picker load more results as the user scrolls. The
+initial ranked preview is followed by all eligible word, topic and meaning
+matches; broad searches can consequently contain many related passages. The
+full ranking is prepared on demand, and off-screen passage text is reloaded from
+the local Bible database when needed. Search playback snapshots the passages
+loaded when playback starts; later pages do not change that playing snapshot.
 
 ## Donations
 

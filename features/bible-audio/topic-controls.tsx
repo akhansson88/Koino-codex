@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import type { ReaderPalette } from "@/features/bible-reader/types";
 import { useAppTranslation } from "@/ui/app-language";
@@ -10,14 +10,35 @@ import { useBibleAudio } from "./provider";
 import { hasSavedAudioTranslation } from "./saved-passage";
 import type { TopicDefinition, TopicLoop, TopicSession } from "./topic-playback";
 
+const catalogChapterKeys = new WeakMap<object, Set<string>>();
+const unavailableByDefinition = new WeakMap<TopicDefinition, { catalog: object; ids: Set<string> }>();
+const itemsByDefinition = new WeakMap<TopicDefinition, Map<string, TopicDefinition["items"][number]>>();
+
 function useTopicState(definition: TopicDefinition) {
   const audio = useBibleAudio();
   const pending = audio.pendingTopic?.definition.id === definition.id ? audio.pendingTopic : undefined;
   const session = !audio.pendingTopic && !audio.pendingRequest && audio.session?.topic?.definition.id === definition.id ? audio.session.topic : undefined;
   const supported = hasSavedAudioTranslation(definition.translation);
-  const hasEntry = (item: TopicDefinition["items"][number]) => Object.values(audio.catalog?.chapters ?? {}).some((entry) => entry.book === item.book && entry.chapter === item.chapter);
-  const knownUnavailable = new Set(session?.unavailableItemIds ?? []);
-  if (audio.catalogState === "ready") definition.items.forEach((item) => { if (!hasEntry(item)) knownUnavailable.add(item.id); });
+  const catalog = audio.catalog;
+  let chapters = catalog && catalogChapterKeys.get(catalog);
+  if (catalog && !chapters) {
+    chapters = new Set(Object.values(catalog.chapters).map((entry) => `${entry.book}:${entry.chapter}`));
+    catalogChapterKeys.set(catalog, chapters);
+  }
+  const hasEntry = (item: TopicDefinition["items"][number]) => chapters?.has(`${item.book}:${item.chapter}`) ?? false;
+  let missing = catalog && audio.catalogState === "ready" ? unavailableByDefinition.get(definition) : undefined;
+  if (catalog && audio.catalogState === "ready" && missing?.catalog !== catalog) {
+    missing = { catalog, ids: new Set(definition.items.filter((item) => !hasEntry(item)).map((item) => item.id)) };
+    unavailableByDefinition.set(definition, missing);
+  }
+  const unavailableKey = JSON.stringify(session?.unavailableItemIds ?? []);
+  const knownUnavailable = useMemo(() => {
+    const catalogMissing = missing?.ids;
+    const runtimeMissing = new Set(session?.unavailableItemIds ?? []);
+    let extra = 0;
+    for (const id of runtimeMissing) if (!catalogMissing?.has(id)) extra++;
+    return { has: (id: string) => Boolean(catalogMissing?.has(id) || runtimeMissing.has(id)), size: (catalogMissing?.size ?? 0) + extra };
+  }, [missing?.ids, unavailableKey]);
   return { audio, pending, session, supported, hasEntry, knownUnavailable };
 }
 
@@ -297,12 +318,12 @@ export function TopicPlaylistProgress({
   );
 }
 
-export function TopicPlaybackPanel({ definition, palette, insets }: { definition: TopicDefinition; palette: ReaderPalette; insets?: { bottom?: number; top?: number } }) {
+export function TopicPlaybackPanel({ definition, palette, insets, playAllLabel }: { definition: TopicDefinition; palette: ReaderPalette; insets?: { bottom?: number; top?: number }; playAllLabel?: string }) {
   const { audio, pending, session, supported, hasEntry, knownUnavailable } = useTopicState(definition);
   const { t } = useAppTranslation();
   const current = session?.definition.items[session.itemIndex];
   const activeDefinition = session?.definition ?? definition;
-  const available = activeDefinition.items.filter((item) => !knownUnavailable.has(item.id));
+  const available = useMemo(() => activeDefinition.items.filter((item) => !knownUnavailable.has(item.id)), [activeDefinition, knownUnavailable]);
   const ownProblem = pending?.options.mode === "all" || session?.mode === "all" ? audio.problem : null;
   const skipped = ownProblem === "unavailable" && !session ? definition.unavailableCount + definition.items.length : definition.unavailableCount + knownUnavailable.size;
   const loading = Boolean(pending?.options.mode === "all" && audio.loading);
@@ -310,7 +331,7 @@ export function TopicPlaybackPanel({ definition, palette, insets }: { definition
   const retry = ownProblem === "network";
   const playable = supported && definition.items.some(hasEntry);
   const disabled = !playable || loading || ownProblem === "unavailable";
-  const label = t(loading ? "audio.loading" : retry ? "audio.retry" : playingAll ? audio.playWhenReady ? "audio.pause" : "bible.topics.audio.resumeAll" : "bible.topics.audio.playAll");
+  const label = !loading && !retry && !playingAll && playAllLabel ? playAllLabel : t(loading ? "audio.loading" : retry ? "audio.retry" : playingAll ? audio.playWhenReady ? "audio.pause" : "bible.topics.audio.resumeAll" : "bible.topics.audio.playAll");
   const explanation = !supported ? t("bible.topics.audio.translationUnavailable") : retry ? t("audio.network") : ownProblem === "unavailable" ? t("bible.topics.audio.unavailable") : !playable ? t(audio.catalogState === "loading" ? "audio.loading" : audio.catalogState === "error" ? "audio.network" : "bible.topics.audio.unavailable") : undefined;
   const currentIndex = available.findIndex((item) => item.id === current?.id);
 
@@ -529,7 +550,9 @@ export function TopicSpeechProgress({ palette }: { palette: ReaderPalette }) {
 export function TopicPassageAudioControl({ definition, itemId, reference, palette }: { definition: TopicDefinition; itemId: string; reference: string; palette: ReaderPalette }) {
   const { audio, pending, session, supported, hasEntry, knownUnavailable } = useTopicState(definition);
   const { t } = useAppTranslation();
-  const item = definition.items.find((value) => value.id === itemId);
+  let items = itemsByDefinition.get(definition);
+  if (!items) { items = new Map(definition.items.map((value) => [value.id, value])); itemsByDefinition.set(definition, items); }
+  const item = items.get(itemId);
   const matching = session?.definition.items[session.itemIndex]?.id === itemId;
   const ownPending = Boolean(pending && (pending.options.initialItemId ?? pending.definition.items[0]?.id) === itemId);
   const ownProblem = ownPending || matching ? audio.problem : null;

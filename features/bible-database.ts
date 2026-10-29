@@ -317,7 +317,7 @@ function ftsQuery(value: string) {
     .join(" ");
 }
 
-export async function queryBibleText(translation: string, query: string, limit: number) {
+export async function queryBibleText(translation: string, query: string, limit: number, offset = 0) {
   const matchQuery = ftsQuery(query);
   if (!matchQuery) return [];
 
@@ -328,10 +328,11 @@ export async function queryBibleText(translation: string, query: string, limit: 
        JOIN translations ON translations.id = verses.translation_id
        JOIN books ON books.id = verses.book_id
       WHERE verse_search MATCH ? AND translations.code = ?
-      ORDER BY bm25(verse_search), verses.canonical_order
-      LIMIT ?`,
+      ORDER BY bm25(verse_search), verses.canonical_order, verses.id
+      LIMIT ? OFFSET ?`,
     matchQuery,
     translation,
     limit,
+    offset,
   );
 }

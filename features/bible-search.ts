@@ -23,6 +23,8 @@ export type ScriptureSearchResult = {
   sources: SearchSource[];
   verse: BibleVerse;
   verses: BiblePassage["verses"];
+  /** Off-screen excerpts can be reloaded from the local reader database. */
+  contentState?: "evicted" | "loading" | "error";
 };
 
 export type ScriptureSearchResponse = {
@@ -38,10 +40,44 @@ export type SearchScriptureOptions = {
   versionId: BibleVersionId;
   signal?: AbortSignal;
   onPartialResults?: (response: ScriptureSearchResponse) => void;
+  /** Internal preview used by the paged session; quotations are still hydrated one page at a time. */
+  onRankedPreview?: (ranked: RankedDocument[]) => void;
 };
+
+export type ScriptureSearchPage = ScriptureSearchResponse & { hasMore: boolean };
+export type ScriptureSearchPageSession = {
+  firstPage(signal?: AbortSignal, onPartialResults?: (response: ScriptureSearchResponse) => void): Promise<ScriptureSearchPage>;
+  nextPage(signal?: AbortSignal): Promise<ScriptureSearchPage>;
+  suspend(): void;
+  dispose(): void;
+};
+
+type CompactSearchIndex = {
+  books: string[]; book: Uint16Array; chapter: Uint16Array; first: Uint16Array; last: Uint16Array; sources: Uint8Array; length: number;
+};
+
+async function compactSearchIndex(rows: RankedDocument[], signal?: AbortSignal): Promise<CompactSearchIndex> {
+  const length = rows.length, books: string[] = [], bookIndexes = new Map<string, number>();
+  const index: CompactSearchIndex = { books, length, book: new Uint16Array(length), chapter: new Uint16Array(length), first: new Uint16Array(length), last: new Uint16Array(length), sources: new Uint8Array(length) };
+  for (let position = 0; position < length; position++) {
+    const { document, sources } = rows[position];
+    let book = bookIndexes.get(document.book);
+    if (book === undefined) { book = books.length; books.push(document.book); bookIndexes.set(document.book, book); }
+    index.book[position] = book; index.chapter[position] = document.chapter;
+    index.first[position] = document.start_verse; index.last[position] = document.end_verse;
+    index.sources[position] = (sources.includes("lexical") ? 1 : 0) | (sources.includes("semantic") ? 2 : 0) | (sources.includes("topic") ? 4 : 0) | (sources.includes("reference") ? 8 : 0);
+    if (position && position % 8192 === 0) { abortIfNeeded(signal); await new Promise<void>((resolve) => setTimeout(resolve, 0)); }
+  }
+  abortIfNeeded(signal);
+  return index;
+}
 
 let backendForTesting: ScriptureSearchBackend | undefined;
 export function setScriptureSearchBackendForTesting(backend?: ScriptureSearchBackend) { backendForTesting = backend; }
+
+async function scriptureBackend() {
+  return backendForTesting ?? await (await import("./bible-search/native-backend")).getNativeSearchBackend();
+}
 
 function abortIfNeeded(signal?: AbortSignal) {
   if (!signal?.aborted) return;
@@ -192,7 +228,7 @@ export function biblePositionFromSearchQuery(query: string, language: AppLanguag
   return { book: book.name, chapter, verse: 1 };
 }
 
-export async function searchScripture({ language, limit = 20, query, versionId, signal, onPartialResults }: SearchScriptureOptions): Promise<ScriptureSearchResponse> {
+export async function searchScripture({ language, limit = 20, query, versionId, signal, onPartialResults, onRankedPreview }: SearchScriptureOptions): Promise<ScriptureSearchResponse> {
   abortIfNeeded(signal);
   const normalizedQuery = normalizeScriptureQuery(query);
   const empty: ScriptureSearchResponse = { results: [], mode: "lexical", semanticState: "ready" };
@@ -237,7 +273,7 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
 
   let backend: ScriptureSearchBackend;
   try {
-    backend = backendForTesting ?? await (await import("./bible-search/native-backend")).getNativeSearchBackend();
+    backend = await scriptureBackend();
   } catch {
     abortIfNeeded(signal);
     const translation = bibleVersionFor(versionId).translation;
@@ -253,17 +289,181 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
   const translationId = versionId === "reformationsbibeln2026" ? 2 : 1;
   const lexical = await backend.lexical(normalizedQuery, translationId, boundedLimit);
   abortIfNeeded(signal);
+  onRankedPreview?.(collapseSearchRanges(lexical, 100));
   const partial: ScriptureSearchResponse = { results: await resolveResults(lexical), mode: "lexical", semanticState: "loading" };
   abortIfNeeded(signal);
   onPartialResults?.(partial);
   try {
-    const results = await backend.hybrid(normalizedQuery, translationId, lexical, boundedLimit, signal);
+    const results = await backend.hybrid(normalizedQuery, translationId, lexical, onRankedPreview ? 100 : boundedLimit, signal);
     abortIfNeeded(signal);
-    const resolved = await resolveResults(results);
+    onRankedPreview?.(results);
+    // Preserve the original first-page grouping: resolving all 100 preview
+    // candidates together can merge extra ranges into the first 20.
+    const resolved = await resolveResults(results.slice(0, boundedLimit));
     abortIfNeeded(signal);
     return { results: resolved, mode: "hybrid", semanticState: "ready" };
   } catch (error) {
     abortIfNeeded(signal);
     return { ...partial, semanticState: "unavailable" };
   }
+}
+
+/**
+ * The visible prefix stays stable. The complete ranking contains compact search
+ * metadata; the reader database is consulted only for a requested page.
+ */
+export function createScriptureSearchPageSession({ language, query, versionId, limit = 20 }: Pick<SearchScriptureOptions, "language" | "query" | "versionId" | "limit">): ScriptureSearchPageSession {
+  const normalizedQuery = normalizeScriptureQuery(query);
+  const pageSize = Number.isFinite(limit) && limit > 0 ? Math.max(1, Math.floor(limit)) : 20;
+  const seen = new Set<string>();
+  let response: ScriptureSearchResponse = { results: [], mode: "lexical", semanticState: "ready" };
+  let ranked: CompactSearchIndex | undefined;
+  let preview: RankedDocument[] = [];
+  let previewOffset = 0;
+  let rankOffset = 0;
+  let fallbackOffset = 0;
+  let exhausted = false;
+  let disposed = false;
+  let initialized = false;
+  let indexController: AbortController | undefined;
+  let indexPromise: Promise<void> | undefined;
+  let indexError: unknown;
+  let pendingPage: Promise<ScriptureSearchPage> | undefined;
+  let generation = 0;
+
+  function check(signal?: AbortSignal, expectedGeneration = generation) {
+    abortIfNeeded(signal);
+    if (disposed || expectedGeneration !== generation) { const error = new Error("Search cancelled"); error.name = "AbortError"; throw error; }
+  }
+
+  function prepareIndex(backend: ScriptureSearchBackend) {
+    if (ranked || indexPromise || indexError || !backend.all) return;
+    const controller = new AbortController();
+    indexController = controller;
+    const task = backend.all(normalizedQuery, versionId === "reformationsbibeln2026" ? 2 : 1, response.semanticState === "ready" && response.mode === "hybrid", controller.signal)
+      .then((value) => compactSearchIndex(value, controller.signal))
+      .then((value) => { if (!controller.signal.aborted && !disposed) ranked = value; })
+      .catch((error) => { if (!controller.signal.aborted && !disposed) indexError = error; throw error; })
+      .finally(() => { if (indexController === controller) { indexController = undefined; indexPromise = undefined; } });
+    indexPromise = task;
+    // Preview pages can finish before indexing. Keep an eventual rejection
+    // handled until a later page awaits it and shows the retry control.
+    void task.catch(() => undefined);
+  }
+
+  async function readNextPage(signal?: AbortSignal, size = 20): Promise<ScriptureSearchPage> {
+    const requestGeneration = generation;
+    check(signal, requestGeneration);
+    if (!initialized) throw new Error("The first search page has not been requested.");
+    if (exhausted) return { ...response, results: [], hasMore: false };
+    let backend: ScriptureSearchBackend | undefined;
+    try { backend = await scriptureBackend(); } catch { check(signal, requestGeneration); }
+    check(signal, requestGeneration);
+    if (backend?.all) {
+      prepareIndex(backend);
+      const usePreview = previewOffset < preview.length;
+      if (!usePreview && !ranked) {
+        try { await indexPromise; } catch (error) { indexError = undefined; throw error; }
+      }
+      check(signal, requestGeneration);
+      if (!usePreview && !ranked && indexError) { const error = indexError; indexError = undefined; throw error; }
+      const sourceLength = usePreview ? preview.length : ranked?.length ?? 0;
+      const itemAt = (position: number): RankedDocument => {
+        if (usePreview) return preview[position];
+        const index = ranked!, flags = index.sources[position];
+        const sources: SearchSource[] = [];
+        if (flags & 1) sources.push("lexical");
+        if (flags & 2) sources.push("semantic");
+        if (flags & 4) sources.push("topic");
+        if (flags & 8) sources.push("reference");
+        const first = index.first[position], last = index.last[position];
+        return { document: { id: position, translation_id: versionId === "reformationsbibeln2026" ? 2 : 1, book: index.books[index.book[position]], chapter: index.chapter[position], start_verse: first, end_verse: last, kind: first === last ? "verse" : "passage", title: "", text: "", canonical_order: 0 }, score: 0, sources };
+      };
+      const page: ScriptureSearchResult[] = [];
+      const pendingIds = new Set<string>();
+      let cursor = usePreview ? previewOffset : rankOffset;
+      while (page.length < size && cursor < sourceLength) {
+        const candidates: Array<{ ranked: RankedDocument; id: string; reference: string }> = [];
+        while (candidates.length < size - page.length && cursor < sourceLength) {
+          const item = itemAt(cursor++), doc = item.document;
+          const reference = `${doc.book} ${doc.chapter}:${doc.start_verse}${doc.end_verse > doc.start_verse ? `-${doc.end_verse}` : ""}`;
+          const id = `${versionId}:${reference}`;
+          if (!seen.has(id) && !pendingIds.has(id)) { candidates.push({ ranked: item, id, reference }); pendingIds.add(id); }
+        }
+        if (!candidates.length) break;
+        const passages = await biblePassagesFromRanges(candidates.map(({ ranked: item }) => ({ book: item.document.book, chapter: item.document.chapter, startVerse: item.document.start_verse, endVerse: item.document.end_verse })), versionId);
+        check(signal, requestGeneration);
+        candidates.forEach(({ ranked: item, id }, index) => {
+          const passage = passages[index];
+          if (passage) page.push({ id, matchType: item.sources.includes("lexical") ? "text" : item.sources.includes("topic") ? "topic" : "semantic", kind: item.document.start_verse === item.document.end_verse ? "verse" : "passage", sources: item.sources, ...passage });
+        });
+      }
+      check(signal, requestGeneration);
+      if (usePreview) previewOffset = cursor;
+      else rankOffset = cursor;
+      for (const id of pendingIds) seen.add(id);
+      exhausted = !usePreview && cursor >= sourceLength;
+      if (usePreview && page.length === 0 && previewOffset >= preview.length) return readNextPage(signal, size);
+      return { ...response, results: page, hasMore: !exhausted };
+    }
+
+    // The packaged reader database remains usable if the hybrid search assets
+    // or native vector extension are unavailable.
+    const page: ScriptureSearchResult[] = [];
+    const pendingIds = new Set<string>();
+    let cursor = fallbackOffset, end = false;
+    const translation = bibleVersionFor(versionId).translation;
+    while (page.length < size && !end) {
+      const batchStart = cursor;
+      const rows = await searchBibleText(normalizedQuery, versionId, 40, cursor);
+      check(signal, requestGeneration);
+      if (!rows.length) { end = true; break; }
+      for (const result of rows) {
+        cursor++;
+        const id = `${versionId}:${result.reference}`;
+        if (seen.has(id) || pendingIds.has(id)) continue;
+        pendingIds.add(id);
+        page.push({ id, matchType: "text", kind: "verse", sources: ["lexical"],
+          verse: { book: result.position.book, chapter: result.position.chapter, startVerse: result.position.verse, endVerse: result.position.verse, reference: result.reference, referenceText: result.reference, text: result.text, translation },
+          verses: [{ verse: result.position.verse, text: result.text }] });
+        if (page.length === size) break;
+      }
+      if (rows.length < 40 && cursor >= batchStart + rows.length) end = true;
+    }
+    check(signal, requestGeneration);
+    fallbackOffset = cursor;
+    for (const id of pendingIds) seen.add(id);
+    exhausted = end;
+    return { mode: "lexical", semanticState: "unavailable", results: page, hasMore: !exhausted };
+  }
+
+  function nextPage(signal?: AbortSignal) {
+    if (pendingPage) return pendingPage;
+    const task = readNextPage(signal);
+    pendingPage = task;
+    void task.finally(() => { if (pendingPage === task) pendingPage = undefined; }).catch(() => undefined);
+    return task;
+  }
+
+  return {
+    async firstPage(signal, onPartialResults) {
+      const requestGeneration = generation;
+      check(signal, requestGeneration);
+      const first = await searchScripture({ language, query: normalizedQuery, versionId, limit: pageSize, signal, onPartialResults, onRankedPreview: (value) => { preview = value; } });
+      check(signal, requestGeneration);
+      response = first;
+      initialized = true;
+      first.results.forEach((item) => seen.add(item.id));
+      const chapterQuery = normalizedQuery.match(/^(.+?)\s*(\d+)$/);
+      exhausted = !normalizedQuery || first.results.some((item) => item.matchType === "reference") || /\d\s*:\s*\d/.test(normalizedQuery)
+        || Boolean(chapterQuery && canonicalBibleBookName(chapterQuery[1], language) && !biblePositionFromSearchQuery(normalizedQuery, language, versionId));
+      if (!exhausted && first.results.length === 0) {
+        return readNextPage(signal, pageSize);
+      }
+      return { ...first, hasMore: !exhausted };
+    },
+    nextPage,
+    suspend() { generation++; pendingPage = undefined; indexController?.abort(); indexController = undefined; indexPromise = undefined; },
+    dispose() { disposed = true; generation++; pendingPage = undefined; indexController?.abort(); indexController = undefined; indexPromise = undefined; ranked = undefined; preview = []; seen.clear(); },
+  };
 }

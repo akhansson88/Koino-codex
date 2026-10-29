@@ -445,5 +445,42 @@ await scenario("paused restoration and native reconciliation", async () => {
     await freshEngine.stop();
   } finally { await h.cleanup(); }
 });
+
+await scenario("large search snapshots use a bounded queue and restore by reference", async () => {
+  const h = await harness(); const { engine, native } = h;
+  try {
+    const items = Array.from({ length: 2105 }, (_, index) => item(`search-${index}`, "John", 1, 2));
+    const search = { ...definition, id: "search:large", searchSessionId: "search-session", windowed: true, items };
+    await engine.startTopicPlaylist(search, { mode: "all", pauseSeconds: 0 });
+    await flush(100);
+    assert.equal(engine.getSnapshot().problem, null);
+    assert.equal(h.starts[0].filter((track) => track.topic.phase === "verse").length, 1, "Playback starts before the whole snapshot is prepared");
+    assert.ok(h.speech().length > 1 && h.speech().length <= 20, "Only a small window enters the native queue");
+    await h.at("search-18", 2); await flush(100);
+    assert.ok(h.speech().some((track) => track.topic.itemId === "search-30"), "Playback prepares the next window in order");
+    assert.ok(h.speech().length <= 22, "Past items are removed as playback advances");
+    await engine.jumpToTopicPassage("search-1000"); await flush(40);
+    assert.equal(engine.getSnapshot().session.topic.itemIndex, 1000, "A jump can resolve an item outside the current window");
+    await engine.moveTopicPassage(1); assert.equal(engine.getSnapshot().session.topic.itemIndex, 1001);
+    await engine.moveTopicPassage(-1); assert.equal(engine.getSnapshot().session.topic.itemIndex, 1000);
+    await engine.setTopicPause(2); await engine.setSpeed(1.25);
+    await h.at("search-1000", 2, "gap", 1.25);
+    await engine.savePosition();
+    const saved = JSON.parse(h.storage.get("koino.audio.position.v1"));
+    assert.equal(saved.topic.definition, undefined);
+    assert.ok(saved.topic.definitionId, "Large snapshots are stored once instead of on each progress update");
+    await engine.stop();
+    assert.equal(await engine.restoreTopicPlayback(saved), true);
+    assert.equal(engine.getSnapshot().session.topic.itemIndex, 1000);
+    assert.equal(engine.getSnapshot().session.topic.phase, "gap");
+    assert.equal(native.rate, 1.25);
+    assert.equal(native.intent, false, "Restoration stays paused");
+    await engine.setTopicLoop("topic");
+    assert.equal(native.repeat, "off", "The native player must not loop only the current window");
+    await engine.jumpToTopicPassage("search-2104");
+    await h.player.play(); await h.end(); await flush(120);
+    assert.equal(engine.getSnapshot().session.topic.itemIndex, 0, "Topic looping wraps the complete snapshot");
+  } finally { await h.cleanup(); }
+});
 if (failures.length) { for (const failure of failures) console.error(`Failed: ${failure.name}\n`, failure.error); throw new AggregateError(failures.map(({ error }) => error), `${failures.length} topic audio scenarios failed`); }
 console.log("Topic queues, exact ranges, native pauses and loops, settings, seek, retries, prefetch, replacement and restoration passed.");

@@ -147,10 +147,15 @@ test("dual-corpus lexical and KNN retrieve foreign evidence as exact selected na
     const backend = createScriptureSearchBackend({ connection, vectorType: "float32", stemSwedish: (text) => text, embedQuery: async () => new Float32Array(unit(1,0).buffer) });
     const lexical = await backend.lexical("speaking donkey", 2, 20);
     assert.equal(lexical[0].document.id, selected.id, "English FTS evidence projects through the shifted native verse mapping");
+    const allLexical = await backend.all("speaking donkey", 2, false);
+    assert.equal(allLexical[0].document.id, selected.id, "Complete lexical paging keeps audited bilingual projection");
     // More than three terms deliberately avoids topic lookup, isolating the semantic branches.
     const hybrid = await backend.hybrid("the animal unexpectedly spoke aloud", 2, [], 20);
     assert.equal(hybrid[0].document.id, selected.id, "The global best cosine may come from the foreign corpus");
     assert.equal(hybrid.every((item) => item.document.translation_id === 2), true);
     assert.deepEqual(hybrid[0].sources, ["semantic"]);
+    const allSemantic = await backend.all("the animal unexpectedly spoke aloud", 2, true);
+    assert.equal(allSemantic[0].document.id, selected.id, "Complete semantic paging projects foreign matches into native ranges");
+    assert.equal(allSemantic.every((item) => item.document.translation_id === 2), true);
   } finally { db.close(); }
 });

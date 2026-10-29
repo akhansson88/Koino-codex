@@ -102,6 +102,15 @@ try {
     }
   }
   for (const query of ['"grace" OR (', "grace - mercy", "nådens gåvor", '[]()+*:"']) await api.searchScripture({ query, versionId: "reformationsbibeln2026", language: "en", limit: 5 });
+  const previewOptions = { query: "grace", versionId: "kjv", language: "en", limit: 20 };
+  const originalPreview = await api.searchScripture(previewOptions);
+  const paged = api.createScriptureSearchPageSession(previewOptions);
+  const initialPage = await paged.firstPage();
+  assert.deepEqual(initialPage.results, originalPreview.results, "Pagination retains the existing top-ranked preview");
+  const nextPage = await paged.nextPage();
+  assert.ok(nextPage.results.length > 0, "The real bundled index provides another page");
+  assert.equal(new Set([...initialPage.results, ...nextPage.results].map((item) => item.id)).size, initialPage.results.length + nextPage.results.length);
+  paged.dispose();
   assert.equal((await api.searchScripture({ query: "Johannes 3:16-17", versionId: "kjv", language: "en" })).results[0].verse.endVerse, 17);
   assert.equal((await api.searchScripture({ query: "Psaltaren 3:9", versionId: "reformationsbibeln2026", language: "en" })).results[0].verse.startVerse, 9);
   assert.equal((await api.searchScripture({ query: "Fakebook 3:16", versionId: "kjv", language: "en" })).results.length, 0);

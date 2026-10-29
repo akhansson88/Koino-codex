@@ -90,9 +90,9 @@ function readableReference(start: BiblePosition, end?: BiblePosition) {
   return `${start.book} ${start.chapter}:${start.verse}-${end.book} ${end.chapter}:${end.verse}`;
 }
 
-export async function searchBibleText(query: string, versionId: BibleVersionId, limit = 20): Promise<BibleTextSearchResult[]> {
+export async function searchBibleText(query: string, versionId: BibleVersionId, limit = 20, offset = 0): Promise<BibleTextSearchResult[]> {
   if (!query.trim() || !Number.isFinite(limit) || limit <= 0) return [];
-  const rows = await queryBibleText(bibleVersionFor(versionId).id, query, Math.floor(limit));
+  const rows = await queryBibleText(bibleVersionFor(versionId).id, query, Math.floor(limit), Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0);
   return rows.map((row) => ({
     position: { book: row.book, chapter: row.chapter, verse: row.verse },
     reference: `${row.book} ${row.chapter}:${row.verse}`,

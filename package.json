@@ -50,6 +50,7 @@
     "postinstall": "node scripts/patch-track-player.cjs && node scripts/patch-libsodium.cjs && node scripts/patch-onnx-runtime.cjs",
     "bible:search:build": "node scripts/hybrid-search/run.mjs",
     "validate:hybrid-search": "node scripts/validate-hybrid-search.mjs",
+    "test:bible-search-pagination": "node --test scripts/search-pagination.test.mjs",
     "validate:bible-search-ui": "node scripts/validate-bible-search-ui.mjs",
     "validate:encryption": "node scripts/validate-encryption.mjs",
     "encryption:rules": "node scripts/generate-encryption-rules.mjs",

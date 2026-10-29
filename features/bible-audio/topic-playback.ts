@@ -1,6 +1,6 @@
 /** A topic list is copied when playback starts, so later voting cannot reorder it. */
 export type TopicItem = { id: string; reference: string; book: string; chapter: number; startVerse: number; endVerse: number };
-export type TopicDefinition = { id: string; topic: string; title: string; translation: string; items: TopicItem[]; unavailableCount: number };
+export type TopicDefinition = { id: string; topic: string; title: string; translation: string; items: TopicItem[]; unavailableCount: number; searchSessionId?: string; windowed?: boolean };
 export type TopicLoop = "off" | "passage" | "topic";
 export type TopicOptions = { mode: "single" | "all"; initialItemId?: string; pauseSeconds?: number; loop?: TopicLoop };
 export type TopicSession = {
@@ -29,7 +29,9 @@ export function isTopicItem(value: unknown): value is TopicItem {
 }
 export function isTopicDefinition(value: unknown): value is TopicDefinition {
   return object(value) && text(value.id) && text(value.topic) && text(value.title) && text(value.translation)
-    && Array.isArray(value.items) && value.items.length <= 2000 && value.items.every(isTopicItem)
+    && (value.searchSessionId === undefined || text(value.searchSessionId))
+    && (value.windowed === undefined || typeof value.windowed === "boolean")
+    && Array.isArray(value.items) && (value.windowed === true || value.items.length <= 2000) && value.items.every(isTopicItem)
     && new Set(value.items.map((item) => item.id)).size === value.items.length
     && Number.isSafeInteger(value.unavailableCount) && Number(value.unavailableCount) >= 0;
 }

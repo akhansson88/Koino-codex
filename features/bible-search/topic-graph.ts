@@ -14,7 +14,7 @@ function abortIfNeeded(signal?: AbortSignal) {
  */
 export async function expandTopicGraphCandidates({
   connection, topicDocuments, hasTopicMatch, contentTerms, translationId, queryVector,
-  vectorType = "int8", semanticMinSimilarity = 0.72, signal,
+  vectorType = "int8", semanticMinSimilarity = 0.72, signal, maxNeighbors = 48,
 }: {
   connection: SearchConnection;
   topicDocuments: SearchDocument[];
@@ -25,12 +25,17 @@ export async function expandTopicGraphCandidates({
   vectorType?: "int8" | "float32";
   semanticMinSimilarity?: number;
   signal?: AbortSignal;
+  /** null removes the preview's cap when enumerating the complete search. */
+  maxNeighbors?: number | null;
 }): Promise<SearchDocument[]> {
   abortIfNeeded(signal);
   if (!hasTopicMatch || contentTerms.length < 1 || contentTerms.length > 3) return [...topicDocuments];
   const seeds = [...new Set(topicDocuments.filter((doc) => doc.translation_id === translationId && doc.kind === "verse").map((doc) => doc.id))].slice(0, 8);
   if (!seeds.length) return [...topicDocuments];
   const existing = [...new Set(topicDocuments.map((doc) => doc.id))];
+  // SQLite has a finite parameter limit. For a large topic, filter the already
+  // included documents in JS instead of placing thousands of IDs in NOT IN.
+  const sqlExcluded = existing.length <= 400 ? existing : [];
   const bytes = new Uint8Array(queryVector.buffer, queryVector.byteOffset, queryVector.byteLength);
   const vectorSQL = vectorType === "int8" ? "vec_quantize_int8(?, 'unit')" : "?";
   const neighbors = await connection.getAllAsync<GraphNeighbor>(
@@ -46,11 +51,11 @@ export async function expandTopicGraphCandidates({
        JOIN documents d ON d.id = neighbors.target_document_id
        JOIN vec_documents v ON v.id = d.id
       WHERE d.translation_id = ? AND d.kind = 'verse'
-        AND d.id NOT IN (${existing.map(() => "?").join(",")})
+        ${sqlExcluded.length ? `AND d.id NOT IN (${sqlExcluded.map(() => "?").join(",")})` : ""}
         AND query_similarity >= ?
       ORDER BY neighbors.graph_weight DESC, d.canonical_order, d.id
-      LIMIT 48`,
-    ...seeds, bytes, translationId, ...existing, semanticMinSimilarity,
+      ${maxNeighbors === null ? "" : `LIMIT ${Math.max(0, Math.floor(maxNeighbors))}`}`,
+    ...seeds, bytes, translationId, ...sqlExcluded, semanticMinSimilarity,
   );
   abortIfNeeded(signal);
   const seen = new Set(topicDocuments.map((doc) => doc.id));
@@ -59,6 +64,6 @@ export async function expandTopicGraphCandidates({
       !Number.isFinite(doc.query_similarity) || doc.query_similarity < semanticMinSimilarity) return false;
     seen.add(doc.id);
     return true;
-  }).slice(0, 48).map(({ graph_weight: _weight, query_similarity: _similarity, ...doc }) => doc);
+  }).slice(0, maxNeighbors === null ? undefined : maxNeighbors).map(({ graph_weight: _weight, query_similarity: _similarity, ...doc }) => doc);
   return [...topicDocuments, ...additions];
 }

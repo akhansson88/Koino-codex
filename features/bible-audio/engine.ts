@@ -96,7 +96,15 @@ type TopicRuntime = {
   requestedSpeed?: number;
   resolutionRevision?: number;
   promotionScheduled?: boolean;
+  windowPreparation?: boolean;
+  windowPreparedFor?: string;
+  itemIndexes?: Map<string, number>;
 };
+function topicItemIndex(runtime: TopicRuntime, id: string) {
+  if (!runtime.definition.windowed) return runtime.definition.items.findIndex((item) => item.id === id);
+  if (!runtime.itemIndexes) runtime.itemIndexes = new Map(runtime.definition.items.map((item, index) => [item.id, index]));
+  return runtime.itemIndexes.get(id) ?? -1;
+}
 const topicRuntimes = new Map<string, TopicRuntime>();
 let activeTopic: TopicRuntime | undefined;
 let topicCommandProblem = false;
@@ -140,7 +148,10 @@ export async function savePosition() {
   const value = snapshot.session;
   if (!value || closing || pending || pendingTopic) return;
   savedAt = Date.now();
-  const json = JSON.stringify({ entry: value.entry, index: value.index, offset: value.topic?.phase === "gap" ? value.topic.gapElapsedSeconds : snapshot.position, speed: value.topic ? activeTopic?.requestedSpeed ?? snapshot.speed : snapshot.speed, passage: value.passage, topic: value.topic });
+  // Long search snapshots are persisted once under their queue identity. Avoid
+  // serializing the entire search result list on every progress update.
+  const topic = value.topic?.definition.windowed && activeTopic ? { ...value.topic, definition: undefined, definitionId: activeTopic.definitionId } : value.topic;
+  const json = JSON.stringify({ entry: value.entry, index: value.index, offset: value.topic?.phase === "gap" ? value.topic.gapElapsedSeconds : snapshot.position, speed: value.topic ? activeTopic?.requestedSpeed ?? snapshot.speed : snapshot.speed, passage: value.passage, topic });
   savedWrites = savedWrites.then(() => AsyncStorage.setItem(POSITION_KEY, json)).catch(() => {});
   await savedWrites;
 }
@@ -513,6 +524,23 @@ async function resolveTopicItem(runtime: TopicRuntime, itemIndex: number, token:
   return resolved;
 }
 async function resolveAllTopicItems(runtime: TopicRuntime, token: number) {
+  if (runtime.definition.windowed) {
+    const selected = Math.max(0, topicItemIndex(runtime, runtime.selectedItemId));
+    const first = Math.max(0, selected - 2), last = Math.min(runtime.definition.items.length, selected + 20);
+    const revision = runtime.resolutionRevision = (runtime.resolutionRevision ?? 0) + 1;
+    let cursor = first;
+    await withDeadline(Promise.all(Array.from({ length: Math.min(4, last - first) }, async () => {
+      while (cursor < last) {
+        checkTopicGeneration(token);
+        if (runtime.resolutionRevision !== revision) throw new Error("Cancelled topic preparation");
+        const index = cursor++;
+        if (!runtime.unavailable.has(runtime.definition.items[index].id)) await resolveTopicItem(runtime, index, token, revision);
+      }
+    })), TOPIC_PREPARATION_TIMEOUT_MS, () => { if (runtime.resolutionRevision === revision) runtime.resolutionRevision++; });
+    checkTopicGeneration(token);
+    runtime.resolved = runtime.resolved.filter((item) => item.itemIndex >= first && item.itemIndex < last);
+    return;
+  }
   if (runtime.allResolved) return;
   const revision = runtime.resolutionRevision = (runtime.resolutionRevision ?? 0) + 1;
   let cursor = 0;
@@ -577,7 +605,7 @@ async function downloadTopicRecordings(runtime: TopicRuntime, items: ResolvedTop
 function topicSession(runtime: TopicRuntime, itemId: string, phase: "verse" | "gap", gapElapsed = 0): TopicSession {
   return {
     definition: runtime.definition, mode: runtime.mode, loop: runtime.loop, pauseSeconds: runtime.pauseSeconds,
-    itemIndex: runtime.definition.items.findIndex((item) => item.id === itemId), phase,
+    itemIndex: topicItemIndex(runtime, itemId), phase,
     unavailableItemIds: [...runtime.unavailable], resolvedItemCount: runtime.allResolved ? runtime.resolved.length : undefined,
     gapElapsedSeconds: phase === "gap" ? gapElapsed : undefined,
     gapRemainingSeconds: phase === "gap" ? Math.max(0, runtime.pauseSeconds - gapElapsed) : undefined,
@@ -620,7 +648,7 @@ async function topicTracks(runtime: TopicRuntime, currentItemId: string, speed: 
       tracks.push(track);
       lastTrack = track;
     }
-    const final = itemIndex === selected.length - 1;
+    const final = itemIndex === selected.length - 1 && !(runtime.definition.windowed && runtime.mode === "all" && runtime.loop !== "passage" && resolved.itemIndex < runtime.definition.items.length - 1);
     if (silence && lastTrack && (!final || runtime.loop !== "off")) tracks.push({
       ...lastTrack, id: `${runtime.definitionId}:${resolved.item.id}:${lastTrack.verseIndex}:gap`, url: silence,
       duration: runtime.pauseSeconds * speed, topic: { ...lastTrack.topic!, phase: "gap", gapSeconds: runtime.pauseSeconds },
@@ -670,7 +698,7 @@ async function rebuildTopicQueue(runtime: TopicRuntime, token: number, change: T
           if (toRemove.length) await TrackPlayer.remove(toRemove);
           if (beforeTarget.length) await TrackPlayer.add(beforeTarget, 0);
         }
-        await setNativeRepeat(runtime.loop);
+        await setNativeRepeat(runtime.definition.windowed && runtime.loop === "topic" ? "off" : runtime.loop);
         await TrackPlayer.setRate(speed);
         await updateCapabilities(true);
         runtime.installedCacheRevision = runtime.cacheRevision;
@@ -700,14 +728,14 @@ async function rebuildTopicQueue(runtime: TopicRuntime, token: number, change: T
   checkTopicGeneration(token);
   if (state.state === State.Ended) runtime.completed = true;
   if (change.itemId || restore) runtime.completed = restore?.completed ?? false;
-  if (runtime.mode === "all" && runtime.loop !== "passage") await resolveAllTopicItems(runtime, token);
+  if (runtime.mode === "all" && runtime.loop !== "passage" && !(runtime.definition.windowed && change.requireLocalFirst)) await resolveAllTopicItems(runtime, token);
   const selectAvailable = async () => {
     pruneTopicCatalog(runtime);
     if (runtime.resolved.some((resolved) => resolved.item.id === itemId)) return;
     if (runtime.mode === "single") throw new UnavailablePassageError("Topic recording was withdrawn");
     await resolveAllTopicItems(runtime, token);
     pruneTopicCatalog(runtime);
-    const oldIndex = runtime.definition.items.findIndex((item) => item.id === itemId);
+    const oldIndex = topicItemIndex(runtime, itemId);
     const next = runtime.resolved.find((resolved) => resolved.itemIndex >= oldIndex) ?? runtime.resolved[0];
     if (!next) throw new UnavailablePassageError("No topic recordings remain available");
     itemId = next.item.id; runtime.selectedItemId = itemId;
@@ -746,7 +774,7 @@ async function rebuildTopicQueue(runtime: TopicRuntime, token: number, change: T
   await TrackPlayer.add(tracks);
   await TrackPlayer.skip(selected, offset);
   await TrackPlayer.setRate(speed);
-  await setNativeRepeat(runtime.loop);
+  await setNativeRepeat(runtime.definition.windowed && runtime.loop === "topic" ? "off" : runtime.loop);
   await updateCapabilities(true);
   checkTopicGeneration(token);
   if (tracks.some((track) => !topicEntryAvailable(track.entry))) { await TrackPlayer.reset(); throw new UnavailablePassageError("Topic recording was withdrawn"); }
@@ -809,6 +837,50 @@ async function substituteTopicCache(runtime: TopicRuntime, token: number) {
     }
   }).catch(() => {}).finally(() => { runtime.promotionScheduled = false; });
 }
+
+/** Keep a small native queue for long search snapshots and replenish it ahead. */
+async function prepareTopicWindow(runtime: TopicRuntime, token: number) {
+  if (!runtime.definition.windowed || runtime.mode !== "all" || runtime.loop === "passage" || runtime.windowPreparation || closing || pending || pendingTopic || activeTopic !== runtime) return;
+  runtime.windowPreparation = true;
+  try {
+    const current = snapshot.session?.topic?.definition.items[snapshot.session.topic.itemIndex];
+    if (!current) return;
+    if (runtime.windowPreparedFor === current.id) return;
+    runtime.selectedItemId = current.id;
+    await resolveAllTopicItems(runtime, token);
+    checkTopicGeneration(token);
+    await serial(async () => {
+      if (token !== generation || closing || pending || pendingTopic || activeTopic !== runtime || runtime.mode !== "all" || runtime.loop === "passage") return;
+      const active = await TrackPlayer.getActiveTrackIndex();
+      let queue = await TrackPlayer.getQueue() as VerseTrack[];
+      const activeTrack = active === undefined ? undefined : queue[active];
+      if (!activeTrack?.topic || activeTrack.topic.definitionId !== runtime.definitionId) return;
+      const currentIndex = topicItemIndex(runtime, activeTrack.topic.itemId);
+      const previousToRemove = queue.flatMap((track, index) => index < active! && track.topic?.definitionId === runtime.definitionId && topicItemIndex(runtime, track.topic.itemId) < currentIndex - 2 ? [index] : []);
+      if (previousToRemove.length) {
+        await TrackPlayer.remove(previousToRemove.sort((a, b) => b - a));
+        queue = await TrackPlayer.getQueue() as VerseTrack[];
+      }
+      const last = [...queue].reverse().find((track) => track.topic?.definitionId === runtime.definitionId);
+      const lastIndex = last?.topic ? topicItemIndex(runtime, last.topic.itemId) : currentIndex;
+      const existing = new Set(queue.map((track) => track.id));
+      const tracks = await topicTracks(runtime, activeTrack.topic.itemId, await TrackPlayer.getRate());
+      const upcoming = tracks.filter((track) => !existing.has(track.id) && topicItemIndex(runtime, track.topic!.itemId) > lastIndex);
+      if (upcoming.length) await TrackPlayer.add(upcoming);
+      // The active item may have advanced while manifests were loading. Mark
+      // the item the window was actually prepared around, so the next event
+      // immediately extends it again when needed.
+      runtime.windowPreparedFor = current.id;
+    });
+    if (token === generation && activeTopic === runtime) void downloadTopicRecordings(runtime, runtime.resolved.filter((item) => item.item.id !== current.id), token, true).catch(() => {});
+  } catch {
+    // The current native queue remains playable; Retry or the next track event
+    // will try to prepare the missing window again.
+  } finally {
+    runtime.windowPreparation = false;
+  }
+}
+
 export function startTopicPlaylist(definition: TopicDefinition, options: TopicOptions) { return beginTopic(definition, options); }
 async function beginTopic(definition: TopicDefinition, options: TopicOptions, restore?: TopicRestorePoint) {
   const token = ++generation;
@@ -835,7 +907,7 @@ async function beginTopic(definition: TopicDefinition, options: TopicOptions, re
     update({ pendingTopic: { definition: frozen, options: { ...request.options } } });
     // Manifest preparation overlaps the first passage download. Later audio can
     // stream natively even when JavaScript is suspended before prefetch completes.
-    await Promise.all([downloadTopicRecordings(runtime, [first], token), runtime.mode === "all" ? resolveAllTopicItems(runtime, token) : Promise.resolve()]);
+    await Promise.all([downloadTopicRecordings(runtime, [first], token), runtime.mode === "all" && !runtime.definition.windowed ? resolveAllTopicItems(runtime, token) : Promise.resolve()]);
     checkTopicGeneration(token);
     runtime.pauseSeconds = request.options.pauseSeconds!;
     topicRuntimes.set(runtime.definitionId, runtime);
@@ -848,7 +920,8 @@ async function beginTopic(definition: TopicDefinition, options: TopicOptions, re
     });
     if (token === generation) {
       await syncFromNative(); await savePosition();
-      if (runtime.mode === "all") void downloadTopicRecordings(runtime, runtime.resolved, token, true).catch(() => {});
+      if (runtime.definition.windowed) void prepareTopicWindow(runtime, token);
+      else if (runtime.mode === "all") void downloadTopicRecordings(runtime, runtime.resolved, token, true).catch(() => {});
     }
   } catch (error) {
     if (token === generation) update({ loading: false, playing: false, playWhenReady: false, problem: error instanceof UnavailablePassageError ? "unavailable" : "network" });
@@ -979,10 +1052,11 @@ export async function setTopicLoop(loop: TopicLoop) {
     if (loop === "topic") runtime.mode = "all";
     const session = snapshot.session;
     if (session?.topic) update({ session: { ...session, topic: { ...session.topic, mode: runtime.mode, loop } } });
-    await setNativeRepeat(runtime.loop);
+    await setNativeRepeat(runtime.definition.windowed && runtime.loop === "topic" ? "off" : runtime.loop);
     if (runtime.mode === "all") await resolveAllTopicItems(runtime, token);
     await rebuildTopicQueue(runtime, token, { intent, seamless: true });
-    if (runtime.mode === "all") void downloadTopicRecordings(runtime, runtime.resolved, token, true).catch(() => {});
+    if (runtime.definition.windowed) void prepareTopicWindow(runtime, token);
+    else if (runtime.mode === "all") void downloadTopicRecordings(runtime, runtime.resolved, token, true).catch(() => {});
   });
 }
 export async function jumpToTopicPassage(itemId: string) {
@@ -1014,7 +1088,11 @@ export async function jumpToTopicPassage(itemId: string) {
       if (intent) await TrackPlayer.play();
       else await TrackPlayer.pause();
     } else {
-      await resolveAllTopicItems(runtime, token);
+      if (runtime.definition.windowed) {
+        const index = topicItemIndex(runtime, itemId);
+        if (index >= 0 && !runtime.unavailable.has(itemId)) await resolveTopicItem(runtime, index, token);
+        runtime.selectedItemId = itemId;
+      } else await resolveAllTopicItems(runtime, token);
       const targetItem = runtime.resolved.find((item) => item.item.id === itemId);
       if (!targetItem) return;
       await rebuildTopicQueue(runtime, token, { itemId: targetItem.item.id, intent });
@@ -1028,7 +1106,13 @@ export async function moveTopicPassage(delta: number) {
   if (!runtime || !session?.topic || !Number.isInteger(delta) || !delta) return;
   const intent = snapshot.playWhenReady;
   const position = runtime.resolved.findIndex((item) => item.itemIndex === session.topic!.itemIndex);
-  const target = runtime.resolved[position + delta];
+  const target = position < 0 ? undefined : runtime.resolved[position + delta];
+  if (!target && runtime.definition.windowed) {
+    let index = session.topic.itemIndex + Math.sign(delta);
+    while (index >= 0 && index < runtime.definition.items.length && runtime.unavailable.has(runtime.definition.items[index].id)) index += Math.sign(delta);
+    if (index >= 0 && index < runtime.definition.items.length) await jumpToTopicPassage(runtime.definition.items[index].id);
+    return;
+  }
   if (!target) return;
 
   runtime.selectedItemId = target.item.id;
@@ -1073,8 +1157,13 @@ async function seekInTopic(seconds: number) {
 }
 export async function restoreTopicPlayback(value: unknown): Promise<boolean> {
   if (!value || typeof value !== "object") return false;
-  const saved = value as { topic?: TopicSession; index?: number; offset?: number; speed?: number };
-  const topic = saved.topic;
+  const saved = value as { topic?: TopicSession & { definitionId?: string }; index?: number; offset?: number; speed?: number };
+  let topic = saved.topic;
+  if (topic && !topic.definition && typeof topic.definitionId === "string") {
+    const json = await AsyncStorage.getItem(topicDefinitionKey(topic.definitionId));
+    if (!json) return false;
+    try { topic = { ...topic, definition: (JSON.parse(json) as { definition: TopicDefinition }).definition }; } catch { return false; }
+  }
   if (!topic || !isTopicDefinition(topic.definition) || !["single", "all"].includes(topic.mode) || !isTopicLoop(topic.loop)
     || !Number.isInteger(topic.pauseSeconds) || topic.pauseSeconds < 0 || topic.pauseSeconds > 60
     || !Number.isInteger(topic.itemIndex) || topic.itemIndex < 0 || topic.itemIndex >= topic.definition.items.length
@@ -1100,7 +1189,7 @@ async function topicRuntimeFromTrack(track: VerseTrack, chapter: AudioChapter, t
     topicRuntimes.set(runtime.definitionId, runtime);
   }
   checkTopicGeneration(token);
-  const itemIndex = runtime.definition.items.findIndex((item) => item.id === metadata.itemId);
+  const itemIndex = topicItemIndex(runtime, metadata.itemId);
   const item = runtime.definition.items[itemIndex];
   if (!item || item.book !== chapter.book || item.chapter !== chapter.chapter) return;
   const indices = chapter.verses.flatMap((verse, index) => verse.verse >= item.startVerse && verse.verse <= item.endVerse ? [index] : []);
@@ -1143,7 +1232,10 @@ export async function syncFromNative(): Promise<boolean> {
     const old = snapshot.session;
     const changed = old?.entry.manifestUrl !== verse.entry.manifestUrl || old.index !== verse.verseIndex || !samePassage(old.passage, verse.passage)
       || old?.topic?.definition.id !== runtime?.definition.id || old?.topic?.definition.items[old.topic.itemIndex]?.id !== verse.topic?.itemId || old?.topic?.phase !== verse.topic?.phase;
-    if (runtime) { activeTopic = runtime; if (state.state === State.Ended) runtime.completed = true; }
+    if (runtime) {
+      activeTopic = runtime;
+      if (state.state === State.Ended && !(runtime.definition.windowed && runtime.mode === "all" && (runtime.loop === "topic" || topicItemIndex(runtime, verse.topic!.itemId) < runtime.definition.items.length - 1))) runtime.completed = true;
+    }
     const topic = runtime && verse.topic ? topicSession(runtime, verse.topic.itemId, verse.topic.phase, verse.topic.phase === "gap" ? Math.max(0, Math.min(progress.position / rate, verse.topic.gapSeconds!)) : 0) : undefined;
     update({
       session: changed || topic ? { chapter, entry: verse.entry, index: verse.verseIndex, passage: verse.passage, topic } : old,
@@ -1154,6 +1246,7 @@ export async function syncFromNative(): Promise<boolean> {
     });
     if (changed || Date.now() - savedAt >= 5000) void savePosition();
     if (changed) void prepareNext();
+    if (runtime?.definition.windowed && (changed || state.state === State.Playing)) void prepareTopicWindow(runtime, token);
     if (runtime && (verse.topic?.phase === "gap" || !intent)) void substituteTopicCache(runtime, token);
     return true;
   } catch { return false; /* Uninitialized native player or temporarily unavailable manifest. */ }
@@ -1177,6 +1270,21 @@ export function ensurePlaybackListeners() {
       // Ignore delayed end events from a queue that has since changed or resumed.
       const state = await TrackPlayer.getPlaybackState();
       if (closing || pending || pendingTopic || token !== generation || state.state !== State.Ended) return;
+      const runtime = activeTopic, topic = snapshot.session?.topic;
+      if (runtime?.definition.windowed && topic && runtime.mode === "all" && runtime.loop !== "passage") {
+        let next = topic.itemIndex + 1;
+        while (next < runtime.definition.items.length && runtime.unavailable.has(runtime.definition.items[next].id)) next++;
+        if (next >= runtime.definition.items.length && runtime.loop === "topic") {
+          next = 0;
+          while (next < runtime.definition.items.length && runtime.unavailable.has(runtime.definition.items[next].id)) next++;
+        }
+        if (next < runtime.definition.items.length) {
+          await beginTopic(runtime.definition, { mode: "all", initialItemId: runtime.definition.items[next].id, pauseSeconds: runtime.pauseSeconds, loop: runtime.loop });
+          return;
+        }
+        runtime.completed = true;
+        if (snapshot.session?.topic) update({ session: { ...snapshot.session, topic: { ...snapshot.session.topic, completed: true } } });
+      }
       if (snapshot.sleep === "chapter") update({ sleep: 0 });
       else if (snapshot.continuous && !snapshot.session?.passage && !snapshot.session?.topic) { const entry = adjacent(1); if (entry) await start(entry); else update({ problem: "unavailable" }); }
     })().catch(() => {});
