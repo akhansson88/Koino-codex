@@ -1,14 +1,13 @@
-import "./firebase-emulator-guard.mjs";
+import { emulatorEndpoints, compiledFunctionsDirectory } from "./firebase-emulator-guard.mjs";
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { crypto } from './encryption-test-helpers.mjs';
-process.env.FIREBASE_DATABASE_EMULATOR_HOST = '127.0.0.1:9001';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const app = initializeApp({ projectId: 'demo-koino', databaseURL: 'https://demo-koino-default-rtdb.firebaseio.com' });
-const { encryptedAccount } = require('../functions/lib/encryption.js');
-const { createCommentNotification, sendPrayerNotification } = require('../functions/lib/activity-notifications.js');
+const { encryptedAccount } = require(`${compiledFunctionsDirectory}/encryption.js`);
+const { createCommentNotification, sendPrayerNotification } = require(`${compiledFunctionsDirectory}/activity-notifications.js`);
 const db = getDatabase(app);
 const pub = (identity) => ({ publicKey: identity.publicKey, signingPublicKey: identity.signingPublicKey });
 function request(user, operation, data) {

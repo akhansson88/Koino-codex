@@ -1,4 +1,4 @@
-import "./firebase-emulator-guard.mjs";
+import { emulatorEndpoints, compiledFunctionsDirectory } from "./firebase-emulator-guard.mjs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -6,7 +6,6 @@ import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "fi
 import { connectDatabaseEmulator, goOffline, getDatabase, ref, set, get, update, query, orderByChild, limitToLast } from "firebase/database";
 import { crypto } from "./encryption-test-helpers.mjs";
 const projectId = "demo-koino", namespace = "demo-koino-default-rtdb";
-process.env.FIREBASE_DATABASE_EMULATOR_HOST = "127.0.0.1:9001";
 const require = createRequire(new URL("../functions/package.json", import.meta.url));
 const { initializeApp: initializeAdmin, deleteApp: deleteAdmin } = require("firebase-admin/app");
 const { getDatabase: adminDatabase } = require("firebase-admin/database");
@@ -14,8 +13,8 @@ const admin = initializeAdmin({ projectId, databaseURL: `https://${namespace}.fi
 const apps = [];
 async function client(label) {
   const app = initializeApp({ apiKey: "fake-api-key", projectId, databaseURL: `https://${namespace}.firebaseio.com` }, label); apps.push(app);
-  const auth = getAuth(app); connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  const database = getDatabase(app); connectDatabaseEmulator(database, "127.0.0.1", 9001);
+  const auth = getAuth(app); connectAuthEmulator(auth, emulatorEndpoints.authURL, { disableWarnings: true });
+  const database = getDatabase(app); connectDatabaseEmulator(database, emulatorEndpoints.host, emulatorEndpoints.databasePort);
   const { user } = await createUserWithEmailAndPassword(auth, `${label}@example.test`, "test-password-123");
   return { uid: user.uid, database, identity: crypto.identity() };
 }

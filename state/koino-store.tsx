@@ -70,7 +70,7 @@ import {
   User,
 } from "@/state/types";
 import { type CommunityPageAvailability, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
-import { auth, database } from "@/state/store/firebase";
+import { auth, database, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import {
   authMessage,
@@ -1156,6 +1156,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await FirebaseAuth.signOut(auth);
               return;
             case "requestPasswordReset": {
+              if (emulatorMode) throw new Error("Password reset email is disabled in KOINO Emulator. / E-post för lösenordsåterställning är avstängd i KOINO Emulator.");
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
 

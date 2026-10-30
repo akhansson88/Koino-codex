@@ -18,6 +18,7 @@ import { KoinoProvider, useKoinoSelector } from "@/state/koino-store";
 import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
+import { EmulatorBadge } from "@/ui/emulator-badge";
 import { colors, statusBarStyle } from "@/ui/theme";
 import { EncryptionBoundary } from "@/ui/encryption";
 
@@ -39,7 +40,7 @@ export default function RootLayout() {
         <BibleDatabaseProvider>
           <BibleAudioProvider><RootNavigator /></BibleAudioProvider>
         </BibleDatabaseProvider>
-      </KoinoProvider></EncryptionBoundary>
+      </KoinoProvider></EncryptionBoundary><EmulatorBadge />
     </AppLanguageProvider></GestureHandlerRootView>
   );
 }
@@ -92,5 +93,3 @@ function RootNavigator() {
     </>
   );
 }
-
-

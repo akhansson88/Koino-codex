@@ -1,3 +1,5 @@
+const { emulatorConfig } = require("./state/store/firebase-emulator-config.cjs");
+
 const baseConfig = {
   name: "KOINO",
   slug: "koino-mvp",
@@ -69,25 +71,33 @@ const baseConfig = {
   },
 };
 
-const isDevelopment = process.env.APP_VARIANT === "development";
+const variant = process.env.APP_VARIANT || "production";
+const isDevelopment = variant === "development";
+const emulator = emulatorConfig({ variant, host: process.env.EXPO_PUBLIC_KOINO_EMULATOR_HOST });
 
 module.exports = {
   ...baseConfig,
-  name: isDevelopment ? "KOINO Dev" : baseConfig.name,
-  scheme: isDevelopment ? "koino-dev" : baseConfig.scheme,
+  name: emulator ? "KOINO Emulator" : isDevelopment ? "KOINO Dev" : baseConfig.name,
+  scheme: emulator ? "koino-emulator" : isDevelopment ? "koino-dev" : baseConfig.scheme,
+  runtimeVersion: emulator ? "2.1.0-emulator" : baseConfig.runtimeVersion,
+  updates: emulator ? { enabled: false } : baseConfig.updates,
+  extra: { ...baseConfig.extra, koinoVariant: variant, ...(emulator ? { koinoEmulator: emulator } : {}) },
+  plugins: [...baseConfig.plugins, ...(emulator ? ["./plugins/with-emulator-local-network.cjs"] : [])],
   ios: {
     ...baseConfig.ios,
-    bundleIdentifier: isDevelopment
-      ? "com.akhansson.koino.dev"
-      : baseConfig.ios.bundleIdentifier,
+    bundleIdentifier: emulator ? "com.akhansson.koino.emulator" : isDevelopment ? "com.akhansson.koino.dev" : baseConfig.ios.bundleIdentifier,
+    infoPlist: emulator ? {
+      ...baseConfig.ios.infoPlist,
+      NSLocalNetworkUsageDescription: "KOINO Emulator connects only to your local Firebase test environment. / KOINO Emulator ansluter till din lokala Firebase-testmiljö.",
+      NSAppTransportSecurity: {
+        NSAllowsLocalNetworking: true,
+        NSExceptionDomains: { [emulator.host]: { NSExceptionAllowsInsecureHTTPLoads: true, NSIncludesSubdomains: false } },
+      },
+    } : baseConfig.ios.infoPlist,
   },
   android: {
     ...baseConfig.android,
-    package: isDevelopment
-      ? "com.akhansson.koinomvp.dev"
-      : baseConfig.android.package,
-    googleServicesFile: isDevelopment
-      ? "./google-services.dev.json"
-      : baseConfig.android.googleServicesFile,
+    package: emulator ? "com.akhansson.koinomvp.emulator" : isDevelopment ? "com.akhansson.koinomvp.dev" : baseConfig.android.package,
+    googleServicesFile: emulator ? undefined : isDevelopment ? "./google-services.dev.json" : baseConfig.android.googleServicesFile,
   },
 };

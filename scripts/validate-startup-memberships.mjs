@@ -29,7 +29,7 @@ const mocks = {
       sendPasswordResetEmail = async () => {}, confirmPasswordReset = async () => {}, reauthenticateWithCredential = async () => {}, updatePassword = async () => {};
     export const EmailAuthProvider = { credential: () => ({}) };
   `,
-  "@/state/store/firebase": `export const auth = { currentUser: { uid: "alex" } }, database = {};`,
+  "@/state/store/firebase": `export const auth = { currentUser: { uid: "alex" } }, database = {}, emulatorMode = false;`,
   "firebase/database": `
     export const onValue = (reference, listener, onError) => {
       globalThis.__membershipStartup.listeners.set(reference.path, { listener, onError });

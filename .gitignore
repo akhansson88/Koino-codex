@@ -40,3 +40,9 @@ __pycache__/
 .codex/encryption-functions-deploy/
 .codex/audit-legacy-collections.cjs
 .codex/search-*
+
+# Isolated physical-device emulator state, generated source and logs.
+.codex/koino-emulator-device/
+
+# Disposable isolated admission tests; may contain dummy account key fixtures.
+.codex/koino-admission-validation/

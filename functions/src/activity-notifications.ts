@@ -1,3 +1,4 @@
+import { emulatorTestConfiguration } from "./emulator-safety";
 import { ROOT_UNCHANGED, rootTransaction } from "./encryption";
 import { getDatabase } from "firebase-admin/database";
 import { logger } from "firebase-functions";
@@ -36,8 +37,11 @@ function categoryForReason(reason: "owner" | "participant" | "mention"): PushCat
   return "followedDiscussions";
 }
 
+// The local RTDB emulator emits v2 events only in us-central1. Production stays in Europe.
+const notificationRegion = emulatorTestConfiguration() ? "us-central1" : "europe-west1";
+
 export const createCommentNotification = onValueCreated(
-  { ref: "/encryptedData/replies/{groupId}/{replyId}", region: "europe-west1", retry: true },
+  { ref: "/encryptedData/replies/{groupId}/{replyId}", region: notificationRegion, retry: true },
   async (event) => {
     const reply = event.data.val() as Reply | null;
     const { groupId, replyId } = event.params;
@@ -137,7 +141,7 @@ export const createCommentNotification = onValueCreated(
 );
 
 export const sendPrayerNotification = onValueCreated(
-  { ref: "/encryptedData/prayerNotifications/{recipientUserId}/{notificationId}", region: "europe-west1" },
+  { ref: "/encryptedData/prayerNotifications/{recipientUserId}/{notificationId}", region: notificationRegion },
   async (event) => {
     const notification = event.data.val() as PrayerNotification | null;
     const { recipientUserId, notificationId } = event.params;

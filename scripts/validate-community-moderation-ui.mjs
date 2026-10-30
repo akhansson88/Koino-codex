@@ -10,7 +10,7 @@ const require=createRequire(import.meta.url), directory=await mkdtemp(path.join(
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const h=globalThis.__moderationUi={currentUserId:"A",currentGroupId:"room",groups:[{id:"room",ownerId:"A"}],calls:[],language:"en"};
 const mocks={
-  "@/state/store/firebase":'export const database={};',
+  "@/state/store/firebase":'export const database={},emulatorMode=false;',
   "@/state/store/helpers":'export const asArray=value=>Object.values(value??{});',
   "@/state/encryption/database":'export const ref=(_,path="")=>({path});export const get=async reference=>({val:()=>globalThis.__moderationUi.records[reference.path]});export const update=async(reference,values)=>{const h=globalThis.__moderationUi;h.writes.push({path:reference.path,values});if(h.failWrite)throw Error("denied");};',
   "react-native":'export const Pressable="Pressable";',
