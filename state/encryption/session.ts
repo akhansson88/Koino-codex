@@ -1,8 +1,7 @@
 import sodium from "react-native-libsodium";
 import { get, ref, onValue } from "firebase/database";
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { getApp } from "firebase/app";
-import { auth, database } from "@/state/store/firebase";
+import { httpsCallable } from "firebase/functions";
+import { auth, database, functions } from "@/state/store/firebase";
 import storage from "./local-storage";
 import { createCrypto, type Identity, type EncryptedRecord } from "./crypto";
 
@@ -40,7 +39,7 @@ async function invoke<T>(operation: string, data: unknown, device?: Device) {
   const signingDevice = device ?? current?.device;
   const payload = { operation, data, deviceId: signingDevice?.id ?? null, requestId: crypto.randomKey(), timestamp: Date.now() };
   const signature = signingDevice ? crypto.signature(payload, signingDevice.identity.signingPrivateKey) : null;
-  const response = await httpsCallable<unknown, T>(getFunctions(getApp(), "europe-west1"), "encryptedAccount")({ ...payload, signature });
+  const response = await httpsCallable<unknown, T>(functions, "encryptedAccount")({ ...payload, signature });
   return response.data;
 }
 export const encryptedOperation = invoke;

@@ -87,7 +87,7 @@ const databaseFixture = {
 };
 fixture.modules["@/state/encryption/database"] = databaseFixture;
 fixture.modules["firebase/database"] = databaseFixture;
-fixture.modules["@/state/store/firebase"] = { auth: fixture.auth, database: {} };
+fixture.modules["@/state/store/firebase"] = { auth: fixture.auth, database: {}, emulatorMode: false };
 fixture.modules["@/state/encryption/local-storage"] = { default: { getItem: async () => null, setItem: async () => {} } };
 fixture.modules["@/ui/theme"] = { normalizeTheme: () => "light", applyTheme: () => {} };
 fixture.modules["@/state/store/helpers"] = { asArray: (value) => Object.values(value ?? {}), defaultBibleHighlightColors: [], now: () => "2026-10-06", localDayKey: () => "2026-10-06" };

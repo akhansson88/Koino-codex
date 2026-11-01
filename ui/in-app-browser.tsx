@@ -1,3 +1,4 @@
+import { emulatorMode } from "@/state/store/firebase";
 import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -78,6 +79,7 @@ export function InAppBrowserProvider({ children }: PropsWithChildren) {
   const [loadError, setLoadError] = useState(false);
 
   const openExternalLink = useCallback<OpenExternalLink>((value) => {
+    if (emulatorMode) { void openLinkInApp(value); return; }
     const url = normalizeExternalHttpUrl(value);
 
     if (!url) {
@@ -198,6 +200,7 @@ function InAppBrowserSheet({
   const progressWidth = `${Math.round(Math.max(0.04, Math.min(progress, 1)) * 100)}%` as `${number}%`;
 
   function openInExternalBrowser() {
+    if (emulatorMode) { void openLinkInApp(displayedUrl); return; }
     const externalUrl = normalizeExternalHttpUrl(displayedUrl);
     if (!externalUrl) return;
     void Linking.openURL(externalUrl).catch(() => {
@@ -206,6 +209,7 @@ function InAppBrowserSheet({
   }
 
   function shouldStartRequest(url: string) {
+    if (emulatorMode) return false;
     if (normalizeExternalHttpUrl(url) || url === "about:blank") return true;
     void Linking.openURL(url).catch(() => undefined);
     return false;
@@ -231,7 +235,7 @@ function InAppBrowserSheet({
           </View>}
     >
           <View style={{ backgroundColor: colors.paper, flex: 1 }}>
-            {session && loadUrl && !loadError ? (
+            {!emulatorMode && session && loadUrl && !loadError ? (
               <WebView
                 allowsBackForwardNavigationGestures
                 allowsFullscreenVideo

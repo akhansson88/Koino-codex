@@ -32,6 +32,33 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "emulator-ios": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "environment": "preview",
+      "channel": "emulator",
+      "env": {
+        "APP_VARIANT": "emulator",
+        "EXPO_PUBLIC_KOINO_EMULATOR_HOST": "100.100.67.44"
+      },
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      }
+    },
+    "emulator-android": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "environment": "preview",
+      "channel": "emulator",
+      "env": {
+        "APP_VARIANT": "emulator",
+        "EXPO_PUBLIC_KOINO_EMULATOR_HOST": "100.100.67.44"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

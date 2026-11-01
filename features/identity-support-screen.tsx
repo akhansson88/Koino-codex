@@ -2,10 +2,11 @@ import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import type { PropsWithChildren } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Text, useWindowDimensions, View } from "react-native";
 import { SupportKoinoCard } from "@/features/donation-flow-screen";
 import { useKoino } from "@/state/koino-store";
+import { emulatorMode } from "@/state/store/firebase";
 import {
   AppHeader,
   AppScreen,
@@ -35,7 +36,11 @@ import { RoomSwitcherSheet } from "@/features/identity/room-switcher";
 function IdentityRouteSheet({ children, onDismiss, sheetRef }: PropsWithChildren<{ onDismiss: () => void; sheetRef: React.RefObject<AppSheetHandle | null> }>) {
   const { t } = useAppTranslation();
   const { height } = useWindowDimensions();
-  return <AppSheet ref={sheetRef} visible onClose={onDismiss} title={t("identity.title")} height={height * 0.92} backgroundColor={colors.cream} scroll>{children}</AppSheet>;
+  return <AppSheet ref={sheetRef} modal={false} visible onClose={onDismiss} title={t("identity.title")} height={height * 0.92} backgroundColor={colors.cream} scroll>{children}</AppSheet>;
+}
+
+function traceIdentity(event: string) {
+  if (emulatorMode) console.info(`[KOINO Emulator UI] identity:${event}`);
 }
 
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
@@ -54,6 +59,13 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
+  useEffect(() => {
+    traceIdentity(`state theme=${state.theme} language=${language} sheet=${activeSheet ?? "none"} switcher=${switcherVisible}`);
+  }, [state.theme, language, activeSheet, switcherVisible]);
+  useEffect(() => {
+    traceIdentity("mounted");
+    return () => traceIdentity("unmounted");
+  }, []);
   const themeLabel = t(state.theme === "dark" ? "identity.appearance.night" : "identity.appearance.light");
 
   function openAvatarCropper(source: RoomImageCropSource) {
@@ -67,6 +79,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleChooseAvatar() {
+    if (emulatorMode) {
+      setAvatarMessage(t("identity.avatar.emulatorUnavailable"));
+      return;
+    }
     setAvatarMessage("");
 
     try {
@@ -99,6 +115,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSaveAvatar(localUri: string) {
+    if (emulatorMode) throw new Error(t("identity.avatar.emulatorUnavailable"));
     await dispatch({ type: "uploadUserAvatar", localUri });
     setAvatarCropSource(undefined);
     setAvatarMessage(t("identity.avatar.updated"));
@@ -121,6 +138,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSendPasswordReset() {
+    if (emulatorMode) {
+      setSecurityMessage(t("identity.security.emulatorUnavailable"));
+      return;
+    }
     if (!state.authEmail) {
       setSecurityMessage(t("identity.security.noEmail"));
       return;
@@ -150,7 +171,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           title={t("identity.appearance.title")}
           subtitle={t("identity.appearance.subtitle")}
           value={themeLabel}
-          onPress={() => dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" })}
+          onPress={() => {
+            traceIdentity("appearance.press");
+            void dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" });
+          }}
           showDivider
         />
         <SettingsRow
@@ -158,7 +182,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           title={t("settings.language.title")}
           subtitle={t("settings.language.subtitle")}
           value={language === "en" ? t("settings.language.option.english") : t("settings.language.option.swedish")}
-          onPress={() => setActiveSheet("language")}
+          onPress={() => { traceIdentity("language.press"); setActiveSheet("language"); }}
           showDivider
         />
         <SettingsRow
@@ -178,7 +202,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             icon="repeat"
             title={t("community.rooms.joinOrCreate")}
             subtitle={t("community.identity.joinOrCreateBody")}
-            onPress={() => setSwitcherVisible(true)}
+            onPress={() => { traceIdentity("community.press"); setSwitcherVisible(true); }}
           />
         </Card>
       </View>
@@ -189,10 +213,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           icon="lock"
           title={t("identity.security.title")}
           subtitle={t("identity.security.subtitle")}
-          onPress={() => setActiveSheet("security")}
+          onPress={() => { traceIdentity("security.press"); setActiveSheet("security"); }}
           showDivider
         />
-        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => router.push("/encryption" as never)} />
+        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => { traceIdentity("encryption.push"); router.push("/encryption" as never); }} />
         <SettingsRow icon="shield" title={t("identity.privacy.title")} subtitle={t("identity.privacy.subtitle")} onPress={() => setActiveSheet("privacy")} showDivider />
         <SettingsRow
           icon="file-text"
@@ -227,7 +251,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <SecondaryButton icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
+          <SecondaryButton disabled={emulatorMode} icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
             {t(user?.image ? "identity.profile.changeImage" : "identity.profile.chooseImage")}
           </SecondaryButton>
           {user?.image ? (
@@ -236,12 +260,14 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             </SecondaryButton>
           ) : null}
         </View>
+        {emulatorMode ? <BodyText muted>{t("identity.avatar.emulatorUnavailable")}</BodyText> : null}
         {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{avatarMessage}</Text> : null}
       </BottomSheet>
 
       <BottomSheet
         title={t("settings.language.sheetTitle")}
         visible={activeSheet === "language"}
+        onShow={() => traceIdentity("language.presented")}
         onClose={() => setActiveSheet(undefined)}
       >
         <BodyText muted>{t("settings.language.description")}</BodyText>
@@ -286,9 +312,9 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         body={t("identity.help.body")}
       />
 
-      <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>{t("identity.security.body")}</BodyText>
-        <PrimaryButton icon="mail" onPress={handleSendPasswordReset}>
+      <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onShow={() => traceIdentity("security.presented")} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{t(emulatorMode ? "identity.security.emulatorUnavailable" : "identity.security.body")}</BodyText>
+        <PrimaryButton disabled={emulatorMode} icon="mail" onPress={handleSendPasswordReset}>
           {t("identity.security.sendReset")}
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}

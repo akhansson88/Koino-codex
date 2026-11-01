@@ -8,7 +8,7 @@ const { transformSync } = require("esbuild");
 const source = fs.readFileSync(path.join(__dirname, "../features/donation-api.ts"), "utf8");
 const { code } = transformSync(source, { loader: "ts", format: "cjs" });
 
-function client({ origin, response, networkError } = {}) {
+function client({ origin, response, networkError, emulator = false } = {}) {
   const requests = [];
   const opened = [];
   const module = { exports: {} };
@@ -17,6 +17,7 @@ function client({ origin, response, networkError } = {}) {
     process: { env: { EXPO_PUBLIC_DONATION_API_ORIGIN: origin } },
     console: { warn() {} },
     require(name) {
+      if (name === "@/state/store/firebase") return { emulatorMode: emulator };
       if (name === "react-native") return { Platform: { OS: "android" } };
       if (name === "expo-web-browser") return {
         openBrowserAsync: async (...args) => { opened.push(args); },
@@ -80,4 +81,15 @@ test("missing authentication never sends a request", async () => {
   const { api, requests } = client();
   await assert.rejects(api.startDonationCheckout(null, 100, "one_time"), /Logga in igen/);
   assert.equal(requests.length, 0);
+});
+
+
+test("emulator mode never sends tokens or opens external payment services", async () => {
+  const { api, requests, opened } = client({ emulator: true });
+  await assert.rejects(api.startDonationCheckout("emulator-token", 100, "one_time"), /disabled in KOINO Emulator/);
+  await assert.rejects(api.verifyDonation("emulator-token", "session"), /disabled in KOINO Emulator/);
+  await assert.rejects(api.openDonationPortal("emulator-token"), /disabled in KOINO Emulator/);
+  assert.equal((await api.getDonationStatus("emulator-token", "user")).hasCompletedDonation, false);
+  assert.equal(requests.length, 0);
+  assert.equal(opened.length, 0);
 });

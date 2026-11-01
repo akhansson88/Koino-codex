@@ -1,3 +1,4 @@
+import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -587,7 +588,7 @@ export function PostCard({
           )}
         </LinkPreviewContent>
       ) : undefined}
-      headerAccessory={menuButton}
+      headerAccessory={menuButton ?? <CommunityRemovalMenu groupId={item.groupId} targetType={item.type} targetId={item.id} authorId={item.userId} />}
       item={item}
       onOpen={() => {
         if (menuOpen || suppressOpenRef.current) {

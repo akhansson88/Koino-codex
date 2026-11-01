@@ -27,6 +27,10 @@ export const SheetTextInput = forwardRef<TextInput, TextInputProps>(function She
 export type AppSheetHandle = { dismiss: (afterDismiss?: () => void) => void };
 export type AppSheetProps = PropsWithChildren<{
   visible: boolean;
+  /** Reuse a transparent navigation route instead of presenting another native modal. */
+  modal?: boolean;
+  /** Native Modal presentation callback; route hosts are managed by the navigator. */
+  onShow?: () => void;
   onClose: () => void;
   onDismiss?: () => void;
   onBack?: () => void;
@@ -42,9 +46,9 @@ export type AppSheetProps = PropsWithChildren<{
   returnFocusRef?: { current: View | null };
 }>;
 
-/** One native modal host per sheet keeps nested sheets above full-screen pickers on both platforms. */
+/** Native sheets own a modal; transparent route sheets reuse their navigation host. */
 export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSheet({
-  children, visible, onClose, onDismiss, onBack, title, height, dismissible = true,
+  children, visible, modal = true, onShow, onClose, onDismiss, onBack, title, height, dismissible = true,
   reducedMotion, backgroundColor = colors.paper, foregroundColor = colors.ink,
   scroll = false, contentPanning = true, header, returnFocusRef,
 }, ref) {
@@ -113,12 +117,12 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
     callback?.();
   }, []);
   useEffect(() => {
-    // iOS supplies a native dismissal completion. Android completes after the host commit.
-    if (!mounted && Platform.OS !== "ios") {
+    // Native iOS modals supply dismissal completion. Route/Android hosts finish after the commit.
+    if (!mounted && (!modal || Platform.OS !== "ios")) {
       const frame = requestAnimationFrame(complete);
       return () => cancelAnimationFrame(frame);
     }
-  }, [mounted, complete]);
+  }, [mounted, modal, complete]);
 
   const backdrop = useCallback((props: BottomSheetBackdropProps) => (
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1}
@@ -139,9 +143,7 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
   </View>, [dismiss, dismissible, foregroundColor, header, t, title]);
 
   const body = <SheetContext.Provider value>{children}</SheetContext.Provider>;
-  return (
-    <Modal transparent visible={mounted} onDismiss={complete} animationType="none" statusBarTranslucent navigationBarTranslucent
-      onRequestClose={() => { if (dismissible) { if (onBack) onBack(); else dismiss(); } }}>
+  const content = (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View accessibilityViewIsModal style={StyleSheet.absoluteFill}>
           {mounted ? <BottomSheet ref={sheet} index={0} animateOnMount enableDynamicSizing={!fixedHeight}
@@ -166,6 +168,12 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
           </BottomSheet> : null}
         </View>
       </GestureHandlerRootView>
+  );
+  if (!modal) return mounted ? content : null;
+  return (
+    <Modal transparent visible={mounted} onDismiss={complete} onShow={onShow} animationType="none" statusBarTranslucent navigationBarTranslucent
+      onRequestClose={() => { if (dismissible) { if (onBack) onBack(); else dismiss(); } }}>
+      {content}
     </Modal>
   );
 });

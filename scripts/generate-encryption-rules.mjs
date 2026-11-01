@@ -65,6 +65,10 @@ for (const [collection, p] of Object.entries(policies)) {
   const read = shared && collection !== "userGroups" ? member : collection === "inviteCodes" ? "auth != null" : own;
   const migrating = "auth != null && root.child('e2eeMigrations').child('group').child($groupId).child('ownerId').val() == auth.uid && root.child('e2eeMigrations').child('group').child($groupId).child('status').val() == 'copying'";
   let write = shared ? `${writableMember} && ((!newData.exists() && (data.child('userId').val() == auth.uid || root.child('e2eeGroups').child($groupId).child('ownerId').val() == auth.uid)) || (newData.exists() && newData.child('userId').val() == auth.uid && (!data.exists() || data.child('userId').val() == auth.uid)))` : own;
+  if (["posts", "checkIns", "replies", "prayerReactions", "postReactions"].includes(collection)) {
+    // Cross-author removal must go through the audited backend operation.
+    write = `${writableMember} && ((!newData.exists() && data.child('userId').val() == auth.uid) || (newData.exists() && newData.child('userId').val() == auth.uid && (!data.exists() || data.child('userId').val() == auth.uid)))`;
+  }
   if (shared) write = `(${write}) || (${migrating})`;
   if (collection === "groups") write = `${owner} && data.exists() && newData.exists() && newData.child('id').val() == data.child('id').val() && newData.child('ownerId').val() == data.child('ownerId').val() && newData.child('inviteCode').val() == data.child('inviteCode').val()`;
   if (["groupMembers", "userGroups"].includes(collection)) write = `${writableMember} && auth.uid == $uid && data.exists() && newData.exists() && newData.child('userId').val() == data.child('userId').val() && newData.child('groupId').val() == data.child('groupId').val() && newData.child('role').val() == data.child('role').val()`;
@@ -75,6 +79,46 @@ for (const [collection, p] of Object.entries(policies)) {
   if (collection === "discussionFollowers") write = `(${writableMember} && auth.uid == $uid && (!newData.exists() || newData.child('userId').val() == auth.uid)) || (${migrating})`;
   if (collection === "groupBiblePlanAnnouncements") write = `(${owner}) || (${migrating})`;
   if (collection === "groupBiblePlanParticipation") write = `(${writableMember} && ((!newData.exists() && data.child('userId').val() == auth.uid) || (newData.child('userId').val() == auth.uid && (!data.exists() || data.child('userId').val() == auth.uid || root.child('encryptedData').child('groupBiblePlanParticipantIds').child(auth.uid).child($announcementId).val() == $uid)))) || (${migrating})`;
+  // Author self-deletion can remove another user's child only when the same
+  // atomic update also removes the author's parent. Individual cross-author
+  // deletion still requires moderation; there is no unaudited owner shortcut.
+  const newRoot = "newData.parent().parent().parent().parent()";
+  const removedParent = (type, targetId) => {
+    const name = { post: "posts", check_in: "checkIns", reply: "replies" }[type];
+    const parent = `root.child('encryptedData').child('${name}').child($groupId).child(${targetId})`;
+    const removed = `!${newRoot}.child('encryptedData').child('${name}').child($groupId).child(${targetId}).exists()`;
+    return `(${parent}.child('userId').val() == auth.uid && ${removed})`;
+  };
+  const parentId = "data.child('targetId').val()";
+  let cascade = ["post", "check_in"].map(type => `(data.child('targetType').val() == '${type}' && ${removedParent(type, parentId)})`).join(" || ");
+  if (collection === "prayerReactions") {
+    const reply = `root.child('encryptedData').child('replies').child($groupId).child(${parentId})`;
+    const parentCascade = ["post", "check_in"].map(type => `(${reply}.child('targetType').val() == '${type}' && ${removedParent(type, `${reply}.child('targetId').val()`)})`).join(" || ");
+    cascade += ` || (data.child('targetType').val() == 'reply' && (${removedParent("reply", parentId)} || (${parentCascade})))`;
+  }
+  if (["replies", "prayerReactions", "postReactions"].includes(collection)) {
+    write = `(${write}) || (${writableMember} && !newData.exists() && (${cascade}))`;
+  }
+  const moderatedTypes = { posts: "post", checkIns: "check_in", replies: "reply" };
+  if (moderatedTypes[collection]) {
+    write = `(${write}) && (!newData.exists() || !root.child('moderationTombstones').child($groupId).child('${moderatedTypes[collection]}').child($id).exists())`;
+    // Copying a legacy record is permitted; overwriting another author's
+    // existing encrypted content is never a moderation action.
+    write = `(${write}) && (!data.exists() || !newData.exists() || data.child('userId').val() == auth.uid)`;
+    // Migration cannot be used as an alternate unaudited cross-author delete.
+    write = `(${write}) && (newData.exists() || data.child('userId').val() == auth.uid${collection === "replies" ? ` || (${cascade})` : ""})`;
+  }
+  if (["replies", "prayerReactions", "postReactions"].includes(collection)) {
+    const types = collection === "prayerReactions" ? ["post", "check_in", "reply"] : ["post", "check_in"];
+    const parents = { post: "posts", check_in: "checkIns", reply: "replies" };
+    const liveParent = types.map(type => `(newData.child('targetType').val() == '${type}' && root.child('encryptedData').child('${parents[type]}').child($groupId).child(newData.child('targetId').val()).exists() && !root.child('moderationTombstones').child($groupId).child('${type}').child(newData.child('targetId').val()).exists())`).join(" || ");
+    write = `(${write}) && (!newData.exists() || ((${liveParent}) && (!data.exists() || (newData.child('targetType').val() == data.child('targetType').val() && newData.child('targetId').val() == data.child('targetId').val()))))`;
+  }
+  if (collection === "discussionFollowers") write = `(${write}) && (!newData.exists() || !root.child('moderationTombstones').child($groupId).child($targetType).child($targetId).exists())`;
+  if (collection === "userDiscussionFollows") write = `(${write}) && (!newData.exists() || !root.child('moderationTombstones').child($groupId).child(newData.child('targetType').val()).child(newData.child('targetId').val()).exists())`;
+  if (collection === "checkIns") write = `(${write}) && (!newData.exists() || ((data.exists() || newData.child('dayKey').isString()) && (!newData.hasChild('dayKey') || !root.child('moderatedCheckInDays').child(auth.uid).child($groupId).child(newData.child('dayKey').val()).exists())))`;
+  if (collection === "privateCheckIns") write = `(${write}) && (!newData.exists() || ((data.exists() || newData.child('dayKey').isString()) && (!newData.hasChild('dayKey') || !root.child('moderatedCheckInDays').child($uid).child(newData.child('groupId').val()).child(newData.child('dayKey').val()).exists())))`;
+  if (collection === "checkInDailyClaims") write = `(${write}) && !root.child('moderatedCheckInDays').child($uid).child($groupId).child($dayKey).exists() && !newData.hasChild('moderated')`;
   const target = {};
   let node = target;
   for (let index = 0; index < vars.length; index++) {
@@ -110,6 +154,9 @@ for (const [collection, p] of Object.entries(policies)) {
   store[collection] = target;
 }
 rules.encryptedData = store;
+rules.moderationTombstones = { "$groupId": { ".read": member, ".write": false } };
+rules.moderationActions = { "$groupId": { ".read": owner, ".write": false } };
+rules.moderatedCheckInDays = { "$uid": { ".read": own, ".write": false } };
 rules.e2eePolicy = { ".read": "auth != null", ".write": false };
 rules.e2eeAccounts = { "$uid": { ".read": "auth != null", ".write": false } };
 rules.e2eeSigners = { ".read": "auth != null", ".write": false };

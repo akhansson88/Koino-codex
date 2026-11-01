@@ -55,9 +55,14 @@
     "validate:encryption": "node scripts/validate-encryption.mjs",
     "encryption:rules": "node scripts/generate-encryption-rules.mjs",
     "validate:encryption-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-encryption-emulator.mjs\"",
+    "validate:community-moderation": "node scripts/validate-community-moderation.mjs && node scripts/validate-community-moderation-ui.mjs",
+    "validate:community-moderation-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-community-moderation-emulator.mjs\"",
     "validate:encryption-backend": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-encryption-backend.mjs\"",
     "validate:encryption-adapter": "node scripts/validate-encryption-adapter.mjs",
-    "validate:encryption-migration": "node scripts/validate-encryption-migration.mjs"
+    "validate:encryption-migration": "node scripts/validate-encryption-migration.mjs",
+    "validate:emulator-client": "node scripts/validate-emulator-client.mjs",
+    "validate:emulator-network": "node scripts/validate-emulator-device-network.mjs",
+    "validate:emulator-callable": "pwsh -NoProfile -File scripts/start-emulator-devices.ps1 -SmokeTest"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

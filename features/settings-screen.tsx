@@ -156,7 +156,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
   const currentCheckInKey = `${state.currentUserId}:${state.currentGroupId}:${todayKey}`;
-  const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey) || submittedCheckInKey === currentCheckInKey;
+  const moderatedToday = state.checkInDailyClaims.some(claim => claim.dayKey === todayKey && claim.moderated);
+  const todaysCheckIn = checkInExistsForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey) || moderatedToday || submittedCheckInKey === currentCheckInKey;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const prayerReactionsByTarget = useMemo(() => {

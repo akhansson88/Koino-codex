@@ -84,6 +84,7 @@ const mocks = {
     export { kjvBooks, normalizeBiblePosition, previousBibleChapter, nextBibleChapter } from "@/features/bible-canon";
     export { bibleVersionFor, isBibleVersionId } from "@/features/bible-versions";
     export const bibleChapterAsync = async () => ({ verses: Array.from({ length: 40 }, (_, index) => ({ verse: index + 1, text: "Fixture text" })), subtitles: [] });
+    export const biblePassagesFromRanges = async () => { throw new Error("Unexpected excerpt hydration in audio-follow fixture"); };
     export const bibleCrossReferences = () => [], buildBibleVerse = (...args) => globalThis.__bibleAudioFollowTest.buildVerse?.(...args),
       bibleVerseFromReference = () => undefined;
   `,
@@ -91,6 +92,32 @@ const mocks = {
     export const displayBibleReference = value => value, displayBibleBookName = value => value;
     export const normalizeScriptureQuery = value => value.trim();
     export const searchScripture = async () => globalThis.__bibleAudioFollowTest.searchResponse ?? { results: [], mode: "hybrid", semanticState: "ready" };
+    // Follow scenarios use one existing search fixture; retain the paged API's cancellation lifecycle.
+    export function createScriptureSearchPageSession(options) {
+      let disposed = false, generation = 0, response;
+      const check = (signal, expected = generation) => {
+        if (disposed || signal?.aborted || generation !== expected) {
+          const error = new Error("Search cancelled"); error.name = "AbortError"; throw error;
+        }
+      };
+      return {
+        async firstPage(signal, onPartialResults) {
+          const expected = generation;
+          check(signal, expected);
+          const result = await searchScripture({ ...options, signal, onPartialResults });
+          check(signal, expected);
+          response = result;
+          return { ...result, hasMore: false };
+        },
+        async nextPage(signal) {
+          check(signal);
+          if (!response) throw new Error("The first search page has not been requested.");
+          return { ...response, results: [], hasMore: false };
+        },
+        suspend() { generation++; },
+        dispose() { disposed = true; generation++; },
+      };
+    }
   `,
   "./semantic-runtime": `export const prepareSemanticRuntime = async () => {};`,
   "@/features/bible-reader/preferences-sync": `
@@ -594,6 +621,7 @@ try {
     await act(async () => { props("ScriptureSearchContent").session.setQuery("hope"); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 210)); });
     const retained = props("ScriptureSearchContent").session.search.response;
+    assert.equal(retained.results[0]?.verse, searchVerse, "The search fixture must load before testing retained search and audio navigation");
     props("ScriptureSearchContent").session.scroll.offset = 420;
     await act(async () => { props("Modal").onRequestClose(); });
     assert.equal(props("BibleReaderHeader").canGoBack, false, "Closing search without selecting a result creates no return destination");

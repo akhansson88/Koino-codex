@@ -12,7 +12,7 @@ const mocks = {
     export { isBibleVersionId } from "@/features/bible-versions";
   `,
   "@/features/bible-preferences": `export const defaultBibleVersionId = "reformationsbibeln2026";`,
-  "@/state/store/firebase": `export const database = {};`,
+  "@/state/store/firebase": `export const database = {}, emulatorMode = false;`,
   "@/state/encryption/database": `
     const db = globalThis.__readerPreferencesDatabase;
     export const ref = (_db, path) => path;

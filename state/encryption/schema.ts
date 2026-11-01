@@ -28,7 +28,7 @@ export const policies: Record<string, CollectionPolicy> = {
   biblePlans: { depth: 3, scope: "user", metadata: [...routing, "announcementId"] },
   notificationPreferences: { depth: 2, scope: "routing", metadata: ["pushEnabled", "ownContent", "mentions", "followedDiscussions", "prayerActivity"] },
   pushTokens: { depth: 3, scope: "routing", metadata: ["token", "platform", "createdAt", "updatedAt"] },
-  checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt", "historyGeneration"] },
+  checkInDailyClaims: { depth: 4, scope: "routing", metadata: ["dayKey", "checkInId", "visibility", "status", "createdAt", "historyGeneration", "moderated"] },
   discussionFollowers: { depth: 5, scope: "routing", metadata: ["id", "userId", "targetType", "targetId", "createdAt", "historyGeneration"] },
   userDiscussionFollows: { depth: 4, scope: "routing", metadata: [...routing, "following"] },
   groupBiblePlanParticipantIds: { depth: 3, scope: "routing", metadata: [] },

@@ -1,3 +1,5 @@
+import { emulatorTestConfiguration } from "./emulator-safety";
+import { ROOT_UNCHANGED, rootTransaction } from "./encryption";
 import { getDatabase } from "firebase-admin/database";
 import { logger } from "firebase-functions";
 import { onValueCreated } from "firebase-functions/v2/database";
@@ -25,14 +27,21 @@ type PrayerNotification = {
   durationSeconds: number;
 };
 
+function own(value: any, key: string): any {
+  return value && typeof value === "object" && Object.hasOwn(value, key) ? value[key] : undefined;
+}
+
 function categoryForReason(reason: "owner" | "participant" | "mention"): PushCategory {
   if (reason === "owner") return "ownContent";
   if (reason === "mention") return "mentions";
   return "followedDiscussions";
 }
 
+// The local RTDB emulator emits v2 events only in us-central1. Production stays in Europe.
+const notificationRegion = emulatorTestConfiguration() ? "us-central1" : "europe-west1";
+
 export const createCommentNotification = onValueCreated(
-  { ref: "/encryptedData/replies/{groupId}/{replyId}", region: "europe-west1" },
+  { ref: "/encryptedData/replies/{groupId}/{replyId}", region: notificationRegion, retry: true },
   async (event) => {
     const reply = event.data.val() as Reply | null;
     const { groupId, replyId } = event.params;
@@ -66,27 +75,56 @@ export const createCommentNotification = onValueCreated(
       if (typeof uid === "string" && uid !== reply.userId && membersById[uid]) recipients.set(uid, "mention");
     }
 
-    await Promise.all(Array.from(recipients, async ([recipientUserId, reason]) => {
-      if (!membersById[recipientUserId]) return;
+    const candidates = Array.from(recipients).filter(([recipientUserId]) => membersById[recipientUserId]);
+    if (!candidates.length) return;
+    let createdRecipients: typeof candidates = [];
+    // One atomic fanout avoids recipients competing with each other for the
+    // root ETag, while keeping notification creation ordered with moderation.
+    const transaction = await rootTransaction(root => {
+      createdRecipients = [];
+      if (!root) return ROOT_UNCHANGED;
+      const store = root.encryptedData ?? {};
+      const currentPolicy = root.e2eePolicy;
+      const members = own(root.e2eeGroups, groupId)?.members;
+      const departures = own(root.e2eeDepartures, groupId);
+      const tombstones = own(root.moderationTombstones, groupId);
+      if (currentPolicy?.sharedWritesFrozen || currentPolicy?.historyGeneration && reply.historyGeneration !== currentPolicy.historyGeneration
+        || !own(own(store.replies, groupId), replyId) || !own(own(store[targetCollection], groupId), reply.targetId)
+        || own(own(tombstones, "reply"), replyId)
+        || own(own(tombstones, reply.targetType), reply.targetId)
+        || !own(members, reply.userId) || own(departures, reply.userId)) return ROOT_UNCHANGED;
+      for (const [recipientUserId, reason] of candidates) {
+        if (!own(members, recipientUserId) || own(departures, recipientUserId)) continue;
+        store.activityNotifications ??= {};
+        let notices = own(store.activityNotifications, recipientUserId);
+        if (!notices) {
+          notices = Object.create(null);
+          Object.defineProperty(store.activityNotifications, recipientUserId, { value: notices, enumerable: true, configurable: true, writable: true });
+        }
+        if (Object.hasOwn(notices, replyId)) continue;
+        Object.defineProperty(notices, replyId, { value: {
+          id: replyId,
+          type: reason === "mention" ? "mention" : reason === "participant" ? "discussion_activity" : "comment",
+          reason,
+          priority: reason === "mention" ? "high" : "normal",
+          bundleKey,
+          actorUserId: reply.userId,
+          recipientUserId,
+          groupId,
+          targetType: reply.targetType,
+          targetId: reply.targetId,
+          replyId,
+          createdAt: reply.createdAt,
+          ...(currentPolicy?.historyGeneration ? { historyGeneration: currentPolicy.historyGeneration } : {}),
+        }, enumerable: true, configurable: true, writable: true });
+        createdRecipients.push([recipientUserId, reason]);
+      }
+      return createdRecipients.length ? root : ROOT_UNCHANGED;
+    });
+    if (!transaction.committed) throw new Error("Notification transaction conflicted; retry delivery.");
+    await Promise.all(createdRecipients.map(async ([recipientUserId, reason]) => {
       const notificationRef = database.ref(`encryptedData/activityNotifications/${recipientUserId}/${replyId}`);
-      const notification = {
-        id: replyId,
-        type: reason === "mention" ? "mention" : reason === "participant" ? "discussion_activity" : "comment",
-        reason,
-        priority: reason === "mention" ? "high" : "normal",
-        bundleKey,
-        actorUserId: reply.userId,
-        recipientUserId,
-        groupId,
-        targetType: reply.targetType,
-        targetId: reply.targetId,
-        replyId,
-        createdAt: reply.createdAt,
-        ...(policy?.historyGeneration ? { historyGeneration: policy.historyGeneration } : {}),
-      };
-      const transaction = await notificationRef.transaction((current) => (current ? undefined : notification));
-      if (!transaction.committed || !(await pushAllowed(database, recipientUserId, categoryForReason(reason)))) return;
-
+      if (!(await notificationRef.get()).exists() || !(await pushAllowed(database, recipientUserId, categoryForReason(reason)))) return;
       await sendExpoPush(database, recipientUserId, `comment:${replyId}`, buildCommentPushMessage({
         actorName: "",
         body: "",
@@ -103,7 +141,7 @@ export const createCommentNotification = onValueCreated(
 );
 
 export const sendPrayerNotification = onValueCreated(
-  { ref: "/encryptedData/prayerNotifications/{recipientUserId}/{notificationId}", region: "europe-west1" },
+  { ref: "/encryptedData/prayerNotifications/{recipientUserId}/{notificationId}", region: notificationRegion },
   async (event) => {
     const notification = event.data.val() as PrayerNotification | null;
     const { recipientUserId, notificationId } = event.params;

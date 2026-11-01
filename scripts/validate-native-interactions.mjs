@@ -87,9 +87,12 @@ try {
   for (const os of ["android", "ios"]) {
     globalThis.__interaction.os = os;
     const order = [];
+    let presentations = 0;
     const ref = React.createRef();
-    const props = { ref, visible: true, title: "Actions", onClose: () => order.push("close"), onDismiss: () => order.push("dismiss") };
+    const props = { ref, visible: true, title: "Actions", onShow: () => presentations++, onClose: () => order.push("close"), onDismiss: () => order.push("dismiss") };
     await act(() => { tree = create(React.createElement(AppSheet, props)); });
+    await act(() => tree.root.findByType("Modal").props.onShow());
+    assert.equal(presentations, 1, "Native presentation diagnostics forward the actual onShow event");
     ref.current.dismiss(() => order.push("next"));
     ref.current.dismiss(() => order.push("duplicate"));
     assert.deepEqual(order, [], "callbacks wait for animation completion");
@@ -111,7 +114,30 @@ try {
     assert.deepEqual(order, ["close", "dismiss", "next", "dismiss"], "controlled close does not duplicate onClose");
     await act(() => tree.unmount());
   }
-  console.log("Native interactions passed: tap/hold, movement cancellation, haptics, accessibility/right-click, dismissal ordering, locking, reopen, controlled close.");
+  // Identity already has a transparent native-stack host. Adding an RN Modal
+  // here creates a second presentation owner and orphaned state after Back.
+  for (const os of ["ios", "android"]) {
+    globalThis.__interaction.os = os;
+    const order = [];
+    const ref = React.createRef();
+    const props = { ref, modal: false, visible: true, title: "Identity", onClose: () => order.push("close"), onDismiss: () => order.push("dismiss") };
+    await act(() => { tree = create(React.createElement(AppSheet, props)); });
+    assert.equal(tree.root.findAllByType("Modal").length, 0, "Route-hosted Identity must not create another native modal");
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await act(() => ref.current.dismiss(() => order.push("next")));
+      await act(() => tree.root.findByType("Sheet").props.onClose());
+      assert.equal(tree.root.findAllByType("GestureRoot").length, 0, "Closed route sheet must not leave an invisible touch overlay");
+      assert.equal(order.length, cycle * 3, "Route callbacks wait until the host leaves the tree");
+      await act(() => flushFrames());
+      assert.deepEqual(order.slice(-3), ["close", "dismiss", "next"]);
+      await act(() => tree.update(React.createElement(AppSheet, { ...props, visible: false })));
+      await act(() => tree.update(React.createElement(AppSheet, props)));
+      assert.equal(tree.root.findAllByType("Sheet").length, 1, "Route-hosted sheet reopens after dismissal");
+      assert.equal(tree.root.findAllByType("Modal").length, 0);
+    }
+    await act(() => tree.unmount());
+  }
+  console.log("Native interactions passed: tap/hold, movement cancellation, haptics, accessibility/right-click, dismissal ordering, locking, reopen, controlled close, route-host lifecycle and native presentation events.");
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
