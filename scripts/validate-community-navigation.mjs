@@ -99,7 +99,9 @@ for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", 
 }
 for (const [module, names] of leafUiImports) {
   mocks[module] = [...names].map(name => {
-    if (name === "PrayerMoment" || name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
+    if (name === "PrayerMoment") return `export const PrayerMoment = props => React.createElement("PrayerMoment", props);`;
+    if (name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
+    if (name === "CommunityFeedCard") return `export const CommunityFeedCard = props => React.createElement("CommunityFeedCard", props, props.actions, props.responseSummary);`;
     if (/^[A-Z]/.test(name)) return `export function ${name}(props) { return props.visible === false ? null : React.createElement("${name}", props); }`;
     return `export const ${name} = () => undefined;`;
   }).join("\n");
@@ -112,6 +114,7 @@ try {
   await build({
     stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
       export { translateMessage } from "./ui/localization";
+      export { PrayerRequestCard } from "./features/community/prayer-screens";
       export { default as Overview } from "./app/(tabs)/community/index";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
       export { default as CheckIns } from "./app/(tabs)/community/checkins";`, resolveDir: process.cwd(), loader: "tsx" },
@@ -254,7 +257,7 @@ try {
   delete harness.initialDetailTab;
   for (const [filter, component, title, empty] of [
     ["checkins", screens.CheckIns, "community.page.checkIns", "community.checkIns.empty"],
-    ["prayer", screens.Prayer, "community.page.prayer", "community.prayer.empty"],
+    ["prayer", screens.Prayer, "community.page.prayer", "community.prayer.emptyOpen"],
   ]) {
     for (const status of ["ready", "loading", "error", "populated", "offline"]) {
       harness.state = { ...(status === "populated" || status === "offline" ? populatedState : baseState), communityFeedReady: status !== "loading", communityFeedError: status === "error" ? "test error" : undefined, communityFeedOffline: status === "offline" };
@@ -272,6 +275,160 @@ try {
       await act(() => tree.unmount());
     }
   }
+  // Exercise request prayer through the real screen callbacks; Dwell itself remains mocked.
+  const sarahImage = { url: "test-image", path: "profiles/sarah/image.webp", width: 512, height: 512, contentType: "image/webp", updatedAt: now };
+  const prayerFixture = {
+    ...baseState,
+    users: [...baseState.users, { id: "sarah", name: "Sarah", image: sarahImage }],
+    memberships: [{ userId: "reader", role: "owner", userName: "Reader" }, { userId: "sarah", role: "member", userName: "Sarah" }],
+    posts: [
+      { id: "unprayed", groupId: "room", userId: "sarah", kind: "prayer_request", title: "Tomorrow", body: "Please pray for tomorrow.", createdAt: now },
+      { id: "answered", groupId: "room", userId: "sarah", kind: "prayer_request", body: "An answered request.", answeredAt: now, createdAt: now },
+      { id: "prior-prayed", groupId: "room", userId: "sarah", kind: "prayer_request", body: "A request already prayed for.", createdAt: now },
+    ],
+    prayerReactions: [{ id: "reader_post_prior-prayed", userId: "reader", targetType: "post", targetId: "prior-prayed", createdAt: now }],
+    communityContentHasMore: true, communityContentLoadingMore: false,
+  };
+  const cards = () => tree.root.findAllByType("CommunityFeedCard");
+  const card = id => cards().find(node => node.props.item.id === id);
+  const cardIds = () => cards().map(node => node.props.item.id).sort();
+  const requestAction = id => card(id).findAll(node => ["Pressable", "CommunityCardAction"].includes(node.type) && typeof node.props.onPress === "function")[0];
+  const moment = () => tree.root.findByType("PrayerMoment");
+  const press = node => node.props.onPress({ stopPropagation() {} });
+  const renderedTree = () => JSON.stringify(tree.toJSON(), (key, value) => key === "_owner" ? undefined : value);
+  const updatePrayer = async state => { harness.state = state; await act(() => tree.update(React.createElement(screens.Prayer))); };
+  harness.state = prayerFixture;
+  harness.actions = [];
+  await act(async () => { tree = create(React.createElement(screens.Prayer)); });
+  assert.ok(tree.root.findAll(node => node.type?.name === "PrayerRequestCard").every(node => node.props.focused === true), "Only the dedicated Prayer screen opts into focused request actions");
+  assert.equal(requestAction("unprayed").type, "Pressable");
+  assert.equal(requestAction("unprayed").props.accessibilityLabel, "community.prayer.prayForRequest:Sarah");
+  assert.ok(entryStyle(requestAction("unprayed")).minHeight >= 44);
+  assert.equal(requestAction("unprayed").findByType("MaterialCommunityIcons").props.name, "hands-pray");
+  assert.equal(card("unprayed").props.status.props.status, "open");
+  await act(() => press(requestAction("unprayed")));
+  const expectedTarget = { targetType: "post", targetId: "unprayed", body: prayerFixture.posts[0].body, recipientUserId: "sarah", recipientName: "Sarah", recipientImage: sarahImage };
+  assert.deepEqual(moment().props.target, expectedTarget, "Pray must retain the exact request and recipient metadata");
+  await act(() => moment().props.onClose());
+  assert.equal(moment().props.target, undefined);
+  assert.deepEqual(harness.actions, [], "Cancelling a request prayer does not persist completion");
+  for (const status of ["skipped", "completed"]) {
+    await act(() => press(requestAction("unprayed")));
+    await act(() => moment().props.onFinish(status, now));
+    assert.equal(moment().props.target, undefined);
+    assert.deepEqual(harness.actions.at(-1), { type: "finishPrayer", targetType: "post", targetId: "unprayed", status, startedAt: now, recipientUserId: "sarah", throwOnError: false }, "Dwell callback retains the existing request completion contract");
+  }
+  const afterPrayer = { ...prayerFixture, prayerReactions: [...prayerFixture.prayerReactions, { id: "reader_post_unprayed", userId: "reader", targetType: "post", targetId: "unprayed", createdAt: now }] };
+  await updatePrayer(afterPrayer);
+  assert.equal(requestAction("unprayed").type, "CommunityCardAction");
+  assert.equal(requestAction("unprayed").props.active, true);
+  assert.equal(requestAction("unprayed").props.label, "community.action.prayer.completed");
+  assert.equal(requestAction("unprayed").props.accessibilityLabel, "community.prayer.prayAgainForRequest:Sarah");
+  assert.equal(card("unprayed").props.status.props.status, "open", "Prayed participation does not mark a request Answered");
+  assert.equal(card("unprayed").findByType("CommunityCardResponseSummary").props.count, 1);
+  await act(() => press(requestAction("unprayed")));
+  assert.deepEqual(moment().props.target, expectedTarget, "Prayed remains an interactive repeat-prayer action");
+  await act(() => moment().props.onFinish("completed", now));
+  assert.equal(harness.actions.at(-1).type, "finishPrayer", "Repeat prayer must not toggle or remove participation");
+  await act(() => overviewChips().props.onChange("answered"));
+  assert.equal(card("answered").props.status.props.status, "answered");
+  assert.equal(requestAction("answered").type, "Pressable", "Answered status does not imply that this reader has prayed");
+  const sharePrayer = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.share");
+  assert.ok(sharePrayer && entryStyle(sharePrayer).minHeight >= 44, "Sharing is an accessible tertiary action");
+  await act(() => press(sharePrayer));
+  assert.equal(tree.root.findByType("SharedComposer").props.visible, true);
+  assert.equal(tree.root.findByType("SharedComposer").props.kind, "prayer_request");
+  await act(() => tree.root.findByType("SharedComposer").props.onClose());
+  await act(() => press(tree.root.findAllByType("SecondaryButton").find(node => node.props.children === "community.prayer.prayForSomeone")));
+  await act(() => memberModal().props.onSelect(memberModal().props.members.find(member => member.id === "sarah")));
+  assert.equal(memberModal().props.visible, false);
+  assert.deepEqual(moment().props.target, { ...expectedTarget, targetType: "user", targetId: "sarah", body: "" }, "Personal prayer still selects a user, independently of request prayer");
+  await act(() => moment().props.onClose());
+  const beforePagination = harness.actions.length;
+  await act(() => press(tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier")));
+  assert.equal(harness.actions.length, beforePagination + 1);
+  assert.deepEqual(harness.actions.at(-1), { type: "loadOlderCommunityContent" });
+  await updatePrayer({ ...prayerFixture, communityContentLoadingMore: true });
+  const earlierAction = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier");
+  assert.equal(earlierAction.props.disabled, true);
+  assert.equal(earlierAction.props.accessibilityState.busy, true);
+  for (const [filter, ids, emptyKey] of [
+    ["open", ["prior-prayed", "unprayed"], "community.prayer.emptyOpen"],
+    ["answered", ["answered"], "community.prayer.emptyAnswered"],
+    ["all", ["answered", "prior-prayed", "unprayed"], "community.prayer.empty"],
+  ]) {
+    await act(() => overviewChips().props.onChange(filter));
+    for (const status of ["populated", "loading", "error", "offline", "empty"]) {
+      await updatePrayer({ ...prayerFixture, posts: status === "empty" ? [] : prayerFixture.posts, communityFeedReady: status !== "loading", communityFeedError: status === "error" ? "test error" : undefined, communityFeedOffline: status === "offline" });
+      assert.deepEqual(cardIds(), ["populated", "offline"].includes(status) ? ids : [], `${filter} preserves its ${status} card state`);
+      if (status !== "populated") assert.ok(renderedTree().includes(status === "loading" ? "community.feed.loading" : status === "error" ? "community.feed.loadError" : status === "offline" ? "community.feed.unavailable" : emptyKey));
+      assert.equal(tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier"), status !== "loading" && status !== "error", "Pagination preserves its loading/error guard");
+    }
+  }
+  await updatePrayer({ ...prayerFixture, communityContentHasMore: false });
+  assert.ok(!tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier"), "No older-content action appears when history is exhausted");
+  await act(() => tree.unmount());
+  // Recent keeps the default card presentation; focused prayer moments remain read-only.
+  harness.state = prayerFixture;
+  await act(async () => { tree = create(React.createElement(screens.Overview)); });
+  assert.ok(tree.root.findAll(node => node.type?.name === "PrayerRequestCard").every(node => node.props.focused === undefined), "Recent does not opt into focused request styling");
+  assert.equal(requestAction("unprayed").type, "CommunityCardAction");
+  await act(() => tree.unmount());
+  const cardProps = { item: { ...prayerFixture.posts[0], type: "post" }, authorName: "Sarah", ownsItem: false, prayerCount: 0, prayedBy: [], onOpen() {}, onPray() {} };
+  for (const prayed of [false, true]) {
+    await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, prayed })); });
+    const defaultCard = renderedTree();
+    await act(() => tree.unmount());
+    await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, prayed, focused: false })); });
+    assert.equal(renderedTree(), defaultCard, "Omitting focused retains the same Recent card markup and props");
+    await act(() => tree.unmount());
+  }
+  await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, item: { ...cardProps.item, kind: "prayer_moment" }, focused: true, prayed: false })); });
+  assert.equal(tree.root.findByType("CommunityCardAction").props.onPress, undefined, "A prayer moment stays read-only even in focused mode");
+  assert.equal(tree.root.findByType("CommunityFeedCard").props.status, undefined);
+  await act(() => tree.unmount());
+  const prayerCopy = {
+    en: {
+      description: "Choose a request to pray for.", share: "Share a prayer request", filters: ["Open", "Answered", "All"],
+      pray: "Pray", prayed: "Prayed", prayLabel: "Pray for the request from Sarah", repeatLabel: "Pray again for the request from Sarah",
+      counts: { open: ["1 open request shown", "2 open requests shown"], answered: ["1 answered request shown", "2 answered requests shown"], all: ["1 request shown", "2 requests shown"] },
+      empty: { open: "No open requests to show right now. You can still pray for someone.", answered: "No answered requests to show yet. Keep carrying one another in prayer.", all: "No prayer requests to show yet. You can share one with your community." },
+    },
+    sv: {
+      description: "Välj ett böneämne att be för.", share: "Dela ett böneämne", filters: ["Öppna", "Besvarade", "Alla"],
+      pray: "Be", prayed: "Bett", prayLabel: "Be för böneämnet från Sarah", repeatLabel: "Be igen för böneämnet från Sarah",
+      counts: { open: ["1 öppet böneämne visas", "2 öppna böneämnen visas"], answered: ["1 besvarat böneämne visas", "2 besvarade böneämnen visas"], all: ["1 böneämne visas", "2 böneämnen visas"] },
+      empty: { open: "Det finns inga öppna böneämnen att visa just nu. Du kan fortfarande be för någon.", answered: "Det finns inga besvarade böneämnen att visa ännu. Fortsätt bära varandra i bön.", all: "Det finns inga böneämnen att visa ännu. Du kan dela ett med din gemenskap." },
+    },
+  };
+  for (const [language, copy] of Object.entries(prayerCopy)) {
+    harness.localized = true;
+    harness.language = language;
+    for (const filter of ["open", "answered", "all"]) {
+      const sample = prayerFixture.posts.find(item => filter === "answered" ? item.answeredAt : !item.answeredAt);
+      for (const count of [1, 2]) {
+        const localizedState = { ...prayerFixture, posts: [sample, { ...sample, id: "localized-second" }].slice(0, count), prayerReactions: [] };
+        harness.state = localizedState;
+        await act(async () => { tree = create(React.createElement(screens.Prayer)); });
+        await act(() => overviewChips().props.onChange(filter));
+        assert.deepEqual(overviewChips().props.options.map(option => option.label), copy.filters);
+        assert.ok(renderedTree().includes(copy.description) && renderedTree().includes(copy.counts[filter][count - 1]), `${language} ${filter} describes only the loaded requests, with correct singular/plural copy`);
+        assert.ok(tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === copy.share));
+        assert.equal(requestAction(sample.id).props.accessibilityLabel, copy.prayLabel);
+        assert.ok(requestAction(sample.id).findAllByType("Text").some(node => node.props.children === copy.pray));
+        await updatePrayer({ ...localizedState, prayerReactions: [{ id: `reader_post_${sample.id}`, userId: "reader", targetType: "post", targetId: sample.id, createdAt: now }] });
+        assert.equal(requestAction(sample.id).props.label, copy.prayed);
+        assert.equal(requestAction(sample.id).props.accessibilityLabel, copy.repeatLabel);
+        if (count === 2) {
+          await updatePrayer({ ...localizedState, posts: [] });
+          assert.ok(renderedTree().includes(copy.empty[filter]), `${language} ${filter} has its supportive empty state`);
+        }
+        await act(() => tree.unmount());
+      }
+    }
+  }
+  delete harness.localized;
+  delete harness.language;
   for (const component of [screens.Overview, screens.Prayer, screens.CheckIns]) {
     harness.state = { ...populatedState, groups: [{ ...baseState.groups[0], migrationPending: true }] };
     await act(async () => { tree = create(React.createElement(component)); });
@@ -389,6 +546,7 @@ try {
   }
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
+  console.log("Prayer hierarchy passed: focused request actions, target/cancel/skip/complete/repeat contracts, personal prayer, request composer, filters/states/pagination, unchanged Recent presentation, and EN/SV counts/empty/action copy.");
   console.log("Community navigation passed: translated balanced Prayer requests/Check-ins cards, personal prayer within Prayer, Recent/Reflections and Share, stale filter fallback, iOS/Android filter/scroll and Back, dedicated page/content/empty/loading/error/offline rendering.");
 } finally {
   if (tree) await act(() => tree.unmount());
