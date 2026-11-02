@@ -218,7 +218,7 @@ export function CheckInModal({
                       </Text>
                     </View>
                     <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-                      <Feather name={share ? "check-circle" : "circle"} size={18} color={colors.muted} />
+                      <Feather name={share ? "users" : "lock"} size={18} color={colors.ink} />
                     </View>
                   </Card>
                 </Pressable>

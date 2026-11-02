@@ -559,6 +559,20 @@ try {
   const saveControl = () => tree.root.findAllByType("PrimaryButton").find(node => node.props.icon === "send");
   const audienceSwitch = () => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityRole === "switch");
   const hasDone = () => tree.root.findAllByType("PrimaryButton").some(node => node.props.children === (harness.localized ? screens.translateMessage(harness.language, "community.checkIn.done") : "community.checkIn.done"));
+  const modalCopy = (key, values) => harness.localized ? screens.translateMessage(harness.language, key, values) : values?.name ? `${key}:${values.name}` : key;
+  const assertAudienceSelection = (shared, pending = false) => {
+    const control = audienceSwitch(), destinationIcon = control.findByType("Feather");
+    assert.deepEqual(control.props.accessibilityState, { checked: shared, disabled: pending }, "Audience retains switch semantics without radio/selected state");
+    assert.equal(control.props.accessibilityLabel, shared ? modalCopy("community.checkIn.sharedNotice", { name: "Test community" }) : `${modalCopy("community.checkIn.privateOnly")}. ${modalCopy("community.checkIn.shareOptionLabel", { name: "Test community" })}`, "The accessible audience label follows each selection");
+    assert.equal(destinationIcon.props.name, shared ? "users" : "lock", "Destination icons describe the audience instead of resembling an unselected radio");
+    assert.deepEqual([destinationIcon.parent.props.accessibilityElementsHidden, destinationIcon.parent.props.accessible, destinationIcon.parent.props.importantForAccessibility], [true, false, "no-hide-descendants"], "Destination icons remain decorative");
+    assert.equal(control.findByType("RoomImage").props.name, shared ? "Test community" : modalCopy("community.checkIn.privateJournal"));
+    assert.ok(control.findAllByType("Text").some(node => node.props.children === (shared ? "Test community" : modalCopy("community.checkIn.privateJournal"))), "The visible destination title follows each selection");
+    assert.equal(saveControl().props.children, modalCopy(pending ? "community.checkIn.saving" : shared ? "community.checkIn.shareAction" : "community.checkIn.savePrivateAction"));
+    const reassuranceIcon = tree.root.findAllByType("Feather").find(node => node.props.size === 13);
+    assert.equal(reassuranceIcon.props.name, shared ? "users" : "lock");
+    assert.ok(reassuranceIcon.parent.parent.findAllByType("Text").some(node => node.props.children === modalCopy(shared ? "community.checkIn.sharedNotice" : "community.checkIn.privateNotice", shared ? { name: "Test community" } : undefined)), "Privacy reassurance matches the displayed audience and save action");
+  };
   for (const [language, privateLabel, shareLabel, sharedNotice, privateTitle, sharedTitle, noteLabel] of [
     ["en", "Only you can see this", "Share with Test community", "This will be shared with Test community", "Check-in saved privately", "Check-in shared with Test community", "Add a few words (optional)"],
     ["sv", "Bara du kan se detta", "Dela med Test community", "Detta kommer att delas med Test community", "Incheckningen har sparats privat", "Incheckningen har delats med Test community", "Skriv några ord (valfritt)"],
@@ -568,17 +582,23 @@ try {
     for (const share of [false, true]) {
       const pending = deferred();
       let calls = 0, submission;
-      modalProps = { ...modalDefaults, share, onSubmit: () => { calls++; return pending.promise; } };
+      modalProps = { ...modalDefaults, share, onSubmit: () => { calls++; return pending.promise; }, onShare: nextShare => { modalProps = { ...modalProps, share: nextShare }; tree.update(React.createElement(screens.RealCheckInModal, modalProps)); } };
       await act(async () => { tree = create(React.createElement(screens.RealCheckInModal, modalProps)); });
       assert.equal(audienceSwitch().props.accessibilityState.checked, share);
       assert.equal(audienceSwitch().props.accessibilityLabel, share ? sharedNotice : `${privateLabel}. ${shareLabel}`);
       assert.ok(entryStyle(audienceSwitch()).minHeight >= 44);
       assert.deepEqual(tree.root.findAll(node => ["TextInputField", "BibleVerseField"].includes(node.type) || node.type === "Pressable" && node.props.accessibilityRole === "switch").map(node => node.type === "Pressable" ? "audience" : node.type), ["audience", "TextInputField", "BibleVerseField"], "Audience is clear before optional words and Scripture");
       assert.equal(tree.root.findByType("TextInputField").props.accessibilityLabel, noteLabel);
+      assertAudienceSelection(share);
+      await act(() => audienceSwitch().props.onPress());
+      assertAudienceSelection(!share);
+      await act(() => audienceSwitch().props.onPress());
+      assertAudienceSelection(share);
       await act(() => { submission = saveControl().props.onPress(); void tree.root.findByType("TextInputField").props.onSubmitEditing(); });
       assert.equal(calls, 1, "Same-render button/keyboard submissions share one in-flight guard");
       assert.equal(saveControl().props.disabled, true);
       assert.equal(audienceSwitch().props.disabled, true);
+      assertAudienceSelection(share, true);
       await updateModal({ share: !share, roomName: "Changed community", step: "thanks" });
       assert.equal(hasDone(), false, "A pending thanks step must not claim success");
       assert.ok(renderedTree().includes(screens.translateMessage(language, "community.checkIn.saving")));
@@ -643,14 +663,22 @@ try {
       await act(openActual);
       assert.equal(actualModal().props.share, false);
       await act(() => tree.root.findAll(node => node.type?.name === "MoodOptionCard")[0].props.onPress());
+      assertAudienceSelection(false);
       await act(() => audienceSwitch().props.onPress());
       assert.equal(actualModal().props.share, true);
+      assertAudienceSelection(true);
+      await act(() => audienceSwitch().props.onPress());
+      assertAudienceSelection(false);
+      await act(() => audienceSwitch().props.onPress());
+      assertAudienceSelection(true);
       await act(() => tree.root.findAllByType("IconButton").find(node => node.props.accessibilityLabel === "community.checkIn.back").props.onPress());
       await act(() => tree.root.findAllByType("IconButton").find(node => node.props.accessibilityLabel === "community.checkIn.back").props.onPress());
       await act(openActual);
       assert.equal(actualModal().props.share, false, "Reopening either actual entry point requires new sharing consent");
       await act(() => tree.root.findAll(node => node.type?.name === "MoodOptionCard")[0].props.onPress());
+      assertAudienceSelection(false);
       if (share) await act(() => audienceSwitch().props.onPress());
+      assertAudienceSelection(share);
       await act(async () => { await saveControl().props.onPress(); });
       assert.equal(harness.actions.at(-1).visibility, share ? "group" : "private");
       assert.equal(harness.actions.at(-1).reflectionText, "", "Words remain optional in both entry points");
