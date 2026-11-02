@@ -40,7 +40,7 @@ const mocks = {
     } };
     export const useWindowDimensions = () => ({ width: 390, height: 800 });
     export const AppState = { addEventListener: () => ({ remove() {} }) };
-    export const ActivityIndicator = "ActivityIndicator", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View", Share = {};
+    export const ActivityIndicator = "ActivityIndicator", KeyboardAvoidingView = "KeyboardAvoidingView", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View", Share = {};
     export const FlatList = React.forwardRef(function FlatList(props, ref) {
       React.useImperativeHandle(ref, () => ({ scrollToOffset: options => globalThis.__communityNavigation.scrollRestores.push(options) }), []);
       return React.createElement("FlatList", props,
@@ -75,7 +75,13 @@ const mocks = {
   "react-native-safe-area-context": `export const useSafeAreaInsets = () => ({ top: 24, bottom: 24 });`,
   "@expo/vector-icons": `export const Feather = "Feather", MaterialCommunityIcons = "MaterialCommunityIcons", Ionicons = "Ionicons";`,
   "expo-blur": `export const BlurView = "BlurView";`,
-  "@/features/check-in-modal": `export const CheckInModal = () => null; export const moodNumber = value => value;`,
+  "@/features/check-in-modal": `
+    import React from "react";
+    import { CheckInModal as RealCheckInModal, moodNumber as realMoodNumber } from "./features/check-in-modal";
+    export function CheckInModal(props) { return globalThis.__communityNavigation.realCheckInModal ? React.createElement(RealCheckInModal, props) : null; }
+    Object.defineProperty(CheckInModal, "name", { value: "CheckInModal" });
+    export const moodNumber = value => globalThis.__communityNavigation.realCheckInModal ? realMoodNumber(value) : value;
+  `,
   "@/features/onboarding-screen": `export const OnboardingScreen = "OnboardingScreen";`,
 };
 
@@ -84,7 +90,7 @@ const communityModules = (await readdir("features/community"))
   .filter(file => /\.tsx?$/.test(file))
   .map(file => `features/community/${file}`);
 const leafUiImports = new Map();
-for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
+for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
@@ -115,6 +121,7 @@ try {
     stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
       export { translateMessage } from "./ui/localization";
       export { PrayerRequestCard } from "./features/community/prayer-screens";
+      export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
       export { default as CheckIns } from "./app/(tabs)/community/checkins";`, resolveDir: process.cwd(), loader: "tsx" },
@@ -544,6 +551,165 @@ try {
     if (entryVisibility === "room") assert.ok(JSON.stringify(tree.toJSON()).includes("community.composer.sharedWithCommunity"));
     await act(() => tree.unmount());
   }
+  // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
+  const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+  const modalDefaults = { visible: true, step: "details", mood: "peaceful", note: "", verses: [], roomName: "Test community", share: false, onBack() {}, onClose() {}, onDone() {}, onMood() {}, onNote() {}, onShare() {}, onVerses() {} };
+  let modalProps;
+  const updateModal = async changes => { modalProps = { ...modalProps, ...changes }; await act(() => tree.update(React.createElement(screens.RealCheckInModal, modalProps))); };
+  const saveControl = () => tree.root.findAllByType("PrimaryButton").find(node => node.props.icon === "send");
+  const audienceSwitch = () => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityRole === "switch");
+  const hasDone = () => tree.root.findAllByType("PrimaryButton").some(node => node.props.children === (harness.localized ? screens.translateMessage(harness.language, "community.checkIn.done") : "community.checkIn.done"));
+  for (const [language, privateLabel, shareLabel, sharedNotice, privateTitle, sharedTitle, noteLabel] of [
+    ["en", "Only you can see this", "Share with Test community", "This will be shared with Test community", "Check-in saved privately", "Check-in shared with Test community", "Add a few words (optional)"],
+    ["sv", "Bara du kan se detta", "Dela med Test community", "Detta kommer att delas med Test community", "Incheckningen har sparats privat", "Incheckningen har delats med Test community", "Skriv några ord (valfritt)"],
+  ]) {
+    harness.localized = true;
+    harness.language = language;
+    for (const share of [false, true]) {
+      const pending = deferred();
+      let calls = 0, submission;
+      modalProps = { ...modalDefaults, share, onSubmit: () => { calls++; return pending.promise; } };
+      await act(async () => { tree = create(React.createElement(screens.RealCheckInModal, modalProps)); });
+      assert.equal(audienceSwitch().props.accessibilityState.checked, share);
+      assert.equal(audienceSwitch().props.accessibilityLabel, share ? sharedNotice : `${privateLabel}. ${shareLabel}`);
+      assert.ok(entryStyle(audienceSwitch()).minHeight >= 44);
+      assert.deepEqual(tree.root.findAll(node => ["TextInputField", "BibleVerseField"].includes(node.type) || node.type === "Pressable" && node.props.accessibilityRole === "switch").map(node => node.type === "Pressable" ? "audience" : node.type), ["audience", "TextInputField", "BibleVerseField"], "Audience is clear before optional words and Scripture");
+      assert.equal(tree.root.findByType("TextInputField").props.accessibilityLabel, noteLabel);
+      await act(() => { submission = saveControl().props.onPress(); void tree.root.findByType("TextInputField").props.onSubmitEditing(); });
+      assert.equal(calls, 1, "Same-render button/keyboard submissions share one in-flight guard");
+      assert.equal(saveControl().props.disabled, true);
+      assert.equal(audienceSwitch().props.disabled, true);
+      await updateModal({ share: !share, roomName: "Changed community", step: "thanks" });
+      assert.equal(hasDone(), false, "A pending thanks step must not claim success");
+      assert.ok(renderedTree().includes(screens.translateMessage(language, "community.checkIn.saving")));
+      await act(async () => { pending.resolve(); await submission; });
+      assert.ok(renderedTree().includes(share ? sharedTitle : privateTitle), "Confirmation uses the successfully submitted audience snapshot");
+      assert.ok(!renderedTree().includes("Changed community"), "Later community changes cannot rename the submission receipt");
+      assert.equal(hasDone(), true);
+      await updateModal({ visible: false });
+      await updateModal({ visible: true, step: "choose" });
+      await updateModal({ step: "thanks" });
+      assert.equal(hasDone(), true, "Idle confirmation recovery keeps a way to exit");
+      assert.ok(!renderedTree().includes(privateTitle) && !renderedTree().includes(sharedTitle), "Closing or starting fresh clears the old outcome receipt");
+      await act(() => tree.unmount());
+    }
+  }
+  delete harness.localized;
+  delete harness.language;
+  modalProps = { ...modalDefaults, step: "thanks", onSubmit() {} };
+  await act(async () => { tree = create(React.createElement(screens.RealCheckInModal, modalProps)); });
+  assert.equal(hasDone(), true, "A remounted idle thanks step permits recovery");
+  assert.ok(renderedTree().includes("community.checkIn.completionBody") && !renderedTree().includes("community.checkIn.completionPrivateTitle") && !renderedTree().includes("community.checkIn.completionSharedTitle"), "Recovery makes no unverified saved/private/shared claim");
+  await act(() => tree.unmount());
+  const oldAttempt = deferred(), newAttempt = deferred(), retryAttempt = deferred();
+  const attempts = [oldAttempt, newAttempt, retryAttempt];
+  let attemptIndex = 0, oldSubmission, newSubmission, retrySubmission;
+  modalProps = { ...modalDefaults, share: true, onSubmit: () => attempts[attemptIndex++].promise };
+  await act(async () => { tree = create(React.createElement(screens.RealCheckInModal, modalProps)); });
+  await act(() => { oldSubmission = saveControl().props.onPress(); });
+  await updateModal({ visible: false });
+  await updateModal({ visible: true, step: "choose", share: false });
+  await updateModal({ step: "details" });
+  await act(() => { newSubmission = saveControl().props.onPress(); });
+  await act(async () => { oldAttempt.resolve(); await oldSubmission; });
+  assert.equal(saveControl().props.disabled, true, "A stale completion cannot clear a newer attempt's in-flight state");
+  await act(async () => { newAttempt.reject(new Error("save failed")); await newSubmission; });
+  const saveError = tree.root.findAllByType("BodyText").find(node => node.props.accessibilityRole === "alert");
+  assert.equal(saveError.props.accessibilityLiveRegion, "assertive");
+  assert.ok(renderedTree().includes("community.checkIn.saveFailed"));
+  assert.equal(saveControl().props.disabled, false, "Failure permits an explicit retry");
+  await updateModal({ step: "thanks" });
+  assert.equal(hasDone(), true, "A failed attempt can still exit the neutral thanks recovery");
+  assert.ok(!renderedTree().includes("community.checkIn.completionPrivateTitle") && !renderedTree().includes("community.checkIn.completionSharedTitle"), "Neither failure nor an earlier session supplies a success receipt");
+  await updateModal({ step: "details" });
+  await act(() => { retrySubmission = saveControl().props.onPress(); });
+  await act(async () => { retryAttempt.resolve(); await retrySubmission; });
+  await updateModal({ step: "thanks" });
+  assert.ok(renderedTree().includes("community.checkIn.completionPrivateTitle"), "A successful retry supplies its own private confirmation");
+  assert.ok(!renderedTree().includes("community.checkIn.completionSharedTitle"));
+  assert.equal(attemptIndex, 3);
+  await act(() => tree.unmount());
+  // Run both parent entry points with the actual modal, including fresh consent and blank notes.
+  harness.realCheckInModal = true;
+  for (const component of [screens.Home, screens.CheckIns]) {
+    for (const share of [false, true]) {
+      harness.state = baseState;
+      harness.actions = [];
+      await act(async () => { tree = create(React.createElement(component)); });
+      const actualModal = () => tree.root.findByType(screens.RealCheckInModal);
+      const openActual = () => component === screens.Home
+        ? tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.checkIn.promptTitle").props.onPress()
+        : tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.checkIns.action").props.onPress();
+      await act(openActual);
+      assert.equal(actualModal().props.share, false);
+      await act(() => tree.root.findAll(node => node.type?.name === "MoodOptionCard")[0].props.onPress());
+      await act(() => audienceSwitch().props.onPress());
+      assert.equal(actualModal().props.share, true);
+      await act(() => tree.root.findAllByType("IconButton").find(node => node.props.accessibilityLabel === "community.checkIn.back").props.onPress());
+      await act(() => tree.root.findAllByType("IconButton").find(node => node.props.accessibilityLabel === "community.checkIn.back").props.onPress());
+      await act(openActual);
+      assert.equal(actualModal().props.share, false, "Reopening either actual entry point requires new sharing consent");
+      await act(() => tree.root.findAll(node => node.type?.name === "MoodOptionCard")[0].props.onPress());
+      if (share) await act(() => audienceSwitch().props.onPress());
+      await act(async () => { await saveControl().props.onPress(); });
+      assert.equal(harness.actions.at(-1).visibility, share ? "group" : "private");
+      assert.equal(harness.actions.at(-1).reflectionText, "", "Words remain optional in both entry points");
+      assert.equal(harness.actions.at(-1).mood, 4, "Actual mood conversion is retained");
+      assert.equal(actualModal().props.step, "thanks");
+      assert.ok(renderedTree().includes(share ? "community.checkIn.completionSharedTitle:Test community" : "community.checkIn.completionPrivateTitle"));
+      await act(() => tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.checkIn.done").props.onPress());
+      assert.equal(actualModal().props.visible, false);
+      assert.equal(actualModal().props.share, false, "Done resets audience to private");
+      await act(() => tree.unmount());
+    }
+  }
+  delete harness.realCheckInModal;
+  // Completion never reveals today's private check-in; this list remains shared-only.
+  const sharedBlank = { ...populatedState.checkIns[0], id: "shared-blank", userId: "sarah", reflectionText: "", createdAt: now };
+  const ownPrivate = { ...sharedBlank, id: "own-private", userId: "reader", visibility: "private", reflectionText: "Private note must stay hidden" };
+  const checkInsFixture = { ...prayerFixture, posts: [], checkIns: [sharedBlank, ownPrivate], privateCheckIns: [ownPrivate] };
+  harness.state = checkInsFixture;
+  harness.actions = [];
+  await act(async () => { tree = create(React.createElement(screens.CheckIns)); });
+  assert.deepEqual(cardIds(), ["shared-blank"]);
+  assert.equal(card("shared-blank").props.bodyContent, undefined, "A shared check-in may contain only its mood");
+  assert.ok(renderedTree().includes("community.checkIns.completedToday"));
+  assert.ok(!renderedTree().includes(ownPrivate.reflectionText));
+  assert.ok(!tree.root.findAllByType("PrimaryButton").some(node => node.props.children === "community.checkIns.action"));
+  assert.ok(!renderedTree().includes("community.checkIn.sharedWithCommunity") && !renderedTree().includes("community.checkIn.privateOnly"), "Completed landing copy must not infer the saved audience");
+  for (const reacted of [false, true]) {
+    if (reacted) {
+      harness.state = { ...checkInsFixture, postReactions: [{ id: "encouraged", userId: "reader", targetType: "check_in", targetId: sharedBlank.id, kind: "reflection", createdAt: now }] };
+      await act(() => tree.update(React.createElement(screens.CheckIns)));
+    }
+    const encourage = card("shared-blank").findByType("CommunityCardAction");
+    assert.equal(encourage.props.active, reacted);
+    await act(() => encourage.props.onPress());
+    assert.deepEqual(harness.actions.at(-1), { type: "togglePostReaction", targetType: "check_in", targetId: sharedBlank.id, kind: "reflection", mode: "ensure" }, "Repeated encouragement retains participation instead of toggling it off");
+    await act(() => tree.root.findByType("WrittenEncouragementComposer").props.onDismiss());
+  }
+  assert.ok(harness.actions.every(action => action.type === "togglePostReaction"), "Encouraging without optional words does not create a reply");
+  await act(() => press(tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier")));
+  assert.deepEqual(harness.actions.at(-1), { type: "loadOlderCommunityContent" });
+  harness.state = { ...harness.state, communityContentLoadingMore: true };
+  await act(() => tree.update(React.createElement(screens.CheckIns)));
+  assert.equal(tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier").props.disabled, true);
+  harness.state = { ...harness.state, communityContentHasMore: false };
+  await act(() => tree.update(React.createElement(screens.CheckIns)));
+  assert.ok(!tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier"));
+  for (const [language, completed, sharedList] of [
+    ["en", "You've checked in today. You can still encourage someone.", "Shared check-ins"],
+    ["sv", "Du har checkat in i dag. Du kan fortfarande uppmuntra någon.", "Delade incheckningar"],
+  ]) {
+    harness.localized = true;
+    harness.language = language;
+    await act(() => tree.update(React.createElement(screens.CheckIns)));
+    assert.ok(renderedTree().includes(completed) && renderedTree().includes(sharedList), "Completed and shared-only landing copy is localized");
+  }
+  delete harness.localized;
+  delete harness.language;
+  await act(() => tree.unmount());
+  console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
   console.log("Prayer hierarchy passed: focused request actions, target/cancel/skip/complete/repeat contracts, personal prayer, request composer, filters/states/pagination, unchanged Recent presentation, and EN/SV counts/empty/action copy.");

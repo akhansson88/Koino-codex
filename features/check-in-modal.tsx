@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
@@ -19,7 +19,7 @@ import {
 } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, platformShadow, radius } from "@/ui/theme";
+import { colors, platformShadow, radius, typography } from "@/ui/theme";
 
 export type CheckInStep = "choose" | "details" | "thanks";
 const moodCopyKeys = {
@@ -104,21 +104,40 @@ export function CheckInModal({
   const selectedMood = heartMoods.find((option) => option.value === mood);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
+  const [confirmation, setConfirmation] = useState<{ shared: boolean; communityName: string }>();
+  const submittingRef = useRef(false);
+  const submissionVersionRef = useRef(0);
 
   useEffect(() => {
-    if (!visible || step !== "details") {
+    if (!visible || step === "choose") {
+      submissionVersionRef.current += 1;
+      submittingRef.current = false;
       setSubmitting(false);
       setSubmitError(undefined);
+      setConfirmation(undefined);
     }
   }, [step, visible]);
 
+  useEffect(() => () => {
+    submissionVersionRef.current += 1;
+    submittingRef.current = false;
+  }, []);
+
   async function submit() {
-    if (submitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    const submissionVersion = ++submissionVersionRef.current;
+    // The same render's onSubmit captures this audience in both entry points.
+    // Record it only after that attempt succeeds, independently of later props.
+    const submittedAudience = { shared: share, communityName: roomName };
     setSubmitting(true);
     setSubmitError(undefined);
+    setConfirmation(undefined);
     try {
       await onSubmit();
+      if (submissionVersionRef.current === submissionVersion) setConfirmation(submittedAudience);
     } catch (error) {
+      if (submissionVersionRef.current !== submissionVersion) return;
       if (error instanceof CheckInSubmissionError && error.code === "already_submitted") {
         setSubmitError(t("community.checkIn.alreadySubmitted"));
       } else if (error instanceof CheckInSubmissionError && error.code === "in_progress") {
@@ -129,7 +148,10 @@ export function CheckInModal({
         setSubmitError(t("community.checkIn.saveFailed"));
       }
     } finally {
-      setSubmitting(false);
+      if (submissionVersionRef.current === submissionVersion) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   }
 
@@ -146,7 +168,7 @@ export function CheckInModal({
           {step === "choose" ? (
             <>
               <View style={{ gap: 7 }}>
-                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>{t("community.checkIn.promptTitle")}</Text>
+                <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink }]}>{t("community.checkIn.promptTitle")}</Text>
                 <BodyText muted>{t("community.checkIn.promptBody")}</BodyText>
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -172,11 +194,40 @@ export function CheckInModal({
           {step === "details" ? (
             <>
               <View style={{ gap: 7 }}>
-                <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31 }}>{t("community.checkIn.detailsTitle")}</Text>
+                <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink }]}>{t("community.checkIn.detailsTitle")}</Text>
                 <BodyText muted>{t("community.checkIn.detailsBody")}</BodyText>
               </View>
+              <View style={{ gap: 8 }}>
+                <SectionHeading>{t("community.checkIn.shareWith")}</SectionHeading>
+                <Pressable
+                  accessibilityLabel={share
+                    ? t("community.checkIn.sharedNotice", { name: roomName })
+                    : `${t("community.checkIn.privateOnly")}. ${t("community.checkIn.shareOptionLabel", { name: roomName })}`}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: share, disabled: submitting }}
+                  disabled={submitting}
+                  onPress={() => onShare(!share)}
+                  style={{ minHeight: 44 }}
+                >
+                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
+                    <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+                      <Text style={[typography.subtitle, { color: colors.ink }]}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
+                      <Text style={[typography.caption, { color: colors.muted }]}>
+                        {share ? t("community.checkIn.sharedNotice", { name: roomName }) : t("community.checkIn.privateOnly")}
+                      </Text>
+                    </View>
+                    <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+                      <Feather name={share ? "check-circle" : "circle"} size={18} color={colors.muted} />
+                    </View>
+                  </Card>
+                </Pressable>
+              </View>
               <View style={{ gap: 6 }}>
+                <BodyText muted style={typography.label}>{t("community.checkIn.noteOptional")}</BodyText>
                 <TextInputField
+                  accessibilityLabel={t("community.checkIn.noteOptional")}
+                  editable={!submitting}
                   multiline
                   maxLength={350}
                   value={note}
@@ -184,40 +235,19 @@ export function CheckInModal({
                   onSubmitEditing={submit}
                   placeholder={t("community.checkIn.notePlaceholder")}
                   returnKeyType="send"
-                  style={{ minHeight: 210 }}
+                  style={{ minHeight: 120 }}
                   submitBehavior="submit"
                 />
-                <Text style={{ alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>{note.length}/350</Text>
+                <Text style={[typography.caption, { alignSelf: "flex-end", color: colors.muted }]}>{note.length}/350</Text>
               </View>
               {selectedMood ? (
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
                   <MoodIcon mood={selectedMood.value} size={34} />
-                  <Text style={{ color: colors.muted, flex: 1, fontSize: 13, fontWeight: "800" }}>{t(moodCopyKeys[selectedMood.value].label)}</Text>
+                  <Text style={[typography.label, { color: colors.muted, flex: 1 }]}>{t(moodCopyKeys[selectedMood.value].label)}</Text>
                 </View>
               ) : null}
               <BibleVerseField label={t("community.checkIn.scriptureOptional")} verses={verses} onChange={onVerses} />
-              <View style={{ gap: 8, marginTop: 8 }}>
-                <SectionHeading>{t("community.checkIn.shareWith")}</SectionHeading>
-                <Pressable
-                  accessibilityLabel={t("community.checkIn.sharedWithCommunity", { name: roomName })}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: share, disabled: submitting }}
-                  disabled={submitting}
-                  onPress={() => onShare(!share)}
-                >
-                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                        {share ? t("community.checkIn.sharedWithCommunity", { name: roomName }) : t("community.checkIn.privateOnly")}
-                      </Text>
-                    </View>
-                    <Feather name={share ? "check-circle" : "circle"} size={18} color={colors.muted} />
-                  </Card>
-                </Pressable>
-              </View>
-              {submitError ? <BodyText style={{ color: colors.danger }}>{submitError}</BodyText> : null}
+              {submitError ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{submitError}</BodyText> : null}
               <PrimaryButton disabled={submitting} icon="send" onPress={submit} style={{ minHeight: 58 }}>
                 {submitting
                   ? t("community.checkIn.saving")
@@ -225,17 +255,27 @@ export function CheckInModal({
                     ? t("community.checkIn.shareAction")
                     : t("community.checkIn.savePrivateAction")}
               </PrimaryButton>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center" }}>
-                <Feather name="lock" size={13} color={colors.muted} />
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "center", minWidth: 0 }}>
+                <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+                  <Feather name={share ? "users" : "lock"} size={13} color={colors.muted} />
+                </View>
+                <Text style={[typography.caption, { color: colors.muted, flexShrink: 1 }]}>
                   {share ? t("community.checkIn.sharedNotice", { name: roomName }) : t("community.checkIn.privateNotice")}
                 </Text>
               </View>
             </>
           ) : null}
 
-          {step === "thanks" ? (
-            <View style={{ alignItems: "center", flex: 1, gap: 20, justifyContent: "center", minHeight: 560 }}>
+          {step === "thanks" && !confirmation ? (
+            <View style={{ gap: 16 }}>
+              <BodyText accessibilityLiveRegion="polite" muted>
+                {t(submitting ? "community.checkIn.saving" : "community.checkIn.completionBody")}
+              </BodyText>
+              {!submitting ? <PrimaryButton onPress={onDone}>{t("community.checkIn.done")}</PrimaryButton> : null}
+            </View>
+          ) : null}
+          {step === "thanks" && confirmation ? (
+            <View style={{ alignItems: "center", gap: 20, paddingVertical: 24 }}>
               <View
                 style={{
                   alignItems: "center",
@@ -249,7 +289,11 @@ export function CheckInModal({
                 <Feather name="heart" size={42} color={colors.gold} />
               </View>
               <View style={{ alignItems: "center", gap: 8 }}>
-                <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>{t("community.checkIn.completionTitle")}</Text>
+                <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink, textAlign: "center" }]}>
+                  {confirmation.shared
+                    ? t("community.checkIn.completionSharedTitle", { name: confirmation.communityName })
+                    : t("community.checkIn.completionPrivateTitle")}
+                </Text>
                 <BodyText muted style={{ textAlign: "center" }}>
                   {t("community.checkIn.completionBody")}
                 </BodyText>
@@ -309,8 +353,8 @@ function MoodOptionCard({
       >
         <MoodIcon mood={option.value} />
         <View style={{ alignItems: "center", alignSelf: "stretch", gap: 4, minWidth: 0 }}>
-          <Text style={{ color: colors.ink, flexShrink: 1, fontSize: 14, fontWeight: "900", lineHeight: 19, textAlign: "center" }}>{label}</Text>
-          <Text style={{ color: colors.muted, flexShrink: 1, fontSize: 12, fontWeight: "700", lineHeight: 17, textAlign: "center" }}>{description}</Text>
+          <Text style={[typography.subtitle, { color: colors.ink, flexShrink: 1, textAlign: "center" }]}>{label}</Text>
+          <Text style={[typography.caption, { color: colors.muted, flexShrink: 1, textAlign: "center" }]}>{description}</Text>
         </View>
       </View>
     </Pressable>
