@@ -32,7 +32,7 @@ const mocks = {
   "react-native": `
     import React from "react";
     export const Platform = { get OS() { return globalThis.__communityNavigation.os; } };
-    export const AccessibilityInfo = { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) };
+    export const AccessibilityInfo = { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }), announceForAccessibility() {} };
     export const BackHandler = { addEventListener: (_event, handler) => {
       const h = globalThis.__communityNavigation;
       h.hardwareBack = handler;
@@ -90,12 +90,12 @@ const communityModules = (await readdir("features/community"))
   .filter(file => /\.tsx?$/.test(file))
   .map(file => `features/community/${file}`);
 const leafUiImports = new Map();
-for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
+for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
     const module = statement.moduleSpecifier.text;
-    if (!module.startsWith("@/ui/") || mocks[module] || ["@/ui/community-copy", "@/ui/relative-time", "@/ui/navigation-layout", "@/ui/journal-presentation"].includes(module)) continue;
+    if (!module.startsWith("@/ui/") || mocks[module] || ["@/ui/community-copy", "@/ui/relative-time", "@/ui/navigation-layout", "@/ui/journal-presentation", "@/ui/post-card"].includes(module)) continue;
     const imports = statement.importClause?.namedBindings;
     if (!imports || !ts.isNamedImports(imports)) continue;
     const names = leafUiImports.get(module) ?? new Set();
@@ -107,7 +107,7 @@ for (const [module, names] of leafUiImports) {
   mocks[module] = [...names].map(name => {
     if (name === "PrayerMoment") return `export const PrayerMoment = props => React.createElement("PrayerMoment", props);`;
     if (name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
-    if (name === "CommunityFeedCard") return `export const CommunityFeedCard = props => React.createElement("CommunityFeedCard", props, props.actions, props.responseSummary);`;
+    if (name === "LinkPreviewContent") return `export const LinkPreviewContent = ({ children }) => children({});`;
     if (/^[A-Z]/.test(name)) return `export function ${name}(props) { return props.visible === false ? null : React.createElement("${name}", props); }`;
     return `export const ${name} = () => undefined;`;
   }).join("\n");
@@ -296,10 +296,13 @@ try {
     prayerReactions: [{ id: "reader_post_prior-prayed", userId: "reader", targetType: "post", targetId: "prior-prayed", createdAt: now }],
     communityContentHasMore: true, communityContentLoadingMore: false,
   };
-  const cards = () => tree.root.findAllByType("CommunityFeedCard");
+  const cards = () => tree.root.findAll(node => node.type?.name === "CommunityFeedCard");
   const card = id => cards().find(node => node.props.item.id === id);
   const cardIds = () => cards().map(node => node.props.item.id).sort();
-  const requestAction = id => card(id).findAll(node => ["Pressable", "CommunityCardAction"].includes(node.type) && typeof node.props.onPress === "function")[0];
+  const requestAction = id => {
+    const action = card(id).props.actions;
+    return card(id).find(node => node.type === action.type && node.props.onPress === action.props.onPress);
+  };
   const moment = () => tree.root.findByType("PrayerMoment");
   const press = node => node.props.onPress({ stopPropagation() {} });
   const renderedTree = () => JSON.stringify(tree.toJSON(), (key, value) => key === "_owner" ? undefined : value);
@@ -308,6 +311,7 @@ try {
   harness.actions = [];
   await act(async () => { tree = create(React.createElement(screens.Prayer)); });
   assert.ok(tree.root.findAll(node => node.type?.name === "PrayerRequestCard").every(node => node.props.focused === true), "Only the dedicated Prayer screen opts into focused request actions");
+  assert.ok(cards().every(node => !node.props.overview), "Focused Prayer retains its existing card shell");
   assert.equal(requestAction("unprayed").type, "Pressable");
   assert.equal(requestAction("unprayed").props.accessibilityLabel, "community.prayer.prayForRequest:Sarah");
   assert.ok(entryStyle(requestAction("unprayed")).minHeight >= 44);
@@ -327,12 +331,12 @@ try {
   }
   const afterPrayer = { ...prayerFixture, prayerReactions: [...prayerFixture.prayerReactions, { id: "reader_post_unprayed", userId: "reader", targetType: "post", targetId: "unprayed", createdAt: now }] };
   await updatePrayer(afterPrayer);
-  assert.equal(requestAction("unprayed").type, "CommunityCardAction");
+  assert.equal(requestAction("unprayed").type.name, "CommunityCardAction");
   assert.equal(requestAction("unprayed").props.active, true);
   assert.equal(requestAction("unprayed").props.label, "community.action.prayer.completed");
   assert.equal(requestAction("unprayed").props.accessibilityLabel, "community.prayer.prayAgainForRequest:Sarah");
   assert.equal(card("unprayed").props.status.props.status, "open", "Prayed participation does not mark a request Answered");
-  assert.equal(card("unprayed").findByType("CommunityCardResponseSummary").props.count, 1);
+  assert.equal(card("unprayed").find(node => node.type?.name === "CommunityCardResponseSummary").props.count, 1);
   await act(() => press(requestAction("unprayed")));
   assert.deepEqual(moment().props.target, expectedTarget, "Prayed remains an interactive repeat-prayer action");
   await act(() => moment().props.onFinish("completed", now));
@@ -375,24 +379,131 @@ try {
   await updatePrayer({ ...prayerFixture, communityContentHasMore: false });
   assert.ok(!tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.feed.viewMoreEarlier"), "No older-content action appears when history is exhausted");
   await act(() => tree.unmount());
-  // Recent keeps the default card presentation; focused prayer moments remain read-only.
+  // Recent opts into the overview shell, independently of focused request actions.
   harness.state = prayerFixture;
   await act(async () => { tree = create(React.createElement(screens.Overview)); });
   assert.ok(tree.root.findAll(node => node.type?.name === "PrayerRequestCard").every(node => node.props.focused === undefined), "Recent does not opt into focused request styling");
-  assert.equal(requestAction("unprayed").type, "CommunityCardAction");
+  assert.equal(requestAction("unprayed").type.name, "CommunityCardAction");
   await act(() => tree.unmount());
+  const earlier = { id: "earlier", groupId: "room", userId: "sarah", kind: "reflection", body: "Earlier reflection", createdAt: "2020-01-01T12:00:00Z" };
+  const densityFixture = {
+    ...prayerFixture,
+    posts: [
+      ...prayerFixture.posts,
+      { ...earlier, id: "reflection", body: "A recent reflection", createdAt: now },
+      { ...earlier, id: "praise", kind: "praise", body: "A recent praise", createdAt: now },
+      { ...earlier, id: "scripture", kind: "scripture", body: "", verse: { reference: "Psalm 23:1", text: "The Lord is my shepherd." }, createdAt: now },
+      earlier,
+    ],
+    checkIns: [{ ...populatedState.checkIns[0], userId: "sarah", reflectionText: "", createdAt: now }],
+    postReactions: [{ id: "encouraged", userId: "reader", targetType: "post", targetId: "reflection", kind: "reflection", createdAt: now }],
+  };
+  harness.state = densityFixture;
+  harness.actions = [];
+  await act(async () => { tree = create(React.createElement(screens.Overview)); });
+  assert.deepEqual(cardIds(), ["answered", "checkin", "praise", "prior-prayed", "reflection", "scripture", "unprayed"]);
+  assert.ok(cards().every(node => node.props.overview === true), "All overview card types use the denser shell");
+  assert.ok(cards().every(node => node.findAllByType("Avatar").length === 1 && node.findAllByType("AvatarStack").length === 0), "Only the author avatar renders on overview cards");
+  for (const node of cards()) {
+    const [author, meta] = node.findAllByType("Text");
+    assert.equal(author.props.children, "Sarah");
+    assert.match(meta.props.children, /^community\..+ · .+$/);
+    assert.equal(meta.props.numberOfLines, undefined, "Metadata can wrap under the author name");
+  }
+  assert.ok(renderedTree().includes("community.feed.caughtUpTitle"));
+  assert.equal(tree.root.findByType("FlatList").props.onEndReached, undefined, "Scrolling cannot load history");
+  assert.deepEqual(harness.actions, []);
+  const actionNodes = id => card(id).findAll(node => node.type?.name === "CommunityCardAction");
+  for (const [id, icon, secondaryCount] of [["reflection", "heart", 1], ["scripture", "book-open", 1], ["praise", "star", 0], ["checkin", "heart", 0], ["unprayed", "pray", 0]]) {
+    const [primary, ...secondary] = actionNodes(id);
+    assert.equal(primary.props.icon, icon);
+    assert.notEqual(primary.props.variant, "secondary");
+    assert.equal(secondary.length, secondaryCount);
+    if (secondary.length) {
+      assert.equal(secondary[0].props.icon, "pray");
+      assert.equal(secondary[0].props.variant, "secondary");
+      assert.equal(secondary[0].findAllByType("MaterialCommunityIcons").length, 0, "Secondary Pray is text only");
+    }
+    for (const action of [primary, ...secondary]) assert.ok(entryStyle(action.findByType("Pressable")).minHeight >= 44);
+  }
+  assert.equal(card("answered").props.status.props.children, "shared.status.answered");
+  assert.match(card("answered").props.status.props.accessibilityLabel, /community\.prayer\.status\.label.*shared\.status\.answered/);
+  assert.ok(card("checkin").find(node => node.type?.name === "CommunityCheckInMood"));
+  assert.equal(card("scripture").findByType("VerseList").props.verse.reference, "Psalm 23:1");
+  assert.equal(card("reflection").find(node => node.type?.name === "CommunityCardResponseSummary").props.count, 1);
+  assert.equal(card("unprayed").props.responseSummary, undefined, "Zero prayers add no response copy in the overview");
+  for (const [id, targetType, kind] of [["reflection", "post", "reflection"], ["praise", "post", "praise"], ["checkin", "check_in", "reflection"]]) {
+    await act(() => press(actionNodes(id)[0].findByType("Pressable")));
+    assert.deepEqual(harness.actions.at(-1), { type: "togglePostReaction", targetType, targetId: id, kind, mode: "ensure" });
+    await act(() => tree.root.findByType("WrittenEncouragementComposer").props.onDismiss());
+  }
+  await act(() => press(actionNodes("reflection")[1].findByType("Pressable")));
+  assert.equal(moment().props.target.targetId, "reflection", "Quiet secondary Pray still opens Dwell");
+  await act(() => moment().props.onClose());
+  await act(() => press(actionNodes("unprayed")[0].findByType("Pressable")));
+  assert.equal(moment().props.target.targetId, "unprayed");
+  await act(() => moment().props.onClose());
+  await act(() => press(actionNodes("scripture")[0].findByType("Pressable")));
+  const scriptureComposer = tree.root.findByType("SharedComposer");
+  assert.equal(scriptureComposer.props.context, "journal");
+  assert.equal(scriptureComposer.props.entryVisibility, "private");
+  assert.equal(scriptureComposer.props.verses[0].reference, "Psalm 23:1");
+  await act(() => scriptureComposer.props.onClose());
+  const openScripture = card("scripture").findAllByType("Pressable").find(node => node.findAllByType("VerseList").length === 1);
+  await act(() => press(openScripture));
+  assert.equal(harness.pushed, "/feed/post/scripture", "A verse-only Scripture card still opens details");
+  const endpoint = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.feed.viewEarlierIn:Test community");
+  assert.ok(endpoint);
+  await act(() => press(endpoint));
+  assert.ok(card("earlier")?.props.overview, "Manually revealed history uses the same card hierarchy");
+  assert.ok(renderedTree().includes("community.feed.earlierActivity"));
+  await act(() => overviewChips().props.onChange("reflections"));
+  assert.deepEqual(cardIds(), ["reflection"], "Reflections stays filtered and starts with its own unrevealed history");
+  assert.equal(tree.root.findByType("FlatList").props.onEndReached, undefined);
+  await act(() => tree.unmount());
+  for (const [language, copy, answered, count] of [
+    ["en", [["reflection", "Reflection", "Encouraged"], ["unprayed", "Prayer", "Pray"], ["praise", "Praise", "Amen"], ["scripture", "Scripture", "Reflect"], ["checkin", "Check-in", "Encourage"]], "Answered", "1 encouragement"],
+    ["sv", [["reflection", "Reflektion", "Uppmuntrat"], ["unprayed", "Bön", "Be"], ["praise", "Tacksägelse", "Amen"], ["scripture", "Bibelord", "Reflektera"], ["checkin", "Incheckning", "Uppmuntra"]], "Besvarad", "1 uppmuntran"],
+  ]) {
+    harness.localized = true;
+    harness.language = language;
+    await act(async () => { tree = create(React.createElement(screens.Overview)); });
+    for (const [id, type, action] of copy) {
+      assert.ok(card(id).findAllByType("Text")[1].props.children.startsWith(`${type} · `));
+      assert.equal(actionNodes(id)[0].findByType("Pressable").props.accessibilityLabel, action);
+    }
+    assert.equal(card("answered").props.status.props.accessibilityLabel, `status. ${answered}`);
+    const summary = card("reflection").find(node => node.type?.name === "CommunityCardResponseSummary");
+    assert.equal(summary.findByType("Text").props.children.join(""), count);
+    await act(() => tree.unmount());
+  }
+  delete harness.localized;
+  delete harness.language;
+  for (const [state, message, hasCards] of [
+    [{ ...densityFixture, communityFeedReady: false }, "community.feed.loading", false],
+    [{ ...densityFixture, communityFeedError: "test error" }, "community.feed.loadError", false],
+    [{ ...densityFixture, posts: [], checkIns: [] }, "community.empty.recent", false],
+    [{ ...densityFixture, communityFeedOffline: true }, "community.feed.unavailable", true],
+  ]) {
+    harness.state = state;
+    await act(async () => { tree = create(React.createElement(screens.Overview)); });
+    assert.ok(renderedTree().includes(message));
+    assert.equal(cards().length > 0, hasCards);
+    if (hasCards) assert.ok(cards().every(node => node.props.overview));
+    await act(() => tree.unmount());
+  }
   const cardProps = { item: { ...prayerFixture.posts[0], type: "post" }, authorName: "Sarah", ownsItem: false, prayerCount: 0, prayedBy: [], onOpen() {}, onPray() {} };
   for (const prayed of [false, true]) {
     await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, prayed })); });
     const defaultCard = renderedTree();
     await act(() => tree.unmount());
     await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, prayed, focused: false })); });
-    assert.equal(renderedTree(), defaultCard, "Omitting focused retains the same Recent card markup and props");
+    assert.equal(renderedTree(), defaultCard, "Omitting focused retains the default card markup and props");
     await act(() => tree.unmount());
   }
   await act(async () => { tree = create(React.createElement(screens.PrayerRequestCard, { ...cardProps, item: { ...cardProps.item, kind: "prayer_moment" }, focused: true, prayed: false })); });
-  assert.equal(tree.root.findByType("CommunityCardAction").props.onPress, undefined, "A prayer moment stays read-only even in focused mode");
-  assert.equal(tree.root.findByType("CommunityFeedCard").props.status, undefined);
+  assert.equal(tree.root.find(node => node.type?.name === "CommunityCardAction").props.onPress, undefined, "A prayer moment stays read-only even in focused mode");
+  assert.equal(cards()[0].props.status, undefined);
   await act(() => tree.unmount());
   const prayerCopy = {
     en: {
@@ -700,6 +811,7 @@ try {
   harness.actions = [];
   await act(async () => { tree = create(React.createElement(screens.CheckIns)); });
   assert.deepEqual(cardIds(), ["shared-blank"]);
+  assert.ok(cards().every(node => !node.props.overview), "Focused Check-ins retains its existing card shell");
   assert.equal(card("shared-blank").props.bodyContent, undefined, "A shared check-in may contain only its mood");
   assert.ok(renderedTree().includes("community.checkIns.completedToday"));
   assert.ok(!renderedTree().includes(ownPrivate.reflectionText));
@@ -710,7 +822,7 @@ try {
       harness.state = { ...checkInsFixture, postReactions: [{ id: "encouraged", userId: "reader", targetType: "check_in", targetId: sharedBlank.id, kind: "reflection", createdAt: now }] };
       await act(() => tree.update(React.createElement(screens.CheckIns)));
     }
-    const encourage = card("shared-blank").findByType("CommunityCardAction");
+    const encourage = card("shared-blank").find(node => node.type?.name === "CommunityCardAction");
     assert.equal(encourage.props.active, reacted);
     await act(() => encourage.props.onPress());
     assert.deepEqual(harness.actions.at(-1), { type: "togglePostReaction", targetType: "check_in", targetId: sharedBlank.id, kind: "reflection", mode: "ensure" }, "Repeated encouragement retains participation instead of toggling it off");
@@ -740,8 +852,9 @@ try {
   console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
-  console.log("Prayer hierarchy passed: focused request actions, target/cancel/skip/complete/repeat contracts, personal prayer, request composer, filters/states/pagination, unchanged Recent presentation, and EN/SV counts/empty/action copy.");
+  console.log("Prayer hierarchy passed: focused request actions, target/cancel/skip/complete/repeat contracts, personal prayer, request composer, filters/states/pagination, overview opt-in, and EN/SV counts/empty/action copy.");
   console.log("Community navigation passed: translated balanced Prayer requests/Check-ins cards, personal prayer within Prayer, Recent/Reflections and Share, stale filter fallback, iOS/Android filter/scroll and Back, dedicated page/content/empty/loading/error/offline rendering.");
+  console.log("Feed card density passed: overview opt-in, one author avatar and primary action, secondary prayer, nonzero response counts, mood and Scripture, and explicit history reveal.");
 } finally {
   if (tree) await act(() => tree.unmount());
   await rm(directory, { recursive: true, force: true });

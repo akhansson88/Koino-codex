@@ -820,6 +820,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       return (
         <CheckInCard
           key={key}
+          overview
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
@@ -839,6 +840,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       return (
         <PrayerRequestCard
           key={key}
+          overview
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
@@ -859,6 +861,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return (
       <PostCard
         key={key}
+        overview
         authorImage={userImageById.get(item.userId)}
         authorName={userById.get(item.userId) ?? t("common.someone")}
         item={item}
