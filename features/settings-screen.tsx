@@ -52,7 +52,7 @@ import { PostCard } from "@/ui/post-card";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors } from "@/ui/theme";
+import { colors, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import {
   type RoomView,
@@ -84,7 +84,7 @@ import {
   CommunityPrayerMomentDetailScreen,
   CommunityPrayerScreen,
 } from "@/features/community/prayer-screens";
-import { CommunityPrayerMemberModal, CommunityPrayerActions } from "@/features/community/prayer-actions";
+import { CommunityPrayerMemberModal } from "@/features/community/prayer-actions";
 import { FocusedScreenHeader } from "@/features/community/focused-header";
 import { MembersPanel } from "@/features/community/members-panel";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
@@ -99,6 +99,8 @@ import {
   CommunityFeedErrorState,
 } from "@/features/community/feed-components";
 
+const overviewTabs = roomTabs.filter((tab) => tab.value === "recent" || tab.value === "reflections");
+
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
   const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
@@ -107,7 +109,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const navigation = useNavigation();
   const { prayerMomentId } = useLocalSearchParams<{ prayerMomentId?: string }>();
   const [roomView, setRoomView] = useState<RoomView>(routeRoomView);
-  const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
+  const [activeDetailTab, setDetailTab] = useState<RoomDetailTab>("recent");
+  // Retained state from the former Prayer/Check-ins filters opens the mixed feed.
+  const detailTab = activeDetailTab === "reflections" ? "reflections" : "recent";
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [joinInviteCode, setJoinInviteCode] = useState("");
@@ -489,15 +493,16 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
-    if (tab === detailTab) return;
+    const nextTab = tab === "reflections" ? "reflections" : "recent";
+    if (nextTab === detailTab) return;
     if (group) {
-      const targetKey = `${group.id}:${tab}`;
+      const targetKey = `${group.id}:${nextTab}`;
       pendingCommunityScrollRestoreRef.current = {
         key: targetKey,
         offset: communityScrollOffsetsRef.current[targetKey] ?? 0,
       };
     }
-    setDetailTab(tab);
+    setDetailTab(nextTab);
   }
 
   function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
@@ -1154,22 +1159,60 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <Feather name="chevron-right" size={17} color={colors.muted} />
               </Pressable>
 
-              <CommunityPrayerActions
-                groupId={group.id}
-                members={otherCommunityMembers}
-                onPrayForPerson={(assignedMember) => {
-                  if (!assignedMember) {
-                    setMemberSelectVisible(true);
-                    return;
-                  }
-
-                  startCommunityPrayer(assignedMember);
-                }}
-                onPrayForRequests={() => {
-                  setPrayerFilter("open");
-                  navigateToRoomView("prayer");
-                }}
-              />
+              <View style={{ alignItems: "stretch", flexDirection: "row", gap: 10 }}>
+                {[
+                  {
+                    key: "prayer",
+                    icon: "list" as const,
+                    title: t("community.overview.prayerRequests"),
+                    subtitle: t("community.overview.prayTogether"),
+                    primary: true,
+                    onPress: () => {
+                      setPrayerFilter("open");
+                      navigateToRoomView("prayer");
+                    },
+                  },
+                  {
+                    key: "checkins",
+                    icon: "check-circle" as const,
+                    title: t("community.page.checkIns"),
+                    subtitle: t("community.overview.shareHowYouFeel"),
+                    primary: false,
+                    onPress: openCheckInsView,
+                  },
+                ].map(({ key, icon, title, subtitle, primary, onPress }) => (
+                  <Pressable
+                    accessibilityLabel={`${title}. ${subtitle}`}
+                    accessibilityRole="button"
+                    key={key}
+                    onPress={onPress}
+                    style={{
+                      backgroundColor: primary ? colors.accentWarm : colors.cream,
+                      borderColor: primary ? colors.accentWarm : colors.border,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      flex: 1,
+                      flexBasis: 0,
+                      gap: 8,
+                      minHeight: 104,
+                      minWidth: 0,
+                      padding: 12,
+                    }}
+                  >
+                    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                      <Feather name={icon} size={20} color={primary ? colors.onAccent : colors.textPrimary} />
+                    </View>
+                    <View style={{ gap: 3, minWidth: 0 }}>
+                      <Text style={[typography.cardTitle, { color: primary ? colors.onAccent : colors.textPrimary }]}>
+                        {title}
+                      </Text>
+                      <Text style={[typography.caption, { color: primary ? colors.onAccent : colors.textSecondary }]}>
+                        {subtitle}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
 
               <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
                 <View style={{ flex: 1, minWidth: 148 }}>
@@ -1177,25 +1220,15 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
                   </SectionHeading>
                 </View>
-                {detailTab === "prayer" ? (
-                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.openPrayer")}
-                  </PrimaryButton>
-                ) : detailTab === "checkins" ? (
-                  <PrimaryButton icon="check-circle" onPress={openCheckInsView} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.openCheckIns")}
-                  </PrimaryButton>
-                ) : (
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.share")}
-                  </PrimaryButton>
-                )}
+                <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
+                  {t("community.feed.share")}
+                </PrimaryButton>
               </View>
 
               <CommunityFilterChips
                 value={detailTab}
                 onChange={handleCommunityTabChange}
-                options={roomTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
+                options={overviewTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
               />
             </View>
 
@@ -1210,11 +1243,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   <BodyText muted>
                     {detailTab === "recent"
                       ? t("community.empty.recent")
-                      : detailTab === "prayer"
-                        ? t("community.empty.prayer")
-                        : detailTab === "checkins"
-                          ? t("community.empty.checkIns")
-                          : t("community.empty.reflections")}
+                      : t("community.empty.reflections")}
                   </BodyText>
                 </Card>
               ) : null}
