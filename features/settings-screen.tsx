@@ -8,6 +8,7 @@ import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { checkInExistsForDay } from "@/state/check-ins";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
+import type { Action, CommunitySubmissionOutcome, CommunitySubmissionRequest } from "@/state/store/types";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import { EntryVisibility, feedItemKind, normalizeEntryKind, roomTabs, visibility } from "@/state/product";
 import {
@@ -51,7 +52,7 @@ import { tabContentClearance } from "@/ui/navigation-layout";
 import { PostCard } from "@/ui/post-card";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
-import { SharedComposer } from "@/ui/shared-composer";
+import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-composer";
 import { colors, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import {
@@ -101,6 +102,38 @@ import {
 
 const overviewTabs = roomTabs.filter((tab) => tab.value === "recent" || tab.value === "reflections");
 
+const COMMUNITY_SUBMISSION_CONFIRMATION_MS = 15_000;
+type CommunityComposerDraft = {
+  kind: EntryKind;
+  title: string;
+  body: string;
+  verses: BibleVerse[];
+  editingPost?: Extract<FeedItem, { type: "post" }>;
+};
+type CommunityComposerAttempt = {
+  owner: string;
+  viewVersion: number;
+  draft: CommunityComposerDraft;
+  action: Extract<Action, { type: "createPost" | "editPost" }>;
+  request: Omit<CommunitySubmissionRequest, "report" | "previouslyUnknown">;
+  status: CommunityComposerSubmission["status"];
+  inFlight: boolean;
+  previouslyUnknown: boolean;
+  outcome?: CommunitySubmissionOutcome;
+  attachedView: object;
+  timer?: ReturnType<typeof setTimeout>;
+};
+// Process-memory only. Native navigation can remount SettingsScreen while an
+// SDK transaction is still alive; that must not create a new submission ID.
+const communityComposerAttempts = new Map<string, CommunityComposerAttempt>();
+const communityComposerObservers = new Set<(attempt: CommunityComposerAttempt) => void>();
+
+function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
+  for (const observer of communityComposerObservers) {
+    try { observer(attempt); } catch { /* An obsolete view cannot change the write outcome. */ }
+  }
+}
+
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
   const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
@@ -125,6 +158,81 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
+  const [composerSubmission, setComposerSubmission] = useState<CommunityComposerSubmission>({ status: "idle", inFlight: false });
+  const composerOwner = JSON.stringify([state.currentUserId ?? null, state.currentGroupId ?? null]);
+  const currentComposerOwnerRef = useRef(composerOwner);
+  currentComposerOwnerRef.current = composerOwner;
+  const composerOwnerRef = useRef<string | undefined>(undefined);
+  const composerViewVersionRef = useRef(0);
+  const composerViewIdentityRef = useRef({});
+  const renderedComposerVersion = composerViewVersionRef.current;
+  const composerAttemptRef = useRef<CommunityComposerAttempt | undefined>(undefined);
+  // Memory-only retention prevents a scope switch from turning an uncertain save
+  // into a fresh-ID submission. Drafts are never exposed to another scope.
+  const composerAttemptsRef = useRef(communityComposerAttempts);
+  const composerMountedRef = useRef(true);
+
+  function composerIsLocked() {
+    const attempt = composerAttemptRef.current;
+    return Boolean(attempt && attempt.owner === currentComposerOwnerRef.current
+      && (attempt.inFlight || attempt.status === "unknown"));
+  }
+
+  function composerAttemptIsVisible(attempt: CommunityComposerAttempt) {
+    return composerMountedRef.current && composerAttemptRef.current === attempt
+      && attempt.attachedView === composerViewIdentityRef.current
+      && currentComposerOwnerRef.current === attempt.owner && composerOwnerRef.current === attempt.owner
+      && composerViewVersionRef.current === attempt.viewVersion;
+  }
+
+  function publishComposerSubmission(attempt: CommunityComposerAttempt) {
+    notifyCommunityComposer(attempt);
+  }
+
+  function receiveComposerSubmission(attempt: CommunityComposerAttempt) {
+    if (!composerAttemptIsVisible(attempt)) return;
+    if (attempt.outcome?.status === "success") {
+      composerViewVersionRef.current++;
+      composerAttemptRef.current = undefined;
+      setComposerSubmission({ status: "idle", inFlight: false });
+      setComposerVisible(false);
+      setComposerBody("");
+      setComposerTitle("");
+      setComposerVerses([]);
+      setEditingPost(undefined);
+    } else setComposerSubmission({ status: attempt.status, inFlight: attempt.inFlight });
+  }
+
+  function changeComposerDraft(change: () => void) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked()) return;
+    const attempt = composerAttemptRef.current;
+    if (attempt?.owner === currentComposerOwnerRef.current) {
+      composerAttemptsRef.current.delete(attempt.owner);
+      composerAttemptRef.current = undefined;
+      setComposerSubmission({ status: "idle", inFlight: false });
+    }
+    change();
+  }
+
+  useLayoutEffect(() => {
+    if (composerOwnerRef.current && composerOwnerRef.current !== composerOwner) {
+      composerViewVersionRef.current++;
+      composerOwnerRef.current = undefined;
+      composerAttemptRef.current = undefined;
+      setComposerVisible(false);
+      setComposerSubmission({ status: "idle", inFlight: false });
+    }
+  }, [composerOwner]);
+
+  useLayoutEffect(() => {
+    composerMountedRef.current = true;
+    communityComposerObservers.add(receiveComposerSubmission);
+    return () => {
+      composerMountedRef.current = false;
+      communityComposerObservers.delete(receiveComposerSubmission);
+    };
+  }, []);
   const selectedPrayerMomentId = prayerMomentId;
   const [prayerMomentEncouragementDraft, setPrayerMomentEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
@@ -276,6 +384,12 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   useFocusEffect(
     useCallback(() => {
       setCommunityFeedClock(Date.now());
+      const attempt = composerAttemptRef.current;
+      if (attempt && composerOwnerRef.current === currentComposerOwnerRef.current) {
+        attempt.attachedView = composerViewIdentityRef.current;
+        attempt.viewVersion = composerViewVersionRef.current;
+        receiveComposerSubmission(attempt);
+      }
     }, []),
   );
 
@@ -323,6 +437,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   );
 
   const navigateToRoomView = useCallback((nextView: RoomView, direction: TransitionDirection = "forward") => {
+    if (composerIsLocked()) return;
     // Prayer and check-ins stay in the mounted overview screen. On Android,
     // pushing either view onto the nested native stack can leave its view tree
     // present but its drawing surface blank until the tab is reselected.
@@ -338,6 +453,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }, [navigation, roomView, routeRoomView]);
   const openCheckInsView = useCallback(() => navigateToRoomView("checkins"), [navigateToRoomView]);
   const goBackFromRoomView = useCallback(() => {
+    if (composerIsLocked()) return true;
     if (routeRoomView === "detail" && (roomView === "prayer" || roomView === "checkins")) {
       setRoomView("detail");
     } else if (navigation.canGoBack()) router.back();
@@ -351,7 +467,37 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return () => subscription.remove();
   }, [goBackFromRoomView, roomView, routeRoomView]);
 
+  function resumeComposerAttempt() {
+    const attempt = composerAttemptsRef.current.get(currentComposerOwnerRef.current);
+    if (!attempt) return false;
+    composerOwnerRef.current = attempt.owner;
+    attempt.attachedView = composerViewIdentityRef.current;
+    attempt.viewVersion = ++composerViewVersionRef.current;
+    composerAttemptRef.current = attempt;
+    setComposerContext("room");
+    setComposerVisibility(visibility.room);
+    setComposerKind(attempt.draft.kind);
+    setComposerTitle(attempt.draft.title);
+    setComposerBody(attempt.draft.body);
+    setComposerVerses(attempt.draft.verses);
+    setEditingPost(attempt.draft.editingPost);
+    setComposerSubmission({ status: attempt.status, inFlight: attempt.inFlight });
+    setComposerVisible(true);
+    return true;
+  }
+
+  function beginComposerSession() {
+    composerViewVersionRef.current++;
+    composerOwnerRef.current = currentComposerOwnerRef.current;
+    composerAttemptRef.current = undefined;
+    setComposerSubmission({ status: "idle", inFlight: false });
+  }
+
   function openComposer(kind: EntryKind = "reflection") {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     setEditingPost(undefined);
     setComposerContext("room");
     setComposerKind(kind);
@@ -363,6 +509,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openScriptureReflection(item: Extract<FeedItem, { type: "post" }>) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
     setEditingPost(undefined);
     setComposerContext("journal");
@@ -375,6 +525,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function editPost(item: Extract<FeedItem, { type: "post" }>) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     setComposerContext("room");
     setEditingPost(item);
     setComposerKind(normalizeEntryKind(item.kind));
@@ -386,14 +540,87 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function closeComposer() {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked()) return;
+    composerViewVersionRef.current++;
+    if (composerOwnerRef.current) composerAttemptsRef.current.delete(composerOwnerRef.current);
+    composerAttemptRef.current = undefined;
+    setComposerSubmission({ status: "idle", inFlight: false });
     setComposerVisible(false);
     setEditingPost(undefined);
   }
 
   async function submitComposer() {
+    if (!composerVisible || composerOwnerRef.current !== composerOwner || currentComposerOwnerRef.current !== composerOwner
+      || renderedComposerVersion !== composerViewVersionRef.current) return;
     const canSubmit = composerContext === "room" && composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
     if (!canSubmit) return;
     if (composerContext === "room" && !editingPost && composerKind === "update") return;
+    if (composerContext === "room") {
+      let attempt = composerAttemptRef.current;
+      if (attempt?.inFlight) return;
+      if (!attempt) {
+        const draft = JSON.parse(JSON.stringify({ kind: composerKind, title: composerTitle, body: composerBody, verses: composerVerses, editingPost })) as CommunityComposerDraft;
+        const titleFreeKind = draft.kind === "reflection" || draft.kind === "praise" || draft.kind === "scripture";
+        const content = { kind: draft.kind, ...(titleFreeKind ? {} : { title: draft.title }), body: draft.body, verse: primaryBibleVerse(draft.verses), verses: draft.verses };
+        attempt = {
+          owner: composerOwner,
+          attachedView: composerViewIdentityRef.current,
+          viewVersion: composerViewVersionRef.current,
+          draft,
+          action: draft.editingPost ? { type: "editPost", id: draft.editingPost.id, ...content } : { type: "createPost", ...content },
+          request: {
+            attemptId: `post_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`,
+            createdAt: new Date().toISOString(),
+            userId: state.currentUserId ?? "",
+            groupId: state.currentGroupId ?? "",
+            ...(draft.editingPost ? { baseline: draft.editingPost } : {}),
+          },
+          status: "idle", inFlight: false, previouslyUnknown: false,
+        };
+        composerAttemptRef.current = attempt;
+        composerAttemptsRef.current.set(attempt.owner, attempt);
+      }
+      // Set synchronously, before dispatch or React state updates can yield.
+      attempt.inFlight = true;
+      attempt.status = "pending";
+      attempt.outcome = undefined;
+      publishComposerSubmission(attempt);
+      const operation = attempt;
+      operation.timer = setTimeout(() => {
+        if (!operation.inFlight) return;
+        operation.status = "unknown";
+        publishComposerSubmission(operation);
+      }, COMMUNITY_SUBMISSION_CONFIRMATION_MS);
+      let outcome: CommunitySubmissionOutcome | undefined;
+      try {
+        await dispatch({
+          ...operation.action,
+          communitySubmission: {
+            ...operation.request,
+            previouslyUnknown: operation.previouslyUnknown,
+            report: (result) => { outcome ??= result; },
+          },
+        });
+      } catch {
+        // A missing/throwing boundary cannot be treated as a failed write.
+        outcome ??= { status: "unknown", reason: "transport" };
+      }
+      if (operation.timer) clearTimeout(operation.timer);
+      operation.timer = undefined;
+      operation.inFlight = false;
+      outcome ??= { status: "unknown", reason: "transport" };
+      operation.outcome = outcome;
+      if (outcome.status === "success") {
+        publishComposerSubmission(operation);
+        if (composerAttemptsRef.current.get(operation.owner) === operation) composerAttemptsRef.current.delete(operation.owner);
+      } else {
+        operation.status = outcome.status;
+        operation.previouslyUnknown ||= outcome.status === "unknown";
+        publishComposerSubmission(operation);
+      }
+      return;
+    }
     const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
     const title = titleFreeKind ? {} : { title: composerTitle };
     if (editingPost) {
@@ -413,6 +640,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     } else {
       await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
+    // Private journal writes keep their existing behavior; an old completion
+    // must nevertheless never clear a newer Community composer session.
+    if (!composerMountedRef.current || currentComposerOwnerRef.current !== composerOwner
+      || composerOwnerRef.current !== composerOwner || composerViewVersionRef.current !== renderedComposerVersion) return;
     setComposerVisible(false);
     setComposerBody("");
     setComposerTitle("");
@@ -493,6 +724,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
+    if (composerIsLocked()) return;
     const nextTab = tab === "reflections" ? "reflections" : "recent";
     if (nextTab === detailTab) return;
     if (group) {
@@ -506,6 +738,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
+    if (composerIsLocked()) return;
     if (isPrayerMomentKind(item.kind)) {
 
       setPrayerMomentEncouragementDraft("");
@@ -553,6 +786,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function prayForItem(item: FeedItem) {
+    if (composerIsLocked()) return;
     const prayer = itemPrayerState(item);
     const displayBody = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t).body : item.body;
     setPrayerTarget({
@@ -566,6 +800,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function startCommunityPrayer(member: Pick<CommunityMember, "id" | "image" | "name">) {
+    if (composerIsLocked()) return;
     if (!member.id.trim()) return;
 
     setDirectPrayerResult(undefined);
@@ -641,6 +876,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function togglePostAction(item: FeedItem) {
+    if (composerIsLocked()) return;
     if (item.type === "post" && normalizeEntryKind(item.kind) === "scripture") {
       openScriptureReflection(item);
       return;
@@ -758,6 +994,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openCheckInComposer() {
+    if (composerIsLocked()) return;
     if (todaysCheckIn || !state.privateCheckInsReady || !state.checkInDailyClaimsReady || !communityFeedReadyForGroup) return;
     resetCommunityCheckIn();
     setCheckInVisible(true);
@@ -1032,18 +1269,19 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           />
         </View>
         <SharedComposer
-          visible={composerVisible}
+          visible={composerVisible && composerOwnerRef.current === composerOwner}
+          submission={composerContext === "room" ? composerSubmission : undefined}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}
           body={composerBody}
           verses={composerVerses}
-          onKind={setComposerKind}
-          onVisibility={setComposerVisibility}
-          onTitle={setComposerTitle}
-          onBody={setComposerBody}
-          onVerses={setComposerVerses}
+          onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
+          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
+          onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
+          onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
@@ -1255,18 +1493,19 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           />
         </View>
         <SharedComposer
-          visible={composerVisible}
+          visible={composerVisible && composerOwnerRef.current === composerOwner}
+          submission={composerContext === "room" ? composerSubmission : undefined}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}
           body={composerBody}
           verses={composerVerses}
-          onKind={setComposerKind}
-          onVisibility={setComposerVisibility}
-          onTitle={setComposerTitle}
-          onBody={setComposerBody}
-          onVerses={setComposerVerses}
+          onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
+          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
+          onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
+          onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
