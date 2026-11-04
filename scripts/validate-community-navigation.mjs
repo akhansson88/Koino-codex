@@ -1415,6 +1415,168 @@ try {
     delete harness.realComposer;
     delete harness.dispatch;
   }
+  // S2: exercise the actual Community type controls and field order, retaining
+  // all S1 outcome/locking assertions above without changing their fixtures.
+  const clarityVerse = { reference: "Psalm 23:1", text: "The Lord is my shepherd." };
+  for (const [language, labels, prayerPrompt, praisePrompt, reflectionDescription, scriptureDescription, audience] of [
+    ["en", { reflection: "Reflection", prayer_request: "Prayer request", praise: "Praise", scripture: "Scripture" }, "What would you like prayer for?", "What are you thankful to God for?", "Share a thought from your life or faith.", "Choose a Bible passage to share. A note is optional.", "Visible to members of Test community."],
+    ["sv", { reflection: "Reflektion", prayer_request: "Böneämne", praise: "Tacksägelse", scripture: "Bibelord" }, "Vad vill du ha förbön för?", "Vad är du tacksam till Gud för?", "Dela en tanke om livet eller tron.", "Välj ett bibelställe att dela. En anteckning är valfri.", "Synligt för medlemmarna i Test community."],
+  ]) {
+    harness.localized = true;
+    harness.language = language;
+    const clarityEvents = [];
+    let clarityProps;
+    const updateClarity = changes => {
+      clarityProps = { ...clarityProps, ...changes };
+      tree.update(React.createElement(screens.RealComposer, clarityProps));
+    };
+    clarityProps = {
+      visible: true, context: "room", kind: "prayer_request", entryVisibility: "room", roomName: "Test community",
+      title: "Title kept for the request", body: "Words kept between contribution types", verses: [clarityVerse],
+      onTitle: title => { clarityEvents.push("title"); updateClarity({ title }); },
+      onBody: body => { clarityEvents.push("body"); updateClarity({ body }); },
+      onKind: kind => { clarityEvents.push("kind"); updateClarity({ kind }); },
+      onVerses: verses => { clarityEvents.push("verses"); updateClarity({ verses }); },
+      onVisibility: entryVisibility => updateClarity({ entryVisibility }), onClose() {}, onSubmit: () => clarityEvents.push("submit"),
+    };
+    await act(async () => { tree = create(React.createElement(screens.RealComposer, clarityProps)); });
+    const claritySelector = () => tree.root.find(node => node.type?.name === "CommunityTypeSelector");
+    const clarityBody = () => tree.root.findAllByType("TextInputField").find(node => node.props.multiline);
+    const clarityFields = () => tree.root.findAll(node => ["TextInputField", "BibleVerseField"].includes(node.type));
+    const clarityText = value => tree.root.findAllByType("Text").find(node => node.props.children === value);
+    const retained = { title: clarityProps.title, body: clarityProps.body, verses: clarityProps.verses };
+    assert.deepEqual(Object.fromEntries(claritySelector().props.options.map(option => [option.value, option.label])), labels, "Community exposes exactly four localized contribution types");
+    assert.deepEqual(claritySelector().props.options.map(option => option.value), ["reflection", "prayer_request", "praise", "scripture"], "The established inline four-type structure is retained");
+    assert.equal(claritySelector().findAllByType("Pressable").length, 4);
+    const retainedPassageField = tree.root.findByType("BibleVerseField");
+    for (const kind of ["prayer_request", "reflection", "praise", "scripture", "prayer_request"]) {
+      await act(() => claritySelector().props.onChange(kind));
+      assert.equal(claritySelector().props.value, kind);
+      assert.deepEqual({ title: clarityProps.title, body: clarityProps.body, verses: clarityProps.verses }, retained, "Switching Community type preserves the complete unsent input");
+      const controls = claritySelector().findAllByType("Pressable");
+      assert.deepEqual(controls.filter(node => node.props.accessibilityState.selected).map(node => node.props.accessibilityLabel), [labels[kind]]);
+      assert.ok(controls.every(node => entryStyle(node).minHeight >= 44), "Existing accessible selector target sizes are retained");
+      const description = screens.translateMessage(language, `community.composer.share.description.${kind}`);
+      assert.ok(description && description !== `community.composer.share.description.${kind}`);
+      assert.ok(clarityText(description), "Only the selected contribution's contextual explanation is displayed");
+      for (const otherKind of Object.keys(labels).filter(value => value !== kind)) {
+        assert.ok(!clarityText(screens.translateMessage(language, `community.composer.share.description.${otherKind}`)));
+      }
+      assert.equal(tree.root.findByType("BibleVerseField"), retainedPassageField, "Reordering fields preserves the passage component instead of remounting its picker");
+      if (kind === "reflection") assert.equal(description, reflectionDescription);
+      if (kind === "scripture") assert.equal(description, scriptureDescription);
+      assert.ok(clarityText(audience), "The audience names the actual selected community");
+      const ordered = tree.root.findAll(node => ["TextInputField", "BibleVerseField"].includes(node.type) || node.type === "Text" && node.props.children === audience);
+      assert.equal(ordered[0].props.children, audience, "Audience copy appears before every writing or passage field");
+      assert.deepEqual(clarityFields().map(node => node.type), kind === "scripture" ? ["BibleVerseField", "TextInputField"] : kind === "prayer_request" ? ["TextInputField", "TextInputField", "BibleVerseField"] : ["TextInputField", "BibleVerseField"], "Required Scripture is first; existing other-type field order is retained");
+      if (kind === "prayer_request") assert.equal(clarityBody().props.placeholder, prayerPrompt);
+      if (kind === "praise") assert.equal(clarityBody().props.placeholder, praisePrompt);
+      assert.equal(tree.root.findAllByType("TextInputField").filter(node => !node.props.multiline).length, kind === "prayer_request" ? 1 : 0, "Irrelevant title fields stay hidden without deleting the draft title");
+      assert.ok(!renderedTree().includes(screens.translateMessage(language, "community.composer.privateCommunity")));
+      assert.ok(!renderedTree().includes(screens.translateMessage(language, "community.composer.privateJournal")));
+    }
+    assert.deepEqual(clarityEvents, ["kind", "kind", "kind", "kind"], "Type selection changes only kind, with no silent title/body/passage clearing");
+    await act(() => updateClarity({ roomName: "Another community" }));
+    const changedAudience = screens.translateMessage(language, "community.composer.share.audience", { community: "Another community" });
+    assert.ok(clarityText(changedAudience));
+    assert.ok(!clarityText(audience), "Audience follows the current name rather than stale destination copy");
+    await act(() => updateClarity({ roomName: undefined }));
+    assert.equal(tree.root.findByType("PrimaryButton").props.disabled, true);
+    assert.ok(!renderedTree().includes(screens.translateMessage(language, "community.composer.share.audience", { community: screens.translateMessage(language, "community.composer.communityFallback") })), "No selected community cannot be replaced by an invented named audience");
+
+    // Journal retains its old labels, prompts, audience choices and field order.
+    await act(() => updateClarity({ context: "journal", kind: "prayer_request", entryVisibility: "private", roomName: "Test community" }));
+    assert.equal(clarityBody().props.placeholder, screens.translateMessage(language, "community.composer.placeholder.prayerBody"));
+    assert.equal(tree.root.findAll(node => node.type?.name === "CommunityTypeSelector").length, 0, "Journal keeps its established wider-screen FilterChips selector");
+    const journalTypes = tree.root.findAllByType("FilterChips").find(node => node.props.value === "prayer_request");
+    assert.equal(journalTypes.props.options.find(option => option.value === "prayer_request").label, screens.translateMessage(language, "community.composer.type.prayer"));
+    assert.deepEqual(clarityFields().map(node => node.type), ["TextInputField", "TextInputField", "BibleVerseField"]);
+    assert.ok(!clarityText(audience));
+    assert.ok(clarityText(screens.translateMessage(language, "community.composer.journal.privateOnly")));
+    assert.ok(tree.root.findAllByType("FilterChips").some(node => node.props.value === "private"), "Journal retains its explicit audience choice");
+    await act(() => updateClarity({ kind: "praise" }));
+    assert.equal(clarityBody().props.placeholder, screens.translateMessage(language, "community.composer.placeholder.praiseBody"));
+    assert.equal(tree.root.findAllByType("FilterChips").find(node => node.props.value === "praise").props.options.find(option => option.value === "praise").label, screens.translateMessage(language, "community.composer.journal.type.praise"));
+
+    // Validation stays type-specific; Scripture still accepts a passage without words.
+    await act(() => updateClarity({ context: "room", kind: "scripture", body: "Optional words", verses: [] }));
+    assert.equal(tree.root.findByType("PrimaryButton").props.disabled, true);
+    await act(() => updateClarity({ body: "", verses: [clarityVerse] }));
+    assert.equal(tree.root.findByType("PrimaryButton").props.disabled, false);
+    assert.equal(clarityBody().props.placeholder, screens.translateMessage(language, "community.composer.placeholder.scriptureNote"));
+    for (const kind of ["prayer_request", "reflection", "praise"]) {
+      await act(() => updateClarity({ kind, body: "  " }));
+      assert.equal(tree.root.findByType("PrimaryButton").props.disabled, true, "Other Community types still require words even with a passage");
+    }
+
+    // Bible-origin sharing keeps its attached passage and existing open-in-Bible callback.
+    let openedPassage;
+    await act(() => updateClarity({ bibleIntent: "share", kind: "scripture", body: "", verses: [clarityVerse], onOpenVerseInBible: verse => { openedPassage = verse; } }));
+    assert.equal(tree.root.findByType("BibleVerseField").props.attachedFromBible, true);
+    assert.deepEqual(clarityFields().map(node => node.type), ["BibleVerseField", "TextInputField"]);
+    assert.equal(tree.root.findByType("PrimaryButton").props.disabled, false);
+    await act(() => tree.root.findByType("BibleVerseField").props.onOpenInBible(clarityVerse));
+    assert.deepEqual(openedPassage, clarityVerse);
+    await act(() => claritySelector().props.onChange("prayer_request"));
+    assert.deepEqual(clarityProps.verses, [clarityVerse]);
+    assert.equal(tree.root.findAllByType("TextInputField").filter(node => !node.props.multiline).length, 0, "Bible-origin title visibility is unchanged");
+    await act(() => updateClarity({ context: "journal", bibleIntent: "reflect", kind: "reflection", entryVisibility: "private", body: "Private reflection" }));
+    assert.deepEqual(clarityFields().map(node => node.type), ["TextInputField", "BibleVerseField"]);
+    assert.ok(clarityText(screens.translateMessage(language, "community.composer.journal.privateOnly")));
+    assert.ok(!clarityText(audience));
+    await act(() => tree.unmount());
+  }
+  delete harness.localized;
+  delete harness.language;
+
+  harness.realComposer = true;
+  harness.dispatch = action => { action.communitySubmission?.report({ status: "success" }); };
+  try {
+    for (const filter of ["recent", "reflections"]) {
+      harness.state = overviewState;
+      harness.actions = [];
+      await act(async () => { tree = create(React.createElement(screens.Overview)); });
+      await act(() => overviewChips().props.onChange(filter));
+      await act(shareFromOverview);
+      assert.equal(actualComposer().props.kind, "reflection", "Both overview Share entry points retain their Reflection default");
+      await act(() => actualComposer().findByType("IconButton").props.onPress());
+      await act(() => overviewEntry(overviewEntryLabels.prayer).props.onPress());
+      await act(() => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.share").props.onPress());
+      assert.equal(actualComposer().props.kind, "prayer_request", "Dedicated Prayer opens the real composer with its request type preselected");
+      await act(() => actualComposer().findByType("IconButton").props.onPress());
+      await act(() => tree.unmount());
+    }
+    for (const kind of ["prayer_request", "reflection", "praise", "scripture"]) {
+      harness.state = overviewState;
+      harness.actions = [];
+      await act(async () => { tree = create(React.createElement(screens.Overview)); });
+      await act(shareFromOverview);
+      const realSelector = () => actualComposer().find(node => node.type?.name === "CommunityTypeSelector");
+      await act(() => realSelector().props.onChange("prayer_request"));
+      await act(() => {
+        actualComposer().findAllByType("TextInputField").find(node => !node.props.multiline).props.onChangeText("Retained request title");
+        actualBody().props.onChangeText("A contribution with an optional passage");
+        actualComposer().findByType("BibleVerseField").props.onChange([clarityVerse]);
+      });
+      for (const nextKind of ["reflection", "praise", "scripture", kind]) await act(() => realSelector().props.onChange(nextKind));
+      assert.equal(actualComposer().props.title, "Retained request title");
+      assert.equal(actualComposer().props.body, "A contribution with an optional passage");
+      assert.deepEqual(actualComposer().props.verses, [clarityVerse]);
+      await act(async () => { await actualSave().props.onPress(); });
+      const submitted = harness.actions.at(-1);
+      assert.equal(submitted.type, "createPost");
+      assert.equal(submitted.kind, kind);
+      assert.equal(submitted.body, "A contribution with an optional passage");
+      assert.deepEqual(submitted.verses, [clarityVerse], "Passages remain valid optional content on other contribution types");
+      assert.equal(Object.hasOwn(submitted, "title"), kind === "prayer_request", "Retaining a hidden draft title never adds it to an irrelevant published payload");
+      if (kind === "prayer_request") assert.equal(submitted.title, "Retained request title");
+      assert.equal(actualComposer().props.visible, false);
+      await act(() => tree.unmount());
+    }
+  } finally {
+    delete harness.realComposer;
+    delete harness.dispatch;
+  }
   console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
@@ -1423,6 +1585,7 @@ try {
   console.log("Feed card density passed: overview opt-in, one author avatar and primary action, secondary prayer, nonzero response counts, mood and Scripture, and explicit history reveal.");
   console.log("Managed Community composer passed: EN/SV pending and unknown feedback, locked draft/close/picker controls, explicit retry-only uncertainty and preserved failure drafts.");
   console.log("Community parent submission passed: synchronous duplicate guard, failure/success drafts, timeout uncertainty, stable retry, stale callbacks, scoped draft recovery and unchanged private Scripture reflection.");
+  console.log("Community Share clarity passed: EN/SV four-type labels and contextual copy, named audience above fields, Scripture-first layout without picker remount, retained drafts, correct defaults, hidden-title payload exclusion and preserved journal/Bible behavior.");
 } finally {
   if (tree) await act(() => tree.unmount());
   await rm(directory, { recursive: true, force: true });
