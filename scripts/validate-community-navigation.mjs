@@ -52,10 +52,10 @@ const mocks = {
   "expo-router": `
     import React from "react";
     const h = globalThis.__communityNavigation;
-    export const router = { navigate: route => { h.route = route.split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace() {}, dismissTo() {} };
+    export const router = { navigate: route => { h.route = route.split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace() {}, dismissTo: route => { h.dismissedTo = route; } };
     export const useNavigation = () => ({ canGoBack: () => true, setOptions() {} });
     export const useLocalSearchParams = () => (h.params ?? {});
-    export const useFocusEffect = callback => React.useEffect(callback, [callback]);
+    export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
     export const Tabs = Object.assign(props => React.createElement("Tabs", props), { Screen: () => null });
   `,
   "@/state/koino-store": `
@@ -1746,6 +1746,426 @@ try {
     delete harness.realComposer;
     delete harness.dispatch;
   }
+  // S4 uses the real S1 parent boundary. Subscription delivery and write
+  // acknowledgement are independent; appearing feed data never confirms a save.
+  const publicationNativeSetTimeout = globalThis.setTimeout;
+  const publicationNativeClearTimeout = globalThis.clearTimeout;
+  const publicationTimers = new Set();
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    if (![50, 350, 8_000].includes(delay)) return publicationNativeSetTimeout(callback, delay, ...args);
+    const timer = { delay, callback: () => callback(...args) };
+    publicationTimers.add(timer);
+    return timer;
+  };
+  globalThis.clearTimeout = timer => publicationTimers.has(timer) ? publicationTimers.delete(timer) : publicationNativeClearTimeout(timer);
+  const flushPublicationTimers = async delay => {
+    const ready = [...publicationTimers].filter(timer => timer.delay === delay);
+    await act(() => ready.forEach(timer => { publicationTimers.delete(timer); timer.callback(); }));
+  };
+  harness.realComposer = true;
+  const publicationOperations = [];
+  harness.dispatch = action => {
+    if (!action.communitySubmission) return;
+    const pending = deferred();
+    publicationOperations.push({ action, ...pending });
+    return pending.promise.then(outcome => { if (outcome !== undefined) action.communitySubmission.report(outcome); });
+  };
+  const publicationTranslation = (key, values) => screens.translateMessage(harness.language ?? "en", `community.composer.publication.${key}`, values);
+  const publicationReceipts = () => tree.root.findAllByType("View").filter(node => node.props.accessible && [
+    publicationTranslation("shared", { community: "Test community" }),
+    publicationTranslation("shared", { community: "Renamed community" }),
+    publicationTranslation("updated"),
+  ].includes(node.props.accessibilityLabel));
+  const publicationRecentAction = () => tree.root.findAllByType("SecondaryButton").find(node => node.props.children === publicationTranslation("viewRecent"));
+  const publicationDismiss = () => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === publicationTranslation("dismiss"));
+  const publicationPrayer = () => tree.root.find(node => node.type?.name === "CommunityPrayerScreen");
+  const publicationShare = () => tree.root.findAllByType("PrimaryButton").find(node => node.props.children === screens.translateMessage(harness.language ?? "en", "community.feed.share"));
+  const publicationOpenPrayer = async () => {
+    const label = `${screens.translateMessage(harness.language, "community.overview.prayerRequests")}. ${screens.translateMessage(harness.language, "community.overview.prayTogether")}`;
+    await act(() => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === label).props.onPress());
+  };
+  const publicationRender = async (Component = screens.Overview) => {
+    await act(() => tree.update(React.createElement(Component)));
+  };
+  const publicationStart = async (kind = "prayer_request") => {
+    await act(() => actualComposer().props.onKind(kind));
+    await act(() => {
+      actualComposer().props.onBody("Publication feedback words");
+      if (kind === "scripture") actualComposer().props.onVerses([clarityVerse]);
+    });
+    let promise;
+    await act(() => { promise = actualSave().props.onPress(); });
+    return { operation: publicationOperations.at(-1), promise };
+  };
+  const publicationPost = ({ action }) => ({
+    id: action.id ?? action.communitySubmission.attemptId,
+    userId: action.communitySubmission.userId, groupId: action.communitySubmission.groupId,
+    createdAt: action.communitySubmission.baseline?.createdAt ?? action.communitySubmission.createdAt,
+    kind: action.kind, body: action.body, ...(action.title === undefined ? {} : { title: action.title }),
+    ...(action.verse ? { verse: action.verse } : {}), ...(action.verses ? { verses: action.verses } : {}),
+  });
+  const publicationDeliver = async (attempt, changes = {}, Component = screens.Overview) => {
+    const post = { ...publicationPost(attempt.operation), ...changes };
+    harness.state = { ...harness.state, posts: [post, ...harness.state.posts.filter(item => item.id !== post.id)] };
+    await publicationRender(Component);
+    return post;
+  };
+  const publicationResolve = async (attempt, ...outcomes) => {
+    const outcome = outcomes.length ? outcomes[0] : { status: "success" };
+    await act(async () => { attempt.operation.resolve(outcome); await attempt.promise; });
+  };
+  const publicationReset = async (Component = screens.Overview, extraState = {}) => {
+    harness.state = { ...overviewState, ...extraState };
+    harness.actions = [];
+    harness.route = "index";
+    harness.scrollRestores = [];
+    harness.announcements = [];
+    delete harness.dismissedTo;
+    delete harness.params;
+    await act(async () => { tree = create(React.createElement(Component)); });
+    await flushPublicationTimers(50);
+  };
+  try {
+    for (const os of ["ios", "android"]) {
+      for (const language of ["en", "sv"]) {
+        harness.os = os;
+        harness.language = language;
+        harness.localized = true;
+        assert.equal(publicationTranslation("shared", { community: "Test community" }), language === "en" ? "Shared with Test community." : "Delat med Test community.");
+        assert.equal(publicationTranslation("updated"), language === "en" ? "Changes saved." : "Ändringarna har sparats.");
+        assert.equal(publicationTranslation("viewRecent"), language === "en" ? "View in Recent" : "Visa i Senaste");
+        const cases = [
+          ...["reflection", "prayer_request", "praise", "scripture"].map(kind => ["detail", "recent", kind, false]),
+          ...["reflection", "prayer_request", "praise", "scripture"].map(kind => ["detail", "reflections", kind, kind !== "reflection"]),
+          ["prayer", "open", "prayer_request", false], ["prayer", "open", "reflection", true],
+          ["prayer", "answered", "prayer_request", true], ["prayer", "answered", "praise", true],
+          ["prayer", "all", "prayer_request", false], ["prayer", "all", "scripture", true],
+        ];
+        for (const [origin, filter, kind, hidden] of cases) {
+          await publicationReset();
+          await act(() => overviewChips().props.onChange(origin === "detail" ? filter : "reflections"));
+          if (origin === "prayer") {
+            await publicationOpenPrayer();
+            await act(() => publicationPrayer().props.onFilter(filter));
+            await act(() => publicationPrayer().props.onCreatePrayer());
+          } else await act(() => publicationShare().props.onPress());
+          const attempt = await publicationStart(kind);
+          assert.equal(publicationReceipts().length, 0, "Pending submission cannot display success");
+          await publicationDeliver(attempt);
+          assert.equal(publicationReceipts().length, 0, "Feed subscription data cannot stand in for write acknowledgement");
+          await flushPublicationTimers(50);
+          const before = { route: harness.route, backs: harness.backs, scroll: [...harness.scrollRestores] };
+          await publicationResolve(attempt);
+          assert.equal(publicationReceipts().length, 1, "Confirmed creation displays one Community confirmation");
+          const receipt = publicationReceipts()[0];
+          let receiptScroll = receipt.parent;
+          while (receiptScroll && receiptScroll.type !== "ScrollView") receiptScroll = receiptScroll.parent;
+          assert.ok(receiptScroll, "Receipt content remains scrollable for long names and enlarged text");
+          assert.equal(entryStyle(receiptScroll).maxHeight, "40%");
+          assert.equal(entryStyle(receiptScroll).flexGrow, 0, "Feedback leaves space for the originating feed viewport");
+          assert.equal(receipt.findByType("Text").props.numberOfLines, undefined, "The confirmation message can wrap without truncation");
+          assert.equal(receipt.props.accessibilityLabel, publicationTranslation("shared", { community: "Test community" }));
+          assert.equal(receipt.props.accessibilityLiveRegion, os === "android" ? "polite" : "none");
+          assert.notEqual(receipt.props.accessibilityRole, "alert", "Calm success feedback avoids interrupting alert speech");
+          assert.equal(Boolean(publicationRecentAction()), hidden, `${origin}/${filter}/${kind} offers Recent only for a hidden eligible result`);
+          assert.equal(origin === "detail" ? overviewChips().props.value : publicationPrayer().props.filter, filter, "Publication never automatically changes the current filter");
+          assert.deepEqual({ route: harness.route, backs: harness.backs, scroll: harness.scrollRestores }, before, "Publication never navigates or changes saved scroll offsets");
+          await flushPublicationTimers(350);
+          const message = publicationTranslation("shared", { community: "Test community" });
+          assert.equal(harness.announcements.filter(item => item === message).length, os === "ios" ? 1 : 0, "Success uses one platform-specific accessibility announcement");
+          await publicationRender();
+          await flushPublicationTimers(350);
+          assert.equal(harness.announcements.filter(item => item === message).length, os === "ios" ? 1 : 0, "Rerenders cannot repeat success speech");
+          if (hidden) {
+            assert.ok(entryStyle(publicationRecentAction()).minHeight >= 44);
+            await flushPublicationTimers(8_000);
+            assert.ok(publicationRecentAction(), "An actionable receipt remains available for an explicit choice");
+            await act(() => publicationRecentAction().props.onPress());
+            assert.equal(overviewChips().props.value, "recent");
+            assert.equal(publicationReceipts().length, 0);
+          } else {
+            await flushPublicationTimers(8_000);
+            assert.equal(publicationReceipts().length, 0, "A plain receipt expires without navigation");
+          }
+          await act(() => tree.unmount());
+        }
+
+        // Edits use their own message, even when an old result is not Recent.
+        const editable = { ...overviewState.posts[0], id: "publication-edit", userId: "reader", createdAt: "2020-01-01T12:00:00Z" };
+        await publicationReset(screens.Prayer, { posts: [editable] });
+        await act(() => publicationPrayer().props.onEditPrayer({ type: "post", ...editable }));
+        const edit = await publicationStart();
+        await publicationResolve(edit, { status: "failure", reason: "conflict" });
+        assert.equal(publicationReceipts().length, 0);
+        let editPromise;
+        await act(() => { editPromise = actualSave().props.onPress(); });
+        await publicationResolve({ operation: publicationOperations.at(-1), promise: editPromise });
+        assert.equal(publicationReceipts()[0].props.accessibilityLabel, publicationTranslation("updated"));
+        assert.equal(publicationRecentAction(), undefined, "Editing cannot suggest a new Recent result");
+        await act(() => publicationDismiss().props.onPress());
+        assert.equal(publicationReceipts().length, 0);
+        await act(() => tree.unmount());
+      }
+    }
+
+    harness.os = "ios";
+    harness.language = "en";
+    // The ACK can arrive before its feed subscription. Show the truthful receipt,
+    // then offer Recent only after that actual result is eligible for the feed.
+    await publicationReset();
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => publicationShare().props.onPress());
+    const delayedFeed = await publicationStart();
+    await publicationResolve(delayedFeed);
+    assert.equal(publicationReceipts().length, 1);
+    assert.equal(publicationRecentAction(), undefined, "A confirmed result missing from loaded content has no speculative destination");
+    await publicationDeliver(delayedFeed);
+    assert.ok(publicationRecentAction(), "Later feed delivery enables the valid hidden-result destination");
+    await flushPublicationTimers(8_000);
+    assert.ok(publicationRecentAction(), "The former plain-receipt expiry cannot remove a newly actionable receipt");
+    await act(() => publicationDismiss().props.onPress());
+    assert.equal(publicationReceipts().length, 0);
+    await act(() => tree.unmount());
+
+    for (const [label, postChanges, extraState] of [
+      ["old timestamp", { createdAt: "2020-01-01T12:00:00Z" }, {}],
+      ["other community", { groupId: "another-room" }, {}],
+      ["unrenderable post", { body: undefined }, {}],
+      ["loading feed", {}, { communityFeedReady: false }],
+      ["feed error", {}, { communityFeedError: "unavailable" }],
+      ["outside first twenty", {}, { posts: Array.from({ length: 20 }, (_, index) => ({ ...overviewState.posts[1], id: `newer-${index}`, createdAt: new Date(Date.now() + 60_000 + index).toISOString() })) }],
+    ]) {
+      await publicationReset(screens.Overview, extraState);
+      await act(() => overviewChips().props.onChange("reflections"));
+      await act(() => publicationShare().props.onPress());
+      const attempt = await publicationStart();
+      await publicationDeliver(attempt, postChanges);
+      await publicationResolve(attempt);
+      assert.equal(publicationReceipts().length, 1, "Write confirmation remains truthful even when content is unavailable");
+      assert.equal(publicationRecentAction(), undefined, `${label} cannot produce a misleading Recent destination`);
+      await act(() => tree.unmount());
+    }
+
+    for (const unavailable of ["deleted", "matching-filter", "loading", "error"]) {
+      await publicationReset();
+      await act(() => overviewChips().props.onChange("reflections"));
+      await act(() => publicationShare().props.onPress());
+      const attempt = await publicationStart();
+      const post = await publicationDeliver(attempt);
+      await publicationResolve(attempt);
+      const retainedAction = publicationRecentAction().props.onPress;
+      if (unavailable === "matching-filter") await act(() => overviewChips().props.onChange("recent"));
+      else {
+        harness.state = unavailable === "deleted"
+          ? { ...harness.state, posts: harness.state.posts.filter(item => item.id !== post.id) }
+          : { ...harness.state, ...(unavailable === "loading" ? { communityFeedReady: false } : { communityFeedError: "unavailable" }) };
+        await publicationRender();
+      }
+      assert.equal(publicationRecentAction(), undefined);
+      await act(() => retainedAction());
+      assert.equal(overviewChips().props.value, unavailable === "matching-filter" ? "recent" : "reflections");
+      assert.equal(publicationReceipts().length, 1, "A retained obsolete action cannot dismiss a current receipt or navigate to unavailable content");
+      await act(() => tree.unmount());
+    }
+
+    for (const unavailable of ["migration", "missing-group"]) {
+      await publicationReset();
+      await act(() => publicationShare().props.onPress());
+      const attempt = await publicationStart();
+      await publicationResolve(attempt);
+      assert.equal(publicationReceipts().length, 1);
+      const groups = harness.state.groups;
+      harness.state = { ...harness.state, groups: unavailable === "migration" ? groups.map(group => ({ ...group, migrationPending: true })) : [] };
+      await publicationRender();
+      assert.equal(publicationReceipts().length, 0);
+      harness.state = { ...harness.state, groups };
+      await publicationRender();
+      await flushPublicationTimers(350);
+      assert.equal(publicationReceipts().length, 0, "A removed/migrating community cannot later resurrect an old receipt");
+      assert.ok(!harness.announcements.includes("Shared with Test community."));
+      await act(() => tree.unmount());
+    }
+
+    // Failure, missing acknowledgement and uncertainty do not become success
+    // merely because a document appears. A retry still uses the original ID.
+    for (const outcome of [{ status: "failure", reason: "rejected" }, { status: "unknown", reason: "transport" }, undefined]) {
+      await publicationReset();
+      await act(() => publicationShare().props.onPress());
+      const attempt = await publicationStart();
+      await publicationDeliver(attempt);
+      await publicationResolve(attempt, outcome);
+      assert.equal(publicationReceipts().length, 0);
+      assert.equal(publicationRecentAction(), undefined);
+      assert.equal(actualComposer().props.visible, true);
+      const originalId = attempt.operation.action.communitySubmission.attemptId;
+      let retryPromise;
+      await act(() => { retryPromise = actualSave().props.onPress(); });
+      const retry = { operation: publicationOperations.at(-1), promise: retryPromise };
+      assert.equal(retry.operation.action.communitySubmission.attemptId, originalId);
+      await publicationResolve(retry);
+      assert.equal(publicationReceipts().length, 1, "Only the acknowledged retry can show success");
+      await act(() => tree.unmount());
+    }
+
+    // A named community is read from the live screen scope, not the observer's
+    // first-render closure. New sessions also invalidate receipt callbacks.
+    await publicationReset();
+    harness.state = { ...harness.state, groups: [{ ...harness.state.groups[0], name: "Renamed community" }] };
+    await publicationRender();
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => publicationShare().props.onPress());
+    const renamed = await publicationStart();
+    await publicationDeliver(renamed);
+    await publicationResolve(renamed);
+    assert.equal(publicationReceipts()[0].props.accessibilityLabel, "Shared with Renamed community.");
+    const staleRecentAction = publicationRecentAction().props.onPress;
+    const staleDismiss = publicationDismiss().props.onPress;
+    const staleAnnouncement = [...publicationTimers].find(timer => timer.delay === 350)?.callback;
+    await act(() => publicationShare().props.onPress());
+    assert.equal(publicationReceipts().length, 0, "Opening another composer session clears old confirmation");
+    await act(() => { staleRecentAction(); staleDismiss(); staleAnnouncement?.(); });
+    assert.equal(overviewChips().props.value, "reflections");
+    assert.equal(actualComposer().props.visible, true);
+    assert.ok(!harness.announcements.includes("Shared with Renamed community."), "A stale delayed announcement cannot speak over another composer");
+    await act(() => actualComposer().props.onClose());
+    await act(() => tree.unmount());
+
+    for (const scope of [{ currentUserId: "another-reader" }, { currentGroupId: "another-room", communityFeedGroupId: "another-room" }]) {
+      await publicationReset(screens.Overview, { groups: [...overviewState.groups, { id: "another-room", name: "Other community", ownerId: "reader" }] });
+      await act(() => publicationShare().props.onPress());
+      const attempt = await publicationStart();
+      harness.state = { ...harness.state, ...scope };
+      await publicationRender();
+      await act(() => publicationShare().props.onPress());
+      await act(() => actualComposer().props.onBody("New scope draft"));
+      await publicationResolve(attempt);
+      assert.equal(publicationReceipts().length, 0, "Late success cannot confirm another account/community's composer");
+      assert.equal(actualComposer().props.visible, true);
+      assert.equal(actualComposer().props.body, "New scope draft");
+      await act(() => actualComposer().props.onClose());
+      await act(() => tree.unmount());
+    }
+
+    await publicationReset();
+    await act(() => publicationShare().props.onPress());
+    const blurred = await publicationStart();
+    harness.focused = false;
+    await publicationRender();
+    await publicationResolve(blurred);
+    harness.focused = true;
+    await publicationRender();
+    assert.equal(publicationReceipts().length, 0, "A completion while the originating screen is blurred cannot leave a stale receipt on return");
+    await act(() => tree.unmount());
+    delete harness.focused;
+
+    // Standalone Prayer uses the existing overview route and a scoped one-use
+    // request. A preserved overview keeps its separate per-filter scroll state.
+    const standaloneHandoff = async () => {
+      await publicationReset(screens.Prayer);
+      await act(() => publicationPrayer().props.onFilter("answered"));
+      await act(() => publicationPrayer().props.onCreatePrayer());
+      const attempt = await publicationStart();
+      await publicationDeliver(attempt, {}, screens.Prayer);
+      await publicationResolve(attempt);
+      assert.equal(harness.dismissedTo, undefined, "A standalone publication does not automatically navigate");
+      assert.equal(publicationPrayer().props.filter, "answered");
+      await act(() => publicationRecentAction().props.onPress());
+      const destination = harness.dismissedTo;
+      assert.equal(destination.pathname, "/(tabs)/community", "Recent reuses the existing overview route");
+      assert.equal(typeof destination.params.communityRecentRequest, "string");
+      await act(() => tree.unmount());
+      return destination.params;
+    };
+    await publicationReset();
+    await act(() => tree.root.findByType("FlatList").props.onScroll({ nativeEvent: { contentOffset: { y: 260 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }));
+    await act(() => overviewChips().props.onChange("reflections"));
+    await flushPublicationTimers(50);
+    await act(() => tree.root.findByType("FlatList").props.onScroll({ nativeEvent: { contentOffset: { y: 180 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }));
+    const preservedOverview = tree;
+    const recentParams = await standaloneHandoff();
+    tree = preservedOverview;
+    harness.params = recentParams;
+    await publicationRender();
+    assert.equal(overviewChips().props.value, "recent", "An explicit standalone action selects Recent in the preserved overview");
+    await act(() => tree.root.findByType("FlatList").props.onContentSizeChange());
+    assert.deepEqual(harness.scrollRestores.at(-1), { animated: false, offset: 260 });
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => tree.root.findByType("FlatList").props.onContentSizeChange());
+    assert.deepEqual(harness.scrollRestores.at(-1), { animated: false, offset: 180 });
+    delete harness.params;
+    await publicationRender();
+    harness.params = recentParams;
+    await publicationRender();
+    assert.equal(overviewChips().props.value, "reflections", "Replayed route parameters cannot reapply a consumed request");
+    await act(() => tree.unmount());
+
+    for (const invalid of ["other-account", "expired", "active-composer", "missing-group", "migration"]) {
+      const destinationParams = await standaloneHandoff();
+      harness.params = destinationParams;
+      harness.initialDetailTab = "reflections";
+      if (invalid === "other-account") harness.state = { ...harness.state, currentUserId: "another-reader" };
+      if (invalid === "missing-group") harness.state = { ...harness.state, groups: [] };
+      if (invalid === "migration") harness.state = { ...harness.state, groups: harness.state.groups.map(group => ({ ...group, migrationPending: true })) };
+      const actualNow = Date.now;
+      if (invalid === "expired") Date.now = () => actualNow() + 6_000;
+      try {
+        if (invalid === "active-composer") {
+          delete harness.params;
+          await act(async () => { tree = create(React.createElement(screens.Overview)); });
+          await act(() => publicationShare().props.onPress());
+          harness.params = destinationParams;
+          await publicationRender();
+          assert.equal(actualComposer().props.visible, true, "A handoff cannot override an active destination composer");
+          await act(() => actualComposer().props.onClose());
+        } else await act(async () => { tree = create(React.createElement(screens.Overview)); });
+      } finally { Date.now = actualNow; }
+      if (!["missing-group", "migration"].includes(invalid)) assert.equal(overviewChips().props.value, "reflections", `${invalid} rejects the one-use navigation request`);
+      harness.state = overviewState;
+      delete harness.params;
+      await publicationRender();
+      harness.params = destinationParams;
+      await publicationRender();
+      assert.equal(overviewChips().props.value, "reflections", "Rejected requests remain consumed after scope/content recovers");
+      await act(() => tree.unmount());
+      delete harness.initialDetailTab;
+    }
+
+    harness.os = "web";
+    await publicationReset();
+    await act(() => publicationShare().props.onPress());
+    const webPublication = await publicationStart();
+    await publicationResolve(webPublication);
+    assert.equal(publicationReceipts()[0].props.accessibilityLiveRegion, "polite");
+    await flushPublicationTimers(350);
+    assert.ok(!harness.announcements.includes("Shared with Test community."), "Web uses its live region without duplicate native announcements");
+    await act(() => tree.unmount());
+    harness.os = "ios";
+
+    // A private Scripture reflection keeps its original journal behavior and
+    // never receives public Community publication feedback.
+    await publicationReset(screens.Overview, densityFixture);
+    await act(() => press(actionNodes("scripture")[0].findByType("Pressable")));
+    await act(() => actualComposer().props.onBody("Private journal words"));
+    await act(async () => { await actualSave().props.onPress(); });
+    assert.equal(publicationReceipts().length, 0);
+    assert.equal(harness.actions.at(-1).type, "createJournalEntry");
+    assert.equal(harness.actions.at(-1).communitySubmission, undefined);
+    await act(() => tree.unmount());
+  } finally {
+    if (tree) await act(() => tree.unmount());
+    globalThis.setTimeout = publicationNativeSetTimeout;
+    globalThis.clearTimeout = publicationNativeClearTimeout;
+    delete harness.realComposer;
+    delete harness.dispatch;
+    delete harness.localized;
+    delete harness.language;
+    delete harness.announcements;
+    delete harness.params;
+    delete harness.dismissedTo;
+    delete harness.focused;
+    harness.os = "android";
+  }
+  console.log("Community S4 publication feedback passed: confirmed-only localized create/edit receipts, eligible hidden-result actions, explicit navigation, platform accessibility speech and preserved filters/scroll; native presentation remains unverified.");
   console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
