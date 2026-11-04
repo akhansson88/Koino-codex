@@ -32,13 +32,14 @@ const mocks = {
   "react-native": `
     import React from "react";
     export const Platform = { get OS() { return globalThis.__communityNavigation.os; } };
-    export const AccessibilityInfo = { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }), announceForAccessibility() {} };
+    export const AccessibilityInfo = { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }), announceForAccessibility(message) { (globalThis.__communityNavigation.announcements ??= []).push(message); } };
+    export const Keyboard = { dismiss() { globalThis.__communityNavigation.keyboardDismissals = (globalThis.__communityNavigation.keyboardDismissals ?? 0) + 1; } };
     export const BackHandler = { addEventListener: (_event, handler) => {
       const h = globalThis.__communityNavigation;
       h.hardwareBack = handler;
       return { remove() { if (h.hardwareBack === handler) h.hardwareBack = undefined; } };
     } };
-    export const useWindowDimensions = () => ({ width: 390, height: 800 });
+    export const useWindowDimensions = () => ({ width: 390, height: 800, fontScale: 1, scale: 3, ...globalThis.__communityNavigation.windowDimensions });
     export const AppState = { addEventListener: () => ({ remove() {} }) };
     export const ActivityIndicator = "ActivityIndicator", KeyboardAvoidingView = "KeyboardAvoidingView", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View", Share = {};
     export const FlatList = React.forwardRef(function FlatList(props, ref) {
@@ -80,6 +81,8 @@ const mocks = {
   "react-native-safe-area-context": `export const useSafeAreaInsets = () => ({ top: 24, bottom: 24 });`,
   "@expo/vector-icons": `export const Feather = "Feather", MaterialCommunityIcons = "MaterialCommunityIcons", Ionicons = "Ionicons";`,
   "expo-blur": `export const BlurView = "BlurView";`,
+  "@/features/bible-preferences": `export const usePreferredBibleVersion = () => "kjv";`,
+  "@/ui/bible-verse-picker": `import React from "react"; export const BibleVersePicker = props => React.createElement("BibleVersePicker", props);`,
   "@/features/check-in-modal": `
     import React from "react";
     import { CheckInModal as RealCheckInModal, moodNumber as realMoodNumber } from "./features/check-in-modal";
@@ -104,7 +107,7 @@ const communityModules = (await readdir("features/community"))
   .filter(file => /\.tsx?$/.test(file))
   .map(file => `features/community/${file}`);
 const leafUiImports = new Map();
-for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
+for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", "ui/bible-verse-field.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
@@ -337,7 +340,7 @@ let tree;
 try {
   const outfile = path.join(directory, "screens.cjs");
   await build({
-    stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
+    stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { BibleVerseField as RealBibleVerseField } from "./ui/bible-verse-field"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
       export { translateMessage } from "./ui/localization";
       export { PrayerRequestCard } from "./features/community/prayer-screens";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
@@ -1093,10 +1096,12 @@ try {
     const managedBody = () => tree.root.findAllByType("TextInputField").find(node => node.props.multiline);
     const managedTitle = () => tree.root.findAllByType("TextInputField").find(node => !node.props.multiline);
     const managedSelector = () => tree.root.find(node => node.type?.name === "CommunityTypeSelector");
-    const managedFeedback = () => tree.root.findAllByType("View").find(node => node.props.accessibilityRole === "progressbar" || node.props.accessibilityRole === "alert");
+    const managedFeedback = () => tree.root.findAllByType("View").find(node => node.props.accessible && ["pending", "waiting", "unknown", "failure"].some(state => node.props.accessibilityLabel === screens.translateMessage(language, `community.composer.submission.${state}`)));
     const assertManagedLock = () => {
       assert.equal(managedBody().props.editable, false);
       assert.equal(managedTitle().props.editable, false);
+      assert.deepEqual(managedBody().props.accessibilityState, { disabled: true });
+      assert.deepEqual(managedTitle().props.accessibilityState, { disabled: true });
       assert.equal(managedSelector().props.disabled, true);
       assert.ok(managedSelector().findAllByType("Pressable").every(node => node.props.disabled && node.props.accessibilityState.disabled));
       const scripture = tree.root.findByType("BibleVerseField");
@@ -1118,7 +1123,8 @@ try {
       tree.root.findByType("BibleVerseField").props.onOpenInBible(managedProps.verses[0]);
       tree.root.findByType("IconButton").props.onPress();
       tree.root.findByType("FullScreenModal").props.onRequestClose();
-      managedBody().props.onSubmitEditing();
+      assert.equal(managedBody().props.onSubmitEditing, undefined, "Multiline Community Return has no publishing handler");
+      managedSave().props.onPress();
       managedSave().props.onPress();
     });
     assert.deepEqual(events, [], "Pending callbacks remain guarded even if invoked programmatically");
@@ -1128,7 +1134,7 @@ try {
     assert.equal(managedFeedback().props.accessibilityLabel, screens.translateMessage(language, "community.composer.submission.waiting"));
     await updateManaged({ submission: { status: "unknown", inFlight: false } });
     assertManagedLock();
-    assert.equal(managedFeedback().props.accessibilityRole, "alert");
+    assert.equal(managedFeedback().props.accessibilityRole, undefined);
     assert.deepEqual(managedFeedback().props.accessibilityState, { busy: false });
     assert.equal(managedFeedback().props.accessibilityLabel, screens.translateMessage(language, "community.composer.submission.unknown"));
     assert.equal(managedSave().props.disabled, false);
@@ -1136,7 +1142,7 @@ try {
     await act(() => { tree.root.findByType("IconButton").props.onPress(); managedBody().props.onChangeText("New draft"); managedSave().props.onPress(); });
     assert.deepEqual(events, [["submit"]], "An uncertain attempt permits only explicit original-attempt retry");
     await updateManaged({ submission: { status: "failure", inFlight: false } });
-    assert.equal(managedFeedback().props.accessibilityRole, "alert");
+    assert.equal(managedFeedback().props.accessibilityRole, undefined);
     assert.equal(managedFeedback().props.accessibilityLabel, screens.translateMessage(language, "community.composer.submission.failure"));
     assert.equal(managedBody().props.value, "Draft body");
     assert.equal(managedTitle().props.value, "Draft title");
@@ -1202,10 +1208,11 @@ try {
     let submission;
     await act(() => {
       submission = actualSave().props.onPress();
-      void actualBody().props.onSubmitEditing();
+      assert.equal(actualBody().props.onSubmitEditing, undefined, "Community keyboard input cannot start publication");
+      void actualSave().props.onPress();
       void oldIdleHandlers.onSubmit();
     });
-    assert.equal(submissionOperations.length, 1, "Same-render footer, keyboard and parent callback events start one operation");
+    assert.equal(submissionOperations.length, 1, "Same-render rapid footer taps and parent callback events start one operation");
     assert.deepEqual(actualComposer().props.submission, { status: "pending", inFlight: true });
     const pendingHandlers = actualComposer().props;
     await act(() => {
@@ -1253,7 +1260,7 @@ try {
     await act(() => [...confirmationTimers].at(-1).callback());
     assert.deepEqual(actualComposer().props.submission, { status: "unknown", inFlight: true });
     const operationCount = submissionOperations.length;
-    await act(() => { void actualSave().props.onPress(); void actualBody().props.onSubmitEditing(); actualComposer().props.onClose(); });
+    await act(() => { void actualSave().props.onPress(); void actualSave().props.onPress(); actualComposer().props.onClose(); });
     assert.equal(submissionOperations.length, operationCount, "Loss of timely confirmation never releases an overlapping retry");
     await act(async () => { unknownOperation.resolve({ status: "unknown", reason: "transport" }); await submission; });
     assert.deepEqual(actualComposer().props.submission, { status: "unknown", inFlight: false });
@@ -1454,7 +1461,7 @@ try {
       assert.equal(claritySelector().props.value, kind);
       assert.deepEqual({ title: clarityProps.title, body: clarityProps.body, verses: clarityProps.verses }, retained, "Switching Community type preserves the complete unsent input");
       const controls = claritySelector().findAllByType("Pressable");
-      assert.deepEqual(controls.filter(node => node.props.accessibilityState.selected).map(node => node.props.accessibilityLabel), [labels[kind]]);
+      assert.deepEqual(controls.filter(node => node.props.accessibilityState.checked).map(node => node.props.accessibilityLabel), [labels[kind]]);
       assert.ok(controls.every(node => entryStyle(node).minHeight >= 44), "Existing accessible selector target sizes are retained");
       const description = screens.translateMessage(language, `community.composer.share.description.${kind}`);
       assert.ok(description && description !== `community.composer.share.description.${kind}`);
@@ -1529,6 +1536,168 @@ try {
   delete harness.localized;
   delete harness.language;
 
+  // S3 checks native prop contracts and actual callbacks with mocked primitives.
+  // Keyboard geometry, VoiceOver speech/focus and real text sizing still need an iPhone.
+  for (const os of ["ios", "android"]) {
+    for (const language of ["en", "sv"]) {
+      harness.os = os;
+      harness.localized = true;
+      harness.language = language;
+      harness.announcements = [];
+      harness.windowDimensions = { width: 390, fontScale: 1 };
+      const nativeEvents = [];
+      let nativeProps;
+      const updateNative = changes => {
+        nativeProps = { ...nativeProps, ...changes };
+        tree.update(React.createElement(screens.RealComposer, nativeProps));
+      };
+      nativeProps = {
+        visible: true, context: "room", kind: "prayer_request", entryVisibility: "room", roomName: "Test community",
+        title: "A retained title", body: "A retained first line", verses: [clarityVerse], submission: { status: "idle", inFlight: false },
+        onTitle: title => updateNative({ title }), onBody: body => updateNative({ body }), onKind: kind => updateNative({ kind }),
+        onVerses: verses => updateNative({ verses }), onVisibility() {}, onClose: () => nativeEvents.push("close"), onSubmit: () => nativeEvents.push("submit"),
+      };
+      await act(async () => { tree = create(React.createElement(screens.RealComposer, nativeProps)); });
+      const nativeBody = () => tree.root.findAllByType("TextInputField").find(node => node.props.multiline);
+      const nativeTitle = () => tree.root.findAllByType("TextInputField").find(node => !node.props.multiline);
+      const nativeSelector = () => tree.root.find(node => node.type?.name === "CommunityTypeSelector");
+      const nativeSave = () => tree.root.findByType("PrimaryButton");
+      const nativeFeedback = key => tree.root.findAllByType("View").find(node => node.props.accessible && node.props.accessibilityLabel === screens.translateMessage(language, key));
+      const nativeScroll = tree.root.findByType("ScrollView");
+      assert.equal(nativeScroll.props.automaticallyAdjustKeyboardInsets, os === "ios", "Community iOS uses one native keyboard inset adjustment");
+      assert.equal(nativeScroll.props.keyboardDismissMode, os === "ios" ? "interactive" : "on-drag");
+      assert.equal(nativeScroll.props.keyboardShouldPersistTaps, "handled", "Share and Scripture taps can be handled while the keyboard is up");
+      assert.equal(tree.root.findAllByType("KeyboardAvoidingView").length, 0, "Native insets are not combined with a second keyboard offset");
+      assert.ok(nativeScroll.props.contentContainerStyle.paddingTop >= 42 && nativeScroll.props.contentContainerStyle.paddingBottom >= 24, "Scrollable controls retain safe-area clearance");
+      assert.equal(nativeBody().props.maxLength, 500);
+      assert.equal(nativeBody().props.submitBehavior, "newline");
+      assert.equal(nativeBody().props.returnKeyType, "default");
+      assert.equal(nativeBody().props.onSubmitEditing, undefined);
+      assert.equal(nativeTitle().props.onSubmitEditing, undefined, "Single-line Community title Return also cannot publish accidentally");
+      assert.equal(nativeTitle().props.returnKeyType, "done");
+      for (const field of [nativeBody(), nativeTitle()]) {
+        assert.ok(field.props.accessibilityLabel && !field.props.accessibilityLabel.startsWith("community."), "EN/SV fields retain a localized accessible label when populated");
+        assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === field.props.accessibilityLabel), "A persistent visible label accompanies each Community input");
+        assert.notEqual(field.props.allowFontScaling, false);
+      }
+      assert.equal(nativeTitle().props.accessibilityLabel, language === "en" ? "Prayer title (optional)" : "Rubrik för böneämnet (valfri)");
+      const bodyLabels = language === "en"
+        ? { prayer_request: "Prayer request (required)", reflection: "Reflection (required)", praise: "Praise (required)", scripture: "Note (optional)" }
+        : { prayer_request: "Böneämne (obligatoriskt)", reflection: "Reflektion (obligatorisk)", praise: "Tacksägelse (obligatorisk)", scripture: "Anteckning (valfri)" };
+      for (const [kind, label] of Object.entries(bodyLabels)) {
+        await act(() => updateNative({ kind }));
+        assert.equal(nativeBody().props.accessibilityLabel, label, "Each type identifies required writing or the optional Scripture note");
+        assert.equal(nativeBody().props.accessibilityHint, screens.translateMessage(language, "community.composer.share.field.writingHint", { max: 500 }));
+        assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === label));
+      }
+      await act(() => updateNative({ kind: "prayer_request" }));
+      await act(() => nativeBody().props.onChangeText("First line\nSecond line"));
+      assert.equal(nativeProps.body, "First line\nSecond line");
+      assert.deepEqual(nativeEvents, [], "Newlines retain content without invoking publication");
+      await act(() => nativeBody().props.onChangeText("x".repeat(510)));
+      assert.equal(nativeProps.body.length, 500, "The existing character cap is enforced by the handler as well as native input");
+      const group = nativeSelector().findAllByType("View").find(node => node.props.accessibilityRole === "radiogroup");
+      assert.ok(group?.props.accessibilityLabel && !group.props.accessibilityLabel.startsWith("community."));
+      for (const [width, fontScale, rowSize] of [[390, 1, 2], [320, 1, 1], [390, 1.6, 1]]) {
+        harness.windowDimensions = { width, fontScale };
+        await act(() => updateNative({}));
+        const options = nativeSelector().findAllByType("Pressable");
+        assert.equal(options.length, 4);
+        assert.ok(options.every(node => node.props.accessibilityRole === "radio" && entryStyle(node).minHeight >= 44));
+        assert.equal(options.filter(node => node.props.accessibilityState.checked).length, 1, "Screen readers have one checked contribution type");
+        assert.ok(options.every(node => node.parent.findAllByType("Pressable").length === rowSize), "Narrow or enlarged-text Community choices use one column without shortening their labels");
+        assert.ok(options.every(node => node.findByType("Text").props.numberOfLines === undefined), "Localized type names can wrap");
+      }
+      await act(() => updateNative({ roomName: "En lång gemenskap med ett fullständigt namn som behöver flera rader" }));
+      const audience = tree.root.findAllByType("Text").find(node => node.props.children === screens.translateMessage(language, "community.composer.share.audience", { community: nativeProps.roomName }));
+      assert.equal(audience.props.numberOfLines, undefined);
+      assert.equal(entryStyle(audience).minWidth, 0);
+
+      const feedbackKeys = ["community.composer.submission.pending", "community.composer.submission.waiting", "community.composer.submission.unknown", "community.composer.submission.failure"];
+      const submissionStates = [{ status: "pending", inFlight: true }, { status: "unknown", inFlight: true }, { status: "unknown", inFlight: false }, { status: "failure", inFlight: false }];
+      for (let index = 0; index < submissionStates.length; index++) {
+        await act(() => updateNative({ submission: submissionStates[index] }));
+        const feedback = nativeFeedback(feedbackKeys[index]);
+        assert.ok(feedback, "Each submission state has the truthful localized accessible message");
+        assert.equal(feedback.props.accessibilityLiveRegion, os === "android" ? "polite" : "none", "A single platform-specific announcement path avoids duplicate speech");
+        assert.equal(feedback.props.accessibilityRole, submissionStates[index].inFlight ? "progressbar" : undefined, "Status speech is not duplicated by an alert role");
+        const count = harness.announcements.length;
+        await act(() => updateNative({ title: `${nativeProps.title}!` }));
+        assert.equal(harness.announcements.length, count, "Unrelated rerenders do not repeat a status announcement");
+      }
+      assert.deepEqual(harness.announcements, os === "ios" ? feedbackKeys.map(key => screens.translateMessage(language, key)) : []);
+      await act(() => updateNative({ visible: false }));
+      assert.equal(harness.announcements.length, os === "ios" ? 4 : 0, "A hidden composer makes no new announcement");
+      await act(() => updateNative({ visible: true }));
+      assert.equal(harness.announcements.length, os === "ios" ? 5 : 0, "Reopening announces its current state once");
+      await act(() => updateNative({ submission: { status: "idle", inFlight: false }, body: "" }));
+      harness.announcements = [];
+      await act(() => nativeSave().props.onPress());
+      const validation = screens.translateMessage(language, "community.composer.validation.bodyRequired");
+      const validationText = tree.root.findAllByType("Text").find(node => node.props.children === validation);
+      assert.ok(validationText);
+      assert.equal(validationText.props.accessibilityLiveRegion, os === "android" ? "polite" : undefined);
+      assert.deepEqual(harness.announcements, os === "ios" ? [validation] : []);
+      await act(() => nativeSave().props.onPress());
+      assert.deepEqual(harness.announcements, os === "ios" ? [validation] : [], "An unchanged validation error is announced once");
+      assert.deepEqual(nativeEvents, [], "Invalid draft callbacks never publish");
+      const beforeTypeChangeAnnouncements = [...harness.announcements];
+      const scriptureValidation = screens.translateMessage(language, "community.composer.validation.scriptureRequired");
+      await act(() => updateNative({ kind: "scripture", verses: [] }));
+      assert.deepEqual(harness.announcements, beforeTypeChangeAnnouncements, "Changing contribution type cannot announce an error from an unattempted validation");
+      assert.ok(!tree.root.findAllByType("Text").some(node => node.props.children === scriptureValidation), "An earlier Prayer attempt cannot display an unattempted Scripture error");
+      await act(() => nativeSave().props.onPress());
+      assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === scriptureValidation));
+      const afterScriptureAttemptAnnouncements = os === "ios" ? [...beforeTypeChangeAnnouncements, scriptureValidation] : [];
+      assert.deepEqual(harness.announcements, afterScriptureAttemptAnnouncements);
+      await act(() => nativeSave().props.onPress());
+      assert.deepEqual(harness.announcements, afterScriptureAttemptAnnouncements, "Repeating the same Scripture validation does not repeat speech");
+
+      // Journal remains on AppScreen and retains its original keyboard semantics.
+      harness.windowDimensions = { width: 320, fontScale: 1.6 };
+      await act(() => updateNative({ context: "journal", kind: "prayer_request", entryVisibility: "private", body: "Private words" }));
+      assert.equal(tree.root.findAllByType("ScrollView").length, 0);
+      assert.ok(tree.root.findByType("AppScreen"));
+      assert.equal(nativeBody().props.returnKeyType, "send");
+      assert.equal(nativeBody().props.submitBehavior, "submit");
+      assert.equal(nativeBody().props.accessibilityLabel, undefined);
+      assert.ok(nativeSelector().findAllByType("Pressable").every(node => node.props.accessibilityRole === "button"));
+      await act(() => nativeBody().props.onSubmitEditing());
+      assert.deepEqual(nativeEvents, ["submit"], "Existing private journal keyboard submission is unchanged");
+      await act(() => tree.unmount());
+    }
+  }
+  delete harness.windowDimensions;
+  delete harness.announcements;
+  delete harness.localized;
+  delete harness.language;
+  harness.os = "android";
+
+  // The concrete picker is isolated from Bible database/storage dependencies.
+  // Its callback and modal lifecycle are real; native presentation is mocked.
+  for (const communityComposer of [undefined, true]) {
+    harness.keyboardDismissals = 0;
+    const passages = [];
+    await act(async () => { tree = create(React.createElement(screens.RealBibleVerseField, { communityComposer, label: "A passage label that wraps", verses: [], onChange: verses => passages.push(verses) })); });
+    if (communityComposer) {
+      const label = tree.root.findAllByType("Text").find(node => node.props.children === "A passage label that wraps");
+      assert.equal(entryStyle(label).minWidth, 0);
+      assert.equal(entryStyle(label).flex, 1);
+      assert.equal(label.props.numberOfLines, undefined, "Community passage labels wrap beside the count");
+    } else {
+      assert.ok(tree.root.findByType("SectionHeading"), "Existing non-Community picker heading is retained");
+    }
+    await act(async () => tree.root.findByType("SecondaryButton").props.onPress());
+    assert.equal(harness.keyboardDismissals, communityComposer ? 1 : 0, "Only the Community picker dismisses its writing keyboard before opening");
+    assert.ok(tree.root.findByType("FullScreenModal"));
+    const picker = tree.root.findByType("BibleVersePicker");
+    await act(() => picker.props.onSelect(clarityVerse));
+    assert.deepEqual(passages, [[clarityVerse]], "Picker selection and verse payload are preserved");
+    assert.equal(tree.root.findAllByType("FullScreenModal").length, 0);
+    await act(() => tree.unmount());
+  }
+  delete harness.keyboardDismissals;
+
   harness.realComposer = true;
   harness.dispatch = action => { action.communitySubmission?.report({ status: "success" }); };
   try {
@@ -1586,6 +1755,7 @@ try {
   console.log("Managed Community composer passed: EN/SV pending and unknown feedback, locked draft/close/picker controls, explicit retry-only uncertainty and preserved failure drafts.");
   console.log("Community parent submission passed: synchronous duplicate guard, failure/success drafts, timeout uncertainty, stable retry, stale callbacks, scoped draft recovery and unchanged private Scripture reflection.");
   console.log("Community Share clarity passed: EN/SV four-type labels and contextual copy, named audience above fields, Scripture-first layout without picker remount, retained drafts, correct defaults, hidden-title payload exclusion and preserved journal/Bible behavior.");
+  console.log("Community S3 mocked contracts passed: native keyboard inset/scroll props, multiline newline-only input, localized persistent labels and radio selection, narrow/large-text wrapping, deduplicated iOS status/validation announcements, Android live regions and Community-only picker keyboard dismissal; native iPhone geometry and VoiceOver remain unverified.");
 } finally {
   if (tree) await act(() => tree.unmount());
   await rm(directory, { recursive: true, force: true });
