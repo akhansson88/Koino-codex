@@ -147,6 +147,7 @@ export function CheckInCard({
   onDelete,
   onOpen,
   onReact,
+  overview = false,
   ownsItem,
   reacted,
   reactedBy,
@@ -158,6 +159,7 @@ export function CheckInCard({
   onDelete?: () => void;
   onOpen: () => void;
   onReact: () => void;
+  overview?: boolean;
   ownsItem: boolean;
   reacted: boolean;
   reactedBy?: { name: string; image?: GroupImage }[];
@@ -240,6 +242,7 @@ export function CheckInCard({
           icon="heart"
           label={communityActionLabel(itemKind, reacted, t)}
           onPress={onReact}
+          overview={overview || undefined}
           tone="check_in"
         />
       }
@@ -272,9 +275,11 @@ export function CheckInCard({
         onOpen();
       }}
       overlay={menu}
+      overview={overview || undefined}
       responseSummary={
-        reactedBy?.length ? (
+        (overview ? reactionCount > 0 : reactedBy?.length) ? (
           <CommunityCardResponseSummary
+            compact={overview || undefined}
             count={reactionCount}
             label={communityResponseNoun(item, reactionCount, t)}
             users={reactedBy}

@@ -333,6 +333,7 @@ export function PrayerRequestCard({
   onEdit,
   onOpen,
   onPray,
+  overview = false,
   ownsItem,
   prayed,
   prayedBy,
@@ -346,6 +347,7 @@ export function PrayerRequestCard({
   onEdit?: () => void;
   onOpen: () => void;
   onPray: () => void;
+  overview?: boolean;
   ownsItem: boolean;
   prayed: boolean;
   prayedBy?: { name: string; image?: GroupImage }[];
@@ -354,7 +356,8 @@ export function PrayerRequestCard({
   const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
-  const answered = Boolean(item.answeredAt);
+  const prayerStatus = item.answeredAt ? "answered" : "open";
+  const prayerStatusLabel = t(`shared.status.${prayerStatus}`);
   const prayerMoment = isPrayerMomentKind(item.kind);
   const displayCopy = communityPrayerMomentDisplayCopy(item, t);
 
@@ -442,7 +445,13 @@ export function PrayerRequestCard({
     <CommunityFeedCard
       actions={
         prayerMoment ? (
-          <CommunityCardAction active icon="pray" label={t("community.action.prayer.completed")} tone="prayer" />
+          <CommunityCardAction
+            active
+            icon="pray"
+            label={t("community.action.prayer.completed")}
+            overview={overview || undefined}
+            tone="prayer"
+          />
         ) : focused && !prayed ? (
           <Pressable
             accessibilityLabel={t("community.prayer.prayForRequest", { name: authorName })}
@@ -481,6 +490,7 @@ export function PrayerRequestCard({
             icon="pray"
             label={communityActionLabel("prayer_request", prayed, t)}
             onPress={onPray}
+            overview={overview || undefined}
             tone="prayer"
           />
         )
@@ -512,17 +522,26 @@ export function PrayerRequestCard({
         onOpen();
       }}
       overlay={menu}
+      overview={overview || undefined}
       responseSummary={
-        prayerMoment ? undefined : (
+        prayerMoment || (overview && prayerCount === 0) ? undefined : (
           <CommunityCardResponseSummary
+            compact={overview || undefined}
             count={prayerCount}
             label={communityPrayerNoun(prayerCount, t)}
-            showWhenEmpty
+            showWhenEmpty={!overview}
             users={prayedBy}
           />
         )
       }
-      status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
+      status={prayerMoment ? undefined : overview ? (
+        <Text
+          accessibilityLabel={`${t("community.prayer.status.label")}. ${prayerStatusLabel}`}
+          style={[typography.caption, { color: colors.textSecondary, flexShrink: 1 }]}
+        >
+          {prayerStatusLabel}
+        </Text>
+      ) : <StatusPill status={prayerStatus} />}
       style={{ zIndex: menuOpen ? 10 : 1 }}
     />
   );

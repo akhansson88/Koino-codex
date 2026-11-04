@@ -50,6 +50,7 @@ type CommunityFeedCardProps = {
   item: FeedItem;
   onOpen?: () => void;
   overlay?: ReactNode;
+  overview?: boolean;
   responseSummary?: ReactNode;
   status?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -178,12 +179,17 @@ export function CommunityFeedCard({
   item,
   onOpen,
   overlay,
+  overview = false,
   responseSummary,
   status,
   style,
   title,
 }: CommunityFeedCardProps) {
-  const { language } = useAppTranslation();
+  const { language, t } = useAppTranslation();
+  const relativeTime = formatRelativeTime(item.createdAt, language);
+  const metadata = overview
+    ? [communityFeedItemLabel(item, t), relativeTime].filter(Boolean).join(" · ")
+    : relativeTime;
   const visibleBody = body || bodyFallback;
   const mainContent = bodyContent ?? (visibleBody ? (
     <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES}>
@@ -193,14 +199,23 @@ export function CommunityFeedCard({
   return (
     <Card style={[{ overflow: "visible", padding: 16, position: "relative" }, style]}>
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10, minWidth: 0 }}>
-        <Avatar image={authorImage} name={authorName} size={42} tone="green" />
+        {overview ? (
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Avatar image={authorImage} name={authorName} size={42} tone="green" />
+          </View>
+        ) : (
+          <Avatar image={authorImage} name={authorName} size={42} tone="green" />
+        )}
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <Text style={[typography.label, { color: colors.ink, fontSize: 15 }]}>
+          <Text style={[overview ? typography.bodyMedium : typography.label, { color: colors.ink, fontSize: 15 }]}>
             {authorName}
           </Text>
-          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>
+            {metadata}
+          </Text>
+          {overview ? status : null}
         </View>
-        <HeaderMeta accessory={headerAccessory} item={item} status={status} />
+        {overview ? headerAccessory : <HeaderMeta accessory={headerAccessory} item={item} status={status} />}
       </View>
 
       {overlay}
@@ -277,6 +292,7 @@ export function CommunityCardAction({
   icon,
   label,
   onPress,
+  overview = false,
   tone,
   variant = "primary",
 }: {
@@ -285,10 +301,12 @@ export function CommunityCardAction({
   icon: CommunityCardActionIcon;
   label: string;
   onPress?: () => void;
+  overview?: boolean;
   tone: CommunityCardTone;
   variant?: "primary" | "secondary";
 }) {
   const palette = toneColors(tone);
+  const quiet = overview && variant === "secondary";
   const actionStyle: ViewStyle = {
     alignItems: "center",
     backgroundColor: variant === "primary" && active ? palette.soft : colors.paper,
@@ -299,11 +317,18 @@ export function CommunityCardAction({
     gap: 7,
     minHeight: 44,
     paddingHorizontal: variant === "primary" ? 13 : 8,
+    ...(overview ? { maxWidth: "100%", paddingVertical: 6 } : {}),
   };
   const content = (
     <>
-      <ActionIcon active={active} icon={icon} />
-      <Text style={[typography.label, { color: active ? colors.textMuted : colors.ink }]}>{label}</Text>
+      {!quiet ? <ActionIcon active={active} icon={icon} /> : null}
+      <Text style={[
+        typography.label,
+        {
+          color: quiet ? colors.muted : active ? colors.textMuted : colors.ink,
+          ...(overview ? { flexShrink: 1 } : {}),
+        },
+      ]}>{label}</Text>
     </>
   );
 
@@ -332,16 +357,23 @@ export function CommunityCardAction({
 }
 
 export function CommunityCardResponseSummary({
+  compact = false,
   count,
   label,
   showWhenEmpty = false,
   users,
 }: {
+  compact?: boolean;
   count: number;
   label: string;
   showWhenEmpty?: boolean;
   users?: { name: string; image?: GroupImage }[];
 }) {
+  if (compact) {
+    return count > 0 ? (
+      <Text style={[typography.caption, { color: colors.muted, flexShrink: 1 }]}>{count} {label}</Text>
+    ) : null;
+  }
   if (!showWhenEmpty && !users?.length) return null;
   return (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
@@ -403,6 +435,7 @@ export function PostCard({
   onPray,
   onReact,
   onReply,
+  overview = false,
   ownsItem,
   prayed,
   prayedBy,
@@ -421,6 +454,7 @@ export function PostCard({
   onPray: () => void;
   onReact?: () => void;
   onReply?: () => void;
+  overview?: boolean;
   ownsItem: boolean;
   prayed: boolean;
   prayedBy?: { name: string; image?: GroupImage }[];
@@ -451,8 +485,9 @@ export function PostCard({
     itemKind === "praise" ? "star" : itemKind === "scripture" ? "book-open" : itemKind === "update" ? "message-circle" : "heart";
   const hasPersonalNote = Boolean(displayCopy.body.trim());
   const reactionPresentedAsCompleted = itemKind !== "scripture" && Boolean(reacted);
-  const hasPrayerActivity = itemKind !== "praise" && Boolean(prayedBy?.length);
-  const hasReactionActivity = itemKind !== "scripture" && !isPrayerPost && Boolean(reactedBy?.length);
+  const hasPrayerActivity = itemKind !== "praise" && (overview ? prayerCount > 0 : Boolean(prayedBy?.length));
+  const hasReactionActivity = itemKind !== "scripture" && !isPrayerPost
+    && (overview ? (reactionCount ?? 0) > 0 : Boolean(reactedBy?.length));
 
   const menuButton = ownsItem && (onEdit || onDelete) ? (
     <Pressable
@@ -535,6 +570,7 @@ export function PostCard({
               icon={reactionIcon}
               label={communityActionLabel(itemKind, reactionPresentedAsCompleted, t)}
               onPress={onReact}
+              overview={overview || undefined}
               tone={reactionTone}
             />
           ) : (
@@ -543,6 +579,7 @@ export function PostCard({
               icon="pray"
               label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
               onPress={onPray}
+              overview={overview || undefined}
               tone="prayer"
             />
           )}
@@ -552,6 +589,7 @@ export function PostCard({
               icon="pray"
               label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
               onPress={onPray}
+              overview={overview || undefined}
               tone="prayer"
               variant="secondary"
             />
@@ -598,18 +636,20 @@ export function PostCard({
         onOpen();
       }}
       overlay={menu}
+      overview={overview || undefined}
       responseSummary={
         hasPrayerActivity || hasReactionActivity ? (
           <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             {hasReactionActivity ? (
               <CommunityCardResponseSummary
+                compact={overview || undefined}
                 count={reactionCount ?? 0}
                 label={communityResponseNoun(item, reactionCount ?? 0, t)}
                 users={reactedBy}
               />
             ) : null}
             {hasPrayerActivity ? (
-              <CommunityCardResponseSummary count={prayerCount} label={communityPrayerNoun(prayerCount, t)} users={prayedBy} />
+              <CommunityCardResponseSummary compact={overview || undefined} count={prayerCount} label={communityPrayerNoun(prayerCount, t)} users={prayedBy} />
             ) : null}
           </View>
         ) : undefined
