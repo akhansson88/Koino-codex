@@ -201,7 +201,9 @@ export function JournalScreen() {
             accessibilityHint={t("me.journey.seeAllHint")}
             accessibilityLabel={t("me.journey.seeAll")}
             accessibilityRole="button"
-            onPress={() => setHistoryVisible(true)}
+            onPress={() => {
+              if (!afterHistoryClose.current) setHistoryVisible(true);
+            }}
             style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, minHeight: 44, opacity: pressed ? 0.7 : 1, paddingHorizontal: 4 })}
           >
             <Text style={[typography.label, { color: colors.olive, flexShrink: 1 }]}>{t("me.journey.seeAll")}</Text>

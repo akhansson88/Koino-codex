@@ -140,6 +140,8 @@ try {
   await press(previews().at(-1));
   assert.equal(history().visible, false);
   assert.equal(harness.pushes.at(-1).params.id, "today-reflection", "Wait for native history dismissal before pushing");
+  await press(seeAll());
+  assert.equal(history().visible, false, "Do not reopen history while its next action is pending");
   await act(() => history().onDismiss());
   assert.equal(harness.pushes.at(-1).params.id, "yesterday");
   await press(seeAll());
