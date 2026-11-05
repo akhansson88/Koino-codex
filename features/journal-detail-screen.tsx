@@ -10,7 +10,7 @@ import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/st
 import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
-import { journalEntryPresentation } from "@/ui/journal-presentation";
+import { journalEntryHasSharedCopy, journalEntryPresentation, presentedJournalEntryType } from "@/ui/journal-presentation";
 import { LinkPreview } from "@/ui/link-preview";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
@@ -87,11 +87,11 @@ export function JournalDetailScreen() {
   }
 
   const currentEntry = entry;
-  const storedType = journalEntryTypeFor(currentEntry);
+  const storedType = presentedJournalEntryType(currentEntry);
   const presentation = journalEntryPresentation(currentEntry, t);
   const isSharedCheckIn = Boolean(currentEntry.isSharedCheckIn);
   const audienceLocked = isCheckInJournalEntry(currentEntry);
-  const isSharedEntry = isSharedCheckIn || (audienceLocked && Boolean(currentEntry.sharedPostId));
+  const sharedCopy = journalEntryHasSharedCopy(currentEntry);
 
   function openEditor() {
     setJournalType(storedType);
@@ -205,8 +205,8 @@ export function JournalDetailScreen() {
       </View>
       <VerseList verse={currentEntry.verse} verses={currentEntry.verses} maxLines={99} showFullText />
       <View style={{ gap: 8 }}>
-        <SectionHeading>{t(isSharedEntry ? "me.journey.detail.sharedWith" : "me.journey.detail.privacy")}</SectionHeading>
-        {isSharedEntry ? (
+        <SectionHeading>{t(isSharedCheckIn ? "me.journey.detail.sharedWith" : "me.journey.detail.privacy")}</SectionHeading>
+        {isSharedCheckIn ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
             <RoomImage image={group?.image} name={group?.name ?? t("tabs.community")} size={34} />
             <View style={{ flex: 1 }}>
@@ -216,8 +216,10 @@ export function JournalDetailScreen() {
           </Card>
         ) : (
           <View style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
-            <Feather name="lock" size={14} color={colors.muted} />
-            <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.detail.privateOnly")}</Text>
+            <Feather name={sharedCopy ? "users" : "lock"} size={14} color={colors.muted} />
+            <Text style={[typography.caption, { color: colors.muted, flex: 1 }]}>
+              {t(sharedCopy ? "me.journey.preview.sharedCopy" : "me.journey.detail.privateOnly")}
+            </Text>
           </View>
         )}
       </View>
@@ -236,7 +238,10 @@ export function JournalDetailScreen() {
         verses={verses}
         audienceLocked={audienceLocked}
         editing
-        onKind={setEntryKind}
+        onKind={(kind) => {
+          setEntryKind(kind);
+          if (!audienceLocked) setJournalType(journalEntryTypeFor({ entryKind: kind, source: currentEntry.source }));
+        }}
         onVisibility={setEntryVisibility}
         onTitle={setTitle}
         onBody={setBody}

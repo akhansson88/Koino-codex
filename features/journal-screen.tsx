@@ -1,60 +1,25 @@
 import { displayBibleReference } from "@/features/bible-book-names";
+import { JournalEntryPreview } from "@/features/journal-entry-preview";
+import { JournalHistoryModal } from "@/features/journal-history-modal";
+import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { AppState, Platform, Pressable, Text, View } from "react-native";
 
 import { isCheckInJournalEntry } from "@/state/check-ins";
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
+import { localDayKey } from "@/state/store/helpers";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
-import {
-  AppScreen,
-  BodyText,
-  Card,
-  FullScreenModal,
-  IconButton,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/ui/app-components";
+import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
-import { journalEntryPresentation } from "@/ui/journal-presentation";
-import type { AppLanguage, TranslationFunction, TranslationKey } from "@/ui/localization";
 import { QuietActionCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
-
-const JOURNAL_BODY_PREVIEW_LINES = 3;
-
-function formatDate(value: string, language: AppLanguage) {
-  return new Intl.DateTimeFormat(language, { weekday: "short", month: "short", day: "numeric" }).format(new Date(value));
-}
-
-function formatRecentEntryDate(value: string, language: AppLanguage) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-
-  return new Intl.DateTimeFormat(language, { month: "short", day: "numeric" }).format(date);
-}
-
-function recentEntrySummary(entry: JournalEntry | undefined, language: AppLanguage, t: TranslationFunction) {
-  if (!entry) return t("me.journey.empty");
-
-  const typeLabelKey: Record<JournalEntryType, TranslationKey> = {
-    reflection: "me.journey.lastReflection",
-    prayer: "me.journey.lastPrayer",
-    answered_prayer: "me.journey.lastAnsweredPrayer",
-    heart_checkin: "me.journey.lastCheckIn",
-    scripture_note: "me.journey.lastReflection",
-  };
-  const context = t(typeLabelKey[journalEntryPresentation(entry, t).journalType]);
-  const date = formatRecentEntryDate(entry.createdAt, language);
-
-  return date ? `${context} · ${date}` : context;
-}
 
 function composerKindForJournalType(type: JournalEntryType): EntryKind {
   if (type === "prayer") return "prayer_request";
@@ -68,6 +33,34 @@ function journalTypeForKind(kind: EntryKind): JournalEntryType {
   if (kind === "praise") return "answered_prayer";
   if (kind === "scripture") return "scripture_note";
   return "reflection";
+}
+
+function useLocalJournalDay() {
+  const [day, setDay] = useState(() => localDayKey(new Date()));
+
+  useFocusEffect(useCallback(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    function refresh() {
+      clearTimeout(timer);
+      const now = new Date();
+      setDay(localDayKey(now));
+      const nextDay = new Date(now);
+      nextDay.setHours(24, 0, 0, 0);
+      timer = setTimeout(refresh, nextDay.getTime() - now.getTime());
+    }
+
+    refresh();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") refresh();
+    });
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+    };
+  }, []));
+
+  return day;
 }
 
 export function JournalScreen() {
@@ -85,23 +78,34 @@ export function JournalScreen() {
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | undefined>();
   const [historyVisible, setHistoryVisible] = useState(false);
+  const afterHistoryClose = useRef<() => void>(undefined);
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
   const editingCheckIn = Boolean(editingEntry && isCheckInJournalEntry(editingEntry));
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const entries = useMemo<JournalEntry[]>(() => {
-    return state.journalEntries
-      .filter((entry) => entry.userId === state.currentUserId)
-      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  }, [state.currentUserId, state.journalEntries]);
-  const mostRecentEntry = useMemo(
-    () =>
-      entries.reduce<JournalEntry | undefined>(
-        (latest, entry) => (!latest || Date.parse(entry.createdAt) > Date.parse(latest.createdAt) ? entry : latest),
-        undefined,
-      ),
-    [entries],
+  const entries = useMemo(
+    () => ownedJournalEntries(state.journalEntries, state.currentUserId),
+    [state.currentUserId, state.journalEntries],
   );
+  const recentEntries = recentJourneyEntries(entries);
+  const today = useLocalJournalDay();
+  const todaysReflection = reflectionForJournalDay(entries, today);
+
+  function openEntry(entry: JournalEntry) {
+    router.push({ pathname: "/me/[id]", params: { id: entry.id } });
+  }
+
+  function closeHistoryThen(action: () => void) {
+    if (afterHistoryClose.current) return;
+    afterHistoryClose.current = action;
+    setHistoryVisible(false);
+  }
+
+  function finishHistoryClose() {
+    const action = afterHistoryClose.current;
+    afterHistoryClose.current = undefined;
+    action?.();
+  }
 
   function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
     const kind = composerKindForJournalType(type);
@@ -169,25 +173,54 @@ export function JournalScreen() {
     beginEntry("reflection", visibility.private);
   }, [params.newEntry]);
 
+  useEffect(() => {
+    if (historyVisible || Platform.OS === "ios" || !afterHistoryClose.current) return;
+    // Native Modal onDismiss is iOS-only. Keep the existing slide-out delay elsewhere.
+    const timer = setTimeout(finishHistoryClose, 220);
+    return () => clearTimeout(timer);
+  }, [historyVisible]);
+
   return (
     <AppScreen topInset={false}>
       <View style={{ gap: 6 }}>
-        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("tabs.me")}</Text>
+        <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>{t("tabs.me")}</Text>
         <BodyText muted>{t("me.description")}</BodyText>
       </View>
 
-      <ReflectTodayCard onPress={() => beginEntry("reflection", visibility.private)} />
+      <ReflectTodayCard
+        completed={Boolean(todaysReflection)}
+        onPress={() => todaysReflection ? openEntry(todaysReflection) : beginEntry("reflection", visibility.private)}
+      />
 
-      <JourneySummaryCard entry={mostRecentEntry} onPress={() => setHistoryVisible(true)} />
+      <View style={{ gap: 6 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+          <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink, flexShrink: 1 }]}>
+            {t("me.journey.title")}
+          </Text>
+          <Pressable
+            accessibilityHint={t("me.journey.seeAllHint")}
+            accessibilityLabel={t("me.journey.seeAll")}
+            accessibilityRole="button"
+            onPress={() => setHistoryVisible(true)}
+            style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, minHeight: 44, opacity: pressed ? 0.7 : 1, paddingHorizontal: 4 })}
+          >
+            <Text style={[typography.label, { color: colors.olive, flexShrink: 1 }]}>{t("me.journey.seeAll")}</Text>
+            <Feather name="arrow-right" size={15} color={colors.olive} />
+          </Pressable>
+        </View>
+        {recentEntries.length ? (
+          recentEntries.map((entry) => (
+            <JournalEntryPreview entry={entry} key={entry.id} onOpen={() => openEntry(entry)} variant="journey" />
+          ))
+        ) : (
+          <View style={{ borderColor: colors.line, borderTopWidth: 1, gap: 4, paddingVertical: 12 }}>
+            <Text style={[typography.title, { color: colors.ink }]}>{t("me.journey.emptyState.title")}</Text>
+            <BodyText muted>{t("me.journey.emptyState.body")}</BodyText>
+          </View>
+        )}
+      </View>
 
       <BiblePlansCard count={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length} />
-
-      {entries.length === 0 ? (
-        <Card>
-          <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("me.empty.title")}</Text>
-          <BodyText muted>{t("me.empty.body")}</BodyText>
-        </Card>
-      ) : null}
 
       {state.authError ? (
         <Card>
@@ -224,14 +257,9 @@ export function JournalScreen() {
         hasMore={state.journalEntriesHasMore}
         loadingMore={state.journalEntriesLoadingMore}
         onClose={() => setHistoryVisible(false)}
-        onOpen={(entry) => {
-          setHistoryVisible(false);
-          setTimeout(() => router.push(`/me/${entry.id}` as never), 220);
-        }}
-        onWriteEntry={() => {
-          setHistoryVisible(false);
-          beginEntry("reflection", visibility.private);
-        }}
+        onDismiss={finishHistoryClose}
+        onOpen={(entry) => closeHistoryThen(() => openEntry(entry))}
+        onWriteEntry={() => closeHistoryThen(() => beginEntry("reflection", visibility.private))}
         onLoadMore={() => dispatch({ type: "loadOlderJournalEntries" })}
         visible={historyVisible}
       />
@@ -255,167 +283,29 @@ function BiblePlansCard({ count }: { count: number }) {
   );
 }
 
-function ReflectTodayCard({ onPress }: { onPress: () => void }) {
+function ReflectTodayCard({ completed, onPress }: { completed: boolean; onPress: () => void }) {
   const { t } = useAppTranslation();
+  const title = t(completed ? "me.reflect.completedTitle" : "me.reflect.title");
+  const subtitle = t(completed ? "me.reflect.openEntry" : "me.reflect.subtitle");
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, minHeight: 150, overflow: "hidden", padding: 16 }}>
-        <BrandWaveMotif
-          height={136}
-          opacity={0.95}
-          style={{ bottom: -12, position: "absolute", right: -54, transform: [{ rotate: "-2deg" }] }}
-          width={306}
-        />
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12, zIndex: 1 }}>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("me.reflect.title")}</Text>
-            <BodyText muted>{t("me.reflect.subtitle")}</BodyText>
-          </View>
-          <Feather name="chevron-right" size={19} color={colors.muted} />
-        </View>
-      </Card>
-    </Pressable>
-  );
-}
-
-function JourneySummaryCard({ entry, onPress }: { entry?: JournalEntry; onPress: () => void }) {
-  const { language, t } = useAppTranslation();
-
-  return (
-    <QuietActionCard icon="book-open" onPress={onPress} subtitle={t("me.journey.subtitle")} title={t("me.journey.title")} tone="accent">
-      <View style={{ backgroundColor: colors.line, height: 1 }} />
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <Feather name="book-open" size={15} color={colors.muted} />
-        <Text style={[typography.caption, { color: colors.muted }]}>{recentEntrySummary(entry, language, t)}</Text>
-      </View>
-    </QuietActionCard>
-  );
-}
-
-function JournalHistoryModal({
-  entries,
-  hasMore,
-  loadingMore,
-  onClose,
-  onLoadMore,
-  onOpen,
-  onWriteEntry,
-  visible,
-}: {
-  entries: JournalEntry[];
-  hasMore: boolean;
-  loadingMore: boolean;
-  onClose: () => void;
-  onLoadMore: () => Promise<void>;
-  onOpen: (entry: JournalEntry) => void;
-  onWriteEntry: () => void;
-  visible: boolean;
-}) {
-  const { t } = useAppTranslation();
-  const historyScrollRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    historyScrollRef.current?.scrollTo({ animated: false, y: 0 });
-  }, [visible]);
-
-  return (
-    <FullScreenModal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <AppScreen scrollRef={historyScrollRef}>
-        <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-          <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onClose} />
-          <Text style={[typography.label, { color: colors.olive }]}>{t("me.journey.privateJournal")}</Text>
-          <View style={{ width: 38 }} />
-        </View>
-        <View style={{ gap: 6 }}>
-          <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("me.journey.title")}</Text>
-          <BodyText muted>{t("me.journey.subtitle")}</BodyText>
-        </View>
-        {entries.length === 0 ? (
-          <Card style={{ gap: 12 }}>
-            <Text style={[typography.title, { color: colors.ink }]}>{t("me.journey.emptyState.title")}</Text>
-            <BodyText muted>{t("me.journey.emptyState.body")}</BodyText>
-            <PrimaryButton icon="edit-3" onPress={onWriteEntry}>
-              {t("me.journey.emptyState.action")}
-            </PrimaryButton>
-          </Card>
-        ) : null}
-        {entries.map((entry) => (
-          <JournalEntryCard
-            key={`${entry.id}-${entry.createdAt}`}
-            entry={entry}
-            onOpen={() => onOpen(entry)}
-          />
-        ))}
-        {hasMore ? (
-          <SecondaryButton disabled={loadingMore} icon="chevron-down" onPress={onLoadMore}>
-            {t(loadingMore ? "me.journey.loadingEarlier" : "me.journey.loadEarlier")}
-          </SecondaryButton>
-        ) : null}
-      </AppScreen>
-    </FullScreenModal>
-  );
-}
-
-function JournalEntryCard({
-  entry,
-  onOpen,
-}: {
-  entry: JournalEntry;
-  onOpen: () => void;
-}) {
-  const bookLanguage = useBibleBookLanguage();
-  const { language, t } = useAppTranslation();
-  const presentation = journalEntryPresentation(entry, t);
-  const references = normalizeBibleVerses(entry.verse, entry.verses).map((verse) => displayBibleReference(verse.reference, bookLanguage, verse.translation));
-  const date = formatDate(entry.createdAt, language);
-
-  return (
-    <Pressable
-      accessibilityHint={t("me.journey.preview.openHint")}
-      accessibilityLabel={t("me.journey.preview.openLabel", { date, type: presentation.typeLabel })}
-      accessibilityRole="button"
-      onPress={onOpen}
-    >
+    <Pressable accessibilityLabel={`${title}. ${subtitle}`} accessibilityRole="button" onPress={onPress}>
       {({ pressed }) => (
-        <Card style={{ gap: 10, opacity: pressed ? 0.88 : 1, padding: 14 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", flex: 1, gap: 6 }}>
-              <Feather name={presentation.typeIcon} size={14} color={colors.accentReflection} />
-              <Text style={[typography.label, { color: colors.textMuted }]}>{presentation.typeLabel}</Text>
+        <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, justifyContent: "center", minHeight: 106, opacity: pressed ? 0.85 : 1, overflow: "hidden", padding: 16 }}>
+          <BrandWaveMotif
+            height={136}
+            opacity={0.9}
+            style={{ bottom: -12, position: "absolute", right: -54, transform: [{ rotate: "-2deg" }] }}
+            width={306}
+          />
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+            {completed ? <Feather name="check-circle" size={18} color={colors.olive} /> : null}
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
+              <BodyText muted>{subtitle}</BodyText>
             </View>
-            <Text style={[typography.caption, { color: colors.muted }]}>{date}</Text>
+            <Feather name="chevron-right" size={19} color={colors.muted} />
           </View>
-          {presentation.moodLabel ? (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-              <Feather name={presentation.moodIcon} size={15} color={colors.olive} />
-              <Text style={[typography.label, { color: colors.olive }]}>{presentation.moodLabel}</Text>
-            </View>
-          ) : null}
-          {presentation.title ? (
-            <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
-              {presentation.title}
-            </Text>
-          ) : null}
-          {presentation.body ? (
-            <Text numberOfLines={JOURNAL_BODY_PREVIEW_LINES} style={[typography.body, { color: colors.muted }]}>
-              {presentation.body}
-            </Text>
-          ) : null}
-          {references.length > 0 ? (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-              <Feather name="book-open" size={14} color={colors.olive} />
-              <Text numberOfLines={2} style={[typography.caption, { color: colors.olive, flex: 1 }]}>
-                {references.join(" · ")}
-              </Text>
-              <Feather name="chevron-right" size={16} color={colors.muted} />
-            </View>
-          ) : (
-            <View style={{ alignItems: "flex-end" }}>
-              <Feather name="chevron-right" size={16} color={colors.muted} />
-            </View>
-          )}
         </Card>
       )}
     </Pressable>
