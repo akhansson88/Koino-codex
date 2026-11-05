@@ -178,6 +178,10 @@ export function firstPositionForPlanDay(day?: BiblePlanDay) {
   return day?.ranges[0]?.start;
 }
 
+export function biblePlanReadingRoute(planId: string, dayNumber: number) {
+  return { pathname: "/(tabs)/bible" as const, params: { planId, planDay: String(dayNumber), planJump: String(Date.now()) } };
+}
+
 export function completedDayNumbers(days: BiblePlanDay[]) {
   return days.reduce<Record<string, true>>((result, day) => {
     if (day.completedAt) result[String(day.dayNumber)] = true;

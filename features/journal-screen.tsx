@@ -1,6 +1,7 @@
 import { displayBibleReference } from "@/features/bible-book-names";
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
 import { JournalHistoryModal } from "@/features/journal-history-modal";
+import { MeBiblePlans } from "@/features/me-bible-plans";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,7 +18,6 @@ import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
-import { QuietActionCard } from "@/ui/rhythm-cards";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
 
@@ -220,7 +220,7 @@ export function JournalScreen() {
         )}
       </View>
 
-      <BiblePlansCard count={state.biblePlans.filter((plan) => plan.userId === state.currentUserId).length} />
+      <MeBiblePlans plans={state.biblePlans} userId={state.currentUserId} />
 
       {state.authError ? (
         <Card>
@@ -264,22 +264,6 @@ export function JournalScreen() {
         visible={historyVisible}
       />
     </AppScreen>
-  );
-}
-
-function BiblePlansCard({ count }: { count: number }) {
-  const { t } = useAppTranslation();
-
-  return (
-    <QuietActionCard icon="calendar" onPress={() => router.push("/bible-plans" as never)} subtitle={t("me.biblePlans.subtitle")} title={t("me.biblePlans.title")}>
-      <View style={{ backgroundColor: colors.line, height: 1 }} />
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <Feather name="book-open" size={15} color={colors.muted} />
-        <Text style={[typography.caption, { color: colors.muted }]}>
-          {count === 0 ? t("me.biblePlans.empty") : count === 1 ? t("me.biblePlans.single") : t("me.biblePlans.count", { count })}
-        </Text>
-      </View>
-    </QuietActionCard>
   );
 }
 
