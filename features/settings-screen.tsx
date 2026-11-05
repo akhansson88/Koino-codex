@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
@@ -173,6 +173,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
   const [composerSubmission, setComposerSubmission] = useState<CommunityComposerSubmission>({ status: "idle", inFlight: false });
   const [publicationReceipt, setPublicationReceipt] = useState<CommunityPublicationReceipt>();
+  const [publicationViewportHeight, setPublicationViewportHeight] = useState(0);
   const publicationReceiptRef = useRef<CommunityPublicationReceipt | undefined>(undefined);
   const publicationFocusedRef = useRef(true);
   const publicationRecentAvailableRef = useRef(false);
@@ -828,6 +829,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     if (composerIsLocked()) return;
     const nextTab = tab === "reflections" ? "reflections" : "recent";
     if (nextTab === detailTab) return;
+    clearPublicationReceipt();
     if (group) {
       const targetKey = `${group.id}:${nextTab}`;
       pendingCommunityScrollRestoreRef.current = {
@@ -1312,26 +1314,33 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     </BottomSheet>
   ) : null;
 
-  // Bound the in-flow receipt without truncating long names or large text.
+  function measurePublicationViewport(event: LayoutChangeEvent) {
+    setPublicationViewportHeight(event.nativeEvent.layout.height);
+  }
+
+  // Only the message can scroll. The footer and its controls keep their full
+  // height above the tabs while the feed takes the remaining viewport.
   const publicationFeedback = activePublicationReceipt && publicationMessage ? (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator
-      style={{ flexGrow: 0, flexShrink: 1, maxHeight: "40%", marginHorizontal: 18, marginBottom: tabContentClearance(insets.bottom) }}
-    >
-      <Card style={{ gap: 8, padding: 12 }}>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+    <View style={{ flexShrink: 0, marginHorizontal: 18, marginBottom: tabContentClearance(insets.bottom) }}>
+      <Card style={{ flexShrink: 0, gap: 8, padding: 12 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 }}>
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
             <Feather name="check-circle" size={18} color={colors.olive} />
           </View>
-          <View
-            accessible
-            accessibilityLabel={publicationMessage}
-            accessibilityLiveRegion={Platform.OS === "ios" ? "none" : "polite"}
-            style={{ flex: 1, minWidth: 0 }}
+          <ScrollView
+            contentInsetAdjustmentBehavior="never"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+            style={{ flex: 1, minWidth: 0, maxHeight: Math.max(44, (publicationViewportHeight - tabContentClearance(insets.bottom)) * 0.4) }}
           >
-            <Text style={[typography.bodyMedium, { color: colors.ink }]}>{publicationMessage}</Text>
-          </View>
+            <View
+              accessible
+              accessibilityLabel={publicationMessage}
+              accessibilityLiveRegion={Platform.OS === "ios" ? "none" : "polite"}
+            >
+              <Text style={[typography.bodyMedium, { color: colors.ink }]}>{publicationMessage}</Text>
+            </View>
+          </ScrollView>
           <Pressable
             accessibilityLabel={t("community.composer.publication.dismiss")}
             accessibilityRole="button"
@@ -1344,12 +1353,12 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           </Pressable>
         </View>
         {offerViewRecent ? (
-          <SecondaryButton onPress={viewPublicationInRecent} style={{ minHeight: 44 }}>
+          <SecondaryButton onPress={viewPublicationInRecent} style={{ flexShrink: 0, minHeight: 44 }}>
             {t("community.composer.publication.viewRecent")}
           </SecondaryButton>
         ) : null}
       </Card>
-    </ScrollView>
+    </View>
   ) : null;
 
   if (group?.migrationPending && roomView !== "rooms") {
@@ -1407,7 +1416,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   if (roomView === "prayer" && group) {
     return (
       <>
-        <View style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View onLayout={measurePublicationViewport} style={{ flex: 1, backgroundColor: colors.cream }}>
           <CommunityPrayerScreen
             communityName={group.name}
             filter={prayerFilter}
@@ -1415,7 +1424,11 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             onCreatePrayer={() => openComposer("prayer_request")}
             onEditPrayer={editPost}
             onDeletePrayer={deletePost}
-            onFilter={setPrayerFilter}
+            onFilter={(filter) => {
+              if (composerIsLocked() || filter === prayerFilter) return;
+              clearPublicationReceipt();
+              setPrayerFilter(filter);
+            }}
             onOpenPrayer={openPrayerDetail}
             onPray={prayForItem}
             onPrayForSomeone={() => setMemberSelectVisible(true)}
@@ -1517,8 +1530,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   if (roomView === "detail" && group) {
     return (
       <>
-        <View style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View onLayout={measurePublicationViewport} style={{ flex: 1, backgroundColor: colors.cream }}>
           <FlatList
+            style={{ flex: 1, minHeight: 0 }}
             data={communityFeedRows}
             initialNumToRender={6}
             maxToRenderPerBatch={6}

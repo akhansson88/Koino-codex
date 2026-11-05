@@ -1795,6 +1795,7 @@ try {
   const publicationReceipts = () => tree.root.findAllByType("View").filter(node => node.props.accessible && [
     publicationTranslation("shared", { community: "Test community" }),
     publicationTranslation("shared", { community: "Renamed community" }),
+    publicationTranslation("shared", { community: harness.state.groups.find(group => group.id === harness.state.currentGroupId)?.name }),
     publicationTranslation("updated"),
   ].includes(node.props.accessibilityLabel));
   const publicationRecentAction = () => tree.root.findAllByType("SecondaryButton").find(node => node.props.children === publicationTranslation("viewRecent"));
@@ -1882,8 +1883,24 @@ try {
           let receiptScroll = receipt.parent;
           while (receiptScroll && receiptScroll.type !== "ScrollView") receiptScroll = receiptScroll.parent;
           assert.ok(receiptScroll, "Receipt content remains scrollable for long names and enlarged text");
-          assert.equal(entryStyle(receiptScroll).maxHeight, "40%");
-          assert.equal(entryStyle(receiptScroll).flexGrow, 0, "Feedback leaves space for the originating feed viewport");
+          let receiptCard = receiptScroll.parent;
+          while (receiptCard && receiptCard.type !== "Card") receiptCard = receiptCard.parent;
+          let receiptFooter = receiptCard.parent;
+          while (receiptFooter && entryStyle(receiptFooter).marginBottom === undefined) receiptFooter = receiptFooter.parent;
+          assert.ok(receiptFooter);
+          assert.equal(entryStyle(receiptFooter).flexShrink, 0, "The entire receipt cannot shrink below its message/control layout");
+          assert.equal(entryStyle(receiptCard).flexShrink, 0);
+          assert.equal(entryStyle(receiptFooter).marginBottom, 104, "The complete footer reserves the existing tab bar plus safe-area clearance");
+          await act(() => receiptFooter.parent.props.onLayout({ nativeEvent: { layout: { height: 600 } } }));
+          assert.ok(entryStyle(receiptScroll).maxHeight >= 44 && entryStyle(receiptScroll).maxHeight <= (600 - 104) / 2, "Only the message is bounded within the measured screen, leaving room for controls and feed");
+          assert.equal(entryStyle(receiptScroll).minWidth, 0);
+          assert.equal(receiptScroll.props.contentInsetAdjustmentBehavior, "never");
+          assert.ok(!receiptScroll.findAllByType("SecondaryButton").length, "The Recent action is outside the scrollable message body");
+          assert.ok(!receiptScroll.findAllByType("Pressable").length, "Dismissal is outside the scrollable message body");
+          if (origin === "detail") {
+            assert.equal(entryStyle(tree.root.findByType("FlatList")).flex, 1);
+            assert.equal(entryStyle(tree.root.findByType("FlatList")).minHeight, 0, "The feed yields its remaining space to the nonshrinking receipt");
+          }
           assert.equal(receipt.findByType("Text").props.numberOfLines, undefined, "The confirmation message can wrap without truncation");
           assert.equal(receipt.props.accessibilityLabel, publicationTranslation("shared", { community: "Test community" }));
           assert.equal(receipt.props.accessibilityLiveRegion, os === "android" ? "polite" : "none");
@@ -1899,6 +1916,7 @@ try {
           assert.equal(harness.announcements.filter(item => item === message).length, os === "ios" ? 1 : 0, "Rerenders cannot repeat success speech");
           if (hidden) {
             assert.ok(entryStyle(publicationRecentAction()).minHeight >= 44);
+            assert.equal(entryStyle(publicationRecentAction()).flexShrink, 0);
             await flushPublicationTimers(8_000);
             assert.ok(publicationRecentAction(), "An actionable receipt remains available for an explicit choice");
             await act(() => publicationRecentAction().props.onPress());
@@ -1929,8 +1947,122 @@ try {
       }
     }
 
+    // Keep the actual overview mounted across submissions: a fresh Reflection
+    // must never inherit the preceding Prayer/Praise/Scripture receipt action.
+    for (const language of ["en", "sv"]) {
+      harness.os = "ios";
+      harness.language = language;
+      await publicationReset();
+      await act(() => overviewChips().props.onChange("reflections"));
+      for (const previousKind of ["prayer_request", "praise", "scripture"]) {
+        await act(() => publicationShare().props.onPress());
+        const previous = await publicationStart(previousKind);
+        await publicationDeliver(previous);
+        await publicationResolve(previous);
+        assert.ok(publicationRecentAction(), "An excluded acknowledged contribution legitimately offers Recent");
+        const previousAction = publicationRecentAction().props.onPress;
+        const previousDismiss = publicationDismiss().props.onPress;
+        const previousAnnouncement = [...publicationTimers].find(timer => timer.delay === 350)?.callback;
+        await act(() => publicationShare().props.onPress());
+        assert.equal(publicationReceipts().length, 0, "A subsequent composer clears the previous receipt");
+        assert.equal(publicationRecentAction(), undefined);
+        const reflection = await publicationStart("reflection");
+        await act(() => { previousAction(); previousDismiss(); previousAnnouncement?.(); });
+        assert.equal(overviewChips().props.value, "reflections");
+        assert.equal(publicationReceipts().length, 0, "Old callbacks cannot restore success during the next submission");
+        // Alternate subscription/ACK order without resetting the component.
+        if (previousKind === "praise") {
+          await publicationResolve(reflection);
+          assert.equal(publicationRecentAction(), undefined);
+          await publicationDeliver(reflection);
+        } else {
+          await publicationDeliver(reflection);
+          await publicationResolve(reflection);
+        }
+        assert.equal(publicationReceipts().length, 1);
+        assert.ok(tree.root.findByType("FlatList").props.data.some(row => row.type === "item" && row.item.id === reflection.operation.action.communitySubmission.attemptId), "The newly acknowledged Reflection is in the actual Reflections list");
+        assert.equal(publicationRecentAction(), undefined, "Reflections -> Share Reflection -> confirmed success shows confirmation only, even after an actionable receipt");
+        await act(() => { previousAction(); previousDismiss(); previousAnnouncement?.(); });
+        assert.equal(publicationReceipts().length, 1, "Obsolete callbacks cannot dismiss the newer confirmation");
+        assert.equal(publicationRecentAction(), undefined);
+        assert.equal(overviewChips().props.value, "reflections");
+      }
+      await act(() => tree.unmount());
+    }
+
     harness.os = "ios";
     harness.language = "en";
+    // A manual filter change leaves the publication context. Returning to it
+    // must not resurrect an earlier contribution's generic success/action.
+    await publicationReset();
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => publicationShare().props.onPress());
+    const obsoletePublication = await publicationStart("prayer_request");
+    await publicationDeliver(obsoletePublication);
+    await publicationResolve(obsoletePublication);
+    assert.ok(publicationRecentAction());
+    await act(() => overviewChips().props.onChange("reflections"));
+    assert.ok(publicationRecentAction(), "Reselecting the same filter preserves a legitimate action");
+    const obsoletePublicationAction = publicationRecentAction().props.onPress;
+    await act(() => overviewChips().props.onChange("recent"));
+    assert.equal(publicationReceipts().length, 0, "Changing the filter dismisses the previous publication context");
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => obsoletePublicationAction());
+    assert.equal(publicationRecentAction(), undefined, "Returning to Reflections cannot resurrect the earlier Prayer action");
+    assert.equal(overviewChips().props.value, "reflections");
+    await act(() => publicationShare().props.onPress());
+    const afterFilterTransition = await publicationStart("reflection");
+    await publicationDeliver(afterFilterTransition);
+    await publicationResolve(afterFilterTransition);
+    assert.equal(publicationReceipts().length, 1);
+    assert.equal(publicationRecentAction(), undefined, "The next visible Reflection has only its own confirmation");
+    await act(() => tree.unmount());
+
+    await publicationReset(screens.Prayer);
+    await act(() => publicationPrayer().props.onFilter("answered"));
+    await act(() => publicationPrayer().props.onCreatePrayer());
+    const prayerFilterPublication = await publicationStart();
+    await publicationDeliver(prayerFilterPublication, {}, screens.Prayer);
+    await publicationResolve(prayerFilterPublication);
+    assert.ok(publicationRecentAction(), "A new Open request still offers Recent from Answered");
+    await act(() => publicationPrayer().props.onFilter("answered"));
+    assert.ok(publicationRecentAction());
+    await act(() => publicationPrayer().props.onFilter("open"));
+    assert.equal(publicationReceipts().length, 0);
+    await act(() => publicationPrayer().props.onFilter("answered"));
+    assert.equal(publicationRecentAction(), undefined, "Prayer filter round trips cannot resurrect an older receipt");
+    await act(() => tree.unmount());
+
+    // Structural containment only: native font measurement, VoiceOver gestures
+    // and the footer's actual frame still require physical-device acceptance.
+    harness.language = "sv";
+    harness.windowDimensions = { width: 320, fontScale: 2 };
+    const longCommunityName = "Gemenskapen för hopp, bön och tacksamhet i vår svenska församling";
+    await publicationReset(screens.Overview, { groups: [{ ...overviewState.groups[0], name: longCommunityName }] });
+    await act(() => overviewChips().props.onChange("reflections"));
+    await act(() => publicationShare().props.onPress());
+    const largeTextPublication = await publicationStart("praise");
+    await publicationDeliver(largeTextPublication);
+    await publicationResolve(largeTextPublication);
+    const largeTextReceipt = publicationReceipts()[0];
+    let largeTextScroll = largeTextReceipt.parent;
+    while (largeTextScroll && largeTextScroll.type !== "ScrollView") largeTextScroll = largeTextScroll.parent;
+    let publicationViewport = largeTextScroll.parent;
+    while (publicationViewport && !publicationViewport.props.onLayout) publicationViewport = publicationViewport.parent;
+    for (const height of [600, 300, 480]) {
+      await act(() => publicationViewport.props.onLayout({ nativeEvent: { layout: { height } } }));
+      assert.ok(entryStyle(largeTextScroll).maxHeight >= 44 && entryStyle(largeTextScroll).maxHeight < height - 104, "The message bound responds to the measured available height");
+      assert.equal(largeTextReceipt.props.accessibilityLabel, `Delat med ${longCommunityName}.`);
+      assert.equal(largeTextReceipt.findByType("Text").props.numberOfLines, undefined);
+      assert.equal(publicationRecentAction().props.children, "Visa i Senaste");
+      assert.equal(entryStyle(publicationRecentAction()).flexShrink, 0);
+      assert.equal(largeTextScroll.findAllByType("SecondaryButton").length, 0);
+      assert.ok(entryStyle(publicationDismiss()).minHeight >= 44 && entryStyle(publicationDismiss()).minWidth >= 44);
+    }
+    await act(() => tree.unmount());
+    delete harness.windowDimensions;
+    harness.language = "en";
+
     // The ACK can arrive before its feed subscription. Show the truthful receipt,
     // then offer Recent only after that actual result is eligible for the feed.
     await publicationReset();
@@ -1985,7 +2117,7 @@ try {
       assert.equal(publicationRecentAction(), undefined);
       await act(() => retainedAction());
       assert.equal(overviewChips().props.value, unavailable === "matching-filter" ? "recent" : "reflections");
-      assert.equal(publicationReceipts().length, 1, "A retained obsolete action cannot dismiss a current receipt or navigate to unavailable content");
+      assert.equal(publicationReceipts().length, unavailable === "matching-filter" ? 0 : 1, "A filter transition dismisses the obsolete receipt; retained callbacks cannot navigate or affect current feedback");
       await act(() => tree.unmount());
     }
 
@@ -2290,6 +2422,7 @@ try {
     harness.os = "android";
   }
   console.log("Community S4 publication feedback passed: confirmed-only localized create/edit receipts, eligible hidden-result actions, explicit navigation, platform accessibility speech and preserved filters/scroll; native presentation remains unverified.");
+  console.log("Receipt acceptance regressions passed: consecutive acknowledged submissions, earlier actionable receipts, both ACK/feed orders, overview/Prayer filter-return cleanup, stale callbacks and measured message-only scrolling with fixed controls; large-text native geometry remains unverified.");
   console.log("Community denial hotfix passed: exact uncoded SDK and coded denials, editable retained drafts, conservative near-match/transport handling, sticky uncertainty, frozen retries, acknowledged receipts and no duplicate contributions.");
   console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
