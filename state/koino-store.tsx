@@ -216,8 +216,12 @@ export async function runCommunityPostSubmission(
     return failed("conflict");
   } catch (error) {
     if (sessionChanged || !dependencies.isCurrent()) return { status: "unknown", reason: "session" };
-    const code = String((error as { code?: unknown } | null)?.code ?? "").toLowerCase().replace(/_/g, "-").split("/").at(-1);
-    if (code === "permission-denied" || code === "invalid-argument" || code === "invalid-data") return failed("rejected");
+    const errorCode = (error as { code?: unknown } | null)?.code;
+    const code = String(errorCode ?? "").toLowerCase().replace(/_/g, "-").split("/").at(-1);
+    // RTDB 1.1.2 transactions can reject with an uncoded Error("permission_denied").
+    // Match only that verified shape; arbitrary transport messages stay uncertain.
+    const sdkPermissionDenied = errorCode === undefined && error instanceof Error && error.message === "permission_denied";
+    if (sdkPermissionDenied || code === "permission-denied" || code === "invalid-argument" || code === "invalid-data") return failed("rejected");
     // A transport/adapter error may arrive after a committed write. Retain the
     // same immutable attempt for reconciliation; never claim it did not save.
     return { status: "unknown", reason: "transport" };

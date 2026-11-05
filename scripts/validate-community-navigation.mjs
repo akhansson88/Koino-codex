@@ -239,23 +239,44 @@ async function validateCommunitySubmissionStore() {
   outcome(await contracts.runCommunityPostSubmission(action, unacknowledged.dependencies), "failure", "conflict");
 
   const rejected = Object.assign(new Error("permission denied"), { code: "PERMISSION_DENIED" });
+  const sdkRejected = new Error("permission_denied");
+  assert.equal(sdkRejected.code, undefined, "The installed RTDB transaction denial shape has no code property");
   const interrupted = Object.assign(new Error("connection lost"), { code: "NETWORK_ERROR" });
-  outcome(await contracts.runCommunityPostSubmission(action, database([], { transact: async () => { throw rejected; } }).dependencies), "failure", "rejected");
+  for (const denial of [sdkRejected, rejected]) {
+    const denied = database([], { transact: async () => { throw denial; } });
+    outcome(await contracts.runCommunityPostSubmission(action, denied.dependencies), "failure", "rejected");
+    assert.equal(denied.records.size, 0, "An authoritative denial cannot create a contribution or count as success");
+  }
+  for (const error of [
+    new Error("connection lost"), new Error("permission_denied: connection lost"),
+    new Error("transport permission_denied"), new Error("permission_denied "),
+    new Error(" permission_denied"), new Error("PERMISSION_DENIED"), new Error("permission-denied"),
+    { message: "permission_denied" }, "permission_denied",
+    Object.assign(new Error("permission_denied"), { code: "NETWORK_ERROR" }),
+    Object.assign(new Error("permission_denied"), { code: null }),
+    Object.assign(new Error("permission_denied"), { code: "" }),
+  ]) {
+    outcome(await contracts.runCommunityPostSubmission(action, database([], { transact: async () => { throw error; } }).dependencies), "unknown", "transport");
+  }
   outcome(await contracts.runCommunityPostSubmission(action, database([], { transact: async () => { throw interrupted; } }).dependencies), "unknown", "transport");
   const retry = { ...action, communitySubmission: { ...action.communitySubmission, previouslyUnknown: true } };
-  outcome(await contracts.runCommunityPostSubmission(retry, database([], { transact: async () => { throw rejected; } }).dependencies), "unknown");
+  for (const denial of [sdkRejected, rejected]) {
+    outcome(await contracts.runCommunityPostSubmission(retry, database([], { transact: async () => { throw denial; } }).dependencies), "unknown", "rejected");
+  }
   outcome(await contracts.runCommunityPostSubmission(retry, conflict.dependencies), "unknown", "conflict");
   outcome(await contracts.runCommunityPostSubmission(retry, database([], { userId: undefined }).dependencies), "unknown", "precondition");
 
-  const ambiguous = database();
-  const transact = ambiguous.dependencies.transact;
-  ambiguous.dependencies.transact = async (...args) => { await transact(...args); throw interrupted; };
-  outcome(await contracts.runCommunityPostSubmission(action, ambiguous.dependencies), "unknown", "transport");
-  assert.equal(ambiguous.records.size, 1, "The write may exist even though its acknowledgement was lost");
-  ambiguous.dependencies.transact = transact;
-  outcome(await contracts.runCommunityPostSubmission(retry, ambiguous.dependencies), "success");
-  assert.equal(ambiguous.records.size, 1, "A retry after lost acknowledgement never allocates another post");
-  assert.deepEqual(ambiguous.calls, [path, path]);
+  for (const lostAcknowledgement of [interrupted, new Error("acknowledgement lost")]) {
+    const ambiguous = database();
+    const transact = ambiguous.dependencies.transact;
+    ambiguous.dependencies.transact = async (...args) => { await transact(...args); throw lostAcknowledgement; };
+    outcome(await contracts.runCommunityPostSubmission(action, ambiguous.dependencies), "unknown", "transport");
+    assert.equal(ambiguous.records.size, 1, "The write may exist even though its acknowledgement was lost");
+    ambiguous.dependencies.transact = transact;
+    outcome(await contracts.runCommunityPostSubmission(retry, ambiguous.dependencies), "success");
+    assert.equal(ambiguous.records.size, 1, "A retry after lost acknowledgement never allocates another post");
+    assert.deepEqual(ambiguous.calls, [path, path]);
+  }
 
   let current = true;
   const stale = database([], { isCurrent: () => current });
@@ -2141,6 +2162,109 @@ try {
     await act(() => tree.unmount());
     harness.os = "ios";
 
+    // Bridge the actual classifier into the real parent/composer. These errors
+    // are not preclassified UI outcomes, and the in-memory records model lost ACKs.
+    const denialContracts = await communitySubmissionContracts();
+    const publicationDispatch = harness.dispatch;
+    const installDenialBoundary = (denial, mode = "denied") => {
+      const fixture = { denial, mode, records: new Map(), actions: [], paths: [] };
+      harness.dispatch = async action => {
+        if (!action.communitySubmission) return;
+        fixture.actions.push(action);
+        const result = await denialContracts.runCommunityPostSubmission(action, {
+          userId: harness.state.currentUserId, groupId: harness.state.currentGroupId,
+          isCurrent: () => action.communitySubmission.userId === harness.state.currentUserId
+            && action.communitySubmission.groupId === harness.state.currentGroupId,
+          transact: async (path, change) => {
+            fixture.paths.push(path);
+            if (fixture.mode === "denied") throw fixture.denial();
+            const next = change(structuredClone(fixture.records.get(path) ?? null));
+            if (next === undefined) return { committed: false };
+            fixture.records.set(path, structuredClone(next));
+            if (fixture.mode === "lost-ack") throw new Error("connection lost after write");
+            return { committed: true };
+          },
+        });
+        action.communitySubmission.report(result);
+      };
+      return fixture;
+    };
+    const frozenSubmission = action => {
+      const { report, previouslyUnknown, ...request } = action.communitySubmission;
+      return structuredClone({ ...action, communitySubmission: request });
+    };
+    const submitDenialDraft = async () => {
+      await act(async () => {
+        const submit = actualSave().props.onPress;
+        const pending = submit();
+        void submit();
+        assert.equal(publicationReceipts().length, 0, "No pending operation can display a success receipt");
+        await pending;
+      });
+    };
+    try {
+      for (const denial of [() => new Error("permission_denied"), () => Object.assign(new Error("permission denied"), { code: "PERMISSION_DENIED" })]) {
+        await publicationReset();
+        const fixture = installDenialBoundary(denial);
+        await act(() => publicationShare().props.onPress());
+        await fillCommunityDraft("Complete denied draft");
+        const draft = composerDraft();
+        await submitDenialDraft();
+        assert.equal(fixture.actions.length, 1, "Rapid repeated taps cannot overlap a denied transaction");
+        assert.deepEqual(actualComposer().props.submission, { status: "failure", inFlight: false });
+        assert.deepEqual(composerDraft(), draft, "An authoritative denial preserves type, title, body and all passages");
+        assert.equal(actualComposer().props.visible, true);
+        assert.notEqual(actualBody().props.editable, false);
+        assert.notEqual(actualComposer().findAllByType("TextInputField").find(node => !node.props.multiline).props.editable, false);
+        assert.equal(publicationReceipts().length, 0);
+        assert.equal(fixture.records.size, 0);
+        await submitDenialDraft();
+        assert.equal(fixture.actions.length, 2);
+        assert.deepEqual(frozenSubmission(fixture.actions[1]), frozenSubmission(fixture.actions[0]), "Unchanged denied retries retain ID, payload, timestamp, author and community");
+        await act(() => actualBody().props.onChangeText("Corrected denied draft"));
+        assert.equal(actualComposer().props.body, "Corrected denied draft", "Confirmed denial permits correcting the retained draft");
+        fixture.mode = "success";
+        await submitDenialDraft();
+        assert.equal(fixture.actions.length, 3);
+        assert.equal(fixture.records.size, 1, "Corrections after denied writes create only the acknowledged contribution");
+        assert.equal([...fixture.records.values()][0].body, "Corrected denied draft");
+        assert.equal(actualComposer().props.visible, false);
+        assert.equal(publicationReceipts().length, 1, "Confirmed success still produces the S4 receipt");
+        await act(() => tree.unmount());
+      }
+
+      await publicationReset();
+      const uncertain = installDenialBoundary(() => new Error("permission_denied"), "lost-ack");
+      await act(() => publicationShare().props.onPress());
+      await fillCommunityDraft("Complete uncertain draft");
+      const uncertainDraft = composerDraft();
+      await submitDenialDraft();
+      assert.deepEqual(actualComposer().props.submission, { status: "unknown", inFlight: false });
+      assert.equal(uncertain.records.size, 1, "A lost acknowledgement can follow a real write");
+      uncertain.mode = "denied";
+      await submitDenialDraft();
+      assert.deepEqual(actualComposer().props.submission, { status: "unknown", inFlight: false }, "Authoritative denial cannot erase a prior unknown outcome");
+      assert.equal(actualBody().props.editable, false);
+      await act(() => { actualComposer().props.onClose(); actualBody().props.onChangeText("Replacement uncertain draft"); });
+      assert.equal(actualComposer().props.visible, true);
+      assert.deepEqual(composerDraft(), uncertainDraft);
+      assert.equal(publicationReceipts().length, 0);
+      assert.equal(uncertain.records.size, 1);
+      uncertain.mode = "success";
+      await submitDenialDraft();
+      assert.equal(uncertain.actions.length, 3);
+      for (const action of uncertain.actions.slice(1)) {
+        assert.deepEqual(frozenSubmission(action), frozenSubmission(uncertain.actions[0]));
+        assert.equal(action.communitySubmission.previouslyUnknown, true);
+      }
+      assert.equal(new Set(uncertain.paths).size, 1);
+      assert.equal(uncertain.records.size, 1, "Unknown retries never allocate a duplicate contribution");
+      assert.equal(publicationReceipts().length, 1, "Only an acknowledged matching-content retry confirms the original operation");
+      await act(() => tree.unmount());
+    } finally {
+      harness.dispatch = publicationDispatch;
+    }
+
     // A private Scripture reflection keeps its original journal behavior and
     // never receives public Community publication feedback.
     await publicationReset(screens.Overview, densityFixture);
@@ -2166,6 +2290,7 @@ try {
     harness.os = "android";
   }
   console.log("Community S4 publication feedback passed: confirmed-only localized create/edit receipts, eligible hidden-result actions, explicit navigation, platform accessibility speech and preserved filters/scroll; native presentation remains unverified.");
+  console.log("Community denial hotfix passed: exact uncoded SDK and coded denials, editable retained drafts, conservative near-match/transport handling, sticky uncertainty, frozen retries, acknowledged receipts and no duplicate contributions.");
   console.log("Actual check-in modal passed: audience order/labels, optional words, deferred private/shared receipts, double-submit/failure/retry/stale-session guards, both entry points, shared-only completed landing and repeat encouragement.");
   console.log("Saved check-ins passed: completed Home audience/link, delete/reset, private edit lock and shared reverse-transition lock.");
   console.log("Check-in privacy passed: Home and Community initial/reset/private/group submission handlers.");
