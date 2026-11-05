@@ -69,7 +69,7 @@ import {
   SupportIntent,
   User,
 } from "@/state/types";
-import { type CommunityPageAvailability, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
+import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
 import { auth, database, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import {
@@ -101,6 +101,136 @@ import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup, sessionGenerati
 import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
+
+// This boundary is injectable so its outcome/CAS behavior can be tested without
+// initializing Firebase. It is used only by explicitly opted-in Community forms.
+export async function runCommunityPostSubmission(
+  action: Extract<Action, { type: "createPost" | "editPost" }> & { communitySubmission: CommunitySubmissionRequest },
+  dependencies: {
+    userId?: string;
+    groupId?: string | null;
+    isCurrent: () => boolean;
+    transact: (path: string, change: (current: Post | null) => Post | undefined) => Promise<{ committed: boolean }>;
+  },
+): Promise<CommunitySubmissionOutcome> {
+  const request = action.communitySubmission;
+  const failed = (reason: NonNullable<CommunitySubmissionOutcome["reason"]>): CommunitySubmissionOutcome => ({
+    status: request.previouslyUnknown ? "unknown" : "failure",
+    reason,
+  });
+  // Stable logical comparison ignores object-property ordering, but preserves
+  // passage order. Additional status/moderation fields are never overwritten.
+  const canonical = (value: unknown): string => {
+    const order = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(order);
+      if (node && typeof node === "object") return Object.fromEntries(Object.entries(node)
+        .filter(([, child]) => child !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, order(child)]));
+      return node;
+    };
+    return JSON.stringify(order(value));
+  };
+  const editable = (post: Post) => ({
+    kind: post.kind,
+    title: post.title ?? null,
+    body: post.body,
+    verse: post.verse ?? null,
+    verses: actionVerses(post),
+  });
+  const validId = (value: string) => /^[A-Za-z0-9_-]{1,160}$/.test(value);
+  const verses = actionVerses(action).map((verse) => ({ ...verse }));
+  if (!validId(request.attemptId) || !validId(request.groupId) || !request.userId
+    || request.userId !== dependencies.userId || request.groupId !== dependencies.groupId
+    || !Number.isFinite(Date.parse(request.createdAt)) || !validPostContent(action.kind, action.body, verses)) {
+    return failed("precondition");
+  }
+  if (!dependencies.isCurrent()) return failed("session");
+  const baseline = request.baseline ? { ...request.baseline, verses: actionVerses(request.baseline).map((verse) => ({ ...verse })) } : undefined;
+  if (action.type === "editPost" && (!validId(action.id) || !baseline || baseline.id !== action.id
+    || baseline.userId !== request.userId || baseline.groupId !== request.groupId)) {
+    return failed("precondition");
+  }
+  const postId = action.type === "createPost" ? request.attemptId : action.id;
+  const desired: Post = {
+    id: postId,
+    userId: request.userId,
+    groupId: request.groupId,
+    kind: action.kind,
+    body: action.body.trim(),
+    ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
+    ...(verses[0] ? { verse: verses[0], verses } : {}),
+    createdAt: action.type === "editPost" ? baseline!.createdAt : request.createdAt,
+  };
+  let conflict = false;
+  let proposed = false;
+  let sessionChanged = false;
+  try {
+    const result = await dependencies.transact(`posts/${request.groupId}/${postId}`, (current) => {
+      if (!dependencies.isCurrent()) {
+        sessionChanged = true;
+        return undefined;
+      }
+      if (!current) {
+        if (action.type === "createPost") {
+          proposed = true;
+          return desired;
+        }
+        conflict = true;
+        return undefined;
+      }
+      if (current.id !== postId || current.userId !== request.userId || current.groupId !== request.groupId
+        || current.createdAt !== desired.createdAt) {
+        conflict = true;
+        return undefined;
+      }
+      const next = action.type === "createPost" ? desired : { ...current, kind: desired.kind, body: desired.body };
+      if (action.type === "editPost") {
+        if (postSupportsTitle(action.kind) && action.title !== undefined) {
+          if (desired.title) next.title = desired.title;
+          else delete next.title;
+        }
+        if (verses[0]) {
+          next.verse = verses[0];
+          next.verses = verses;
+        } else {
+          delete next.verse;
+          delete next.verses;
+        }
+      }
+      if (canonical(editable(current)) === canonical(editable(next))) {
+        // Returning the record (rather than aborting or trusting a cache read)
+        // requires an acknowledged transaction even after an uncertain retry.
+        proposed = true;
+        return current;
+      }
+      if (action.type === "editPost" && canonical(editable(current)) === canonical(editable(baseline!))) {
+        proposed = true;
+        return next;
+      }
+      conflict = true;
+      return undefined;
+    });
+    if (sessionChanged || !dependencies.isCurrent()) return { status: "unknown", reason: "session" };
+    if (result.committed && proposed && !conflict) return { status: "success" };
+    return failed("conflict");
+  } catch (error) {
+    if (sessionChanged || !dependencies.isCurrent()) return { status: "unknown", reason: "session" };
+    const errorCode = (error as { code?: unknown } | null)?.code;
+    const code = String(errorCode ?? "").toLowerCase().replace(/_/g, "-").split("/").at(-1);
+    // RTDB 1.1.2 transactions can reject with an uncoded Error("permission_denied").
+    // Match only that verified shape; arbitrary transport messages stay uncertain.
+    const sdkPermissionDenied = errorCode === undefined && error instanceof Error && error.message === "permission_denied";
+    if (sdkPermissionDenied || code === "permission-denied" || code === "invalid-argument" || code === "invalid-data") return failed("rejected");
+    // A transport/adapter error may arrive after a committed write. Retain the
+    // same immutable attempt for reconciliation; never claim it did not save.
+    return { status: "unknown", reason: "transport" };
+  }
+}
+
+function reportCommunitySubmission(request: CommunitySubmissionRequest, outcome: CommunitySubmissionOutcome) {
+  try { request.report(outcome); } catch { /* A form callback must not change dispatch error behavior. */ }
+}
 
 function resolveMentionIds(body: string, members: Membership[]) {
   const tokens = new Set(Array.from(body.matchAll(/@([\p{L}\p{N}_-]+)/gu), (match) => match[1].toLocaleLowerCase()));
@@ -267,6 +397,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [userGroupsSnapshotReady, setUserGroupsSnapshotReady] = useState(false);
   const [personalHistoryUid, setPersonalHistoryUid] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const communitySubmissionScopeRef = useRef({ userId: firebaseUser?.uid, groupId: profile?.currentGroupId });
+  communitySubmissionScopeRef.current = { userId: firebaseUser?.uid, groupId: profile?.currentGroupId };
   const [encryptedGroups, setGroups] = useState<Group[]>([]);
   const [encryptedUserMemberships, setUserMemberships] = useState<Membership[]>([]);
   const [legacyGroups, setLegacyGroups] = useState<Group[]>([]);
@@ -1119,6 +1251,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       setAuthError(undefined);
       const generation = sessionGeneration();
       const highlightAction = action.type === "highlightVerses" || action.type === "removeBibleHighlight" || action.type === "removeBibleHighlights";
+      const communitySubmission = (action.type === "createPost" || action.type === "editPost") ? action.communitySubmission : undefined;
 
       try {
         const groupMutationTypes: Action["type"][] = [
@@ -1138,6 +1271,20 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         if (pendingTarget && action.type === "loadOlderCommunityContent") return;
         if (pendingTarget && (groupMutationTypes.includes(action.type) || sharedJournalMutation || linkedPlanMutation || groupPrayerMutation)) {
           throw new Error("This community is waiting for its host to finish encryption and restore member access.");
+        }
+        if ((action.type === "createPost" || action.type === "editPost") && action.communitySubmission) {
+          const request = action.communitySubmission;
+          const outcome = await runCommunityPostSubmission({ ...action, communitySubmission: request }, {
+            userId: firebaseUser?.uid,
+            groupId: profile?.currentGroupId,
+            isCurrent: () => auth.currentUser?.uid === request.userId
+              && communitySubmissionScopeRef.current.userId === request.userId
+              && communitySubmissionScopeRef.current.groupId === request.groupId
+              && sessionGeneration() === generation,
+            transact: (path, change) => runTransaction(ref(database, path), change, { applyLocally: false }),
+          });
+          reportCommunitySubmission(request, outcome);
+          return;
         }
         switch (action.type) {
             case "signIn":
@@ -2436,6 +2583,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
           }
       } catch (error) {
+        if (communitySubmission) {
+          // Only pre-transaction guards can reach here for opted-in forms;
+          // transaction uncertainty is classified inside the helper itself.
+          reportCommunitySubmission(communitySubmission, {
+            status: communitySubmission.previouslyUnknown ? "unknown" : "failure",
+            reason: "precondition",
+          });
+          return;
+        }
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
           highlightAction ||
