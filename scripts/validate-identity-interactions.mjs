@@ -106,6 +106,7 @@ const mocks = {
   "@/features/bible-audio/provider": 'export const BibleAudioProvider=({children})=>children;',
   "@/features/bible-database-provider": 'export const BibleDatabaseProvider=({children})=>children;',
   "@/features/onboarding-screen": 'export const OnboardingScreen="Login";',
+  "@/features/onboarding-journey": 'export const OnboardingJourney="OnboardingJourney";',
   "@/features/startup-performance": '',
   "@/ui/notification-runtime": 'export const NotificationRuntime=()=>null;',
   "@/ui/emulator-badge": 'export const EmulatorBadge=()=>null;',

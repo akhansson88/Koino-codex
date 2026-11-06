@@ -72,6 +72,7 @@ import {
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
 import { auth, database, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
+import { registerForOnboarding } from "@/state/onboarding-progress";
 import {
   authMessage,
   asArray,
@@ -435,6 +436,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [groupBiblePlanParticipantIds, setGroupBiblePlanParticipantIds] = useState<Record<Id, Id>>({});
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
+  const authActionPending = useRef(false);
   const [communityFeedError, setCommunityFeedError] = useState<string>();
   const [communityFeedGroupId, setCommunityFeedGroupId] = useState<Id>();
   const [communityFeedOffline, setCommunityFeedOffline] = useState<boolean>();
@@ -1261,8 +1263,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   const dispatch = useCallback(
     async (action: Action) => {
-      if ((action.type === "signIn" || action.type === "signUp") && (signOutPending.current || signOutIncomplete)) return;
+      const authenticating = action.type === "signIn" || action.type === "signUp";
+      if (authenticating && (authActionPending.current || signOutPending.current || signOutIncomplete || auth.currentUser)) {
+        throw new Error("Another account operation is in progress.");
+      }
       if (action.type === "signOut" && action.expectedUserId && auth.currentUser?.uid !== action.expectedUserId) return;
+      const expectedUserId = action.type === "createGroup" || action.type === "joinGroup" ? action.expectedUserId : undefined;
+      if (expectedUserId && (auth.currentUser?.uid !== expectedUserId || firebaseUser?.uid !== expectedUserId || signOutPending.current)) {
+        throw new Error("The account changed during onboarding.");
+      }
       const expectedScope = "expectedScope" in action ? action.expectedScope : undefined;
       if (expectedScope && (
         auth.currentUser?.uid !== expectedScope.userId ||
@@ -1312,11 +1321,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
         switch (action.type) {
             case "signIn":
-              await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
-              return;
             case "signUp": {
-              const credential = await FirebaseAuth.createUserWithEmailAndPassword(auth, action.email.trim(), action.password);
-              await AsyncStorage.setItem(`e2ee.signup-name.${credential.user.uid}`, action.name);
+              authActionPending.current = true;
+              try {
+                if (action.type === "signUp") await registerForOnboarding(action.email, action.password, action.name);
+                else await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
+              } finally {
+                authActionPending.current = false;
+              }
               return;
             }
             case "signOut": {
@@ -1375,14 +1387,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await FirebaseAuth.updatePassword(firebaseUser, action.newPassword);
               return;
             }
-            case "createSession":
-              if (!firebaseUser) return;
-              if (action.groupName?.trim()) {
-                await createGroupForUser(firebaseUser, action.groupName, action.name);
-              } else if (action.inviteCode?.trim()) {
-                await joinGroupByInvite(firebaseUser, action.inviteCode, action.name);
-              }
-              return;
             case "createGroup":
               if (!firebaseUser) return;
               await createGroupForUser(firebaseUser, action.name, profile?.name);
@@ -2644,6 +2648,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           if (auth.currentUser?.uid === firebaseUser?.uid) setAuthError(authMessage(error));
           throw error;
         }
+        if (expectedUserId && (auth.currentUser?.uid !== expectedUserId || sessionGeneration() !== generation)) throw error;
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
           highlightAction ||

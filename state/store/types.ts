@@ -34,9 +34,8 @@ export type Action =
   | { type: "requestPasswordReset"; email: string }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
-  | { type: "createSession"; name: string; groupName?: string; inviteCode?: string }
-  | { type: "createGroup"; name: string }
-  | { type: "joinGroup"; inviteCode: string }
+  | { type: "createGroup"; name: string; expectedUserId?: Id }
+  | { type: "joinGroup"; inviteCode: string; expectedUserId?: Id }
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "removeGroupMember"; groupId: Id; userId: Id }

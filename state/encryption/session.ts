@@ -274,7 +274,8 @@ export async function publishGroup(group: GroupState, records?: unknown) {
 export async function groupJoinRequest(code: string, name: string) {
   const state = session();
   const invite = await invoke<{ groupId: string; owner: PublicIdentity }>("resolveInvite", { code });
-  await invoke("requestJoin", { code, identity: publicIdentity(state.vault.identity), name: crypto.seal({ name }, invite.owner.publicKey) });
+  if (session() !== state) throw new Error("The account changed while joining a community.");
+  await invoke("requestJoin", { code, identity: publicIdentity(state.vault.identity), name: crypto.seal({ name }, invite.owner.publicKey) }, state.device);
 }
 export async function approveGroupMember(groupId: string, uid: string, fingerprint: string, records: (name: string) => unknown) {
   const state = session();

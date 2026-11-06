@@ -10,6 +10,8 @@ import { encodeAt } from "@/state/encryption/database";
 import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
+import { readOnboardingProgress, writeOnboardingProgress } from "@/state/onboarding-progress";
+import { OnboardingProgressContext } from "@/ui/onboarding-progress";
 
 function useWords() {
   const { language } = useAppTranslation();
@@ -42,25 +44,39 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
+  const [onboardingUserId, setOnboardingUserId] = useState<string>();
   async function finish() {
     const uid = session().uid, token = sessionGeneration();
     const isCurrent = () => auth.currentUser?.uid === uid && token === sessionGeneration();
     setProgress("");
+    const onboarding = await readOnboardingProgress(uid);
+    if (!isCurrent()) return;
     const complete = await personalMigrationComplete();
     if (!isCurrent()) return;
     if (!complete) {
       setPhase("migrating");
-      await migratePersonal((message) => { if (isCurrent()) setProgress(message); });
+      await migratePersonal((message) => { if (isCurrent()) setProgress(message); }, onboarding?.phase === "journey" ? onboarding.signupName : undefined);
     }
     if (!isCurrent()) return;
     await migrateOwnedGroups((message) => { if (isCurrent()) { setPhase("migrating"); setProgress(message); } });
-    if (isCurrent()) setPhase("ready");
+    if (isCurrent()) {
+      setOnboardingUserId(onboarding?.phase === "journey" ? uid : undefined);
+      setPhase("ready");
+    }
+  }
+  async function advanceOnboarding(uid: string) {
+    const token = sessionGeneration();
+    const isCurrent = () => auth.currentUser?.uid === uid && sessionGeneration() === token;
+    if (!isCurrent() || phase !== "ready" || onboardingUserId !== uid) throw new Error("This onboarding session is no longer available.");
+    await writeOnboardingProgress(uid, { phase: "complete" });
+    if (isCurrent()) setOnboardingUserId(undefined);
   }
   useEffect(() => {
     let active = true;
     const unsubscribe = onAuthStateChanged(auth, (next) => {
       const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
+      setOnboardingUserId(undefined);
       setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError("");
       if (!next) { setPhase("signedOut"); return; }
       setPhase("loading");
@@ -99,7 +115,13 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     catch (problem) { setError(problem instanceof Error ? problem.message : w("Encryption could not be unlocked. Try again.", "Krypteringen kunde inte låsas upp. Försök igen.")); }
     finally { setBusy(false); }
   }
-  if (phase === "signedOut" || phase === "ready") return children;
+  if (phase === "signedOut" || phase === "ready") {
+    return (
+      <OnboardingProgressContext.Provider value={{ userId: onboardingUserId, pending: Boolean(onboardingUserId), advance: advanceOnboarding }}>
+        {children}
+      </OnboardingProgressContext.Provider>
+    );
+  }
   if (phase === "loading") return <View style={[styles.screen, { alignItems: "center", justifyContent: "center", gap: 18 }]}>
     <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
     <ActivityIndicator accessibilityLabel={w("Opening KOINO", "Öppnar KOINO")} color={colors.ink} />

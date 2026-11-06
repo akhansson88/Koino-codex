@@ -3,23 +3,28 @@ import { useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
+import { OnboardingJourney } from "@/features/onboarding-journey";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { AppScreen, BodyText, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { useOnboardingProgress } from "@/ui/onboarding-progress";
 import { colors } from "@/ui/theme";
 
 export default function Index() {
   const state = useKoinoFields(["authReady", "currentUserId", "signOutIncomplete"]);
+  const onboarding = useOnboardingProgress();
+  const { t } = useAppTranslation();
 
-  if (!state.authReady) {
+  if (!state.authReady || (onboarding.pending && onboarding.userId !== state.currentUserId)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cream }}>
-        <ActivityIndicator color={colors.olive} />
+        <ActivityIndicator accessibilityLabel={t("onboarding.loading")} color={colors.olive} />
       </View>
     );
   }
 
   if (state.currentUserId) {
+    if (onboarding.pending) return <OnboardingJourney key={state.currentUserId} userId={state.currentUserId} />;
     return <Redirect href="/(tabs)" />;
   }
 

@@ -4,9 +4,9 @@ import { get, ref, update } from "@/state/encryption/database";
 import { normalizeTheme } from "@/ui/theme";
 import { Group, Membership } from "@/state/types";
 import { now, id, inviteCode } from "@/state/store/helpers";
-import { database } from "@/state/store/firebase";
+import { auth, database } from "@/state/store/firebase";
 import { type Profile } from "@/state/store/types";
-import { createEncryptedGroup, groupJoinRequest } from "@/state/encryption/session";
+import { createEncryptedGroup, groupJoinRequest, sessionGeneration } from "@/state/encryption/session";
 import { encodeAt } from "@/state/encryption/database";
 
 export async function ensureProfile(user: FirebaseUser, name?: string) {
@@ -39,7 +39,9 @@ export async function ensureProfile(user: FirebaseUser, name?: string) {
 export async function createGroupForUser(user: FirebaseUser, name: string, userName?: string) {
   if (!name.trim()) return;
 
+  const generation = sessionGeneration();
   const userProfile = await ensureProfile(user, userName);
+  if (auth.currentUser?.uid !== user.uid || sessionGeneration() !== generation) throw new Error("The account changed while creating a community.");
 
   const timestamp = now();
   const groupId = id("group");
@@ -75,6 +77,8 @@ export async function joinGroupByInvite(user: FirebaseUser, code: string, userNa
   const normalizedCode = code.trim().toUpperCase();
   if (!normalizedCode) throw new Error("Enter a community invite code.");
 
+  const generation = sessionGeneration();
   const userProfile = await ensureProfile(user, userName);
+  if (auth.currentUser?.uid !== user.uid || sessionGeneration() !== generation) throw new Error("The account changed while joining a community.");
   await groupJoinRequest(normalizedCode, userProfile.name);
 }

@@ -203,7 +203,7 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
   );
 }
 
-function OnboardingPage({ children, center = false }: PropsWithChildren<{ center?: boolean }>) {
+export function OnboardingPage({ children, center = false }: PropsWithChildren<{ center?: boolean }>) {
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.cream }}>
