@@ -8,13 +8,21 @@ import { act, create } from "react-test-renderer";
 const require = createRequire(import.meta.url);
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const fixture = globalThis.__meBiblePlans = { language: "en", params: {}, routes: [], plans: [] };
+const fixture = globalThis.__meBiblePlans = { language: "en", params: {}, routes: [], plans: [], preferences: new Map(), storageReads: [] };
 const mocks = {
   "react-native": 'export const View="View",Text="Text",Pressable="Pressable",ScrollView="ScrollView",Platform={OS:"ios"};',
-  "expo-router": 'export const router={push:route=>globalThis.__meBiblePlans.routes.push(route)};export const useLocalSearchParams=()=>globalThis.__meBiblePlans.params;',
+  "expo-router": `import { useEffect } from "react";
+    export const router={push:route=>globalThis.__meBiblePlans.routes.push(route)};
+    export const useLocalSearchParams=()=>globalThis.__meBiblePlans.params;
+    export function useFocusEffect(callback) { useEffect(callback, [callback]); }
+  `,
   "@expo/vector-icons": 'export const Feather="Feather";',
   "@/features/use-bible-book-language": 'export const useBibleBookLanguage=()=>globalThis.__meBiblePlans.language;',
   "@/state/koino-store": `export const useKoino=()=>({state:{biblePlans:globalThis.__meBiblePlans.plans,currentUserId:"member",groups:[]},dispatch:async()=>{}});`,
+  "@/state/encryption/local-storage": `export default { getItem: async key => {
+    globalThis.__meBiblePlans.storageReads.push(key);
+    return globalThis.__meBiblePlans.preferences.get(key) ?? null;
+  } };`,
   "@/ui/app-components": `export const AppScreen="AppScreen",BodyText="BodyText",Card="Card",FilterChips="FilterChips",IconButton="IconButton",PrimaryButton="PrimaryButton",SecondaryButton="SecondaryButton",SectionHeading="SectionHeading",TextInputField="TextInputField";`,
   "@/ui/confirm": 'export const confirmAction=()=>{};',
   "@/ui/app-language": `
@@ -30,6 +38,7 @@ const bundle = await build({
   stdin: {
     contents: `
       export { MeBiblePlans } from "./features/me-bible-plans";
+      export { HomeScripture } from "./features/home-scripture";
       export { BiblePlansScreen } from "./features/bible-plans-screen";
       export { todayDateKey } from "./features/bible-plans";
       export { addPlanDays } from "./state/bible-plan-schedule";
@@ -50,7 +59,7 @@ const bundle = await build({
 });
 const module = { exports: {} };
 new Function("require", "module", "exports", bundle.outputFiles[0].text)(require, module, module.exports);
-const { MeBiblePlans, BiblePlansScreen, todayDateKey, addPlanDays, applyTheme, colors } = module.exports;
+const { MeBiblePlans, HomeScripture, BiblePlansScreen, todayDateKey, addPlanDays, applyTheme, colors } = module.exports;
 
 const today = todayDateKey();
 const earlier = addPlanDays(today, -4);
@@ -72,7 +81,7 @@ const completed = plan("Completed reading", { status: "completed", days: [day(1,
 
 let tree;
 async function mount(Component, props) {
-  await act(() => {
+  await act(async () => {
     tree?.unmount();
     tree = create(React.createElement(Component, props));
   });
@@ -92,6 +101,13 @@ async function follow(root, label) {
   const action = link(root, label);
   assert.ok(action, `Missing accessible link: ${label}`);
   assert.equal(action.props.style({ pressed: false }).minHeight, 44);
+  await act(() => action.props.onPress());
+  return fixture.routes.at(-1);
+}
+
+async function followHome(label) {
+  const action = tree.root.findByType("PrimaryButton");
+  assert.equal(action.props.children, label);
   await act(() => action.props.onPress());
   return fixture.routes.at(-1);
 }
@@ -152,9 +168,58 @@ try {
   assert.ok(link(me, "Fortsätt"));
   const title = me.findAllByType("Text").find((item) => item.props.children === scheduled.title);
   assert.equal(title.props.style.at(-1).color, colors.ink);
+
+  const homeProps = { date: today, plans: [foreign, paused, catchUp, scheduled, saved, completed], userId: "member" };
+  let home = await mount(HomeScripture, homeProps);
+  assert.ok(hasText(home, "Första Moseboken 1:1"));
+  assert.ok(hasText(home, scheduled.title));
+  assert.ok(!hasText(home, foreign.title));
+  assert.deepEqual(fixture.storageReads, [], "an active plan takes precedence over stored reader history");
+  route = await followHome("Fortsätt med läsplanen");
+  assert.equal(route.pathname, "/(tabs)/bible");
+  assert.equal(route.params.planId, scheduled.id);
+  assert.equal(route.params.planDay, "3");
+
+  fixture.language = "en";
+  applyTheme("light");
+  await act(async () => tree.update(React.createElement(HomeScripture, homeProps)));
+  const homeTitle = tree.root.findAllByType("Text").find((item) => item.props.children === "Genesis 1:1");
+  assert.equal(homeTitle.props.style.at(-1).color, colors.ink);
+  assert.equal(tree.root.findByType("Card").props.style.backgroundColor, colors.elevated);
+
+  const fallbackProps = { ...homeProps, plans: [foreign, paused, saved, completed, plan("Empty plan", { days: [day(1, { ranges: [] })] })] };
+  home = await mount(HomeScripture, fallbackProps);
+  assert.equal(await followHome("Open the Bible"), "/(tabs)/bible");
+  assert.ok(!hasText(home, "Genesis 1:1"));
+
+  const preferenceKey = "koino.bibleReader.member";
+  const starter = { book: "Philippians", chapter: 4, verse: 4 };
+  const readerPreference = (entries, index) => JSON.stringify({ bibleVersionId: "kjv", history: { entries, index } });
+  for (const unreliable of ["{", readerPreference([starter], 0), readerPreference([starter, position], 2)]) {
+    fixture.preferences.set(preferenceKey, unreliable);
+    await mount(HomeScripture, fallbackProps);
+    assert.equal(await followHome("Open the Bible"), "/(tabs)/bible");
+  }
+
+  const savedPosition = readerPreference([starter, position], 1);
+  fixture.preferences.set(preferenceKey, savedPosition);
+  await mount(HomeScripture, fallbackProps);
+  assert.equal(await followHome("Continue reading"), "/(tabs)/bible");
+  assert.ok(!hasText(tree.root, "Genesis 1:1"), "reader reconciliation owns the resumed passage");
+
+  await act(async () => tree.update(React.createElement(HomeScripture, { ...fallbackProps, userId: "third-user" })));
+  assert.equal(await followHome("Open the Bible"), "/(tabs)/bible");
+  assert.equal(fixture.storageReads.at(-1), "koino.bibleReader.third-user");
+
+  let finishRead;
+  fixture.preferences.set(preferenceKey, new Promise((resolve) => { finishRead = resolve; }));
+  await mount(HomeScripture, fallbackProps);
+  await act(async () => tree.update(React.createElement(HomeScripture, { ...fallbackProps, userId: "third-user" })));
+  await act(async () => finishRead(savedPosition));
+  assert.equal(await followHome("Open the Bible"), "/(tabs)/bible");
 } finally {
   await act(() => tree?.unmount());
   delete globalThis.__meBiblePlans;
 }
 
-console.log("Me Bible plan checks passed: ownership, schedule priority, progress, Continue, paused and fallback states, existing navigation, Swedish and dark theme.");
+console.log("Me and Home Bible checks passed: ownership, schedule priority, Continue, paused and fallback states, account switching, existing navigation, Swedish and dark theme.");

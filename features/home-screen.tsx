@@ -1,28 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, AppState, Pressable, Text, View } from "react-native";
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
+import { HomeScripture } from "@/features/home-scripture";
 import { markStartupMilestone } from "@/features/startup-performance";
-import { checkInForDay } from "@/state/check-ins";
+import { CheckInSubmissionError, checkInForDay } from "@/state/check-ins";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
-import { prayerReactionsForTarget } from "@/state/prayer-reactions";
+import { id, localDayKey } from "@/state/store/helpers";
 import {
   selectCommunityContent,
   selectHomePrayerQueueIds,
   selectLatestHomeCommunityItem,
   selectOpenPrayerRequests,
 } from "@/state/selectors/community-content";
-import type { BibleVerse, FeedItem, GroupImage, HeartMood } from "@/state/types";
+import type { BibleVerse, FeedItem, Group, GroupImage, HeartMood, KoinoState } from "@/state/types";
 import {
   AppScreen,
   Avatar,
-  AvatarStack,
   BodyText,
   Card,
   FullScreenModal,
@@ -30,12 +29,10 @@ import {
   VersePreviewCard,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communityPrayerNoun, communitySystemError } from "@/ui/community-copy";
+import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communitySystemError } from "@/ui/community-copy";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { formatRelativeTime } from "@/ui/relative-time";
-import { QuietActionCard } from "@/ui/rhythm-cards";
-import { colors, radius, typography } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
@@ -58,17 +55,32 @@ function homeGreetingPeriodAt(date: Date): HomeGreetingPeriod {
   return "evening";
 }
 
-function localDayKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
+const homeFields = [
+  "authError", "biblePlans", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError",
+  "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groups",
+  "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "profileReady", "theme",
+  "userGroupsReady", "users",
+] as const;
 
 export function HomeScreen() {
-  const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError", "communityFeedGroupId", "communityFeedReady", "currentGroupId", "currentUserId", "groups", "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "profileReady", "userGroupsReady", "users"]);
+  // Theme-only updates also need to render Home because the palette is mutable.
+  const state = useKoinoFields(homeFields);
+  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const isMember = state.memberships.some((member) => member.groupId === group?.id && member.userId === state.currentUserId);
+  const activeGroupId = state.currentUserId && state.profileReady && state.userGroupsReady && isMember && !group?.migrationPending
+    ? group?.id : undefined;
+  // A draft and its audience must end with the account or community that opened it.
+  const scope = JSON.stringify([state.currentUserId, state.currentGroupId]);
+  return <HomeRhythm key={scope} state={state} group={group} activeGroupId={activeGroupId} />;
+}
+
+function HomeRhythm({ state, group, activeGroupId }: {
+  state: Pick<KoinoState, typeof homeFields[number]>;
+  group: Group | undefined;
+  activeGroupId: string | undefined;
+}) {
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ checkIn?: string }>();
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
@@ -79,7 +91,7 @@ export function HomeScreen() {
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
-  const [greetingPeriod, setGreetingPeriod] = useState<HomeGreetingPeriod>(() => homeGreetingPeriodAt(new Date()));
+  const [homeDate, setHomeDate] = useState(() => new Date());
   const lastCheckInParamRef = useRef<string | undefined>(undefined);
   const directPrayerPersistencePendingRef = useRef(false);
 
@@ -87,60 +99,38 @@ export function HomeScreen() {
     markStartupMilestone("firstScreenMounted", "home");
   }, []);
 
-  const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const communityMigrationPending = Boolean(group?.migrationPending);
-  const user = state.users.find((item) => item.id === state.currentUserId);
-  const todayKey = localDayKey(new Date());
-  const moderatedToday = state.checkInDailyClaims.some(claim => claim.dayKey === todayKey && claim.moderated);
-  const todaysCheckIn = checkInForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, state.currentGroupId, todayKey);
+  const todayKey = localDayKey(homeDate);
+  const profileLoading = Boolean(state.currentUserId && !state.profileReady);
+  const feedMatchesGroup = Boolean(state.currentGroupId && state.communityFeedGroupId === state.currentGroupId);
+  const feedError = feedMatchesGroup ? state.communityFeedError : undefined;
+  const feedOffline = feedMatchesGroup && state.communityFeedOffline;
+  const groupContentReady = Boolean(activeGroupId && feedMatchesGroup && state.communityFeedReady && !feedError);
+  const canOpenGroupPrayer = groupContentReady && !feedOffline;
+  const checkInStatusReady = groupContentReady && state.privateCheckInsReady && state.checkInDailyClaimsReady;
+  const moderatedToday = checkInStatusReady && state.checkInDailyClaims.some((claim) => claim.dayKey === todayKey && claim.moderated);
+  const todaysCheckIn = checkInStatusReady
+    ? checkInForDay([...state.checkIns, ...state.privateCheckIns], state.currentUserId, activeGroupId, todayKey)
+    : undefined;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
-  const communityMembers = useMemo(
-    () =>
-      state.memberships.map((membership) => {
-        const member = state.users.find((candidate) => candidate.id === membership.userId);
-        return {
-          image: member?.image,
-          name: member?.name ?? membership.userName,
-        };
-      }),
-    [state.memberships, state.users],
-  );
-  const directPrayerMembers = useMemo(
-    () => state.users.filter((member) => member.id !== state.currentUserId),
-    [state.currentUserId, state.users],
-  );
-  const communityFeedReadyForGroup = Boolean(
-    state.currentGroupId && state.communityFeedGroupId === state.currentGroupId && state.communityFeedReady,
-  );
-  const profileLoading = Boolean(state.currentUserId && !state.profileReady);
+  const directPrayerMembers = useMemo(() => {
+    if (!activeGroupId) return [];
+    const memberIds = new Set(state.memberships.filter((member) => member.groupId === activeGroupId).map((member) => member.userId));
+    return state.users.filter((member) => member.id !== state.currentUserId && memberIds.has(member.id));
+  }, [activeGroupId, state.currentUserId, state.memberships, state.users]);
   useEffect(() => {
     if (state.currentUserId && state.profileReady && state.userGroupsReady) {
       markStartupMilestone("homeContentReady", "profile-and-membership-rendered");
     }
   }, [state.currentUserId, state.profileReady, state.userGroupsReady]);
-  const communityContentLoading =
-    profileLoading ||
-    !state.userGroupsReady ||
-    Boolean(state.currentGroupId && !state.communityFeedError && !communityFeedReadyForGroup);
-  const checkInStatusReady = Boolean(
-    !communityMigrationPending &&
-    state.currentUserId &&
-    state.currentGroupId &&
-    state.profileReady &&
-    state.userGroupsReady &&
-    state.privateCheckInsReady &&
-    state.checkInDailyClaimsReady &&
-    !state.communityFeedError &&
-    communityFeedReadyForGroup,
-  );
+  const visibleGroupId = canOpenGroupPrayer ? activeGroupId : undefined;
   const communityContent = useMemo(() => {
     return selectCommunityContent({
       checkIns: state.checkIns,
-      groupId: state.currentGroupId,
+      groupId: visibleGroupId,
       posts: state.posts,
     });
-  }, [state.checkIns, state.currentGroupId, state.posts]);
+  }, [state.checkIns, visibleGroupId, state.posts]);
   const latestCommunityItem = useMemo(
     () => selectLatestHomeCommunityItem(communityContent, state.currentUserId),
     [communityContent, state.currentUserId],
@@ -154,21 +144,44 @@ export function HomeScreen() {
     () => openPrayerRequests.find((item) => item.id === homePrayerQueueIds[0]),
     [homePrayerQueueIds, openPrayerRequests],
   );
-  const greetingName = firstName(user?.name);
-  const greetingKey = homeGreetingKeys[greetingPeriod][greetingName ? "named" : "default"];
+  const greetingName = state.currentUserId ? firstName(userById.get(state.currentUserId)) : undefined;
+  const greetingKey = homeGreetingKeys[homeGreetingPeriodAt(homeDate)][greetingName ? "named" : "default"];
+  const showMigration = group?.migrationPending && state.profileReady && state.userGroupsReady;
+  const showDiscovery = Boolean(state.currentUserId && state.profileReady && state.userGroupsReady && !activeGroupId &&
+    (!group || (feedMatchesGroup && state.communityFeedReady)));
 
-  const refreshGreetingPeriod = useCallback(() => {
-    setGreetingPeriod(homeGreetingPeriodAt(new Date()));
-  }, []);
-
-  useFocusEffect(refreshGreetingPeriod);
+  useFocusEffect(useCallback(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function refresh() {
+      clearTimeout(timer);
+      const now = new Date();
+      setHomeDate(now);
+      const nextBoundary = new Date(now);
+      nextBoundary.setHours(now.getHours() < 12 ? 12 : now.getHours() < 18 ? 18 : 24, 0, 0, 0);
+      timer = setTimeout(refresh, nextBoundary.getTime() - now.getTime());
+    }
+    refresh();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") refresh();
+    });
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+    };
+  }, []));
 
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") refreshGreetingPeriod();
-    });
-    return () => subscription.remove();
-  }, [refreshGreetingPeriod]);
+    if (canOpenGroupPrayer) return;
+    setMemberSelectVisible(false);
+    setPrayerTarget(undefined);
+    setDirectPrayerResult(undefined);
+  }, [canOpenGroupPrayer]);
+
+  useEffect(() => {
+    if (activeGroupId) return;
+    setCheckInVisible(false);
+    resetCheckIn();
+  }, [activeGroupId]);
 
   function resetCheckIn() {
     setCheckInStep("choose");
@@ -178,24 +191,30 @@ export function HomeScreen() {
     setShareCheckIn(false);
   }
 
+  const canOpenCheckIn = checkInStatusReady && !feedOffline && !todaysCheckIn && !moderatedToday;
   function openCheckIn() {
-    if (!checkInStatusReady || todaysCheckIn || moderatedToday) return;
+    if (!canOpenCheckIn) return;
     resetCheckIn();
     setCheckInVisible(true);
   }
 
   useEffect(() => {
-    if (!params.checkIn || params.checkIn === lastCheckInParamRef.current || !checkInStatusReady) return;
+    if (!params.checkIn || params.checkIn === lastCheckInParamRef.current || !canOpenCheckIn) return;
     lastCheckInParamRef.current = params.checkIn;
     openCheckIn();
-  }, [params.checkIn, checkInStatusReady, todaysCheckIn]);
+  }, [params.checkIn, canOpenCheckIn]);
+
+  function openPrivateReflection() {
+    if (!state.currentUserId) return;
+    router.navigate({ pathname: "/(tabs)/me", params: { newEntry: id("home-reflection") } });
+  }
 
   function openPrayerSurface() {
-    if (communityMigrationPending || communityContentLoading) return;
-    if (openPrayer && state.currentGroupId) {
+    if (!canOpenGroupPrayer || !activeGroupId) return;
+    if (openPrayer) {
       router.push({
         pathname: "/home/[groupId]/prayer",
-        params: { groupId: state.currentGroupId },
+        params: { groupId: activeGroupId },
       } as never);
       return;
     }
@@ -203,6 +222,7 @@ export function HomeScreen() {
   }
 
   function openCommunityItem(item: FeedItem) {
+    if (!visibleGroupId || item.groupId !== visibleGroupId) return;
     if (item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request") {
       router.push({
         pathname: "/community/[groupId]/prayers/[prayerRequestId]",
@@ -211,15 +231,6 @@ export function HomeScreen() {
       return;
     }
     router.push(`/feed/${item.type}/${item.id}` as never);
-  }
-
-  function itemPrayerState(item: FeedItem) {
-    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const reactions = prayerReactionsForTarget(state.prayerReactions, targetType, item.id);
-    return {
-      count: reactions.length,
-      targetType,
-    };
   }
 
   async function finishDirectPrayer(status: "completed" | "skipped", startedAt: string) {
@@ -234,9 +245,9 @@ export function HomeScreen() {
     const resultPerson = { recipientImage: target.recipientImage, recipientName };
     const recipientIsAvailable =
       Boolean(target.recipientUserId) &&
-      (target.recipientUserId === state.currentUserId || state.users.some((member) => member.id === target.recipientUserId));
+      directPrayerMembers.some((member) => member.id === target.recipientUserId);
     if (
-      !state.currentUserId ||
+      !canOpenGroupPrayer ||
       target.targetType !== "user" ||
       !target.targetId.trim() ||
       !target.recipientUserId?.trim() ||
@@ -271,65 +282,87 @@ export function HomeScreen() {
   }
 
   return (
-    <AppScreen scroll={false} topInset={false}>
-      <ScrollView
-        contentInsetAdjustmentBehavior="never"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: Math.max(112, insets.bottom + 92), paddingTop: 18 }}
-      >
+    <>
+      <AppScreen topInset={false}>
         {profileLoading ? (
-          <ProfileGreetingSkeleton />
+          <HomeStatus loading message={t("home.greeting.loading")} />
         ) : (
           <View style={{ gap: 5 }}>
-            <Text style={{ color: colors.ink, fontSize: 21, fontWeight: "900", lineHeight: 27 }}>
+            <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>
               {t(greetingKey, greetingName ? { name: greetingName } : undefined)}
             </Text>
             <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
           </View>
         )}
 
-        {checkInStatusReady && moderatedToday ? <Card><BodyText muted>{t("community.moderation.checkInRemoved")}</BodyText></Card> : checkInStatusReady ? todaysCheckIn ? (
-          <CompletedHeartCheckInCard
-            shared={todaysCheckIn.visibility === "group"}
-            communityName={group?.name ?? t("tabs.community")}
-            onPress={() => router.push({ pathname: "/me/[id]", params: { id: todaysCheckIn.id } })}
+        <HomeScripture plans={state.biblePlans} userId={state.currentUserId} date={todayKey} />
+
+        {state.currentUserId ? (
+          <View style={{ borderTopWidth: 1, borderColor: colors.line }}>
+            {canOpenGroupPrayer ? (
+              <PrayerPreviewRow onPress={openPrayerSurface} openPrayer={openPrayer} userById={userById} />
+            ) : (
+              <HomeAction icon="heart" onPress={openPrivateReflection} title={t("home.privateReflection.title")} subtitle={t("home.privateReflection.subtitle")} />
+            )}
+
+            {moderatedToday ? (
+              <HomeStatus message={t("community.moderation.checkInRemoved")} />
+            ) : todaysCheckIn ? (
+              <HomeAction
+                icon={todaysCheckIn.visibility === "group" ? "users" : "lock"}
+                onPress={() => router.push({ pathname: "/me/[id]", params: { id: todaysCheckIn.id } })}
+                title={t("home.checkIn.completed")}
+                subtitle={todaysCheckIn.visibility === "group"
+                  ? t("community.checkIn.sharedWithCommunity", { name: group?.name ?? t("tabs.community") }) : t("home.checkIn.private")}
+                action={t("home.checkIn.view")}
+              />
+            ) : canOpenCheckIn ? (
+              <HomeAction
+                accessibilityLabel={t("community.checkIn.promptTitle")}
+                accessibilityHint={t("home.checkIn.promptHint")}
+                icon="plus"
+                onPress={openCheckIn}
+                title={t("home.checkIn.title")}
+                subtitle={t("home.checkIn.promptHint")}
+              />
+            ) : groupContentReady && !feedOffline && !state.authError ? (
+              <HomeStatus loading message={t("home.checkIn.loading")} />
+            ) : !state.currentGroupId && state.profileReady && state.userGroupsReady && !state.authError ? (
+              <HomeStatus message={t("home.checkIn.solo")} />
+            ) : null}
+          </View>
+        ) : null}
+
+        {showMigration && group ? (
+          <Card style={{ gap: 8 }}>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>{group.name}</Text>
+            <CommunityEncryptionNotice group={group} />
+            <HomeAction icon="users" onPress={() => router.navigate("/(tabs)/community")} title={t("community.rooms.open")} />
+          </Card>
+        ) : feedError || feedOffline ? (
+          <HomeStatus message={t(feedError ? "community.feed.loadError" : "home.communityPreview.offline")} />
+        ) : showDiscovery ? (
+          <HomeAction
+            icon="users"
+            onPress={() => router.navigate("/(tabs)/community/rooms")}
+            title={t("home.communityDiscovery.title")}
+            subtitle={t("home.communityDiscovery.subtitle")}
           />
-        ) : <HeartCheckInCard onPress={openCheckIn} /> : null}
-
-        {communityMigrationPending ? <Card style={{ gap: 8 }}>
-          <Text style={[typography.cardTitle, { color: colors.ink }]}>{group?.name}</Text>
-          {group ? <CommunityEncryptionNotice group={group} /> : null}
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/community" as never)}>
-            <Text style={[typography.label, { color: colors.olive }]}>{t("community.rooms.open")}</Text>
-          </Pressable>
-        </Card> : <><PrayerPreviewCard
-          members={communityMembers}
-          loading={communityContentLoading}
-          onPress={openPrayerSurface}
-          openPrayer={openPrayer}
-          userById={userById}
-          userImageById={userImageById}
-        />
-
-        <CommunityPreviewCard
-          item={latestCommunityItem}
-          loading={communityContentLoading}
-          onOpen={openCommunityItem}
-          prayerCount={latestCommunityItem ? itemPrayerState(latestCommunityItem).count : 0}
-          userById={userById}
-          userImageById={userImageById}
-        /></>}
+        ) : state.currentUserId && !groupContentReady ? (
+          <HomeStatus loading message={t("home.communityPreview.loading")} />
+        ) : groupContentReady ? (
+          <CommunityPreviewCard item={latestCommunityItem} onOpen={openCommunityItem} userById={userById} userImageById={userImageById} />
+        ) : null}
 
         {state.authError ? (
           <Card>
             <BodyText muted>{communitySystemError(state.authError, t)}</BodyText>
           </Card>
         ) : null}
-      </ScrollView>
+      </AppScreen>
 
       <CheckInModal
-        visible={checkInVisible}
+        visible={checkInVisible && Boolean(activeGroupId)}
         step={checkInStep}
         mood={heartMood}
         note={checkInText}
@@ -347,6 +380,7 @@ export function HomeScreen() {
         onShare={setShareCheckIn}
         onBack={() => setCheckInStep("choose")}
         onSubmit={async () => {
+          if (!checkInStatusReady || feedOffline) throw new CheckInSubmissionError("unavailable");
           await dispatch({
             type: "submitCheckIn",
             mood: moodNumber(heartMood),
@@ -366,16 +400,16 @@ export function HomeScreen() {
       />
 
       <PrayerMoment
-        target={prayerTarget}
+        target={canOpenGroupPrayer ? prayerTarget : undefined}
         onClose={() => setPrayerTarget(undefined)}
         onFinish={(status, startedAt) => {
           void finishDirectPrayer(status, startedAt);
         }}
       />
 
-      <DirectPrayerResultSheet onDone={() => setDirectPrayerResult(undefined)} result={directPrayerResult} />
+      <DirectPrayerResultSheet onDone={() => setDirectPrayerResult(undefined)} result={canOpenGroupPrayer ? directPrayerResult : undefined} />
 
-      <FullScreenModal animationType="slide" visible={memberSelectVisible} onRequestClose={() => setMemberSelectVisible(false)}>
+      <FullScreenModal animationType="slide" visible={memberSelectVisible && canOpenGroupPrayer} onRequestClose={() => setMemberSelectVisible(false)}>
         <AppScreen>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <IconButton accessibilityLabel={t("common.close")} icon="arrow-left" onPress={() => setMemberSelectVisible(false)} />
@@ -432,173 +466,133 @@ export function HomeScreen() {
           </View>
         </AppScreen>
       </FullScreenModal>
-    </AppScreen>
+    </>
   );
 }
 
-function ProfileGreetingSkeleton() {
+function HomeStatus({ loading = false, message }: { loading?: boolean; message: string }) {
   return (
-    <View accessibilityLabel="Loading profile" accessibilityRole="progressbar" style={{ gap: 8, minHeight: 51 }}>
-      <View style={{ backgroundColor: colors.line, borderRadius: 8, height: 22, width: 190 }} />
-      <View style={{ backgroundColor: colors.line, borderRadius: 7, height: 14, width: 250 }} />
+    <View
+      accessible
+      accessibilityLabel={message}
+      accessibilityLiveRegion="polite"
+      accessibilityRole={loading ? "progressbar" : undefined}
+      accessibilityState={loading ? { busy: true } : undefined}
+      style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 10 }}
+    >
+      {loading ? <ActivityIndicator color={colors.olive} /> : null}
+      <BodyText muted style={{ flex: 1 }}>{message}</BodyText>
     </View>
   );
 }
 
-function CompletedHeartCheckInCard({ shared, communityName, onPress }: { shared: boolean; communityName: string; onPress: () => void }) {
-  const { t } = useAppTranslation();
-  return (
-    <Card style={{ gap: 6, padding: 14 }}>
-      <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("home.checkIn.title")}</Text>
-      <BodyText muted>{t("home.checkIn.completed")}</BodyText>
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-        <Feather name={shared ? "users" : "lock"} size={14} color={colors.muted} />
-        <Text style={[typography.caption, { color: colors.muted }]}>
-          {shared ? t("community.checkIn.sharedWithCommunity", { name: communityName }) : t("home.checkIn.private")}
-        </Text>
-      </View>
-      <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 44, justifyContent: "center" }}>
-        <Text style={[typography.label, { color: colors.olive }]}>{t("home.checkIn.view")}</Text>
-      </Pressable>
-    </Card>
-  );
-}
-
-function HeartCheckInCard({ onPress }: { onPress: () => void }) {
-  const { t } = useAppTranslation();
-  const hintKey = "home.checkIn.promptHint";
+function HomeAction({
+  accessibilityHint,
+  accessibilityLabel,
+  action,
+  icon,
+  onPress,
+  preview,
+  subtitle,
+  title,
+}: {
+  accessibilityHint?: string;
+  accessibilityLabel?: string;
+  action?: string;
+  icon: ComponentProps<typeof Feather>["name"];
+  onPress: () => void;
+  preview?: string;
+  subtitle?: string;
+  title: string;
+}) {
   return (
     <Pressable
-      accessibilityHint={t(hintKey)}
-      accessibilityLabel={t("community.checkIn.promptTitle")}
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel ?? [title, subtitle, preview, action].filter(Boolean).join(". ")}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
+      style={({ pressed }) => ({
+        alignItems: "center", borderBottomWidth: 1, borderColor: colors.line, flexDirection: "row",
+        gap: 12, minHeight: 48, opacity: pressed ? 0.7 : 1, paddingVertical: 12,
+      })}
     >
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, minHeight: 90, padding: 14 }}>
-        <View style={{ flex: 1, gap: 5 }}>
-          <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.checkIn.promptTitle")}</Text>
-          <BodyText muted>{t(hintKey)}</BodyText>
-        </View>
-        <View
-          accessibilityElementsHidden
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          style={{
-            alignItems: "center",
-            backgroundColor: colors.accentSubtle,
-            borderRadius: radius.lg,
-            height: 56,
-            justifyContent: "center",
-            width: 56,
-          }}
-        >
-          <Feather name="plus" size={25} color={colors.olive} />
-        </View>
-      </Card>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Feather name={icon} size={20} color={icon === "heart" ? colors.accentPrayer : colors.olive} />
+      </View>
+      <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+        <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
+        {subtitle ? <BodyText muted>{subtitle}</BodyText> : null}
+        {preview ? <Text numberOfLines={2} style={[typography.body, { color: colors.muted }]}>{preview}</Text> : null}
+        {action ? <Text style={[typography.label, { color: colors.olive }]}>{action}</Text> : null}
+      </View>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Feather name="chevron-right" size={18} color={colors.muted} />
+      </View>
     </Pressable>
   );
 }
 
-function PrayerPreviewCard({
-  loading,
-  members,
-  onPress,
-  openPrayer,
-  userById,
-  userImageById,
-}: {
-  loading: boolean;
-  members: { image?: GroupImage; name: string }[];
+function shortPreview(value: string) {
+  const characters = Array.from(value.trim().replace(/\s+/g, " "));
+  return characters.length > 120 ? `${characters.slice(0, 117).join("").trimEnd()}…` : characters.join("");
+}
+
+function PrayerPreviewRow({ onPress, openPrayer, userById }: {
   onPress: () => void;
-  openPrayer?: FeedItem;
+  openPrayer?: Extract<FeedItem, { type: "post" }>;
   userById: Map<string, string>;
-  userImageById: Map<string, GroupImage | undefined>;
 }) {
   const { t } = useAppTranslation();
-  const openPrayerAuthor =
-    openPrayer && openPrayer.type === "post"
-      ? { image: userImageById.get(openPrayer.userId), name: userById.get(openPrayer.userId) ?? t("common.someone") }
-      : undefined;
-  const previewUsers =
-    openPrayerAuthor ? [openPrayerAuthor] : members;
-  const subtitle = loading
-    ? t("home.prayerPreview.loading")
-    : openPrayerAuthor
-      ? t("home.prayerPreview.openSubtitle", { name: openPrayerAuthor.name })
-      : t("home.prayerPreview.subtitle");
-  const accessibilityHint = openPrayerAuthor
-    ? t("home.prayerPreview.openHint", { name: openPrayerAuthor.name })
-    : t("home.prayerPreview.fallbackHint");
-
-  return (
-    <QuietActionCard
-      accessibilityHint={loading ? t("home.prayerPreview.loading") : accessibilityHint}
+  if (!openPrayer) {
+    return <HomeAction
+      accessibilityHint={t("home.prayerPreview.fallbackHint")}
       accessibilityLabel={t("home.prayerPreview.title")}
-      disabled={loading}
       icon="heart"
       onPress={onPress}
-      subtitle={subtitle}
       title={t("home.prayerPreview.title")}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-        {loading ? (
-          <ActivityIndicator accessibilityLabel={t("home.prayerPreview.loading")} color={colors.olive} />
-        ) : previewUsers.length ? (
-          <AvatarStack users={previewUsers} size={32} />
-        ) : (
-          <BodyText muted>{t("home.prayerPreview.empty")}</BodyText>
-        )}
-      </View>
-    </QuietActionCard>
-  );
+      subtitle={t("home.prayerPreview.subtitle")}
+    />;
+  }
+  const name = userById.get(openPrayer.userId) || t("common.someone");
+  return <HomeAction
+    accessibilityHint={t("home.prayerPreview.openHint", { name })}
+    icon="heart"
+    onPress={onPress}
+    title={t("home.prayerPreview.openSubtitle", { name })}
+    preview={shortPreview(openPrayer.body)}
+  />;
 }
 
 function CommunityPreviewCard({
   item,
-  loading,
   onOpen,
-  prayerCount,
   userById,
   userImageById,
 }: {
   item?: FeedItem;
-  loading: boolean;
   onOpen: (item: FeedItem) => void;
-  prayerCount: number;
   userById: Map<string, string>;
   userImageById: Map<string, GroupImage | undefined>;
 }) {
-  const { language, t } = useAppTranslation();
-  if (loading) {
-    return (
-      <QuietActionCard icon="users" subtitle={t("home.communityPreview.loading")} title={t("home.communityPreview.title")}>
-        <View
-          accessibilityLabel={t("home.communityPreview.loading")}
-          accessibilityRole="progressbar"
-          accessibilityState={{ busy: true }}
-          style={{ alignItems: "flex-start" }}
-        >
-          <ActivityIndicator color={colors.olive} />
-        </View>
-      </QuietActionCard>
-    );
-  }
+  const { t } = useAppTranslation();
   if (!item) {
     return (
-      <QuietActionCard icon="users" subtitle={t("home.communityPreview.subtitle")} title={t("home.communityPreview.title")}>
-        <BodyText muted>{t("home.communityPreview.empty")}</BodyText>
-      </QuietActionCard>
+      <HomeAction
+        icon="users"
+        onPress={() => router.navigate("/(tabs)/community")}
+        subtitle={t("home.communityPreview.empty")}
+        title={t("home.communityPreview.title")}
+      />
     );
   }
 
   const authorName = userById.get(item.userId) ?? t("common.someone");
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
   const isScripture = item.type === "post" && normalizeEntryKind(item.kind) === "scripture";
-  const hasPersonalNote = Boolean(displayCopy.body.trim());
+  const preview = shortPreview(displayCopy.body);
   const itemLabel = communityFeedItemLabel(item, t);
   const displayTitle = displayCopy.title || communityDefaultFeedTitle(item, t);
-  const accessibilityTitle = isScripture && hasPersonalNote ? displayCopy.body : displayTitle;
+  const accessibilityTitle = isScripture && preview ? preview : displayTitle;
   return (
     <Pressable
       accessibilityHint={t("home.communityPreview.openHint")}
@@ -611,7 +605,7 @@ function CommunityPreviewCard({
       onPress={() => onOpen(item)}
       style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
     >
-      <Card style={{ gap: 12, padding: 14 }}>
+      <Card style={{ gap: 8, padding: 12 }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           <Text style={[typography.cardTitle, { color: colors.ink, flex: 1 }]}>{t("home.communityPreview.title")}</Text>
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
@@ -621,41 +615,14 @@ function CommunityPreviewCard({
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
           <Avatar image={userImageById.get(item.userId)} name={authorName} size={36} tone="green" />
           <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-              <Text numberOfLines={1} style={[typography.label, { color: colors.ink, flex: 1 }]}>
-                {authorName}
-              </Text>
-              <Text numberOfLines={1} style={[typography.caption, { color: colors.olive, fontWeight: "700" }]}>
-                {itemLabel}
-              </Text>
-            </View>
-            <Text numberOfLines={1} style={[typography.caption, { color: colors.muted, fontWeight: "700" }]}>
-              {formatRelativeTime(item.createdAt, language)}
-            </Text>
+            <Text style={[typography.label, { color: colors.ink }]}>{authorName}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{itemLabel}</Text>
           </View>
         </View>
-        {!isScripture || hasPersonalNote ? (
-          <View style={{ gap: 5 }}>
-            {!isScripture ? (
-              <Text numberOfLines={2} style={[typography.bodyMedium, { color: colors.ink, flexShrink: 1 }]}>
-                {displayTitle}
-              </Text>
-            ) : null}
-            <BodyText muted numberOfLines={2}>
-              {displayCopy.body || t("community.card.noWords")}
-            </BodyText>
-          </View>
-        ) : null}
+        {!isScripture ? <Text style={[typography.bodyMedium, { color: colors.ink }]} numberOfLines={2}>{displayTitle}</Text> : null}
+        {preview ? <Text style={[typography.body, { color: colors.muted }]} numberOfLines={2}>{preview}</Text> : null}
         {isScripture ? (
           <VersePreviewCard compact interactive={false} maxLines={2} showOpenIndicator={false} verse={item.verses?.[0] ?? item.verse} />
-        ) : null}
-        {prayerCount > 0 ? (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-            <Feather name="heart" size={14} color={colors.muted} />
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
-              {prayerCount} {communityPrayerNoun(prayerCount, t)}
-            </Text>
-          </View>
         ) : null}
       </Card>
     </Pressable>

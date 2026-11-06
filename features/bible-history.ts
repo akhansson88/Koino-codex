@@ -12,26 +12,30 @@ export function initialBibleHistory(position: BiblePosition): BibleHistory {
   return { entries: [position], index: 0 };
 }
 
-export function readBibleHistory(value: unknown, fallback: BiblePosition, versionId: BibleVersionId = "kjv"): BibleHistory {
-  if (!value || typeof value !== "object") return initialBibleHistory(fallback);
+export function parseBibleHistory(value: unknown, versionId: BibleVersionId = "kjv"): BibleHistory | undefined {
+  if (!value || typeof value !== "object") return;
   const candidate = value as Partial<BibleHistory>;
   if (!Array.isArray(candidate.entries) || candidate.entries.length < 1 || candidate.entries.length > limit ||
       !Number.isInteger(candidate.index) || (candidate.index as number) < 0 || (candidate.index as number) >= candidate.entries.length) {
-    return initialBibleHistory(fallback);
+    return;
   }
   const entries: BiblePosition[] = [];
   for (const item of candidate.entries) {
     if (!item || typeof item !== "object" || typeof item.book !== "string" ||
         !kjvBooks.some((book) => book.name === item.book) || !Number.isInteger(item.chapter) || !Number.isInteger(item.verse)) {
-      return initialBibleHistory(fallback);
+      return;
     }
     const normalized = normalizeBiblePosition(item, versionId);
     if (!sameBiblePosition(item, normalized) || (entries.length && sameBiblePosition(entries[entries.length - 1], normalized))) {
-      return initialBibleHistory(fallback);
+      return;
     }
     entries.push(normalized);
   }
   return { entries, index: candidate.index as number };
+}
+
+export function readBibleHistory(value: unknown, fallback: BiblePosition, versionId: BibleVersionId = "kjv"): BibleHistory {
+  return parseBibleHistory(value, versionId) ?? initialBibleHistory(fallback);
 }
 
 export function updateBibleHistoryPosition(history: BibleHistory, position: BiblePosition): BibleHistory {

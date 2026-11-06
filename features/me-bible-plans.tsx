@@ -2,30 +2,11 @@ import { useMemo } from "react";
 import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
-import { biblePlanReadingRoute, completionPercent, firstPositionForPlanDay, todayDateKey } from "@/features/bible-plans";
-import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
-import type { BiblePlan, BiblePlanDay } from "@/state/types";
+import { biblePlanReadingRoute, completionPercent, highlightedBiblePlan, todayDateKey } from "@/features/bible-plans";
+import type { BiblePlan } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { BodyText } from "@/ui/app-components";
 import { colors, typography } from "@/ui/theme";
-
-function planToHighlight(activePlans: BiblePlan[], date: string): { plan: BiblePlan; day?: BiblePlanDay } | undefined {
-  let catchUp: { plan: BiblePlan; day: BiblePlanDay } | undefined;
-
-  // The store supplies most recently updated plans first.
-  for (const plan of activePlans) {
-    if (plan.pausedAt) continue;
-    const next = nextUnreadPlanDay(plan);
-    if (!next) continue;
-    const today = todayPlanDay(plan, date);
-    if (today && !today.completedAt && firstPositionForPlanDay(today)) return { plan, day: today };
-    if (!catchUp && firstPositionForPlanDay(next)) catchUp = { plan, day: next };
-  }
-
-  if (catchUp) return catchUp;
-  const plan = activePlans.find((item) => !item.pausedAt) ?? activePlans[0];
-  return plan ? { plan } : undefined;
-}
 
 function PlanLink({ children, onPress }: { children: string; onPress: () => void }) {
   return (
@@ -43,7 +24,7 @@ export function MeBiblePlans({ plans, userId }: { plans: BiblePlan[]; userId: st
   const { t } = useAppTranslation();
   const date = todayDateKey();
   const ownedPlans = useMemo(() => plans.filter((plan) => userId && plan.userId === userId), [plans, userId]);
-  const highlight = useMemo(() => planToHighlight(ownedPlans.filter((plan) => plan.status === "active"), date), [ownedPlans, date]);
+  const highlight = useMemo(() => highlightedBiblePlan(ownedPlans, date), [ownedPlans, date]);
   const plan = highlight?.plan;
   const day = highlight?.day;
   const tab = highlight ? "active"
