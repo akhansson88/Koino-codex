@@ -56,6 +56,9 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const [avatarCropSource, setAvatarCropSource] = useState<RoomImageCropSource>();
   const [avatarMessage, setAvatarMessage] = useState("");
   const [securityMessage, setSecurityMessage] = useState("");
+  const logoutPending = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
@@ -152,6 +155,21 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       setSecurityMessage(t("identity.security.resetSent"));
     } catch {
       setSecurityMessage(t("identity.security.error"));
+    }
+  }
+
+  async function handleLogOut() {
+    if (logoutPending.current || !state.currentUserId) return;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    setLogoutFailed(false);
+    try {
+      await dispatch({ type: "signOut", expectedUserId: state.currentUserId });
+    } catch {
+      setLogoutFailed(true);
+    } finally {
+      logoutPending.current = false;
+      setLoggingOut(false);
     }
   }
 
@@ -288,21 +306,24 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         </SettingsSection>
       </BottomSheet>
 
-      <BottomSheet title={t("identity.account.title")} visible={activeSheet === "account"} onClose={() => setActiveSheet(undefined)}>
+      <BottomSheet
+        dismissible={!loggingOut}
+        title={t("identity.account.title")}
+        visible={activeSheet === "account"}
+        onClose={() => {
+          setActiveSheet(undefined);
+          setLogoutFailed(false);
+        }}
+      >
         <InfoLine label={t("identity.account.email")} value={state.authEmail ?? t("identity.account.noEmail")} />
         <InfoLine
           label={t("identity.account.notifications")}
           value={t(state.notificationPreferences.pushEnabled ? "notifications.preferences.enabled" : "notifications.preferences.disabled")}
         />
-        <SecondaryButton
-          icon="log-out"
-          onPress={() => {
-            setActiveSheet(undefined);
-            dispatch({ type: "signOut" });
-          }}
-        >
-          {t("common.logOut")}
+        <SecondaryButton disabled={loggingOut} icon="log-out" onPress={handleLogOut}>
+          {t(loggingOut ? "identity.account.loggingOut" : "common.logOut")}
         </SecondaryButton>
+        {logoutFailed ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive">{t("identity.account.logoutError")}</BodyText> : null}
       </BottomSheet>
 
       <InfoSheet

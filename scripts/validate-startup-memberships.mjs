@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "koino-startup-memberships-"));
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const harness = globalThis.__membershipStartup = { listeners: new Map(), writes: [], commits: [], avatarSyncs: 0, rawMembershipExists: false };
+const harness = globalThis.__membershipStartup = { listeners: new Map(), writes: [], commits: [], signOutEvents: [], avatarSyncs: 0, rawMembershipExists: false, encryptionGeneration: 0 };
 const source = await readFile(path.join(projectRoot, "state/koino-store.tsx"), "utf8");
 const imports = new Map();
 for (const node of ts.createSourceFile("store.tsx", source, ts.ScriptTarget.Latest, true).statements) {
@@ -27,13 +27,20 @@ const mocks = {
     export const onAuthStateChanged = (auth, listener) => {
       const h = globalThis.__membershipStartup;
       h.replaceUser = uid => {
-        auth.currentUser = { uid, email: uid + "@example.test" };
+        auth.currentUser = uid ? { uid, email: uid + "@example.test" } : null;
         listener(auth.currentUser);
       };
       h.replaceUser("alex");
       return () => { delete h.replaceUser; };
     };
-    export const signInWithEmailAndPassword = async () => {}, createUserWithEmailAndPassword = async () => {}, signOut = async () => {},
+    export async function signOut(auth) {
+      const h = globalThis.__membershipStartup;
+      h.signOutEvents.push("firebase");
+      if (h.firebaseSignOut) await h.firebaseSignOut(auth);
+      else h.replaceUser(null);
+    }
+    export const signInWithEmailAndPassword = async () => { globalThis.__membershipStartup.signOutEvents.push("sign-in"); },
+      createUserWithEmailAndPassword = async () => { globalThis.__membershipStartup.signOutEvents.push("sign-up"); },
       sendPasswordResetEmail = async () => {}, confirmPasswordReset = async () => {}, reauthenticateWithCredential = async () => {}, updatePassword = async () => {};
     export const EmailAuthProvider = { credential: () => ({}) };
   `,
@@ -51,7 +58,29 @@ const mocks = {
       return { exists: () => exists };
     };
   `,
-  "@/state/encryption/local-storage": `export default { getItem: async () => null, setItem: async () => {}, clearContent: async () => {} };`,
+  "@/state/encryption/local-storage": `
+    export default {
+      getItem: async () => null, setItem: async () => {},
+      clearContent: async () => {
+        const h = globalThis.__membershipStartup;
+        h.signOutEvents.push("content");
+        await h.clearContent?.();
+      },
+    };
+  `,
+  "@/features/bible-audio/engine": `export const stop = async () => { globalThis.__membershipStartup.signOutEvents.push("audio"); };`,
+  "@/state/supabase-storage": (imports.get("@/state/supabase-storage") ?? []).map(name =>
+    name === "clearEncryptedImages" ? `export const ${name} = () => { globalThis.__membershipStartup.signOutEvents.push("images"); };`
+      : `export const ${name} = () => {};`).join("\n"),
+  "@/state/encryption/session": `
+    export const leaveEncryptedGroup = () => {}, rotateGroup = () => {}, deleteEncryptedGroup = () => {};
+    export const sessionGeneration = () => globalThis.__membershipStartup.encryptionGeneration;
+    export function lockSession() {
+      const h = globalThis.__membershipStartup;
+      h.signOutEvents.push("lock");
+      h.encryptionGeneration++;
+    }
+  `,
   "@/state/encryption/migration": `
     export const listenLegacyCommunities = (_, listener, onError) => {
       globalThis.__membershipStartup.legacy = listener;
@@ -231,7 +260,105 @@ try {
     await assertScopedMutationsRejected(oldDispatch, oldScope);
     await assertScopedMutationsRejected(harness.current.dispatch, { userId: "joel", groupId: "another-community" });
   });
+
+  const signOut = () => harness.current.dispatch({ type: "signOut" });
+  const activeUser = () => harness.current.state.currentUserId;
+  const assertCleared = () => {
+    const state = harness.current.state;
+    assert.equal(state.currentUserId, undefined);
+    assert.equal(state.currentGroupId, undefined);
+    for (const field of ["users", "groups", "privateCheckIns", "checkInDailyClaims", "journalEntries", "posts"]) {
+      assert.deepEqual(state[field], [], `The old account's ${field} must be cleared`);
+    }
+  };
+  const joelCheckIn = { id: "private-joel", userId: "joel", groupId: "old-community", reflectionText: "Private Joel reflection" };
+  await emit("privateCheckIns/joel", { [joelCheckIn.id]: joelCheckIn });
+
+  harness.signOutEvents.length = 0;
+  harness.clearContent = () => Promise.reject(new Error("Content storage unavailable"));
+  await act(async () => { await assert.rejects(signOut(), /Content storage unavailable/); });
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content"], "Cleanup failure must stop before Firebase sign-out");
+  assert.equal(activeUser(), "joel", "Cleanup failure must retain the signed-in account");
+  assert.deepEqual(harness.current.state.privateCheckIns, [joelCheckIn]);
+
+  delete harness.clearContent;
+  harness.signOutEvents.length = 0;
+  harness.firebaseSignOut = () => Promise.reject(new Error("Firebase sign-out rejected"));
+  await act(async () => { await assert.rejects(signOut(), /Firebase sign-out rejected/); });
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content", "firebase"]);
+  assert.equal(activeUser(), "joel", "Ordinary Firebase failure must retain the signed-in account");
+  assert.equal(harness.current.state.signOutIncomplete, false);
+  assert.deepEqual(harness.current.state.privateCheckIns, [joelCheckIn]);
+
+  harness.signOutEvents.length = 0;
+  let finishCleanup, finishFirebase, logout;
+  harness.clearContent = () => new Promise(resolve => { finishCleanup = resolve; });
+  harness.firebaseSignOut = () => new Promise(resolve => { finishFirebase = resolve; });
+  await act(async () => { logout = signOut(); });
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content"], "Await encrypted cleanup before the SDK request");
+  assert.equal(activeUser(), "joel", "Pending encrypted cleanup must retain the signed-in account");
+  await act(async () => { await signOut(); });
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content"], "A second press must not start a competing sign-out");
+  await act(async () => { finishCleanup(); });
+  assert.equal(harness.signOutEvents.at(-1), "firebase");
+  assert.equal(activeUser(), "joel", "Pending Firebase sign-out must retain the signed-in account");
+  await act(async () => { harness.replaceUser(null); finishFirebase(); await logout; });
+  assertCleared();
+  assert.equal(harness.current.state.signOutIncomplete, false);
+  assert.ok(!harness.listeners.has("privateCheckIns/joel"), "Signed-out accounts unsubscribe private data");
+
+  delete harness.clearContent;
+  await act(async () => { harness.replaceUser("joel"); });
+  assert.equal(activeUser(), "joel", "The same account can sign in again");
+  assert.deepEqual(harness.current.state.privateCheckIns, [], "A fresh same-account session must load its own snapshot");
+  await emit("privateCheckIns/joel", { [joelCheckIn.id]: joelCheckIn });
+  harness.signOutEvents.length = 0;
+  harness.firebaseSignOut = async auth => {
+    // Firebase's React Native implementation updates currentUser before
+    // removing persisted credentials. Rejection bypasses the observer.
+    auth.currentUser = null;
+    throw new Error("Firebase persistence removal rejected");
+  };
+  await act(async () => { await assert.rejects(signOut(), /Firebase persistence removal rejected/); });
+  assertCleared();
+  assert.equal(harness.current.state.signOutIncomplete, true, "Incomplete logout requires retry before presenting sign-in");
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content", "firebase", "lock", "images"], "Partial failure must lock the old encrypted session and invalidate its image cache");
+  assert.ok(!harness.listeners.has("privateCheckIns/joel"));
+  await act(async () => {
+    await harness.current.dispatch({ type: "signIn", email: "other@example.test", password: "example" });
+    await harness.current.dispatch({ type: "signUp", email: "other@example.test", password: "example", name: "Other" });
+  });
+  assert.ok(!harness.signOutEvents.includes("sign-in") && !harness.signOutEvents.includes("sign-up"), "An incomplete logout blocks replacement credentials");
+
+  harness.firebaseSignOut = () => Promise.reject(new Error("Persistence still unavailable"));
+  await act(async () => { await assert.rejects(signOut(), /Persistence still unavailable/); });
+  assertCleared();
+  assert.equal(harness.current.state.signOutIncomplete, true, "Retry rejection must keep login unavailable");
+
+  delete harness.firebaseSignOut;
+  await act(async () => { await signOut(); });
+  assertCleared();
+  assert.equal(harness.current.state.signOutIncomplete, false, "SDK acknowledgement permits sign-in after retry");
+  await act(async () => { harness.replaceUser("alex"); });
+  assert.equal(activeUser(), "alex");
+  assert.deepEqual(harness.current.state.privateCheckIns, [], "A replacement account cannot inherit Joel's private Check-in");
+  harness.signOutEvents.length = 0;
+  await act(async () => { await harness.current.dispatch({ type: "signOut", expectedUserId: "joel" }); });
+  assert.deepEqual(harness.signOutEvents, [], "A stale Account settings callback must not log out a replacement user");
+  assert.equal(activeUser(), "alex");
+  await act(async () => { await signOut(); });
+  assertCleared();
+
+  await act(async () => { harness.replaceUser("joel"); });
+  harness.signOutEvents.length = 0;
+  harness.clearContent = () => new Promise(resolve => { finishCleanup = resolve; });
+  await act(async () => { logout = signOut(); });
+  await act(async () => { harness.replaceUser("alex"); });
+  await act(async () => { finishCleanup(); await logout; });
+  assert.deepEqual(harness.signOutEvents, ["audio", "images", "content"], "A logout in flight must never reach Firebase after the UID changes");
+  assert.equal(activeUser(), "alex");
   console.log("Startup memberships passed: prioritized Home subscriptions, deferred history, decryption failure, delayed legacy identity, pending write protection, encrypted admission, authoritative departure, same-group account isolation, and stale mutation rejection.");
+  console.log("Auth logout passed: pending cleanup and Firebase acknowledgement, ordinary failure, incomplete Firebase persistence, retry, private data and listener cleanup, and repeated account sessions.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   delete globalThis.__membershipStartup;

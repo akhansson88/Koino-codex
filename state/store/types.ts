@@ -30,7 +30,7 @@ export type CommunitySubmissionRequest = {
 export type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
-  | { type: "signOut" }
+  | { type: "signOut"; expectedUserId?: Id }
   | { type: "requestPasswordReset"; email: string }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }

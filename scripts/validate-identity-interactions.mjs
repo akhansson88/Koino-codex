@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
+import { StackRouter } from "@react-navigation/routers";
 import { build } from "esbuild";
 import React from "react";
 import { act, create } from "react-test-renderer";
@@ -18,17 +19,24 @@ const directory = await mkdtemp(path.join(tmpdir(), "koino-identity-interactions
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const h = globalThis.__identityInteractions = {
   os: "ios", state: {}, listeners: new Set(), navigationListeners: new Set(),
+  sdkUid: "member",
   storage: new Map(), storageWrites: [], actions: [], route: "identity", history: ["identity"],
   identityMounts: 0, identityUnmounts: 0, identityDismissals: 0,
   permissionCalls: 0, pickerCalls: 0, permissionGranted: true,
   pickerResult: { canceled: true, assets: [] }, resetFailure: false, activeRawListeners: new Set(), themeWrites: [],
 };
 const freshState = () => ({
-  currentUserId: "member", currentGroupId: "room", authEmail: "member@example.test", theme: "light",
+  authReady: true, currentUserId: "member", signOutIncomplete: false, currentGroupId: "room", authEmail: "member@example.test", theme: "light",
   users: [{ id: "member", name: "Member" }], groups: [{ id: "room", name: "Test community", ownerId: "member" }],
   groupMemberCounts: { room: 1 }, memberships: [], notificationPreferences: { pushEnabled: true },
 });
 const notify = () => h.listeners.forEach(listener => listener());
+const rootNames = ["index", "reset-password", "(tabs)", "identity", "room-details", "bible-plans", "donation-amount",
+  "donation-confirm", "donation-thank-you", "home/[groupId]/prayer", "community/[groupId]/prayers/[prayerRequestId]",
+  "feed/[targetType]/[id]", "notifications", "notification-settings", "encryption", "me/history", "me/[id]",
+  "native-search-check", "native-encryption-check", "_sitemap", "+not-found"];
+h.rootNames = rootNames;
+h.stackRouter = StackRouter({ initialRouteName: "index" });
 const mocks = {
   "react-native": `
     export const Platform = { get OS() { return globalThis.__identityInteractions.os; }, select: values => values[globalThis.__identityInteractions.os] ?? values.default };
@@ -38,25 +46,86 @@ const mocks = {
   `,
   "@expo/vector-icons": 'export const Feather="Feather";',
   "expo-router": `
-    import {useSyncExternalStore} from "react";
+    import React,{useLayoutEffect,useReducer,useSyncExternalStore} from "react";
     const h=globalThis.__identityInteractions;
     const subscribe=listener=>{h.navigationListeners.add(listener);return()=>h.navigationListeners.delete(listener);};
     const changed=()=>h.navigationListeners.forEach(listener=>listener());
     export const usePathname=()=>useSyncExternalStore(subscribe,()=>h.route);
-    export const router={push(path){h.history=[...h.history,path];h.route=path;changed();},back(){if(h.history.length>1){h.history=h.history.slice(0,-1);h.route=h.history.at(-1);changed();}}};
+    const Screen=()=>null, Protected=()=>null;
+    export const Redirect="Redirect";
+    export const Stack=Object.assign(function StackFixture({children,screenLayout}){
+      // Match Expo Router's protected-child registration, then let the real
+      // React Navigation StackRouter remove disallowed history entries.
+      const declared=new Map();
+      function read(elements,allowed=true){
+        React.Children.forEach(elements,element=>{
+          if(element?.type===Screen)declared.set(element.props.name,{allowed,options:element.props.options});
+          else if(element?.type===Protected)read(element.props.children,allowed&&element.props.guard);
+        });
+      }
+      read(children);
+      const routeNames=h.rootNames.filter(name=>declared.get(name)?.allowed!==false);
+      const opts={routeNames,routeParamList:{},routeGetIdList:{}};
+      const previous=h.rootNavigation;
+      const state=!previous?h.stackRouter.getInitialState(opts)
+        :previous.routeNames.join()!==routeNames.join()
+          ?h.stackRouter.getStateForRouteNamesChange(previous,{...opts,routeKeyChanges:[]})
+          :previous;
+      const [,refresh]=useReducer(n=>n+1,0);
+      useLayoutEffect(()=>{
+        h.rootNavigation=state;
+        h.rootOptions=declared;
+        const name=state.routes[state.index]?.name;
+        const pathname=name==="index"?"/":name==="(tabs)"?"/home":"/"+name;
+        if(h.route!==pathname){h.route=pathname;changed();}
+        h.rootNavigate=(type,path)=>{
+          const pathname=typeof path==="string"?path:path?.pathname;
+          const name=pathname==="/"?"index":pathname?.slice(1);
+          const next=h.stackRouter.getStateForAction(h.rootNavigation,{type,payload:{name}},opts);
+          if(next){h.rootNavigation=next;refresh();}
+        };
+        return()=>{delete h.rootNavigate;};
+      });
+      return <RootStack>{state.routes.map((route,index)=>
+        <RootRoute key={route.key} name={route.name} active={state.index===index}>{
+          screenLayout?screenLayout({children:h.rootViews?.[route.name]?.()??null}):h.rootViews?.[route.name]?.()??null
+        }</RootRoute>
+      )}</RootStack>;
+    },{Screen,Protected});
+    export const router={
+      push(path){if(h.rootNavigate){h.rootNavigate("PUSH",path);return;}h.history=[...h.history,path];h.route=path;changed();},
+      back(){if(h.rootNavigate){h.rootNavigate("GO_BACK");return;}if(h.history.length>1){h.history=h.history.slice(0,-1);h.route=h.history.at(-1);changed();}},
+      replace(path){h.rootNavigate?.("REPLACE",path);},
+      canGoBack(){return h.rootNavigation?h.rootNavigation.routes.length>1:h.history.length>1;},
+    };
+    const RootStack="RootStack",RootRoute="RootRoute";
   `,
+  "expo-font": 'export const useFonts=()=>[true];',
+  "expo-status-bar": 'export const StatusBar="StatusBar";',
+  "react-native-gesture-handler": 'export const GestureHandlerRootView="GestureHandlerRootView";',
+  "@/features/bible-audio/provider": 'export const BibleAudioProvider=({children})=>children;',
+  "@/features/bible-database-provider": 'export const BibleDatabaseProvider=({children})=>children;',
+  "@/features/onboarding-screen": 'export const OnboardingScreen="Login";',
+  "@/features/startup-performance": '',
+  "@/ui/notification-runtime": 'export const NotificationRuntime=()=>null;',
+  "@/ui/emulator-badge": 'export const EmulatorBadge=()=>null;',
+  "@/ui/encryption": 'export const EncryptionBoundary=({children})=>children;',
+  "@/ui/use-reduced-motion": 'export const useReducedMotion=()=>false;',
   "expo-image-picker": `
     export const requestMediaLibraryPermissionsAsync=async()=>{const h=globalThis.__identityInteractions;h.permissionCalls++;return{granted:h.permissionGranted};};
     export const launchImageLibraryAsync=async()=>{const h=globalThis.__identityInteractions;h.pickerCalls++;return h.pickerResult;};
   `,
-  "@/state/store/firebase": 'export const auth={currentUser:{uid:"member"}};export let emulatorMode=false;export const setEmulatorMode=value=>{emulatorMode=value;};',
+  "@/state/store/firebase": 'export const auth={get currentUser(){const uid=globalThis.__identityInteractions.sdkUid;return uid?{uid}:null;}};export let emulatorMode=false;export const setEmulatorMode=value=>{emulatorMode=value;};',
   "@/state/koino-store": `
     import {useSyncExternalStore} from "react";
     const h=globalThis.__identityInteractions;
     const subscribe=listener=>{h.listeners.add(listener);return()=>h.listeners.delete(listener);};
     const useSnapshot=()=>useSyncExternalStore(subscribe,()=>h.state,()=>h.state);
-    const dispatch=async action=>{h.actions.push(action);if(action.type==="setTheme")return h.runActualTheme(action);if(action.type==="requestPasswordReset"&&h.resetFailure)throw Error("Reset fixture failed");};
+    const dispatch=async action=>{h.actions.push(action);if(action.type==="setTheme")return h.runActualTheme(action);if(action.type==="signOut")return h.signOut?.();if(action.type==="requestPasswordReset"&&h.resetFailure)throw Error("Reset fixture failed");};
+    export const KoinoProvider=({children})=>children;
     export const useKoino=()=>({state:useSnapshot(),dispatch});
+    export const useKoinoActions=()=>({dispatch});
+    export const useKoinoSelector=selector=>selector(useSnapshot());
     export const useKoinoFields=keys=>{const state=useSnapshot();return Object.fromEntries(keys.map(key=>[key,state[key]]));};
   `,
   "firebase/auth": 'export const onAuthStateChanged=()=>()=>{},signOut=async()=>{};',
@@ -95,12 +164,19 @@ const mocks = {
   "@/features/identity/room-switcher": `import React from "react";export const RoomSwitcherSheet=props=>props.visible?React.createElement("RoomSwitcherSheet",props):null;`,
   "@/features/identity/room-details-screen": 'export const RoomDetailsScreen=()=>null;',
 };
+for (const [family, weight] of [
+  ["inter", "400Regular"], ["inter", "500Medium"], ["montserrat", "300Light"],
+  ["montserrat", "400Regular"], ["montserrat", "500Medium"], ["montserrat", "600SemiBold"],
+]) {
+  const name = family[0].toUpperCase() + family.slice(1);
+  mocks[`@expo-google-fonts/${family}/${weight}`] = `export const ${name}_${weight}=null;`;
+}
 let tree;
 try {
   const outfile = path.join(directory, "identity.cjs");
   await build({
     stdin: {
-      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {colors,applyTheme} from "./ui/theme";export {setEmulatorMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";`,
+      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {colors,applyTheme} from "./ui/theme";export {setEmulatorMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";export {default as RootLayout} from "./app/_layout";export {default as Index} from "./app/index";export {default as IdentityRoute} from "./app/identity";export {router} from "expo-router";`,
       resolveDir: projectRoot, loader: "tsx",
     },
     outfile, bundle: true, format: "cjs", platform: "node", jsx: "automatic",
@@ -113,7 +189,7 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "tsx", resolveDir: projectRoot }));
     } }],
   });
-  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, colors, applyTheme, setEmulatorMode, EncryptionSettings, AvatarButton } = require(outfile);
+  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, colors, applyTheme, setEmulatorMode, EncryptionSettings, AvatarButton, RootLayout, Index, IdentityRoute, router } = require(outfile);
   // Execute the actual setTheme case instead of mirroring its implementation
   // in the state mock. Only state refs and database boundaries are injected.
   const storeSource = await readFile(path.join(projectRoot, "state/koino-store.tsx"), "utf8");
@@ -313,26 +389,150 @@ try {
   await unmount();
   await act(async () => { tree = create(React.createElement(AppLanguageProvider, null, React.createElement(LanguageProbe))); });
   assert.equal(h.translation.language, "sv");
+  await unmount();
 
-  const layoutSource = await readFile(path.join(projectRoot, "app/_layout.tsx"), "utf8");
-  const layoutAst = ts.createSourceFile("_layout.tsx", layoutSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let identityOptions;
-  function visit(node) {
-    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(layoutAst) === "Stack.Screen") {
-      const name = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(layoutAst) === "name");
-      if (name?.initializer && ts.isStringLiteral(name.initializer) && name.initializer.text === "identity") {
-        const options = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(layoutAst) === "options");
-        identityOptions = options?.initializer && ts.isJsxExpression(options.initializer) ? options.initializer.expression : undefined;
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(layoutAst);
-  assert.ok(identityOptions && ts.isObjectLiteralExpression(identityOptions));
-  const option = name => identityOptions.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(layoutAst) === name)?.initializer;
-  assert.equal(option("presentation")?.text, "transparentModal");
-  assert.equal(option("gestureEnabled")?.kind, ts.SyntaxKind.FalseKeyword);
-  assert.equal(option("animation")?.text, "none");
+  h.os = "ios";
+  h.state = { ...freshState(), authReady: false, currentUserId: undefined };
+  h.storage.set("koino.language", "en");
+  h.actions = [];
+  setEmulatorMode(true);
+  h.rootViews = {
+    index: () => React.createElement(Index),
+    identity: () => React.createElement(React.Fragment, null, React.createElement(LanguageProbe), React.createElement(IdentityRoute)),
+    "(tabs)": () => React.createElement("HomeFixture", null, React.createElement(LanguageProbe), React.createElement(AvatarButton)),
+    "me/history": () => React.createElement("PrivateJournal", null, h.state.authEmail),
+    "reset-password": () => React.createElement("PasswordReset"),
+  };
+  const publish = state => { h.state = state; h.sdkUid = state.currentUserId; notify(); };
+  const activeRoute = () => tree.root.findAllByType("RootRoute").find(node => node.props.active)?.props.name;
+  const history = () => h.rootNavigation.routes.map(route => route.name);
+  const signedOut = () => ({ ...h.state, authReady: true, currentUserId: undefined, signOutIncomplete: false });
+  const pressAvatar = async () => {
+    const avatar = tree.root.findByType("HomeFixture").findAllByType("Pressable").find(button =>
+      button.props.accessibilityLabel === t("shared.app.openIdentitySupport"));
+    assert.ok(avatar, "Open the actual Identity route from the Avatar button");
+    await act(() => avatar.props.onPress());
+  };
+  const logOut = key => tree.root.findAllByType("SecondaryButton").find(node => node.props.children === t(key));
+  const beginLogout = async () => {
+    let resolve, reject;
+    h.signOut = () => new Promise((yes, no) => { resolve = yes; reject = no; });
+    const press = logOut("common.logOut").props.onPress;
+    await act(async () => { press(); press(); });
+    return { resolve, reject };
+  };
+  const assertLoginOnly = () => {
+    assert.deepEqual(history(), ["index"], "The logout transition removes the full authenticated history");
+    assert.equal(activeRoute(), "index");
+    assert.equal(tree.root.findAllByType("Login").length, 1);
+    assert.equal(tree.root.findAllByType("IdentitySheet").length, 0, "The transparent Identity route must be removed");
+    assert.equal(tree.root.findAllByType("SettingsSheet").length, 0, "The native account sheet must also unmount");
+    assert.equal(tree.root.findAllByType("PrivateJournal").length, 0);
+    assert.doesNotMatch(text(), /@example\.test/);
+  };
+  await act(async () => { tree = create(React.createElement(RootLayout)); });
+  await act(() => router.push("/me/history"));
+  assert.equal(activeRoute(), "me/history", "The pending auth check preserves a cold authenticated deep link");
+  const member = freshState();
+  await act(() => publish(member));
+  assert.equal(activeRoute(), "me/history", "Initial authenticated resolution preserves the intended route");
+  await act(() => router.back());
+  await act(() => router.push("/reset-password"));
+  await act(() => router.push("/_sitemap"));
+  await act(() => router.push("/+not-found"));
+  await act(() => router.push("/(tabs)"));
+  await pressAvatar();
+  assert.equal(h.rootOptions.get("identity").options.presentation, "transparentModal");
+  assert.equal(h.rootOptions.get("identity").options.gestureEnabled, false);
+  assert.equal(h.rootOptions.get("identity").options.animation, "none");
+  await pressRow("identity.account.title");
+  assert.ok(sheet("identity.account.title"), "Start logout inside the real iOS Account Settings handler");
+  assert.ok(text().includes(member.authEmail));
+  await act(() => publish(signedOut()));
+  assertLoginOnly();
+
+  await act(() => publish(member));
+  await act(() => router.push("/(tabs)"));
+  await pressAvatar();
+  await pressRow("identity.account.title");
+  const attempted = await beginLogout();
+  assert.equal(h.actions.filter(action => action.type === "signOut").length, 1, "A double tap must start only one logout");
+  assert.equal(activeRoute(), "identity");
+  assert.equal(logOut("identity.account.loggingOut").props.disabled, true);
+  assert.equal(tree.root.findAllByType("Login").length, 0, "Do not present sign-in while logout is pending");
+  await act(async () => { attempted.reject(Error("Mock sign-out failed")); });
+  assert.equal(activeRoute(), "identity", "A failed logout retains the authenticated Identity route");
+  assert.equal(logOut("common.logOut").props.disabled, false);
+  assert.ok(text().includes(t("identity.account.logoutError")), "The Account sheet displays localized recovery copy");
+  assert.ok(text().includes(member.authEmail));
+  assert.equal(tree.root.findAllByType("Login").length, 0);
+
+  const completed = await beginLogout();
+  await act(async () => { completed.resolve(); publish(signedOut()); });
+  assertLoginOnly();
+  await act(() => { router.back(); router.push("/identity"); router.push("/me/history"); });
+  assertLoginOnly();
+  await act(() => router.push("/reset-password"));
+  assert.equal(activeRoute(), "reset-password", "The public password reset path remains navigable after logout");
+  await act(() => router.back());
+
+  const other = { ...member, currentUserId: "other", authEmail: "other@example.test", users: [{ id: "other", name: "Other" }] };
+  await act(() => publish(other));
+  await act(() => router.push("/(tabs)"));
+  await pressAvatar();
+  assert.equal(tree.root.findAllByType("SettingsSheet").length, 0, "Reopening Identity for a new account starts with no child sheets");
+  await pressRow("identity.account.title");
+  assert.ok(text().includes(other.authEmail));
+  assert.ok(!text().includes(member.authEmail));
+  await act(() => publish({ ...other, theme: "dark" }));
+  assert.equal(activeRoute(), "identity", "A same-account preference update preserves signed-in navigation");
+  assert.ok(sheet("identity.account.title"));
+  const repeated = await beginLogout();
+  await act(async () => { repeated.resolve(); publish(signedOut()); });
+  assertLoginOnly();
+
+  await act(() => publish(member));
+  await act(() => { router.push("/(tabs)"); router.push("/me/history"); });
+  assert.equal(activeRoute(), "me/history");
+  await act(() => publish(signedOut()));
+  assertLoginOnly();
+
+  await act(() => publish(member));
+  await act(() => router.push("/(tabs)"));
+  await pressAvatar();
+  await pressRow("identity.account.title");
+  await act(() => publish(other));
+  assert.equal(activeRoute(), "index", "Direct UID replacement removes previous account route history");
+  assert.equal(tree.root.findAllByType("IdentitySheet").length, 0);
+  assert.equal(tree.root.findAllByType("SettingsSheet").length, 0);
+  await act(() => router.push("/(tabs)"));
+  await pressAvatar();
+  await pressRow("identity.account.title");
+  assert.ok(text().includes(other.authEmail) && !text().includes(member.authEmail));
+  await act(() => publish({ ...signedOut(), signOutIncomplete: true }));
+  assert.deepEqual(history(), ["index"]);
+  assert.equal(tree.root.findAllByType("IdentitySheet").length, 0);
+  assert.equal(tree.root.findAllByType("SettingsSheet").length, 0);
+  assert.equal(tree.root.findAllByType("Login").length, 0, "Do not allow a new login until logout persistence is repaired");
+  assert.ok(text().includes(t("identity.account.logoutIncomplete")));
+  const retry = tree.root.findAllByType("PrimaryButton").find(node => node.props.children === t("identity.account.retryLogout"));
+  assert.ok(retry, "Logout recovery must be actionable");
+  h.signOut = async () => publish(signedOut());
+  await act(() => retry.props.onPress());
+  assertLoginOnly();
+  await unmount();
+  delete h.rootNavigation;
+  delete h.rootOptions;
+  delete h.signOut;
+  h.state = { ...signedOut(), authReady: false };
+  await act(async () => { tree = create(React.createElement(RootLayout)); });
+  await act(() => { router.push("/identity"); router.push("/me/history"); });
+  assert.deepEqual(history(), ["index"], "Cold signed-out links must not mount authenticated overlays while the store initializes");
+  await act(() => publish(signedOut()));
+  assertLoginOnly();
+  await unmount();
+  console.log("Logout navigation passed: real Identity and root route declarations, pending/failure, iOS overlay removal, protected history, repeat login/logout and account replacement.");
+
   console.log("Identity handler regressions passed on iOS/Android fixtures: repeated language/security/join sheets, real setTheme action before pending/rejected writes, language persistence, three complete JS history cycles through real Encryption Back and Avatar reopen, emulator restrictions and production reset/photo controls. Native Expo navigation, gestures, picker presentation and platform touch delivery still require device testing.");
 } finally {
   if (tree) await act(() => tree.unmount());
