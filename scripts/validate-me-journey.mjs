@@ -32,7 +32,11 @@ const mocks = {
     const harness = globalThis.__meJourney;
     export const useFocusEffect = useEffect;
     export const useLocalSearchParams = () => harness.params;
-    export const router = { push: target => harness.pushes.push(target), back: () => harness.backs++ };
+    export const router = {
+      navigate: target => harness.pushes.push(target),
+      push: target => harness.pushes.push(target),
+      back: () => harness.backs++,
+    };
   `,
   "@expo/vector-icons": 'export const Feather = "Feather";',
   "@/features/me-bible-plans": 'export const MeBiblePlans = "MeBiblePlans";',
@@ -55,10 +59,6 @@ const mocks = {
     export const AppScreen = "AppScreen", BodyText = "BodyText", Card = "Card", BottomSheet = "BottomSheet",
       IconButton = "IconButton", RoomImage = "RoomImage", PrimaryButton = "PrimaryButton",
       SecondaryButton = "SecondaryButton", SectionHeading = "SectionHeading", VerseList = "VerseList";
-    export function FullScreenModal(props) {
-      return <ModalHost {...props}>{props.visible ? props.children : null}</ModalHost>;
-    }
-    const ModalHost = "FullScreenModal";
   `,
   "@/ui/brand-wave-motif": 'export const BrandWaveMotif = "BrandWaveMotif";',
   "@/ui/link-preview": 'export const LinkPreview = "LinkPreview";',
@@ -104,7 +104,6 @@ try {
   const prompt = () => buttons().find((button) => /Take a moment to reflect|You reflected today/.test(button.props.accessibilityLabel ?? ""));
   const previews = () => buttons().filter((button) => button.props.accessibilityHint === "Opens the complete journal entry.");
   const composer = () => tree.root.findByType("SharedComposer").props;
-  const history = () => tree.root.findByType("FullScreenModal").props;
   const seeAll = () => buttons().find((button) => button.props.accessibilityHint === "Opens your journal history.");
 
   harness.state = baseState;
@@ -135,22 +134,7 @@ try {
   assert.equal(composer().visible, false);
 
   await press(seeAll());
-  assert.equal(history().visible, true);
-  assert.equal(previews().length, 8, "See all renders three previews plus all five owned history entries");
-  await press(previews().at(-1));
-  assert.equal(history().visible, false);
-  assert.equal(harness.pushes.at(-1).params.id, "today-reflection", "Wait for native history dismissal before pushing");
-  await press(seeAll());
-  assert.equal(history().visible, false, "Do not reopen history while its next action is pending");
-  await act(() => history().onDismiss());
-  assert.equal(harness.pushes.at(-1).params.id, "yesterday");
-  await press(seeAll());
-  await press(buttons().find((node) => node.findAllByType("Text").some((text) => text.props.children === "New entry")));
-  assert.equal(composer().visible, false);
-  await act(() => history().onDismiss());
-  assert.equal(composer().visible, true);
-  assert.equal(composer().entryVisibility, "private");
-  await act(() => composer().onClose());
+  assert.equal(harness.pushes.at(-1), "/me/history", "See all opens the journal history route");
 
   await act(() => mock.timers.tick(1_000));
   assert.match(prompt().props.accessibilityLabel, /^Take a moment/, "Reset at local midnight even though UTC is still November 5");

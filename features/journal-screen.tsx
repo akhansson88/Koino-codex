@@ -1,13 +1,12 @@
 import { displayBibleReference } from "@/features/bible-book-names";
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
-import { JournalHistoryModal } from "@/features/journal-history-modal";
 import { MeBiblePlans } from "@/features/me-bible-plans";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { AppState, Platform, Pressable, Text, View } from "react-native";
+import { AppState, Pressable, Text, View } from "react-native";
 
 import { isCheckInJournalEntry } from "@/state/check-ins";
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
@@ -65,7 +64,8 @@ function useLocalJournalDay() {
 
 export function JournalScreen() {
   const bookLanguage = useBibleBookLanguage();
-  const state = useKoinoFields(["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalEntriesHasMore", "journalEntriesLoadingMore"]);
+  // Palette tokens mutate in place, so theme-only store updates must render Me.
+  const state = useKoinoFields(["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "theme"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();
@@ -77,8 +77,6 @@ export function JournalScreen() {
   const [body, setBody] = useState("");
   const [verses, setVerses] = useState<BibleVerse[]>([]);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | undefined>();
-  const [historyVisible, setHistoryVisible] = useState(false);
-  const afterHistoryClose = useRef<() => void>(undefined);
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
   const editingCheckIn = Boolean(editingEntry && isCheckInJournalEntry(editingEntry));
@@ -93,18 +91,6 @@ export function JournalScreen() {
 
   function openEntry(entry: JournalEntry) {
     router.push({ pathname: "/me/[id]", params: { id: entry.id } });
-  }
-
-  function closeHistoryThen(action: () => void) {
-    if (afterHistoryClose.current) return;
-    afterHistoryClose.current = action;
-    setHistoryVisible(false);
-  }
-
-  function finishHistoryClose() {
-    const action = afterHistoryClose.current;
-    afterHistoryClose.current = undefined;
-    action?.();
   }
 
   function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
@@ -173,13 +159,6 @@ export function JournalScreen() {
     beginEntry("reflection", visibility.private);
   }, [params.newEntry]);
 
-  useEffect(() => {
-    if (historyVisible || Platform.OS === "ios" || !afterHistoryClose.current) return;
-    // Native Modal onDismiss is iOS-only. Keep the existing slide-out delay elsewhere.
-    const timer = setTimeout(finishHistoryClose, 220);
-    return () => clearTimeout(timer);
-  }, [historyVisible]);
-
   return (
     <AppScreen topInset={false}>
       <View style={{ gap: 6 }}>
@@ -201,9 +180,7 @@ export function JournalScreen() {
             accessibilityHint={t("me.journey.seeAllHint")}
             accessibilityLabel={t("me.journey.seeAll")}
             accessibilityRole="button"
-            onPress={() => {
-              if (!afterHistoryClose.current) setHistoryVisible(true);
-            }}
+            onPress={() => router.navigate("/me/history")}
             style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, minHeight: 44, opacity: pressed ? 0.7 : 1, paddingHorizontal: 4 })}
           >
             <Text style={[typography.label, { color: colors.olive, flexShrink: 1 }]}>{t("me.journey.seeAll")}</Text>
@@ -254,17 +231,6 @@ export function JournalScreen() {
         roomImage={group?.image}
       />
 
-      <JournalHistoryModal
-        entries={entries}
-        hasMore={state.journalEntriesHasMore}
-        loadingMore={state.journalEntriesLoadingMore}
-        onClose={() => setHistoryVisible(false)}
-        onDismiss={finishHistoryClose}
-        onOpen={(entry) => closeHistoryThen(() => openEntry(entry))}
-        onWriteEntry={() => closeHistoryThen(() => beginEntry("reflection", visibility.private))}
-        onLoadMore={() => dispatch({ type: "loadOlderJournalEntries" })}
-        visible={historyVisible}
-      />
     </AppScreen>
   );
 }
