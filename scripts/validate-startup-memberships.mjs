@@ -93,7 +93,7 @@ try {
     plugins: [{ name: "native-test-boundaries", setup(builder) {
       builder.onResolve({ filter: /.*/ }, ({ path: name }) => {
         if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
-        if (["@/state/selective-store", "@/state/store/bible-highlights"].includes(name)) return;
+        if (["@/state/check-ins", "@/state/selective-store", "@/state/store/bible-highlights"].includes(name)) return;
         if (name in mocks || imports.has(name)) return { path: name, namespace: "mock" };
         if (name === "@/features/bible-audio/engine") return { path: name, namespace: "mock" };
       });
@@ -197,8 +197,25 @@ try {
   await emit(oldClaimPath, oldClaims);
   assert.equal(harness.current.state.checkInDailyClaims[0].checkInId, "alex-removed");
   const lateOldClaim = harness.listeners.get(oldClaimPath).listener;
+  const oldDispatch = harness.current.dispatch;
+  const assertScopedMutationsRejected = async (dispatch, expectedScope) => {
+    const writesBefore = harness.writes.length;
+    await assert.rejects(dispatch({
+      type: "submitCheckIn", expectedScope, mood: 3, readToday: true,
+      reflectionText: "A stale private draft", visibility: "private",
+    }), { code: "unavailable" });
+    await assert.rejects(dispatch({
+      type: "finishPrayer", expectedScope, targetType: "user", targetId: "member",
+      recipientUserId: "member", status: "completed", startedAt: "2026-11-06T12:00:00Z", throwOnError: true,
+    }), Error);
+    assert.equal(harness.writes.length, writesBefore, "A stale scope cannot attempt any database writes");
+  };
+  const oldScope = { userId: "alex", groupId: "old-community" };
   const accountSwitchStart = harness.commits.length;
-  await act(async () => { harness.replaceUser("joel"); });
+  await act(async () => {
+    harness.replaceUser("joel");
+    await assertScopedMutationsRejected(oldDispatch, oldScope);
+  });
   await act(async () => { lateOldClaim({ val: () => oldClaims }); });
   await emit("profiles/joel", { ...profile, id: "joel", name: "Joel" });
   await emit("userGroups/joel", { "old-community": joel });
@@ -210,7 +227,11 @@ try {
   const joelCommits = harness.commits.slice(accountSwitchStart).filter(state => state.currentUserId === "joel");
   assert.ok(joelCommits.length > 0 && joelCommits.some(state => state.currentGroupId === "old-community"));
   assert.ok(joelCommits.every(state => state.checkInDailyClaims.length === 0), "No committed state exposes the previous account's claim, even in the same group");
-  console.log("Startup memberships passed: prioritized Home subscriptions, deferred history, decryption failure, delayed legacy identity, pending write protection, encrypted admission, authoritative departure, and same-group account isolation.");
+  await act(async () => {
+    await assertScopedMutationsRejected(oldDispatch, oldScope);
+    await assertScopedMutationsRejected(harness.current.dispatch, { userId: "joel", groupId: "another-community" });
+  });
+  console.log("Startup memberships passed: prioritized Home subscriptions, deferred history, decryption failure, delayed legacy identity, pending write protection, encrypted admission, authoritative departure, same-group account isolation, and stale mutation rejection.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   delete globalThis.__membershipStartup;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 
@@ -223,7 +223,13 @@ function PrayerCompletionStep({
 export function HomePrayerFlowScreen() {
   const params = useLocalSearchParams<{ groupId?: string | string[] }>();
   const groupId = routeParam(params.groupId)?.trim();
-  const { state, dispatch } = useKoino();
+  const session = useKoino();
+  const scope = JSON.stringify([session.state.currentUserId, session.state.currentGroupId, groupId]);
+  return <HomePrayerFlowSession key={scope} groupId={groupId} session={session} />;
+}
+
+function HomePrayerFlowSession({ groupId, session }: { groupId?: Id; session: ReturnType<typeof useKoino> }) {
+  const { state, dispatch } = session;
   const { t } = useAppTranslation();
   const [queueSession, setQueueSession] = useState<PrayerQueueSession>();
   const [cursor, setCursor] = useState(0);
@@ -234,6 +240,11 @@ export function HomePrayerFlowScreen() {
   const [messageComposerVisible, setMessageComposerVisible] = useState(false);
   const [encouragementDraft, setEncouragementDraft] = useState("");
   const [messageSentRequestId, setMessageSentRequestId] = useState<Id>();
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const routeIsValid = Boolean(groupId);
   const routeUsesCurrentGroup = Boolean(groupId && groupId === state.currentGroupId);
@@ -331,8 +342,9 @@ export function HomePrayerFlowScreen() {
   }
 
   async function persistCompletedPrayer(target: PrayerMomentTarget, status: "completed" | "skipped", startedAt: string) {
+    if (!mounted.current) return;
     setPrayerTarget(undefined);
-    if (status !== "completed") return;
+    if (status !== "completed" || !state.currentUserId || !groupId) return;
 
     if (!validRequestIds.has(target.targetId)) {
       if (activeQueueSession) {
@@ -358,6 +370,7 @@ export function HomePrayerFlowScreen() {
         startedAt,
         recipientUserId: target.recipientUserId,
         throwOnError: true,
+        expectedScope: { userId: state.currentUserId, groupId },
       });
       setCompletedRequestId(target.targetId);
       setMessageSentRequestId(undefined);
@@ -453,7 +466,7 @@ export function HomePrayerFlowScreen() {
           onChangeText={setEncouragementDraft}
           onDismiss={() => setMessageComposerVisible(false)}
           onSend={async (body, replyId) => {
-            if (messageSentRequestId === activeRequest.id) return;
+            if (!mounted.current || messageSentRequestId === activeRequest.id) return;
             await dispatch({
               type: "createReply",
               targetType: "post",

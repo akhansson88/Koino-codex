@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, AppState, Pressable, Text, View } from "react-native";
@@ -118,6 +118,11 @@ function HomeRhythm({ state, group, activeGroupId }: {
     const memberIds = new Set(state.memberships.filter((member) => member.groupId === activeGroupId).map((member) => member.userId));
     return state.users.filter((member) => member.id !== state.currentUserId && memberIds.has(member.id));
   }, [activeGroupId, state.currentUserId, state.memberships, state.users]);
+  const liveActions = useRef<{ groupPrayer: boolean; submitCheckIn: boolean; members: typeof directPrayerMembers } | undefined>(undefined);
+  useLayoutEffect(() => {
+    liveActions.current = { groupPrayer: canOpenGroupPrayer, submitCheckIn: checkInStatusReady && !feedOffline, members: directPrayerMembers };
+    return () => { liveActions.current = undefined; };
+  }, [canOpenGroupPrayer, checkInStatusReady, directPrayerMembers, feedOffline]);
   useEffect(() => {
     if (state.currentUserId && state.profileReady && state.userGroupsReady) {
       markStartupMilestone("homeContentReady", "profile-and-membership-rendered");
@@ -210,7 +215,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
   }
 
   function openPrayerSurface() {
-    if (!canOpenGroupPrayer || !activeGroupId) return;
+    if (!liveActions.current?.groupPrayer || !activeGroupId) return;
     if (openPrayer) {
       router.push({
         pathname: "/home/[groupId]/prayer",
@@ -222,7 +227,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
   }
 
   function openCommunityItem(item: FeedItem) {
-    if (!visibleGroupId || item.groupId !== visibleGroupId) return;
+    if (!liveActions.current?.groupPrayer || item.groupId !== visibleGroupId) return;
     if (item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request") {
       router.push({
         pathname: "/community/[groupId]/prayers/[prayerRequestId]",
@@ -234,6 +239,8 @@ function HomeRhythm({ state, group, activeGroupId }: {
   }
 
   async function finishDirectPrayer(status: "completed" | "skipped", startedAt: string) {
+    const actions = liveActions.current;
+    if (!actions?.groupPrayer || !state.currentUserId || !activeGroupId) return;
     const target = prayerTarget;
     setPrayerTarget(undefined);
     if (!target || directPrayerPersistencePendingRef.current) return;
@@ -245,9 +252,8 @@ function HomeRhythm({ state, group, activeGroupId }: {
     const resultPerson = { recipientImage: target.recipientImage, recipientName };
     const recipientIsAvailable =
       Boolean(target.recipientUserId) &&
-      directPrayerMembers.some((member) => member.id === target.recipientUserId);
+      actions.members.some((member) => member.id === target.recipientUserId);
     if (
-      !canOpenGroupPrayer ||
       target.targetType !== "user" ||
       !target.targetId.trim() ||
       !target.recipientUserId?.trim() ||
@@ -272,6 +278,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
         startedAt,
         recipientUserId: target.recipientUserId,
         throwOnError: true,
+        expectedScope: { userId: state.currentUserId, groupId: activeGroupId },
       });
       setDirectPrayerResult(status === "completed" ? { ...resultPerson, status: "completed" } : undefined);
     } catch {
@@ -380,9 +387,12 @@ function HomeRhythm({ state, group, activeGroupId }: {
         onShare={setShareCheckIn}
         onBack={() => setCheckInStep("choose")}
         onSubmit={async () => {
-          if (!checkInStatusReady || feedOffline) throw new CheckInSubmissionError("unavailable");
+          if (!liveActions.current?.submitCheckIn || !state.currentUserId || !activeGroupId) {
+            throw new CheckInSubmissionError("unavailable");
+          }
           await dispatch({
             type: "submitCheckIn",
+            expectedScope: { userId: state.currentUserId, groupId: activeGroupId },
             mood: moodNumber(heartMood),
             heartMood,
             readToday: true,

@@ -375,6 +375,7 @@ try {
       export { translateMessage } from "./ui/localization";
       export { applyTheme, themes } from "./ui/theme";
       export { PrayerRequestCard } from "./features/community/prayer-screens";
+      export { HomePrayerFlowScreen } from "./features/home-prayer-flow-screen";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
@@ -856,31 +857,50 @@ try {
   await updateHome({ ...homeFixture, posts: homeFixture.posts.filter(post => post.id !== "unprayed") });
   assert.match(homePrayerAction().props.accessibilityLabel, /already prayed for/);
   assert.doesNotMatch(homePrayerAction().props.accessibilityLabel, /Please pray for tomorrow/);
-  await updateHome({ ...homeFixture, posts: homeFixture.posts.filter(post => post.kind !== "prayer_request" || post.answeredAt) });
-  await act(() => homePrayerAction().props.onPress());
-  const pickSarah = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.actions.prayForPerson:Sarah");
-  assert.ok(pickSarah, "With no open request, Home offers the current group's member picker");
-  await act(() => pickSarah.props.onPress());
-  assert.equal(moment().props.target?.recipientUserId, "sarah");
-  await act(() => moment().props.onClose());
+  const noOpenPrayer = { ...homeFixture, posts: homeFixture.posts.filter(post => post.kind !== "prayer_request" || post.answeredAt) };
+  async function captureDirectPrayerFinish() {
+    await updateHome(noOpenPrayer);
+    await act(() => homePrayerAction().props.onPress());
+    const pickSarah = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.actions.prayForPerson:Sarah");
+    assert.ok(pickSarah, "With no open request, Home offers the current group's member picker");
+    await act(() => pickSarah.props.onPress());
+    assert.equal(moment().props.target?.recipientUserId, "sarah");
+    const onFinish = moment().props.onFinish;
+    await act(() => moment().props.onClose());
+    return onFinish;
+  }
 
+  const finishPreviousGroupPrayer = await captureDirectPrayerFinish();
   await act(() => homeCheckInAction().props.onPress());
   await act(() => homeModal().props.onNote("A draft from the previous group"));
   await act(() => homeModal().props.onShare(true));
+  const submitPreviousGroupCheckIn = homeModal().props.onSubmit;
   await updateHome({ ...homeFixture, currentGroupId: "other-room", groups: [{ id: "other-room", name: "Other community" }] });
   assert.notEqual(homeModal()?.props.visible, true, "Switching groups closes an old check-in draft immediately");
   assert.ok(!homeCheckInAction(), "A different group's ready feed cannot enable a check-in");
   assert.doesNotMatch(renderedTree(), /previous group|Please pray for tomorrow|confidential request/);
+  await act(async () => {
+    finishPreviousGroupPrayer("completed", now);
+    await assert.rejects(submitPreviousGroupCheckIn, { code: "unavailable" });
+  });
+  assert.deepEqual(harness.actions, [], "Delayed prayer and Check-in callbacks cannot write after a group switch");
 
   await updateHome(homeFixture);
+  const finishPreviousAccountPrayer = await captureDirectPrayerFinish();
   await act(() => homeCheckInAction().props.onPress());
   assert.equal(homeModal().props.note, "");
   assert.equal(homeModal().props.share, false, "Returning to a group requires fresh sharing consent");
+  const submitPreviousAccountCheckIn = homeModal().props.onSubmit;
   const otherAccount = { ...homeFixture, currentUserId: "new-reader", users: [{ id: "new-reader", name: "New reader" }, ...homeFixture.users] };
   await updateHome(otherAccount);
   assert.notEqual(homeModal()?.props.visible, true, "An account switch closes an old check-in draft");
   assert.ok(!homeCheckInAction(), "An old account's cached membership cannot enable a check-in");
   assert.doesNotMatch(renderedTree(), /Please pray for tomorrow|Another member's reflection/);
+  await act(async () => {
+    finishPreviousAccountPrayer("completed", now);
+    await assert.rejects(submitPreviousAccountCheckIn, { code: "unavailable" });
+  });
+  assert.deepEqual(harness.actions, [], "Delayed prayer and Check-in callbacks cannot write after an account switch");
 
   const day = new Date();
   const dayKey = [day.getFullYear(), String(day.getMonth() + 1).padStart(2, "0"), String(day.getDate()).padStart(2, "0")].join("-");
@@ -950,6 +970,26 @@ try {
   harness.os = "android";
   await act(() => tree.unmount());
   console.log("Home rhythm passed: Scripture hierarchy, safe no-group and pending states, current-scope prayer/Community previews, draft isolation, moderated claims, theme and language updates, and scroll clearance.");
+
+  const guidedFixture = { ...homeFixture, posts: homeFixture.posts.filter(post => post.id === "unprayed") };
+  harness.state = guidedFixture;
+  harness.params = { groupId: "room" };
+  let completeGuidedPrayer;
+  harness.dispatch = () => new Promise(resolve => { completeGuidedPrayer = resolve; });
+  await act(() => { tree = create(React.createElement(screens.HomePrayerFlowScreen)); });
+  const guidedPray = () => tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.action.prayer.default");
+  await act(() => guidedPray().props.onPress());
+  assert.equal(moment().props.target?.targetId, "unprayed", "Home's route opens the previewed request");
+  await act(() => moment().props.onFinish("completed", now));
+  assert.deepEqual(harness.actions.at(-1).expectedScope, { userId: "reader", groupId: "room" });
+  harness.state = { ...guidedFixture, currentUserId: "new-reader" };
+  await act(() => tree.update(React.createElement(screens.HomePrayerFlowScreen)));
+  await act(() => completeGuidedPrayer());
+  assert.ok(guidedPray(), "The previous account's result does not complete the same request for the replacement account");
+  assert.doesNotMatch(renderedTree(), /home\.prayerFlow\.completed/);
+  delete harness.dispatch;
+  delete harness.params;
+  await act(() => tree.unmount());
 
   // The real screen state and submission handlers must require a fresh opt-in.
   for (const component of [screens.Home, screens.CheckIns]) {

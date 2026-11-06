@@ -1256,6 +1256,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   const dispatch = useCallback(
     async (action: Action) => {
+      const expectedScope = "expectedScope" in action ? action.expectedScope : undefined;
+      if (expectedScope && (
+        auth.currentUser?.uid !== expectedScope.userId ||
+        communitySubmissionScopeRef.current.userId !== expectedScope.userId ||
+        communitySubmissionScopeRef.current.groupId !== expectedScope.groupId
+      )) {
+        if (action.type === "submitCheckIn") throw new CheckInSubmissionError("unavailable");
+        throw new Error("This prayer session is no longer available.");
+      }
       setAuthError(undefined);
       const generation = sessionGeneration();
       const highlightAction = action.type === "highlightVerses" || action.type === "removeBibleHighlight" || action.type === "removeBibleHighlights";
