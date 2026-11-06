@@ -20,7 +20,8 @@ const baseState = {
   users: [{ id: "reader", name: "Reader" }], groupMemberCounts: { room: 1 },
   profileReady: true, userGroupsReady: true, communityFeedGroupId: "room", communityFeedReady: true, theme: "light",
   privateCheckInsReady: true, checkInDailyClaimsReady: true, checkInDailyClaims: [],
-  memberships: [], checkIns: [], privateCheckIns: [], posts: [],
+  memberships: [{ groupId: "room", userId: "reader", role: "owner", userName: "Reader" }],
+  biblePlans: [], checkIns: [], privateCheckIns: [], posts: [],
   journalEntries: [], prayerReactions: [], postReactions: [], replies: [],
 };
 const populatedState = {
@@ -52,7 +53,7 @@ const mocks = {
   "expo-router": `
     import React from "react";
     const h = globalThis.__communityNavigation;
-    export const router = { navigate: route => { h.route = route.split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace() {}, dismissTo: route => { h.dismissedTo = route; } };
+    export const router = { navigate: route => { h.navigated = route; h.route = (typeof route === "string" ? route : route.pathname).split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace: route => { h.replaced?.push(route); }, dismissTo: route => { h.dismissedTo = route; } };
     export const useNavigation = () => ({ canGoBack: () => true, setOptions() {} });
     export const useLocalSearchParams = () => (h.params ?? {});
     export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
@@ -77,11 +78,14 @@ const mocks = {
       return { language, t: h.localized ? (key, values) => translateMessage(language, key, values) : (key, values) => values?.name ? key + ":" + values.name : key };
     };
   `,
-  "@/ui/theme": `export const colors = {}, typography = {}, radius = {}; export const platformShadow = () => ({});`,
   "react-native-safe-area-context": `export const useSafeAreaInsets = () => ({ top: 24, bottom: 24 });`,
   "@expo/vector-icons": `export const Feather = "Feather", MaterialCommunityIcons = "MaterialCommunityIcons", Ionicons = "Ionicons";`,
   "expo-blur": `export const BlurView = "BlurView";`,
-  "@/features/bible-preferences": `export const usePreferredBibleVersion = () => "kjv";`,
+  "@/features/bible-preferences": `
+    export { hasRecordedBibleReadingPosition, readerStorageKey } from "./features/bible-preferences";
+    export const usePreferredBibleVersion = () => "kjv";
+  `,
+  "@/state/encryption/local-storage": `export default { getItem: async () => null };`,
   "@/ui/bible-verse-picker": `import React from "react"; export const BibleVersePicker = props => React.createElement("BibleVersePicker", props);`,
   "@/features/check-in-modal": `
     import React from "react";
@@ -107,12 +111,12 @@ const communityModules = (await readdir("features/community"))
   .filter(file => /\.tsx?$/.test(file))
   .map(file => `features/community/${file}`);
 const leafUiImports = new Map();
-for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/shared-composer.tsx", "ui/bible-verse-field.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
+for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/home-scripture.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/app-components/layout.tsx", "ui/shared-composer.tsx", "ui/bible-verse-field.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
     const module = statement.moduleSpecifier.text;
-    if (!module.startsWith("@/ui/") || mocks[module] || ["@/ui/community-copy", "@/ui/relative-time", "@/ui/navigation-layout", "@/ui/journal-presentation", "@/ui/post-card"].includes(module)) continue;
+    if (!module.startsWith("@/ui/") || mocks[module] || ["@/ui/community-copy", "@/ui/relative-time", "@/ui/navigation-layout", "@/ui/journal-presentation", "@/ui/post-card", "@/ui/theme"].includes(module)) continue;
     const imports = statement.importClause?.namedBindings;
     if (!imports || !ts.isNamedImports(imports)) continue;
     const names = leafUiImports.get(module) ?? new Set();
@@ -122,6 +126,12 @@ for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", 
 }
 for (const [module, names] of leafUiImports) {
   mocks[module] = [...names].map(name => {
+    if (name === "AppScreen") return `
+      import { AppScreen as RealAppScreen } from "./ui/app-components/layout";
+      export const AppScreen = props => globalThis.__communityNavigation.realAppScreen
+        ? React.createElement(RealAppScreen, props)
+        : React.createElement("AppScreen", props);
+    `;
     if (name === "PrayerMoment") return `export const PrayerMoment = props => React.createElement("PrayerMoment", props);`;
     if (name === "DirectPrayerResultSheet") return `export const ${name} = () => null;`;
     if (name === "LinkPreviewContent") return `export const LinkPreviewContent = ({ children }) => children({});`;
@@ -363,9 +373,12 @@ try {
   await build({
     stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { BibleVerseField as RealBibleVerseField } from "./ui/bible-verse-field"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
       export { translateMessage } from "./ui/localization";
+      export { applyTheme, themes } from "./ui/theme";
       export { PrayerRequestCard } from "./features/community/prayer-screens";
+      export { HomePrayerFlowScreen } from "./features/home-prayer-flow-screen";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
+      export { default as Rooms } from "./app/(tabs)/community/rooms";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
       export { default as CheckIns } from "./app/(tabs)/community/checkins";`, resolveDir: process.cwd(), loader: "tsx" },
     outfile, bundle: true, platform: "node", format: "cjs", jsx: "automatic",
@@ -531,7 +544,7 @@ try {
   const prayerFixture = {
     ...baseState,
     users: [...baseState.users, { id: "sarah", name: "Sarah", image: sarahImage }],
-    memberships: [{ userId: "reader", role: "owner", userName: "Reader" }, { userId: "sarah", role: "member", userName: "Sarah" }],
+    memberships: [...baseState.memberships, { groupId: "room", userId: "sarah", role: "member", userName: "Sarah" }],
     posts: [
       { id: "unprayed", groupId: "room", userId: "sarah", kind: "prayer_request", title: "Tomorrow", body: "Please pray for tomorrow.", createdAt: now },
       { id: "answered", groupId: "room", userId: "sarah", kind: "prayer_request", body: "An answered request.", answeredAt: now, createdAt: now },
@@ -801,6 +814,184 @@ try {
       "Pending community surfaces must withhold group content and its actions");
     await act(() => tree.unmount());
   }
+  const homeCheckInAction = () => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.checkIn.promptTitle");
+  const homePrayerAction = () => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel?.startsWith("home.prayerPreview."));
+  const homeModal = () => tree.root.findAll(node => node.type?.name === "CheckInModal")[0];
+  const updateHome = async state => {
+    harness.state = state;
+    await act(() => tree.update(React.createElement(screens.Home)));
+  };
+  const ownPost = { id: "own-recent", groupId: "room", userId: "reader", kind: "reflection", body: "My newer reflection", createdAt: "2026-08-03T12:00:00Z" };
+  const otherPost = { ...ownPost, id: "other-recent", userId: "sarah", body: "Another member's reflection", createdAt: "2026-08-02T12:00:00Z" };
+  const homeFixture = {
+    ...prayerFixture,
+    posts: [
+      ownPost,
+      otherPost,
+      ...prayerFixture.posts.map(post => ({ ...post, createdAt: "2026-08-01T12:00:00Z" })),
+      { ...otherPost, id: "other-room-request", groupId: "other-room", kind: "prayer_request", body: "Another room's confidential request" },
+    ],
+    checkIns: [{ ...populatedState.checkIns[0], id: "private-item", userId: "sarah", visibility: "private", reflectionText: "Private body cannot surface in the feed" }],
+  };
+  harness.state = homeFixture;
+  harness.actions = [];
+  harness.os = "ios";
+  harness.realAppScreen = true;
+  await act(async () => { tree = create(React.createElement(screens.Home)); });
+  assert.ok(homePrayerAction(), "Home provides a prayer action");
+  assert.match(homePrayerAction().props.accessibilityLabel, /Sarah/, "VoiceOver can identify the person");
+  const prayerText = JSON.stringify(homePrayerAction().findAll(node => node.type === "Text" || node.type === "BodyText").map(node => node.props.children));
+  assert.match(prayerText, /Sarah/);
+  assert.match(prayerText, /Please pray for tomorrow\./, "The preview describes the highest-priority open, unprayed request");
+  assert.doesNotMatch(prayerText, /answered request|already prayed for|confidential request/);
+  assert.ok(renderedTree().includes(otherPost.body) && !renderedTree().includes(ownPost.body), "Home still prefers another member's contribution");
+  assert.doesNotMatch(renderedTree(), /Private body cannot surface|confidential request/);
+  const homeOrder = ["home.greeting.", "home.scripture.title", "home.prayerPreview.", "community.checkIn.promptTitle", "home.communityPreview."];
+  const orderIndexes = homeOrder.map(label => renderedTree().indexOf(label));
+  assert.ok(orderIndexes.every((index, position) => index > (orderIndexes[position - 1] ?? -1)), "Home puts Scripture between the greeting and the quieter actions");
+  await act(() => homePrayerAction().props.onPress());
+  assert.deepEqual(harness.pushed, { pathname: "/home/[groupId]/prayer", params: { groupId: "room" } });
+  const preview = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityHint === "home.communityPreview.openHint");
+  await act(() => preview.props.onPress());
+  assert.equal(harness.pushed, "/feed/post/other-recent");
+
+  await updateHome({ ...homeFixture, posts: homeFixture.posts.filter(post => post.id !== "unprayed") });
+  assert.match(homePrayerAction().props.accessibilityLabel, /already prayed for/);
+  assert.doesNotMatch(homePrayerAction().props.accessibilityLabel, /Please pray for tomorrow/);
+  const noOpenPrayer = { ...homeFixture, posts: homeFixture.posts.filter(post => post.kind !== "prayer_request" || post.answeredAt) };
+  async function captureDirectPrayerFinish() {
+    await updateHome(noOpenPrayer);
+    await act(() => homePrayerAction().props.onPress());
+    const pickSarah = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.actions.prayForPerson:Sarah");
+    assert.ok(pickSarah, "With no open request, Home offers the current group's member picker");
+    await act(() => pickSarah.props.onPress());
+    assert.equal(moment().props.target?.recipientUserId, "sarah");
+    const onFinish = moment().props.onFinish;
+    await act(() => moment().props.onClose());
+    return onFinish;
+  }
+
+  const finishPreviousGroupPrayer = await captureDirectPrayerFinish();
+  await act(() => homeCheckInAction().props.onPress());
+  await act(() => homeModal().props.onNote("A draft from the previous group"));
+  await act(() => homeModal().props.onShare(true));
+  const submitPreviousGroupCheckIn = homeModal().props.onSubmit;
+  await updateHome({ ...homeFixture, currentGroupId: "other-room", groups: [{ id: "other-room", name: "Other community" }] });
+  assert.notEqual(homeModal()?.props.visible, true, "Switching groups closes an old check-in draft immediately");
+  assert.ok(!homeCheckInAction(), "A different group's ready feed cannot enable a check-in");
+  assert.doesNotMatch(renderedTree(), /previous group|Please pray for tomorrow|confidential request/);
+  await act(async () => {
+    finishPreviousGroupPrayer("completed", now);
+    await assert.rejects(submitPreviousGroupCheckIn, { code: "unavailable" });
+  });
+  assert.deepEqual(harness.actions, [], "Delayed prayer and Check-in callbacks cannot write after a group switch");
+
+  await updateHome(homeFixture);
+  const finishPreviousAccountPrayer = await captureDirectPrayerFinish();
+  await act(() => homeCheckInAction().props.onPress());
+  assert.equal(homeModal().props.note, "");
+  assert.equal(homeModal().props.share, false, "Returning to a group requires fresh sharing consent");
+  const submitPreviousAccountCheckIn = homeModal().props.onSubmit;
+  const otherAccount = { ...homeFixture, currentUserId: "new-reader", users: [{ id: "new-reader", name: "New reader" }, ...homeFixture.users] };
+  await updateHome(otherAccount);
+  assert.notEqual(homeModal()?.props.visible, true, "An account switch closes an old check-in draft");
+  assert.ok(!homeCheckInAction(), "An old account's cached membership cannot enable a check-in");
+  assert.doesNotMatch(renderedTree(), /Please pray for tomorrow|Another member's reflection/);
+  await act(async () => {
+    finishPreviousAccountPrayer("completed", now);
+    await assert.rejects(submitPreviousAccountCheckIn, { code: "unavailable" });
+  });
+  assert.deepEqual(harness.actions, [], "Delayed prayer and Check-in callbacks cannot write after an account switch");
+
+  const day = new Date();
+  const dayKey = [day.getFullYear(), String(day.getMonth() + 1).padStart(2, "0"), String(day.getDate()).padStart(2, "0")].join("-");
+  await updateHome({ ...homeFixture, checkInDailyClaimsReady: false });
+  assert.ok(!homeCheckInAction(), "Home waits for today's claim before offering Check-in");
+  await updateHome({ ...homeFixture, checkInDailyClaims: [{ dayKey, moderated: true }] });
+  assert.ok(renderedTree().includes("community.moderation.checkInRemoved"));
+  assert.ok(!homeCheckInAction(), "A moderated claim cannot be retried");
+
+  const solo = { ...homeFixture, currentGroupId: undefined, communityFeedGroupId: undefined, communityFeedReady: false, groups: [], memberships: [] };
+  for (const [state, status] of [
+    [solo, "home.checkIn.solo"],
+    [{ ...homeFixture, userGroupsReady: false, communityFeedReady: false }, "home.communityPreview.loading"],
+    [{ ...homeFixture, groups: [{ ...homeFixture.groups[0], migrationPending: true, migrationAwaitingApproval: true }] }, "community.encryption.approvalTitle"],
+    [{ ...homeFixture, communityFeedOffline: true, communityFeedReady: false }, "home.communityPreview.offline"],
+    [{ ...homeFixture, communityFeedError: "Community activity could not be fully loaded." }, "community.feed.loadError"],
+  ]) {
+    await updateHome(state);
+    assert.ok(!homeCheckInAction(), "Only a verified, ready community can start a Heart Check-in");
+    assert.doesNotMatch(renderedTree(), /Please pray for tomorrow|confidential request|Private body cannot surface/);
+    assert.ok(renderedTree().includes(status), `Home distinguishes ${status} from empty Community content`);
+    assert.ok(renderedTree().includes("home.scripture.open"), "Scripture is available while Community is unavailable");
+  }
+  await updateHome(solo);
+  const openHomeAction = async label => {
+    harness.navigated = harness.pushed = undefined;
+    const action = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel?.startsWith(label));
+    assert.equal(action?.props.accessibilityRole, "button");
+    const style = action.props.style({ pressed: false });
+    assert.ok(style.minHeight >= 44 && style.height === undefined, "The row has an accessible touch target and can expand with text");
+    await act(() => action.props.onPress());
+    return harness.navigated ?? harness.pushed;
+  };
+  const reflectionRoute = await openHomeAction("home.privateReflection.title");
+  assert.equal(reflectionRoute?.pathname, "/(tabs)/me");
+  assert.ok(reflectionRoute?.params?.newEntry, "Solo prayer opens the existing private reflection composer");
+  assert.equal(await openHomeAction("home.communityDiscovery.title"), "/(tabs)/community/rooms");
+  assert.deepEqual(harness.actions, [], "The solo actions never submit a check-in or mutate Community");
+
+  const scroll = () => tree.root.findByType("ScrollView");
+  const nativeScroll = scroll();
+  assert.equal(nativeScroll.props.keyboardShouldPersistTaps, "handled");
+  assert.ok(nativeScroll.props.contentContainerStyle.paddingBottom >= 80, "Home scroll content clears the bottom navigation and safe area");
+  const greeting = () => tree.root.findAllByType("Text").find(node => node.props.accessibilityRole === "header");
+  const scriptureCard = () => tree.root.findAllByType("Card").find(node => node.findAllByType("PrimaryButton").length === 1);
+  assert.equal(entryStyle(greeting()).color, screens.themes.light.ink);
+  assert.equal(entryStyle(scriptureCard()).backgroundColor, screens.themes.light.elevated);
+  screens.applyTheme("dark");
+  await updateHome({ ...solo, theme: "dark" });
+  assert.equal(entryStyle(greeting()).color, screens.themes.dark.ink);
+  assert.equal(entryStyle(scriptureCard()).backgroundColor, screens.themes.dark.elevated);
+  assert.equal(scroll(), nativeScroll, "Theme updates preserve the scroll host");
+  screens.applyTheme("light");
+  harness.localized = true;
+  for (const language of ["en", "sv"]) {
+    harness.language = language;
+    await updateHome({ ...solo, theme: "light" });
+    const text = renderedTree();
+    for (const key of ["home.scripture.open", "home.privateReflection.title", "home.checkIn.solo", "home.communityDiscovery.title"]) {
+      const copy = screens.translateMessage(language, key);
+      assert.ok(typeof copy === "string" && copy.length && text.includes(copy), `Home renders ${key} in ${language}`);
+    }
+  }
+  delete harness.localized;
+  delete harness.language;
+  delete harness.realAppScreen;
+  harness.os = "android";
+  await act(() => tree.unmount());
+  console.log("Home rhythm passed: Scripture hierarchy, safe no-group and pending states, current-scope prayer/Community previews, draft isolation, moderated claims, theme and language updates, and scroll clearance.");
+
+  const guidedFixture = { ...homeFixture, posts: homeFixture.posts.filter(post => post.id === "unprayed") };
+  harness.state = guidedFixture;
+  harness.params = { groupId: "room" };
+  let completeGuidedPrayer;
+  harness.dispatch = () => new Promise(resolve => { completeGuidedPrayer = resolve; });
+  await act(() => { tree = create(React.createElement(screens.HomePrayerFlowScreen)); });
+  const guidedPray = () => tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.action.prayer.default");
+  await act(() => guidedPray().props.onPress());
+  assert.equal(moment().props.target?.targetId, "unprayed", "Home's route opens the previewed request");
+  await act(() => moment().props.onFinish("completed", now));
+  assert.deepEqual(harness.actions.at(-1).expectedScope, { userId: "reader", groupId: "room" });
+  harness.state = { ...guidedFixture, currentUserId: "new-reader" };
+  await act(() => tree.update(React.createElement(screens.HomePrayerFlowScreen)));
+  await act(() => completeGuidedPrayer());
+  assert.ok(guidedPray(), "The previous account's result does not complete the same request for the replacement account");
+  assert.doesNotMatch(renderedTree(), /home\.prayerFlow\.completed/);
+  delete harness.dispatch;
+  delete harness.params;
+  await act(() => tree.unmount());
+
   // The real screen state and submission handlers must require a fresh opt-in.
   for (const component of [screens.Home, screens.CheckIns]) {
     harness.state = baseState;
@@ -809,7 +1000,7 @@ try {
     const modal = () => tree.root.find(node => node.type?.name === "CheckInModal");
     const open = async () => {
       if (component === screens.Home) {
-        await act(() => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.checkIn.promptTitle").props.onPress());
+        await act(() => homeCheckInAction().props.onPress());
       } else {
         await act(() => tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.checkIns.action").props.onPress());
       }
@@ -848,14 +1039,14 @@ try {
     const rendered = JSON.stringify(tree.toJSON());
     assert.ok(rendered.includes("home.checkIn.completed"));
     assert.ok(rendered.includes(visibility === "private" ? "home.checkIn.private" : "community.checkIn.sharedWithCommunity:Test community"));
-    assert.ok(!tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.checkIn.promptTitle"), "Completed state must not offer another check-in");
+    assert.ok(!homeCheckInAction(), "Completed state must not offer another check-in");
     await act(() => tree.root.findAllByType("Pressable").find(node => node.findAllByType("Text").some(text => text.props.children === "home.checkIn.view")).props.onPress());
     assert.deepEqual(harness.pushed, { pathname: "/me/[id]", params: { id: checkIn.id } });
     // Simulate the store update after deletion from Me, without remounting Home.
     harness.state = baseState;
     await act(() => tree.update(React.createElement(screens.Home)));
     assert.ok(!JSON.stringify(tree.toJSON()).includes("home.checkIn.completed"));
-    assert.ok(tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "community.checkIn.promptTitle"));
+    assert.ok(homeCheckInAction());
     await act(() => tree.unmount());
 
     harness.state = { ...baseState, [visibility === "private" ? "privateCheckIns" : "checkIns"]: [checkIn], journalEntries: visibility === "private" ? [journal] : [] };
@@ -906,8 +1097,114 @@ try {
     if (entryVisibility === "room") assert.ok(JSON.stringify(tree.toJSON()).includes("community.composer.sharedWithCommunity"));
     await act(() => tree.unmount());
   }
-  // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
   const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+  const roomsState = { ...baseState, currentGroupId: undefined, groups: [], memberships: [] };
+  const nextRoomsState = { ...roomsState, currentUserId: "second-reader", users: [{ id: "second-reader", name: "Second Reader" }] };
+  const roomsCopy = key => screens.translateMessage(harness.language, key);
+  const roomsButton = (type, key) => tree.root.findAllByType(type).find(node => node.props.children === roomsCopy(key));
+  const roomsSheet = () => tree.root.findAllByType("BottomSheet").find(node => node.props.title === roomsCopy("community.rooms.joinOrCreate"));
+  const roomsField = key => roomsSheet().findAllByType("TextInputField").find(node => node.props.placeholder === roomsCopy(key));
+  const logoutAlert = () => tree.root.findAll(node => node.props.accessibilityRole === "alert" && node.props.children === roomsCopy("identity.account.logoutError"))[0];
+  const updateRooms = async (state) => {
+    harness.state = state;
+    await act(() => tree.update(React.createElement(screens.Rooms)));
+  };
+  try {
+    for (const language of ["en", "sv"]) {
+      harness.language = language;
+      harness.localized = true;
+      harness.route = "rooms";
+      harness.state = roomsState;
+      harness.actions = [];
+      harness.replaced = [];
+      const first = deferred();
+      harness.dispatch = action => action.type === "signOut" ? first.promise : undefined;
+      await act(() => { tree = create(React.createElement(screens.Rooms)); });
+      let attempt;
+      await act(() => {
+        attempt = roomsButton("SecondaryButton", "common.logOut").props.onPress();
+        void Promise.resolve(attempt).catch(() => undefined);
+      });
+      await act(async () => {
+        first.reject(new Error("Simulated sign-out persistence failure"));
+        await assert.doesNotReject(async () => attempt, "Community Rooms must handle the rejected logout promise");
+      });
+      assert.deepEqual(harness.actions, [{ type: "signOut", expectedUserId: "reader" }]);
+      assert.equal(logoutAlert()?.props.accessibilityLiveRegion, "assertive", `${language} failure copy is presented as an accessible alert`);
+      assert.equal(roomsSheet(), undefined, "Failure is visible on Rooms without opening Join/Create");
+      assert.equal(harness.state.currentUserId, "reader");
+      assert.deepEqual(harness.replaced, [], "Failure must leave navigation in the current session");
+
+      const retry = deferred();
+      harness.dispatch = action => action.type === "signOut" ? retry.promise : undefined;
+      const retryButton = roomsButton("SecondaryButton", "identity.account.retryLogout");
+      assert.ok(retryButton, "A failed logout offers a labeled retry action");
+      assert.equal(Boolean(retryButton.props.disabled), false, "A failed logout offers an enabled retry");
+      await act(() => { attempt = retryButton.props.onPress(); void retryButton.props.onPress(); });
+      assert.equal(roomsButton("SecondaryButton", "identity.account.loggingOut")?.props.disabled, true, "The pending action is disabled");
+      assert.equal(harness.actions.length, 2, "Repeated presses dispatch only one retry");
+      assert.equal(logoutAlert(), undefined, "Retry clears the prior logout error");
+      await act(async () => { retry.resolve(); await attempt; });
+      assert.deepEqual(harness.actions.at(-1), { type: "signOut", expectedUserId: "reader" });
+      assert.deepEqual(harness.replaced, [], "Success lets the auth boundary own the navigation reset");
+
+      // A previously queued page press cannot dismiss the native Join/Create sheet.
+      const queued = deferred();
+      harness.dispatch = action => action.type === "signOut" ? queued.promise : undefined;
+      const queuedPress = roomsButton("SecondaryButton", "common.logOut").props.onPress;
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      await act(() => {
+        roomsField("community.rooms.code").props.onChangeText("room123");
+        roomsField("community.rooms.newNamePlaceholder").props.onChangeText("Unsaved community");
+        attempt = queuedPress();
+      });
+      assert.ok(roomsSheet(), "A pending logout leaves the existing Join/Create sheet open");
+      await act(async () => { queued.reject(new Error("Queued sign-out failed")); await attempt; });
+      assert.ok(roomsSheet(), "Failed logout retains the existing Join/Create sheet");
+      assert.equal(roomsField("community.rooms.code").props.value, "ROOM123", "Failed logout retains the invite code draft");
+      assert.equal(roomsField("community.rooms.newNamePlaceholder").props.value, "Unsaved community", "Failed logout retains the new community draft");
+      await act(() => roomsSheet().props.onClose());
+      assert.equal(roomsSheet(), undefined, "Join/Create still closes independently of logout");
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      assert.equal(roomsField("community.rooms.code").props.value, "ROOM123", "Ordinary sheet close and reopen still preserves the invite code");
+      await act(async () => { await roomsButton("PrimaryButton", "community.rooms.joinByCode").props.onPress(); });
+      assert.deepEqual(harness.actions.at(-1), { type: "joinGroup", inviteCode: "ROOM123" });
+      assert.equal(roomsSheet(), undefined, "Successful join still closes Join/Create");
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      assert.equal(roomsField("community.rooms.code").props.value, "", "Successful join still resets the invite code");
+      await act(async () => { await roomsButton("PrimaryButton", "community.rooms.createAction").props.onPress(); });
+      assert.deepEqual(harness.actions.at(-1), { type: "createGroup", name: "Unsaved community" });
+      assert.equal(roomsSheet(), undefined, "Successful create still closes Join/Create");
+
+      const stale = deferred();
+      harness.dispatch = action => action.type === "signOut" ? stale.promise : undefined;
+      const stalePress = roomsButton("SecondaryButton", "identity.account.retryLogout").props.onPress;
+      await act(() => { attempt = stalePress(); });
+      await updateRooms(nextRoomsState);
+      await act(async () => { stale.reject(new Error("Old account logout failed")); await attempt; });
+      assert.equal(logoutAlert(), undefined, "Old logout completion cannot show an error to the new account");
+      const replacementLogout = roomsButton("SecondaryButton", "common.logOut");
+      assert.ok(replacementLogout, "The replacement account has a fresh logout action");
+      assert.equal(Boolean(replacementLogout.props.disabled), false, "Old pending state cannot disable logout for the replacement account");
+      const countBeforeStalePress = harness.actions.length;
+      await act(async () => { await stalePress(); });
+      assert.equal(harness.actions.length, countBeforeStalePress, "A captured logout press cannot act in the replacement account");
+      await updateRooms(roomsState);
+      await act(async () => { await stalePress(); });
+      assert.equal(harness.actions.length, countBeforeStalePress, "Returning to the same UID does not revive its old logout callback");
+      assert.deepEqual(harness.replaced, [], "An old completion cannot navigate the replacement account");
+      await act(() => tree.unmount());
+      tree = undefined;
+    }
+  } finally {
+    delete harness.localized;
+    delete harness.language;
+    delete harness.dispatch;
+    delete harness.replaced;
+    harness.route = "index";
+  }
+  console.log("Community Rooms logout passed: scoped dispatch, accessible EN/SV failure and retry, pending duplicate guard, auth-owned navigation, account replacement, and Join/Create lifecycle.");
+  // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
   const modalDefaults = { visible: true, step: "details", mood: "peaceful", note: "", verses: [], roomName: "Test community", share: false, onBack() {}, onClose() {}, onDone() {}, onMood() {}, onNote() {}, onShare() {}, onVerses() {} };
   let modalProps;
   const updateModal = async changes => { modalProps = { ...modalProps, ...changes }; await act(() => tree.update(React.createElement(screens.RealCheckInModal, modalProps))); };
@@ -1013,7 +1310,7 @@ try {
       await act(async () => { tree = create(React.createElement(component)); });
       const actualModal = () => tree.root.findByType(screens.RealCheckInModal);
       const openActual = () => component === screens.Home
-        ? tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.checkIn.promptTitle").props.onPress()
+        ? homeCheckInAction().props.onPress()
         : tree.root.findAllByType("PrimaryButton").find(node => node.props.children === "community.checkIns.action").props.onPress();
       await act(openActual);
       assert.equal(actualModal().props.share, false);

@@ -22,11 +22,15 @@ const javascript = ts.transpile(submission, { target: ts.ScriptTarget.ES2022 });
 for (const visibility of ["private", "group"]) {
   const writes = [], claims = [], records = { shared: [], private: [], journal: [] };
   const context = {
+    CheckInSubmissionError: class extends Error {
+      constructor(code) { super(code); this.code = code; }
+    },
     action: { visibility, reflectionText: "  A reflection  ", mood: 4, heartMood: "hopeful", readToday: true },
     firebaseUser: { uid: "reader" }, profile: { currentGroupId: "room" },
     now: () => "2026-10-21T12:00:00Z", localDayKey: () => "2026-10-21",
     pendingCheckInKeys: new Set(), checkIns: [], privateCheckIns: [],
-    checkInExistsForDay: () => false, actionVerses: () => [{ reference: "John 3:16" }],
+    checkInExistsForDay: () => records.shared.length + records.private.length > 0,
+    actionVerses: () => [{ reference: "John 3:16" }],
     id: prefix => prefix + "-test", database: {}, ref: (_db, path) => path,
     claimCheckInDay: async (...args) => claims.push(args),
     commitCheckInClaim: async () => {}, releaseCheckInClaim: async () => {},
@@ -39,8 +43,16 @@ for (const visibility of ["private", "group"]) {
     mergeFirebaseRecords: (a, b) => [...a, ...b],
   };
   const run = new (Object.getPrototypeOf(async function() {}).constructor)(...Object.keys(context), javascript);
-  await run(...Object.values(context));
+  const submit = () => run(...Object.values(context));
+  const first = submit();
+  await assert.rejects(submit(), { code: "in_progress" });
+  await first;
+  await assert.rejects(submit(), { code: "already_submitted" });
+  context.profile = {};
+  await assert.rejects(submit(), { code: "unavailable" });
   assert.equal(writes.length, 1);
+  assert.equal(claims.length, 1);
+  assert.deepEqual(claims[0].slice(0, 3), ["reader", "room", "2026-10-21"]);
   assert.equal(claims[0][3].visibility, visibility);
   assert.equal(context.pendingCheckInKeys.size, 0);
   if (visibility === "private") {
@@ -59,7 +71,7 @@ for (const visibility of ["private", "group"]) {
     assert.equal(records.journal.length, 0);
   }
 }
-console.log("Check-in persistence passed: private atomic journal/check-in write and explicit group write.");
+console.log("Check-in persistence passed: private atomic journal/check-in write, explicit group write, scoped daily claim, duplicate protection and no-group rejection.");
 
 async function runCase(name, context) {
   const javascript = ts.transpile(cases.get(name), { target: ts.ScriptTarget.ES2022 });

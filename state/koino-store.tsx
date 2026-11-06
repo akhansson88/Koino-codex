@@ -97,7 +97,7 @@ import {
   profileAndMembershipImageUpdates,
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
-import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup, sessionGeneration } from "@/state/encryption/session";
+import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration } from "@/state/encryption/session";
 import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
@@ -391,6 +391,8 @@ export function useKoinoFields<const Keys extends readonly (keyof KoinoState)[]>
 export function KoinoProvider({ children }: PropsWithChildren) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [signOutIncomplete, setSignOutIncomplete] = useState(false);
+  const signOutPending = useRef(false);
   const [profileReady, setProfileReady] = useState(false);
   const [userGroupsReady, setUserGroupsReady] = useState(false);
   const [profileSnapshotReady, setProfileSnapshotReady] = useState(false);
@@ -540,9 +542,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
     })();
 
+    let previousUserId: string | undefined;
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
+      if (user && user.uid !== previousUserId) {
+        // An auth replacement can skip the signed-out callback, even in the same group.
+        if (previousUserId) clearUserSession();
+        setProfileReady(false);
+        setUserGroupsReady(false);
+      }
+      previousUserId = user?.uid;
       setFirebaseUser(user);
       setAuthReady(true);
+      setSignOutIncomplete(false);
       markStartupMilestone("authReady", user ? "signed-in" : "signed-out");
       setAuthError(undefined);
 
@@ -1141,6 +1152,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
     return {
       authReady,
+      signOutIncomplete,
       profileReady,
       userGroupsReady,
       currentUserId: firebaseUser?.uid,
@@ -1199,6 +1211,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     communityContentLoadingMore,
     theme,
     authReady,
+    signOutIncomplete,
     checkIns,
     firebaseUser,
     groupMemberCounts,
@@ -1248,6 +1261,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
 
   const dispatch = useCallback(
     async (action: Action) => {
+      if ((action.type === "signIn" || action.type === "signUp") && (signOutPending.current || signOutIncomplete)) return;
+      if (action.type === "signOut" && action.expectedUserId && auth.currentUser?.uid !== action.expectedUserId) return;
+      const expectedScope = "expectedScope" in action ? action.expectedScope : undefined;
+      if (expectedScope && (
+        auth.currentUser?.uid !== expectedScope.userId ||
+        communitySubmissionScopeRef.current.userId !== expectedScope.userId ||
+        communitySubmissionScopeRef.current.groupId !== expectedScope.groupId
+      )) {
+        if (action.type === "submitCheckIn") throw new CheckInSubmissionError("unavailable");
+        throw new Error("This prayer session is no longer available.");
+      }
       setAuthError(undefined);
       const generation = sessionGeneration();
       const highlightAction = action.type === "highlightVerses" || action.type === "removeBibleHighlight" || action.type === "removeBibleHighlights";
@@ -1295,13 +1319,37 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await AsyncStorage.setItem(`e2ee.signup-name.${credential.user.uid}`, action.name);
               return;
             }
-            case "signOut":
-              await import("@/features/bible-audio/engine").then((engine) => engine.stop());
-              clearUserSession();
-              clearEncryptedImages();
-              await AsyncStorage.clearContent();
-              await FirebaseAuth.signOut(auth);
+            case "signOut": {
+              const userId = firebaseUser?.uid;
+              const startingUser = auth.currentUser;
+              if (signOutPending.current || (!userId && !signOutIncomplete) || startingUser?.uid !== userId) return;
+              signOutPending.current = true;
+              try {
+                if (userId) {
+                  await import("@/features/bible-audio/engine").then((engine) => engine.stop());
+                  if (auth.currentUser !== startingUser) return;
+                  clearEncryptedImages();
+                  await AsyncStorage.clearContent();
+                  if (auth.currentUser !== startingUser) return;
+                }
+                try {
+                  await FirebaseAuth.signOut(auth);
+                } catch (error) {
+                  // Firebase clears its in-memory user before removing persisted credentials.
+                  // If removal fails, the SDK can reject without notifying auth observers.
+                  if (!auth.currentUser) {
+                    lockSession();
+                    clearEncryptedImages();
+                    clearUserSession();
+                    setSignOutIncomplete(true);
+                  }
+                  throw error;
+                }
+              } finally {
+                signOutPending.current = false;
+              }
               return;
+            }
             case "requestPasswordReset": {
               if (emulatorMode) throw new Error("Password reset email is disabled in KOINO Emulator. / E-post för lösenordsåterställning är avstängd i KOINO Emulator.");
               const resetEmail = action.email.trim();
@@ -2592,6 +2640,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           });
           return;
         }
+        if (action.type === "signOut") {
+          if (auth.currentUser?.uid === firebaseUser?.uid) setAuthError(authMessage(error));
+          throw error;
+        }
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
           highlightAction ||
@@ -2628,6 +2680,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       biblePlans,
       checkIns,
       clearUserSession,
+      signOutIncomplete,
       communityContentLoadingMore,
       communityPageAvailability,
       discussionFollows,

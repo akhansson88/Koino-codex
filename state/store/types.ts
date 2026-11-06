@@ -8,6 +8,7 @@ export type Profile = User & {
 };
 
 export type CreatePostKind = EntryKind;
+type AccountGroupScope = { userId: Id; groupId: Id };
 
 export type CommunitySubmissionOutcome = {
   status: "success" | "failure" | "unknown";
@@ -29,7 +30,7 @@ export type CommunitySubmissionRequest = {
 export type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
-  | { type: "signOut" }
+  | { type: "signOut"; expectedUserId?: Id }
   | { type: "requestPasswordReset"; email: string }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
@@ -46,7 +47,7 @@ export type Action =
   | { type: "uploadUserAvatar"; localUri: string }
   | { type: "deleteUserAvatar" }
   | { type: "deleteGroup"; id: Id }
-  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; expectedScope?: AccountGroupScope }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
   | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
@@ -63,6 +64,7 @@ export type Action =
       startedAt: string;
       recipientUserId?: Id;
       throwOnError?: boolean;
+      expectedScope?: AccountGroupScope;
     }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }

@@ -82,6 +82,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     const deviceId = session().device.id;
     let refreshing = false;
     return listenRaw(`e2eeAccounts/${user.uid}`, (value) => {
+      if (auth.currentUser?.uid !== user.uid) return;
       const remote = value as Account | null;
       if (!remote?.devices[deviceId]?.active) { lockSession(); clearEncryptedImages(); setPhase("recovery"); return; }
       if (!refreshing && !identityRotationInProgress() && remote.signingPublicKey !== session().vault.identity.signingPublicKey) {

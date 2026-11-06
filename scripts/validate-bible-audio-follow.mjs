@@ -51,8 +51,7 @@ const mocks = {
   "expo-router": `
     const navigation = { canGoBack: () => !!globalThis.__bibleAudioFollowTest.canGoBack,
       goBack() { globalThis.__bibleAudioFollowTest.backCount = (globalThis.__bibleAudioFollowTest.backCount ?? 0) + 1; } };
-    const params = {};
-    export const useNavigation = () => navigation, useLocalSearchParams = () => params;
+    export const useNavigation = () => navigation, useLocalSearchParams = () => globalThis.__bibleAudioFollowTest.params ?? {};
     export const router = { push: value => globalThis.__bibleAudioFollowTest.navigations.push(value) };
   `,
   "expo-clipboard": `export const setStringAsync = async () => {};`,
@@ -285,6 +284,26 @@ async function unmount() {
 }
 
 try {
+  const plannedPosition = { book: "Romans", chapter: 8, verse: 28 };
+  const plannedRange = { id: "planned-range", start: plannedPosition, end: plannedPosition, displayReference: "Romans 8:28" };
+  audio.store = { currentUserId: "reader", biblePlans: [{
+    id: "plan", userId: "reader", title: "Fixture plan", status: "active", startDate: "2026-01-01",
+    days: [{ dayNumber: 1, ranges: [] }, { dayNumber: 2, ranges: [plannedRange] }],
+  }] };
+  audio.params = { planId: "plan", planDay: "2", planJump: "1234" };
+  await mount();
+  assert.deepEqual(reader().position, plannedPosition, "Bible opens the first verse of the day selected by the plan route");
+  await act(async () => { layoutVerses(); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 2682, "plan navigation scrolls to the planned verse");
+  await unmount();
+  audio.store.currentUserId = "another-reader";
+  await mount();
+  assert.notDeepEqual(reader().position, plannedPosition, "a previous account's plan route cannot change the reader position");
+  await unmount();
+  audio.params = undefined;
+  audio.store = undefined;
+
   await mount();
   assert.equal(props("BibleReaderHeader").audioAvailable, false, "KJV has no headphones entry point");
   await act(async () => { props("BibleReaderHeader").onOpenAudio(); });

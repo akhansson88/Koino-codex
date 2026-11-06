@@ -335,6 +335,7 @@ export type SupportIntent = {
 
 export type KoinoState = {
   authReady: boolean;
+  signOutIncomplete: boolean;
   profileReady: boolean;
   userGroupsReady: boolean;
   currentUserId?: Id;
