@@ -10,7 +10,7 @@ import { encodeAt } from "@/state/encryption/database";
 import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
-import { readOnboardingProgress, writeOnboardingProgress } from "@/state/onboarding-progress";
+import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
 import { OnboardingProgressContext } from "@/ui/onboarding-progress";
 
 function useWords() {
@@ -44,7 +44,11 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
-  const [onboardingUserId, setOnboardingUserId] = useState<string>();
+  const [onboarding, setOnboarding] = useState<{
+    userId: string;
+    generation: number;
+    progress: Exclude<OnboardingProgress, { phase: "complete" }>;
+  }>();
   async function finish() {
     const uid = session().uid, token = sessionGeneration();
     const isCurrent = () => auth.currentUser?.uid === uid && token === sessionGeneration();
@@ -60,23 +64,25 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     if (!isCurrent()) return;
     await migrateOwnedGroups((message) => { if (isCurrent()) { setPhase("migrating"); setProgress(message); } });
     if (isCurrent()) {
-      setOnboardingUserId(onboarding?.phase === "journey" ? uid : undefined);
+      setOnboarding(onboarding && onboarding.phase !== "complete" ? { userId: uid, generation: token, progress: onboarding } : undefined);
       setPhase("ready");
     }
   }
-  async function advanceOnboarding(uid: string) {
-    const token = sessionGeneration();
-    const isCurrent = () => auth.currentUser?.uid === uid && sessionGeneration() === token;
-    if (!isCurrent() || phase !== "ready" || onboardingUserId !== uid) throw new Error("This onboarding session is no longer available.");
-    await writeOnboardingProgress(uid, { phase: "complete" });
-    if (isCurrent()) setOnboardingUserId(undefined);
+  async function advanceOnboarding(uid: string, next: Exclude<OnboardingProgress, { phase: "journey" }>) {
+    const isCurrent = () => auth.currentUser?.uid === uid && sessionGeneration() === onboarding?.generation;
+    const expectedPhase = next.phase === "guide" ? "journey" : "guide";
+    if (!onboarding || onboarding.userId !== uid || onboarding.progress.phase !== expectedPhase || !isCurrent() || phase !== "ready") {
+      throw new Error("This onboarding session is no longer available.");
+    }
+    await writeOnboardingProgress(uid, next);
+    if (isCurrent()) setOnboarding(next.phase === "guide" ? { ...onboarding, progress: next } : undefined);
   }
   useEffect(() => {
     let active = true;
     const unsubscribe = onAuthStateChanged(auth, (next) => {
       const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
-      setOnboardingUserId(undefined);
+      setOnboarding(undefined);
       setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError("");
       if (!next) { setPhase("signedOut"); return; }
       setPhase("loading");
@@ -117,7 +123,13 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   }
   if (phase === "signedOut" || phase === "ready") {
     return (
-      <OnboardingProgressContext.Provider value={{ userId: onboardingUserId, pending: Boolean(onboardingUserId), advance: advanceOnboarding }}>
+      <OnboardingProgressContext.Provider value={{
+        userId: onboarding?.userId,
+        pending: Boolean(onboarding),
+        journey: onboarding?.progress.phase === "guide" ? onboarding.progress.journey : undefined,
+        chooseJourney: (uid, journey) => advanceOnboarding(uid, { phase: "guide", journey }),
+        complete: (uid) => advanceOnboarding(uid, { phase: "complete" }),
+      }}>
         {children}
       </OnboardingProgressContext.Provider>
     );

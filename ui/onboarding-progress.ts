@@ -1,12 +1,20 @@
 import { createContext, useContext } from "react";
+import type { OnboardingChoice } from "@/state/onboarding-progress";
+
+async function unavailable() {
+  throw new Error("Onboarding is unavailable.");
+}
 
 export const OnboardingProgressContext = createContext<{
   userId?: string;
   pending: boolean;
-  advance: (userId: string) => Promise<void>;
+  journey?: OnboardingChoice;
+  chooseJourney: (userId: string, journey: OnboardingChoice) => Promise<void>;
+  complete: (userId: string) => Promise<void>;
 }>({
   pending: false,
-  advance: async () => { throw new Error("Onboarding is unavailable."); },
+  chooseJourney: unavailable,
+  complete: unavailable,
 });
 
 export function useOnboardingProgress() {

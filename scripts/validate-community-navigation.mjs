@@ -105,6 +105,7 @@ const mocks = {
   `,
   "@/features/onboarding-screen": `export const OnboardingScreen = "OnboardingScreen";`,
   "@/features/onboarding-journey": `export const OnboardingJourney = "OnboardingJourney";`,
+  "@/features/onboarding-guide": `export const OnboardingGuide = "OnboardingGuide";`,
 };
 
 // Keep screen logic and selectors real while replacing leaf UI dependencies.

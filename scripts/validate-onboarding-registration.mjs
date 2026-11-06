@@ -116,11 +116,20 @@ try {
   auth.app.options.projectId = "other-project";
   assert.equal(await restarted.readOnboardingProgress(pendingUser.uid), null, "The same UID in another Firebase project cannot adopt the marker");
   auth.app.options.projectId = "demo-koino";
+  for (const journey of ["private", "join", "create"]) {
+    const guide = { phase: "guide", journey };
+    await writeOnboardingProgress(pendingUser.uid, guide);
+    await publishUser(null);
+    await publishUser(pendingUser);
+    const resumed = await import(`${moduleUrl}#guide-${journey}`);
+    assert.deepEqual(await resumed.readOnboardingProgress(pendingUser.uid), guide, `Restart resumes guidance for ${journey}`);
+    assert.deepEqual(JSON.parse(saved.get(progressKey(pendingUser.uid))), guide, "Guidance drops the registration name");
+  }
   await writeOnboardingProgress(pendingUser.uid, { phase: "complete" });
   await publishUser(null);
   await publishUser(pendingUser);
   assert.deepEqual(await restarted.readOnboardingProgress(pendingUser.uid), { phase: "complete" });
-  assert.equal(saved.get(progressKey(pendingUser.uid)), '{"phase":"complete"}', "Completion drops the signup name");
+  assert.deepEqual(JSON.parse(saved.get(progressKey(pendingUser.uid))), { phase: "complete" }, "Completion retains neither the journey choice nor the signup name");
   await publishUser(null);
 
   failWrite = true;
@@ -136,8 +145,10 @@ try {
 
   saved.set(progressKey("malformed"), '{"phase":"journey","signupName":42}');
   await assert.rejects(readOnboardingProgress("malformed"), /progress could not be read/, "Invalid progress is distinguishable from an existing account");
+  saved.set(progressKey("malformed"), '{"phase":"guide","journey":"unknown"}');
+  await assert.rejects(readOnboardingProgress("malformed"), /progress could not be read/, "Unknown guide choices fail closed");
   assert.equal(fixture.auth.currentUser, interrupted);
-  console.log("Onboarding registration passed: persistence order, failed and duplicate signup, sign-in, UID and project isolation, restart, and completion.");
+  console.log("Onboarding registration passed: persistence order, failed and duplicate signup, sign-in, UID and project isolation, journey and guide restart, and completion.");
 } finally {
   delete globalThis.__onboardingRegistration;
 }

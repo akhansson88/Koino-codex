@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 
 import { OnboardingPage } from "@/features/onboarding-screen";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
+import type { OnboardingChoice } from "@/state/onboarding-progress";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { Field } from "@/ui/components";
@@ -23,7 +24,7 @@ const stepCopy = {
 export function OnboardingJourney({ userId }: { userId: string }) {
   const { t } = useAppTranslation();
   const { dispatch } = useKoinoActions();
-  const { advance } = useOnboardingProgress();
+  const { chooseJourney } = useOnboardingProgress();
   useKoinoFields(["theme"]);
   const [step, setStep] = useState<JourneyStep>("choice");
   const [value, setValue] = useState("");
@@ -54,9 +55,9 @@ export function OnboardingJourney({ userId }: { userId: string }) {
     }
   }
 
-  async function continueOnboarding() {
+  async function continueOnboarding(choice: OnboardingChoice) {
     try {
-      await advance(userId);
+      await chooseJourney(userId, choice);
     } catch {
       setError("onboarding.journey.continueFailed");
     }
@@ -77,12 +78,8 @@ export function OnboardingJourney({ userId }: { userId: string }) {
         return;
       }
       setValue("");
-      if (isJoin) {
-        setStep("requested");
-      } else {
-        setStep("created");
-        await continueOnboarding();
-      }
+      setStep(isJoin ? "requested" : "created");
+      await continueOnboarding(isJoin ? "join" : "create");
     });
   }
 
@@ -107,7 +104,7 @@ export function OnboardingJourney({ userId }: { userId: string }) {
       </View>
       {step === "choice" ? (
         <>
-          <PrimaryButton disabled={busy} icon="lock" onPress={() => void run(continueOnboarding)}>
+          <PrimaryButton disabled={busy} icon="lock" onPress={() => void run(() => continueOnboarding("private"))}>
             {t("onboarding.journey.private")}
           </PrimaryButton>
           <SecondaryButton disabled={busy} icon="user-plus" onPress={() => changeStep("join")}>
@@ -141,7 +138,9 @@ export function OnboardingJourney({ userId }: { userId: string }) {
           <SecondaryButton disabled={busy} onPress={() => changeStep("choice")}>{t("common.cancel")}</SecondaryButton>
         </>
       ) : (
-        <PrimaryButton disabled={busy} onPress={() => void run(continueOnboarding)}>{continueLabel}</PrimaryButton>
+        <PrimaryButton disabled={busy} onPress={() => void run(() => continueOnboarding(step === "requested" ? "join" : "create"))}>
+          {continueLabel}
+        </PrimaryButton>
       )}
       {error ? (
         <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.body, { color: colors.danger }]}>

@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { OnboardingJourney } from "@/features/onboarding-journey";
+import { OnboardingGuide } from "@/features/onboarding-guide";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { AppScreen, BodyText, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
@@ -24,7 +25,11 @@ export default function Index() {
   }
 
   if (state.currentUserId) {
-    if (onboarding.pending) return <OnboardingJourney key={state.currentUserId} userId={state.currentUserId} />;
+    if (onboarding.pending) {
+      return onboarding.journey
+        ? <OnboardingGuide key={state.currentUserId} userId={state.currentUserId} journey={onboarding.journey} />
+        : <OnboardingJourney key={state.currentUserId} userId={state.currentUserId} />;
+    }
     return <Redirect href="/(tabs)" />;
   }
 

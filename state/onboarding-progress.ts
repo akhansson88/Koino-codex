@@ -3,8 +3,11 @@ import * as FirebaseAuth from "@firebase/auth";
 import storage from "@/state/encryption/local-storage";
 import { auth } from "@/state/store/firebase";
 
+export type OnboardingChoice = "private" | "join" | "create";
+
 export type OnboardingProgress =
   | { phase: "journey"; signupName?: string }
+  | { phase: "guide"; journey: OnboardingChoice }
   | { phase: "complete" };
 
 function progressKey(uid: string) {
@@ -19,10 +22,13 @@ export async function readOnboardingProgress(uid: string): Promise<OnboardingPro
   if (saved === null) return null;
 
   try {
-    const progress = JSON.parse(saved) as { phase?: unknown; signupName?: unknown } | null;
+    const progress = JSON.parse(saved) as { phase?: unknown; signupName?: unknown; journey?: unknown } | null;
     if (progress?.phase === "complete") return { phase: "complete" };
     if (progress?.phase === "journey" && (progress.signupName === undefined || typeof progress.signupName === "string")) {
       return { phase: "journey", signupName: progress.signupName };
+    }
+    if (progress?.phase === "guide" && (progress.journey === "private" || progress.journey === "join" || progress.journey === "create")) {
+      return { phase: "guide", journey: progress.journey };
     }
   } catch {
     // Only an absent marker identifies an account outside this onboarding flow.
