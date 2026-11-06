@@ -2647,6 +2647,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
           highlightAction ||
+          action.type === "signIn" ||
+          action.type === "signUp" ||
           action.type === "createBiblePlan" ||
           action.type === "pauseBiblePlan" ||
           action.type === "rescheduleBiblePlan" ||

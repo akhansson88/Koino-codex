@@ -1,174 +1,225 @@
-import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from "react-native";
+import { type PropsWithChildren, useEffect, useRef, useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useKoino } from "@/state/koino-store";
 import { markStartupMilestone } from "@/features/startup-performance";
-import { Body, Card, Choice, Field, PasswordField, PillButton, Screen } from "@/ui/components";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
+import { emulatorMode } from "@/state/store/firebase";
+import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
+import { useAppTranslation } from "@/ui/app-language";
+import { BrandWaveMotif } from "@/ui/brand-wave-motif";
+import { Field, PasswordField } from "@/ui/components";
 import { KoinoLogo } from "@/ui/koino-logo";
-import { colors } from "@/ui/theme";
+import { type TranslationKey } from "@/ui/localization";
+import { colors, typography } from "@/ui/theme";
+
+type AuthMode = "signIn" | "signUp";
+
+function accountError(error: unknown, resetting: boolean): TranslationKey {
+  const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+  switch (code) {
+    case "auth/email-already-in-use": return "onboarding.account.emailInUse";
+    case "auth/invalid-email": return "onboarding.account.invalidEmail";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return resetting ? "onboarding.account.resetFailed" : "onboarding.account.credentials";
+    case "auth/weak-password": return "onboarding.account.passwordHint";
+    case "auth/too-many-requests": return "onboarding.account.tooManyAttempts";
+    case "auth/network-request-failed": return "onboarding.account.networkError";
+    default: return resetting ? "onboarding.account.resetFailed" : "onboarding.account.authFailed";
+  }
+}
 
 export function OnboardingScreen() {
-  const { state, dispatch } = useKoino();
-  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [groupMode, setGroupMode] = useState<"join" | "create">("join");
-  const [groupName, setGroupName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [resetMessage, setResetMessage] = useState("");
-  const [isSendingReset, setIsSendingReset] = useState(false);
+  const { language, setLanguage, t } = useAppTranslation();
+  const [mode, setMode] = useState<AuthMode>();
+  useKoinoFields(["theme"]);
 
   useEffect(() => {
     markStartupMilestone("firstScreenMounted", "onboarding");
   }, []);
 
-  useEffect(() => {
-    if (!name && state.users[0]?.name) {
-      setName(state.users[0].name);
+  return (
+    <OnboardingPage key={mode ?? "welcome"} center={!mode}>
+      {mode ? <AccountForm mode={mode} onBack={() => setMode(undefined)} /> : (
+        <>
+          <View style={{ alignItems: "center", gap: 12 }}>
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <KoinoLogo size={128} />
+            </View>
+            <Text style={[typography.sectionLabel, { color: colors.muted, letterSpacing: 4 }]}>KOINO</Text>
+            <Text accessibilityRole="header" style={[typography.display, { color: colors.ink, textAlign: "center" }]}>
+              {t("onboarding.welcome.title")}
+            </Text>
+            <Text style={[typography.body, { color: colors.muted, textAlign: "center" }]}>
+              {t("onboarding.welcome.description")}
+            </Text>
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <BrandWaveMotif width={200} height={34} variant="accent" />
+            </View>
+          </View>
+          <PrimaryButton onPress={() => setMode("signUp")}>{t("onboarding.account.signUp")}</PrimaryButton>
+          <SecondaryButton onPress={() => setMode("signIn")}>{t("onboarding.account.signIn")}</SecondaryButton>
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Text style={[typography.caption, { color: colors.muted }]}>{t("onboarding.language")}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>
+              {(["en", "sv"] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  accessibilityRole="button"
+                  accessibilityLanguage={option === "sv" ? "sv-SE" : "en"}
+                  accessibilityState={{ selected: language === option }}
+                  onPress={() => setLanguage(option)}
+                  style={{
+                    justifyContent: "center",
+                    minHeight: 44,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: language === option ? colors.olive : colors.line,
+                    backgroundColor: language === option ? colors.accentSubtle : colors.paper,
+                  }}
+                >
+                  <Text style={[typography.label, { color: colors.ink }]}>{option === "sv" ? "Svenska" : "English"}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </>
+      )}
+    </OnboardingPage>
+  );
+}
+
+function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
+  const { dispatch } = useKoinoActions();
+  const { t } = useAppTranslation();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState<TranslationKey>();
+  const [resetEmail, setResetEmail] = useState("");
+  const [pending, setPending] = useState<"auth" | "reset">();
+  const running = useRef(false);
+  const signingUp = mode === "signUp";
+  const canSubmit = email.trim().includes("@") && password.length >= 6 && (!signingUp || name.trim().length > 1);
+  const submitLabel = signingUp ? "onboarding.account.signUp" : "onboarding.account.signIn";
+
+  async function submit(resetting = false) {
+    if (running.current || (!resetting && !canSubmit)) return;
+    setError(undefined);
+    setResetEmail("");
+    const address = email.trim();
+    if (resetting && !address.includes("@")) {
+      setError("onboarding.account.resetEmail");
+      return;
     }
-  }, [name, state.users]);
-
-  const canAuth =
-    email.trim().includes("@") && password.length >= 6 && (authMode === "signIn" || name.trim().length > 1);
-  const canContinue =
-    state.currentUserId &&
-    name.trim().length > 1 &&
-    (groupMode === "create" ? groupName.trim().length > 1 : inviteCode.trim().length > 2);
-
-  async function handlePasswordReset() {
-    const resetEmail = email.trim();
-    setResetMessage("");
-
-    if (!resetEmail.includes("@")) {
-      setResetMessage("Enter your email above, then request a reset link.");
+    if (resetting && emulatorMode) {
+      setError("onboarding.account.resetUnavailable");
       return;
     }
 
-    setIsSendingReset(true);
+    running.current = true;
+    setPending(resetting ? "reset" : "auth");
     try {
-      await dispatch({ type: "requestPasswordReset", email: resetEmail });
-      setResetMessage(`A reset link was sent to ${resetEmail}. Open it to choose a new password.`);
-    } catch {
-      setResetMessage("");
+      if (resetting) {
+        await dispatch({ type: "requestPasswordReset", email: address });
+        setResetEmail(address);
+      } else {
+        await dispatch(signingUp ? { type: "signUp", email: address, password, name } : { type: "signIn", email: address, password });
+      }
+    } catch (problem) {
+      setError(accountError(problem, resetting));
     } finally {
-      setIsSendingReset(false);
+      running.current = false;
+      setPending(undefined);
     }
   }
 
-  function handleAuthSubmit() {
-    if (!canAuth) return;
-    dispatch(authMode === "signIn" ? { type: "signIn", email, password } : { type: "signUp", email, password, name });
-  }
-
-  function handleSessionSubmit() {
-    if (!canContinue) return;
-    dispatch({
-      type: "createSession",
-      name,
-      groupName: groupMode === "create" ? groupName : undefined,
-      inviteCode: groupMode === "join" ? inviteCode : undefined,
-    });
-  }
+  const nameLabel = t("onboarding.account.name");
+  const emailLabel = t("onboarding.account.email");
+  const passwordLabel = t("onboarding.account.password");
+  const fieldLabelStyle = [typography.label, { color: colors.ink }];
 
   return (
-    <Screen>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 22, padding: 22, paddingTop: 48 }}>
-          <View style={{ alignItems: "center", gap: 12 }}>
-            <KoinoLogo size={164} />
-            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "700", letterSpacing: 1 }}>KOINO</Text>
-            <Text selectable style={{ color: colors.ink, fontSize: 33, fontWeight: "700", letterSpacing: 0, textAlign: "center" }}>
-              A quiet rhythm for prayer and honest reflection.
-            </Text>
-            <Text selectable style={{ color: colors.muted, fontSize: 16, lineHeight: 23, maxWidth: 380, textAlign: "center" }}>
-              Check in, share honestly when you are ready, pray for your people, and leave encouraged.
-            </Text>
+    <>
+      <View style={{ gap: 8 }}>
+        <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>
+          {t(signingUp ? "onboarding.account.signUpTitle" : "onboarding.account.signInTitle")}
+        </Text>
+        {signingUp ? (
+          <Text style={[typography.body, { color: colors.muted }]}>{t("onboarding.account.signUpDescription")}</Text>
+        ) : null}
+      </View>
+      <Card>
+        {signingUp ? (
+          <View style={{ gap: 6 }}>
+            <Text style={fieldLabelStyle}>{nameLabel}</Text>
+            <Field accessibilityLabel={nameLabel} autoCapitalize="words" autoComplete="name" editable={!pending} value={name} onChangeText={setName} />
           </View>
+        ) : null}
+        <View style={{ gap: 6 }}>
+          <Text style={fieldLabelStyle}>{emailLabel}</Text>
+          <Field accessibilityLabel={emailLabel} autoCapitalize="none" autoComplete="email" autoCorrect={false} editable={!pending} keyboardType="email-address" value={email} onChangeText={setEmail} />
+        </View>
+        <View style={{ gap: 6 }}>
+          <Text style={fieldLabelStyle}>{passwordLabel}</Text>
+          <PasswordField
+            accessibilityLabel={passwordLabel}
+            accessibilityHint={signingUp ? t("onboarding.account.passwordHint") : undefined}
+            autoCapitalize="none"
+            autoComplete={signingUp ? "new-password" : "current-password"}
+            autoCorrect={false}
+            editable={!pending}
+            hidePasswordLabel={t("onboarding.account.hidePassword")}
+            showPasswordLabel={t("onboarding.account.showPassword")}
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={() => void submit()}
+            returnKeyType="done"
+          />
+          {signingUp ? <Text style={[typography.caption, { color: colors.muted }]}>{t("onboarding.account.passwordHint")}</Text> : null}
+        </View>
+        {error ? (
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.body, { color: colors.danger }]}>{t(error)}</Text>
+        ) : null}
+        {resetEmail ? (
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.body, { color: colors.ink }]}>
+            {t("onboarding.account.resetSent", { email: resetEmail })}
+          </Text>
+        ) : null}
+      </Card>
+      <PrimaryButton disabled={!canSubmit || Boolean(pending)} onPress={() => void submit()}>
+        {t(pending === "auth" ? (signingUp ? "onboarding.account.signingUp" : "onboarding.account.signingIn") : submitLabel)}
+      </PrimaryButton>
+      {!signingUp ? (
+        <SecondaryButton disabled={Boolean(pending)} onPress={() => void submit(true)}>
+          {t(pending === "reset" ? "onboarding.account.sendingReset" : "onboarding.account.forgot")}
+        </SecondaryButton>
+      ) : null}
+      <SecondaryButton disabled={Boolean(pending)} icon="arrow-left" onPress={onBack}>{t("onboarding.account.back")}</SecondaryButton>
+    </>
+  );
+}
 
-          {!state.currentUserId ? (
-            <>
-              <Card>
-                <Body>{authMode === "signIn" ? "Welcome back." : "Create a quiet account for KOINO."}</Body>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <Choice label="Sign in" selected={authMode === "signIn"} onPress={() => setAuthMode("signIn")} />
-                  <Choice label="Create account" selected={authMode === "signUp"} onPress={() => setAuthMode("signUp")} />
-                </View>
-                {authMode === "signUp" ? (
-                  <Field value={name} onChangeText={setName} onSubmitEditing={handleAuthSubmit} placeholder="Your name" autoCapitalize="words" returnKeyType="next" />
-                ) : null}
-                <Field
-                  value={email}
-                  onChangeText={setEmail}
-                  onSubmitEditing={handleAuthSubmit}
-                  placeholder="Email"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType={Platform.OS === "web" ? "default" : "email-address"}
-                  returnKeyType="next"
-                />
-                <PasswordField
-                  key={authMode}
-                  value={password}
-                  onChangeText={setPassword}
-                  onSubmitEditing={handleAuthSubmit}
-                  placeholder="Password"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                />
-                {state.authError ? <Body muted>{state.authError}</Body> : null}
-                {authMode === "signIn" && resetMessage ? <Body muted>{resetMessage}</Body> : null}
-              </Card>
-
-              <PillButton
-                disabled={!canAuth}
-                onPress={handleAuthSubmit}
-              >
-                {authMode === "signIn" ? "Sign in" : "Create account"}
-              </PillButton>
-              {authMode === "signIn" ? (
-                <PillButton variant="ghost" disabled={isSendingReset} onPress={handlePasswordReset}>
-                  {isSendingReset ? "Sending reset link..." : "Forgot my password"}
-                </PillButton>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Card>
-                <Body>What should your community call you?</Body>
-                <Field value={name} onChangeText={setName} onSubmitEditing={handleSessionSubmit} placeholder="Your name" autoCapitalize="words" returnKeyType="next" />
-                <Body muted>Signed in as {state.authEmail ?? "your account"}.</Body>
-              </Card>
-
-              <Card tone="moss">
-                <Body>Join a community with a code, or create one for the people you pray with.</Body>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <Choice label="Join by code" selected={groupMode === "join"} onPress={() => setGroupMode("join")} />
-                  <Choice label="Create community" selected={groupMode === "create"} onPress={() => setGroupMode("create")} />
-                </View>
-                {groupMode === "join" ? (
-                  <Field value={inviteCode} onChangeText={setInviteCode} onSubmitEditing={handleSessionSubmit} placeholder="Community code" autoCapitalize="characters" returnKeyType="join" />
-                ) : (
-                  <Field value={groupName} onChangeText={setGroupName} onSubmitEditing={handleSessionSubmit} placeholder="Community name" returnKeyType="done" />
-                )}
-                {state.authError ? <Body muted>{state.authError}</Body> : null}
-              </Card>
-
-              <PillButton
-                disabled={!canContinue}
-                onPress={handleSessionSubmit}
-              >
-                Enter the rhythm
-              </PillButton>
-
-              <PillButton variant="ghost" onPress={() => void dispatch({ type: "signOut", expectedUserId: state.currentUserId }).catch(() => undefined)}>
-                Log out
-              </PillButton>
-            </>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Screen>
+function OnboardingPage({ children, center = false }: PropsWithChildren<{ center?: boolean }>) {
+  const insets = useSafeAreaInsets();
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.cream }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: center ? "center" : "flex-start",
+          paddingHorizontal: 24,
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+        }}
+      >
+        <View style={{ alignSelf: "center", width: "100%", maxWidth: 430, gap: 14 }}>{children}</View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
