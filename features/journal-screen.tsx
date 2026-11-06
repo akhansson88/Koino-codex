@@ -12,7 +12,7 @@ import { isCheckInJournalEntry } from "@/state/check-ins";
 import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { localDayKey } from "@/state/store/helpers";
-import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
+import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, KoinoState } from "@/state/types";
 import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
@@ -62,10 +62,16 @@ function useLocalJournalDay() {
   return day;
 }
 
+const journalFields = ["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "theme"] as const;
+
 export function JournalScreen() {
-  const bookLanguage = useBibleBookLanguage();
   // Palette tokens mutate in place, so theme-only store updates must render Me.
-  const state = useKoinoFields(["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "theme"]);
+  const state = useKoinoFields(journalFields);
+  return <JournalContent key={state.currentUserId} state={state} />;
+}
+
+function JournalContent({ state }: { state: Pick<KoinoState, typeof journalFields[number]> }) {
+  const bookLanguage = useBibleBookLanguage();
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();

@@ -540,7 +540,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
     })();
 
+    let previousUserId: string | undefined;
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
+      if (user && user.uid !== previousUserId) {
+        // An auth replacement can skip the signed-out callback, even in the same group.
+        if (previousUserId) clearUserSession();
+        setProfileReady(false);
+        setUserGroupsReady(false);
+      }
+      previousUserId = user?.uid;
       setFirebaseUser(user);
       setAuthReady(true);
       markStartupMilestone("authReady", user ? "signed-in" : "signed-out");

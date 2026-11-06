@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "koino-startup-memberships-"));
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const harness = globalThis.__membershipStartup = { listeners: new Map(), writes: [], avatarSyncs: 0, rawMembershipExists: false };
+const harness = globalThis.__membershipStartup = { listeners: new Map(), writes: [], commits: [], avatarSyncs: 0, rawMembershipExists: false };
 const source = await readFile(path.join(projectRoot, "state/koino-store.tsx"), "utf8");
 const imports = new Map();
 for (const node of ts.createSourceFile("store.tsx", source, ts.ScriptTarget.Latest, true).statements) {
@@ -24,7 +24,15 @@ for (const node of ts.createSourceFile("store.tsx", source, ts.ScriptTarget.Late
 }
 const mocks = {
   "@firebase/auth": `
-    export const onAuthStateChanged = (_, listener) => { listener({ uid: "alex", email: "alex@example.test" }); return () => {}; };
+    export const onAuthStateChanged = (auth, listener) => {
+      const h = globalThis.__membershipStartup;
+      h.replaceUser = uid => {
+        auth.currentUser = { uid, email: uid + "@example.test" };
+        listener(auth.currentUser);
+      };
+      h.replaceUser("alex");
+      return () => { delete h.replaceUser; };
+    };
     export const signInWithEmailAndPassword = async () => {}, createUserWithEmailAndPassword = async () => {}, signOut = async () => {},
       sendPasswordResetEmail = async () => {}, confirmPasswordReset = async () => {}, reauthenticateWithCredential = async () => {}, updatePassword = async () => {};
     export const EmailAuthProvider = { credential: () => ({}) };
@@ -95,7 +103,12 @@ try {
     } }],
   });
   const { KoinoProvider, useKoino } = require(bundlePath);
-  function Observer() { harness.current = useKoino(); return React.createElement("Screen"); }
+  function Observer() {
+    harness.current = useKoino();
+    const { state } = harness.current;
+    React.useLayoutEffect(() => { harness.commits.push(state); }, [state]);
+    return React.createElement("Screen");
+  }
   const mount = async () => {
     harness.writes.length = 0;
     await act(async () => { renderer = create(React.createElement(KoinoProvider, null, React.createElement(Observer))); });
@@ -173,7 +186,31 @@ try {
   await emit("userGroups/alex", null);
   await act(async () => { harness.legacy({ memberships: [], groups: [], ready: true }); });
   assert.deepEqual(harness.writes.at(-1), { path: "profiles/alex", values: { currentGroupId: null } }, "Authoritative absence from both sources should still clear a departed group");
-  console.log("Startup memberships passed: prioritized Home subscriptions, deferred history, decryption failure, delayed legacy identity, pending write protection, encrypted admission, and authoritative departure.");
+
+  // Exercise auth providers that replace the UID without emitting a signed-out event.
+  harness.rawMembershipExists = true;
+  const joel = { ...member, id: "joel-membership", userId: "joel", userName: "Joel" };
+  await emit("userGroups/alex", { "old-community": member });
+  await emit("groupMembers/old-community", { alex: member, joel });
+  const oldClaims = { "2026-11-06": { checkInId: "alex-removed", status: "committed", visibility: "group", moderated: true } };
+  const oldClaimPath = "checkInDailyClaims/alex/old-community";
+  await emit(oldClaimPath, oldClaims);
+  assert.equal(harness.current.state.checkInDailyClaims[0].checkInId, "alex-removed");
+  const lateOldClaim = harness.listeners.get(oldClaimPath).listener;
+  const accountSwitchStart = harness.commits.length;
+  await act(async () => { harness.replaceUser("joel"); });
+  await act(async () => { lateOldClaim({ val: () => oldClaims }); });
+  await emit("profiles/joel", { ...profile, id: "joel", name: "Joel" });
+  await emit("userGroups/joel", { "old-community": joel });
+  const joelClaimPath = "checkInDailyClaims/joel/old-community";
+  assert.ok(harness.listeners.has(joelClaimPath) && !harness.listeners.has(oldClaimPath));
+  assert.equal(harness.current.state.checkInDailyClaimsReady, false, "A same-group replacement account waits for its own claims");
+  await emit(joelClaimPath, null);
+  assert.equal(harness.current.state.checkInDailyClaimsReady, true);
+  const joelCommits = harness.commits.slice(accountSwitchStart).filter(state => state.currentUserId === "joel");
+  assert.ok(joelCommits.length > 0 && joelCommits.some(state => state.currentGroupId === "old-community"));
+  assert.ok(joelCommits.every(state => state.checkInDailyClaims.length === 0), "No committed state exposes the previous account's claim, even in the same group");
+  console.log("Startup memberships passed: prioritized Home subscriptions, deferred history, decryption failure, delayed legacy identity, pending write protection, encrypted admission, authoritative departure, and same-group account isolation.");
 } finally {
   if (renderer) await act(async () => { renderer.unmount(); });
   delete globalThis.__membershipStartup;

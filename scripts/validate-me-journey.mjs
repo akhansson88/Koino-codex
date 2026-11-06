@@ -144,11 +144,24 @@ try {
 
   harness.params = { newEntry: "today-action" };
   await update();
-  assert.equal(composer().visible, true, "The existing new-entry deep link still opens on a completed day");
+  assert.equal(composer().visible, true, "The Home reflection route opens without a community, even on a completed day");
   assert.equal(composer().entryVisibility, "private");
-  await act(() => composer().onClose());
+  await act(() => composer().onBody("A solo reflection from Home"));
+  await act(() => composer().onSubmit());
+  assert.equal(harness.actions.at(-1).type, "createJournalEntry");
+  assert.equal(harness.actions.at(-1).body, "A solo reflection from Home");
+  assert.equal(harness.actions.at(-1).shareWithGroup, false);
   await update();
   assert.equal(composer().visible, false, "An already handled route parameter does not reopen the composer");
+
+  harness.params = { newEntry: "another-home-reflection" };
+  await update();
+  await act(() => composer().onBody("Previous account draft"));
+  harness.params = {};
+  harness.state = { ...baseState, currentUserId: "another-reader" };
+  await update();
+  assert.equal(composer().visible, false, "Account replacement closes the Home reflection composer");
+  assert.equal(composer().body, "", "Account replacement clears the previous account's draft");
 
   harness.state = { ...baseState, currentUserId: undefined };
   harness.language = "sv";
