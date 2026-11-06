@@ -132,6 +132,7 @@ const mocks = {
   `,
   "firebase/auth": 'export const onAuthStateChanged=()=>()=>{},signOut=async()=>{};',
   "@/state/encryption/database": 'export const encodeAt=(_path,value)=>value;',
+  "@/state/store/profile-operations": 'export const hasOnboardingCommunity=async()=>false;',
   "@/state/encryption/session": `
     const h=globalThis.__identityInteractions;
     export const crypto={fingerprint:()=>"fixture fingerprint",randomKey:()=>"fixture"};

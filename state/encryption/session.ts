@@ -56,9 +56,10 @@ function saveVault() {
 async function writeVault() {
   const state = session();
   await storage.setItem(vaultPath(state.uid), JSON.stringify(state.vault));
+  if (session() !== state) throw new Error("Account changed while saving encrypted keys.");
   const recovery = crypto.encrypt(state.vault, `recovery/${state.uid}`, "recovery:1", state.vault.recoveryKey, state.vault.identity);
   const grants = Object.fromEntries(Object.entries(state.accounts[state.uid].devices).filter(([, device]) => device.active).map(([id, device]) => [id, crypto.seal(state.vault, device.publicKey)]));
-  await invoke("backup", { recovery, grants });
+  await invoke("backup", { recovery, grants }, state.device);
 }
 export async function account(uid: string) {
   const state = session();
@@ -262,9 +263,28 @@ export async function createEncryptedGroup(groupId: string, data: () => unknown)
   const state = session();
   const keys = { "1": crypto.randomKey() };
   const group = signedGroup({ id: groupId, ownerId: state.uid, epoch: 1, revision: 1, status: "ready", members: { [state.uid]: publicIdentity(state.vault.identity) }, grants: { [state.uid]: crypto.seal({ id: groupId, keys }, state.vault.identity.publicKey) }, signers: [state.vault.identity.signingPublicKey, state.device.identity.signingPublicKey] });
+  const vaultGroup = { keys, ownerKey: group.signer, revision: 1, trustedSigners: group.signers };
+  const previousGroup = state.groups[groupId];
+  const previousKeys = state.vault.groups[groupId];
+  // Encoding needs the new keys synchronously. A retry must never replace
+  // the committed keys for this ID while its callable is pending.
   state.groups[groupId] = group;
-  state.vault.groups[groupId] = { keys, ownerKey: group.signer, revision: 1, trustedSigners: group.signers };
-  await invoke("createGroup", { group, records: data() });
+  state.vault.groups[groupId] = vaultGroup;
+  let records: unknown;
+  try {
+    records = data();
+  } finally {
+    if (previousGroup) state.groups[groupId] = previousGroup;
+    else delete state.groups[groupId];
+    if (previousKeys) state.vault.groups[groupId] = previousKeys;
+    else delete state.vault.groups[groupId];
+  }
+  await invoke("createGroup", { group, records }, state.device);
+  if (session() !== state) throw new Error("The account changed while creating a community.");
+  if ((state.groups[groupId]?.revision ?? 0) < group.revision) {
+    state.groups[groupId] = group;
+    state.vault.groups[groupId] = vaultGroup;
+  }
   await saveVault();
 }
 export async function publishGroup(group: GroupState, records?: unknown) {

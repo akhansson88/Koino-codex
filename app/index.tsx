@@ -16,6 +16,8 @@ export default function Index() {
   const onboarding = useOnboardingProgress();
   const { t } = useAppTranslation();
 
+  if (state.authReady && state.signOutIncomplete) return <SignOutRecovery />;
+
   if (!state.authReady || (onboarding.pending && onboarding.userId !== state.currentUserId)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cream }}>
@@ -33,7 +35,7 @@ export default function Index() {
     return <Redirect href="/(tabs)" />;
   }
 
-  return state.signOutIncomplete ? <SignOutRecovery /> : <OnboardingScreen />;
+  return <OnboardingScreen />;
 }
 
 function SignOutRecovery() {

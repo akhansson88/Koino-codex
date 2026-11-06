@@ -11,6 +11,7 @@ import { crypto, session, sessionGeneration, identityRotationInProgress, lockSes
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
+import { hasOnboardingCommunity } from "@/state/store/profile-operations";
 import { OnboardingProgressContext } from "@/ui/onboarding-progress";
 
 function useWords() {
@@ -32,6 +33,12 @@ function Button({ label, onPress, disabled }: { label: string; onPress: () => vo
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: Boolean(disabled) }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.5 }]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 
+type ActiveOnboarding = {
+  userId: string;
+  generation: number;
+  progress: Exclude<OnboardingProgress, { phase: "complete" }>;
+};
+
 export function EncryptionBoundary({ children }: PropsWithChildren) {
   const w = useWords();
   const authRevision = useRef(0);
@@ -44,38 +51,63 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
-  const [onboarding, setOnboarding] = useState<{
-    userId: string;
-    generation: number;
-    progress: Exclude<OnboardingProgress, { phase: "complete" }>;
-  }>();
+  const [onboarding, setOnboardingState] = useState<ActiveOnboarding>();
+  const activeOnboarding = useRef<ActiveOnboarding | undefined>(undefined);
+  const onboardingWrite = useRef<ActiveOnboarding | undefined>(undefined);
+  function setOnboarding(value: ActiveOnboarding | undefined) {
+    activeOnboarding.current = value;
+    setOnboardingState(value);
+  }
   async function finish() {
     const uid = session().uid, token = sessionGeneration();
     const isCurrent = () => auth.currentUser?.uid === uid && token === sessionGeneration();
     setProgress("");
-    const onboarding = await readOnboardingProgress(uid);
-    if (!isCurrent()) return;
-    const complete = await personalMigrationComplete();
-    if (!isCurrent()) return;
-    if (!complete) {
-      setPhase("migrating");
-      await migratePersonal((message) => { if (isCurrent()) setProgress(message); }, onboarding?.phase === "journey" ? onboarding.signupName : undefined);
-    }
-    if (!isCurrent()) return;
-    await migrateOwnedGroups((message) => { if (isCurrent()) { setPhase("migrating"); setProgress(message); } });
-    if (isCurrent()) {
-      setOnboarding(onboarding && onboarding.phase !== "complete" ? { userId: uid, generation: token, progress: onboarding } : undefined);
+    try {
+      let saved = await readOnboardingProgress(uid);
+      if (!isCurrent()) return;
+      const complete = await personalMigrationComplete();
+      if (!isCurrent()) return;
+      if (!complete) {
+        setPhase("migrating");
+        await migratePersonal((message) => { if (isCurrent()) setProgress(message); }, saved?.phase === "journey" ? saved.signupName : undefined);
+      }
+      if (!isCurrent()) return;
+      await migrateOwnedGroups((message) => { if (isCurrent()) { setPhase("migrating"); setProgress(message); } });
+      if (!isCurrent()) return;
+      if (saved?.phase === "journey" && saved.creationGroupId) {
+        const created = await hasOnboardingCommunity(uid, saved.creationGroupId).catch(() => false);
+        if (!isCurrent()) return;
+        if (created) {
+          const guide = { phase: "guide", journey: "create" } as const;
+          // A failed check or save leaves the same attempt available for retry.
+          const persisted = await writeOnboardingProgress(uid, guide).then(() => true, () => false);
+          if (!isCurrent()) return;
+          if (persisted) saved = guide;
+        }
+      }
+      setOnboarding(saved && saved.phase !== "complete" ? { userId: uid, generation: token, progress: saved } : undefined);
       setPhase("ready");
+    } catch (problem) {
+      if (!isCurrent()) return;
+      setPhase("error");
+      throw problem;
     }
   }
   async function advanceOnboarding(uid: string, next: Exclude<OnboardingProgress, { phase: "journey" }>) {
-    const isCurrent = () => auth.currentUser?.uid === uid && sessionGeneration() === onboarding?.generation;
+    const isCurrent = () => auth.currentUser?.uid === uid
+      && sessionGeneration() === onboarding?.generation && activeOnboarding.current === onboarding;
     const expectedPhase = next.phase === "guide" ? "journey" : "guide";
-    if (!onboarding || onboarding.userId !== uid || onboarding.progress.phase !== expectedPhase || !isCurrent() || phase !== "ready") {
+    if (!onboarding || onboarding.userId !== uid || onboarding.progress.phase !== expectedPhase || !isCurrent()
+      || phase !== "ready" || onboardingWrite.current === onboarding) {
       throw new Error("This onboarding session is no longer available.");
     }
-    await writeOnboardingProgress(uid, next);
-    if (isCurrent()) setOnboarding(next.phase === "guide" ? { ...onboarding, progress: next } : undefined);
+    onboardingWrite.current = onboarding;
+    try {
+      await writeOnboardingProgress(uid, next);
+      if (isCurrent()) setOnboarding(next.phase === "guide" ? { ...onboarding, progress: next } : undefined);
+    } finally {
+      if (onboardingWrite.current === onboarding) onboardingWrite.current = undefined;
+    }
   }
   useEffect(() => {
     let active = true;
@@ -83,19 +115,20 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
       setOnboarding(undefined);
-      setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError("");
+      setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError(""); setBusy(false);
       if (!next) { setPhase("signedOut"); return; }
+      const isCurrent = () => active && authRevision.current === request && auth.currentUser?.uid === next.uid;
       setPhase("loading");
       void unlockExisting(next.uid).then(async (result) => {
-        if (!active || authRevision.current !== request) return;
+        if (!isCurrent()) return;
         if (result === "setup") {
           const nextDraft = await draftAccount(next.uid);
-          if (!active || authRevision.current !== request) return;
+          if (!isCurrent()) return;
           setDraft(nextDraft); setPhase("setup");
         }
         else if (result === "recovery") setPhase("recovery");
         else await finish();
-      }).catch((problem: Error) => { if (active && authRevision.current === request) { setError(problem.message); setPhase("error"); } });
+      }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
     });
     return () => { active = false; authRevision.current++; unsubscribe(); lockSession(); clearEncryptedImages(); };
   }, []);
@@ -115,11 +148,14 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       }
     });
   }, [user?.uid, phase]);
-  async function work(action: () => Promise<void>) {
+  async function work(action: (isCurrent: () => boolean) => Promise<void>) {
+    const revision = authRevision.current;
+    const isActive = () => revision === authRevision.current;
+    const isCurrent = () => isActive() && auth.currentUser?.uid === user?.uid;
     setBusy(true); setError("");
-    try { await action(); }
-    catch (problem) { setError(problem instanceof Error ? problem.message : w("Encryption could not be unlocked. Try again.", "Krypteringen kunde inte låsas upp. Försök igen.")); }
-    finally { setBusy(false); }
+    try { await action(isCurrent); }
+    catch (problem) { if (isActive()) setError(problem instanceof Error ? problem.message : w("Encryption could not be unlocked. Try again.", "Krypteringen kunde inte låsas upp. Försök igen.")); }
+    finally { if (isActive()) setBusy(false); }
   }
   if (phase === "signedOut" || phase === "ready") {
     return (
@@ -145,19 +181,48 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       <View style={styles.card}><Text selectable style={styles.body}>{draft.recoveryKey}</Text></View>
       <Text style={styles.body}>{w("Enter the last six characters to confirm you saved the code.", "Skriv de sista sex tecknen för att bekräfta att du sparat koden.")}</Text>
       <TextInput accessibilityLabel={w("Recovery code confirmation", "Bekräftelse av återställningskod")} autoCapitalize="none" autoCorrect={false} value={savedCode} onChangeText={setSavedCode} style={styles.input} />
-      <Button label={w("Enable encryption", "Aktivera kryptering")} disabled={busy || savedCode !== draft.recoveryKey.slice(-6)} onPress={() => void work(async () => { await confirmAccount(draft); setDraft(undefined); setSavedCode(""); await finish(); })} />
+      <Button label={w("Enable encryption", "Aktivera kryptering")} disabled={busy || savedCode !== draft.recoveryKey.slice(-6)} onPress={() => void work(async (isCurrent) => {
+        if (!isCurrent()) return;
+        await confirmAccount(draft);
+        if (!isCurrent()) return;
+        setDraft(undefined); setSavedCode(""); await finish();
+      })} />
     </> : null}
     {phase === "recovery" && user ? <>
       <Text style={styles.body}>{w("Unlock with your recovery code, or approve this device from an existing device under Encryption & devices. Resetting your login password does not recover encrypted history.", "Lås upp med återställningskoden, eller godkänn enheten från en befintlig enhet under Kryptering och enheter. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
       <TextInput accessibilityLabel={w("Recovery code", "Återställningskod")} secureTextEntry autoCapitalize="none" autoCorrect={false} value={code} onChangeText={setCode} style={styles.input} />
-      <Button label={w("Recover content", "Återställ innehåll")} disabled={busy || !code} onPress={() => void work(async () => { await recoverAccount(user.uid, code); setCode(""); await finish(); })} />
-      <Button label={w("Request device approval", "Begär godkännande av enheten")} disabled={busy} onPress={() => void work(async () => { setFingerprint(await requestDeviceApproval(user.uid)); })} />
+      <Button label={w("Recover content", "Återställ innehåll")} disabled={busy || !code} onPress={() => void work(async (isCurrent) => {
+        if (!isCurrent()) return;
+        await recoverAccount(user.uid, code);
+        if (isCurrent()) { setCode(""); await finish(); }
+      })} />
+      <Button label={w("Request device approval", "Begär godkännande av enheten")} disabled={busy} onPress={() => void work(async (isCurrent) => {
+        if (!isCurrent()) return;
+        const next = await requestDeviceApproval(user.uid);
+        if (isCurrent()) setFingerprint(next);
+      })} />
       {fingerprint ? <Text selectable style={styles.body}>{w("Compare this fingerprint on your existing device:", "Jämför detta fingeravtryck på din befintliga enhet:")} {fingerprint}</Text> : null}
-      <Button label={w("Check approval", "Kontrollera godkännande")} disabled={busy} onPress={() => void work(async () => { if (await unlockExisting(user.uid) !== "ready") throw new Error(w("This device is still waiting for approval.", "Enheten väntar fortfarande på godkännande.")); await finish(); })} />
+      <Button label={w("Check approval", "Kontrollera godkännande")} disabled={busy} onPress={() => void work(async (isCurrent) => {
+        if (!isCurrent()) return;
+        const result = await unlockExisting(user.uid);
+        if (!isCurrent()) return;
+        if (result !== "ready") throw new Error(w("This device is still waiting for approval.", "Enheten väntar fortfarande på godkännande."));
+        await finish();
+      })} />
     </> : null}
     {phase === "migrating" ? <><ActivityIndicator color={colors.ink} /><Text style={styles.body}>{w("Encrypting your existing history. Keep the app open; interrupted migrations resume safely.", "Krypterar din befintliga historik. Håll appen öppen; avbrutna migreringar kan återupptas.")}</Text>{progress ? <Text style={styles.body}>{progress}</Text> : null}</> : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {phase === "error" || (phase === "migrating" && error) ? <Button label={w("Retry", "Försök igen")} disabled={busy} onPress={() => void work(async () => { if (user && await unlockExisting(user.uid) === "ready") await finish(); else setPhase("recovery"); })} /> : null}
+    {phase === "error" || (phase === "migrating" && error) ? <Button label={w("Retry", "Försök igen")} disabled={busy} onPress={() => void work(async (isCurrent) => {
+      if (!user || !isCurrent()) return;
+      const result = await unlockExisting(user.uid);
+      if (!isCurrent()) return;
+      if (result === "ready") await finish();
+      else if (result === "recovery") setPhase("recovery");
+      else {
+        const nextDraft = await draftAccount(user.uid);
+        if (isCurrent()) { setDraft(nextDraft); setPhase("setup"); }
+      }
+    })} /> : null}
     {user ? <Button label={w("Sign out", "Logga ut")} disabled={busy} onPress={() => void work(async () => { await signOut(auth); })} /> : null}
   </ScrollView>;
 }

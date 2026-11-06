@@ -38,10 +38,21 @@ async function createAccount(sdkAuth, email, password) {
   return { user };
 }
 
+async function signIn(sdkAuth, email, password) {
+  assert.equal(sdkAuth, auth);
+  assert.equal(email, email.trim());
+  assert.equal(password, "fixture-password");
+  const user = accounts.get(email.toLowerCase());
+  if (!user) throw new Error("auth/invalid-credential");
+  await publishUser(user);
+  return { user };
+}
+
 const fixture = globalThis.__onboardingRegistration = {
   auth,
   registerBeforeAuth,
   createAccount,
+  signIn,
   storage: {
     getItem: async (key) => saved.get(key) ?? null,
     async setItem(key, value) {
@@ -56,6 +67,7 @@ const mocks = {
   "@firebase/auth": `
     export const beforeAuthStateChanged = globalThis.__onboardingRegistration.registerBeforeAuth;
     export const createUserWithEmailAndPassword = globalThis.__onboardingRegistration.createAccount;
+    export const signInWithEmailAndPassword = globalThis.__onboardingRegistration.signIn;
   `,
   "@/state/store/firebase": "export const auth = globalThis.__onboardingRegistration.auth;",
   "@/state/encryption/local-storage": "export default globalThis.__onboardingRegistration.storage;",
@@ -74,7 +86,7 @@ try {
     } }],
   });
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`;
-  const { readOnboardingProgress, writeOnboardingProgress, registerForOnboarding } = await import(moduleUrl);
+  const { readOnboardingProgress, writeOnboardingProgress, registerForOnboarding, signInToKoino } = await import(moduleUrl);
   const progressKey = (uid) => `e2ee.onboarding.v1.demo-koino.${uid}`;
   const existing = { uid: "existing", email: "existing@example.test" };
   accounts.set(existing.email, existing);
@@ -95,11 +107,15 @@ try {
   assert.equal(hooks.size, 1);
   assert.equal(persistedUser, null, "SDK persistence waits for the encrypted onboarding marker");
   assert.equal(auth.currentUser, null, "Auth observers cannot see a partially prepared registration");
-  assert.equal(await readOnboardingProgress(pendingUser.uid), null);
+  let readingPending = true;
+  const reload = readOnboardingProgress(pendingUser.uid).then((progress) => { readingPending = false; return progress; });
+  assert.equal(await readOnboardingProgress(existing.uid), null, "Another account's read is independent of the pending signup write");
+  assert.equal(readingPending, true, "The same account's read waits for its in-flight write");
   resumeWrite();
   await registration;
   pauseWrite = undefined;
   const pending = { phase: "journey", signupName: "New Member" };
+  assert.deepEqual(await reload, pending);
   assert.deepEqual(JSON.parse(published.at(-1).storage.get(progressKey(pendingUser.uid))), pending);
   assert.deepEqual(await readOnboardingProgress(pendingUser.uid), pending);
   assert.equal(persistedUser, pendingUser);
@@ -140,8 +156,14 @@ try {
   assert.equal(auth.currentUser, null);
   assert.equal(hooks.size, 0, "An aborted auth publication also removes its hook");
   failWrite = false;
-  await publishUser(interrupted);
-  assert.equal(await readOnboardingProgress(interrupted.uid), null, "Retry through ordinary sign-in succeeds after local storage recovers");
+  await signInToKoino(existing.email, "fixture-password");
+  assert.equal(await readOnboardingProgress(existing.uid), null, "A failed registration never changes another sign-in");
+  await publishUser(null);
+  await signInToKoino(interrupted.email, "fixture-password");
+  const recovered = { phase: "journey", signupName: "Interrupted" };
+  assert.deepEqual(JSON.parse(published.at(-1).storage.get(progressKey(interrupted.uid))), recovered);
+  assert.deepEqual(await readOnboardingProgress(interrupted.uid), recovered, "Sign-in can resume a known registration after a transient storage failure");
+  assert.equal(hooks.size, 0, "Recovery removes the pre-auth hook");
 
   saved.set(progressKey("malformed"), '{"phase":"journey","signupName":42}');
   await assert.rejects(readOnboardingProgress("malformed"), /progress could not be read/, "Invalid progress is distinguishable from an existing account");

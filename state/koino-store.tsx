@@ -72,7 +72,7 @@ import {
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
 import { auth, database, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
-import { registerForOnboarding } from "@/state/onboarding-progress";
+import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
 import {
   authMessage,
   asArray,
@@ -437,6 +437,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [supportIntents, setSupportIntents] = useState<SupportIntent[]>([]);
   const [authError, setAuthError] = useState<string>();
   const authActionPending = useRef(false);
+  const onboardingCreatePending = useRef(false);
   const [communityFeedError, setCommunityFeedError] = useState<string>();
   const [communityFeedGroupId, setCommunityFeedGroupId] = useState<Id>();
   const [communityFeedOffline, setCommunityFeedOffline] = useState<boolean>();
@@ -1264,7 +1265,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const dispatch = useCallback(
     async (action: Action) => {
       const authenticating = action.type === "signIn" || action.type === "signUp";
-      if (authenticating && (authActionPending.current || signOutPending.current || signOutIncomplete || auth.currentUser)) {
+      if (authenticating && (signOutPending.current || signOutIncomplete)) return;
+      if (authenticating && (authActionPending.current || auth.currentUser)) {
         throw new Error("Another account operation is in progress.");
       }
       if (action.type === "signOut" && action.expectedUserId && auth.currentUser?.uid !== action.expectedUserId) return;
@@ -1325,7 +1327,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               authActionPending.current = true;
               try {
                 if (action.type === "signUp") await registerForOnboarding(action.email, action.password, action.name);
-                else await FirebaseAuth.signInWithEmailAndPassword(auth, action.email.trim(), action.password);
+                else await signInToKoino(action.email, action.password);
               } finally {
                 authActionPending.current = false;
               }
@@ -1387,10 +1389,27 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await FirebaseAuth.updatePassword(firebaseUser, action.newPassword);
               return;
             }
-            case "createGroup":
+            case "createGroup": {
               if (!firebaseUser) return;
-              await createGroupForUser(firebaseUser, action.name, profile?.name);
+              if (!expectedUserId) {
+                await createGroupForUser(firebaseUser, action.name, profile?.name);
+                return;
+              }
+              if (onboardingCreatePending.current) throw new Error("Community creation is already in progress.");
+              onboardingCreatePending.current = true;
+              try {
+                const isCurrent = () => auth.currentUser?.uid === expectedUserId && sessionGeneration() === generation && !signOutPending.current;
+                const progress = await readOnboardingProgress(expectedUserId);
+                if (!isCurrent() || progress?.phase !== "journey") throw new Error("The account changed during onboarding.");
+                const groupId = progress.creationGroupId ?? id("group");
+                if (!progress.creationGroupId) await writeOnboardingProgress(expectedUserId, { ...progress, creationGroupId: groupId });
+                if (!isCurrent()) throw new Error("The account changed during onboarding.");
+                await createGroupForUser(firebaseUser, action.name, profile?.name, groupId);
+              } finally {
+                onboardingCreatePending.current = false;
+              }
               return;
+            }
             case "joinGroup":
               if (!firebaseUser) return;
               await joinGroupByInvite(firebaseUser, action.inviteCode, profile?.name);
