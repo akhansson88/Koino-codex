@@ -5,19 +5,20 @@ import { Modal, type ModalProps } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export type FullScreenModalHostProps = PropsWithChildren<
-  Pick<ModalProps, "animationType" | "onRequestClose" | "presentationStyle" | "visible">
+  Pick<ModalProps, "animationType" | "onDismiss" | "onRequestClose" | "presentationStyle" | "visible">
 >;
 
 export function FullScreenModalHost({
   animationType,
   children,
+  onDismiss,
   onRequestClose,
   presentationStyle,
   visible,
 }: FullScreenModalHostProps) {
   const reducedMotion = useReducedMotion();
   return (
-    <Modal animationType={reducedMotion ? "none" : animationType} presentationStyle={presentationStyle} visible={visible} onRequestClose={onRequestClose}>
+    <Modal animationType={reducedMotion ? "none" : animationType} presentationStyle={presentationStyle} visible={visible} onDismiss={onDismiss} onRequestClose={onRequestClose}>
       <GestureHandlerRootView style={{ flex: 1 }}><OutsideSheet>{children}</OutsideSheet></GestureHandlerRootView>
     </Modal>
   );
