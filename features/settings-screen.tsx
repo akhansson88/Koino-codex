@@ -1164,12 +1164,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setJoinSheetVisible(false);
   }
 
-  async function handleSignOut() {
-    setJoinSheetVisible(false);
-    await dispatch({ type: "signOut" });
-    router.replace("/");
-  }
-
   function openRoomOverview() {
     navigateToRoomView("rooms");
     setJoinSheetVisible(false);
@@ -1819,9 +1813,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </Card>
       </View>
 
-      <SecondaryButton icon="log-out" onPress={handleSignOut}>
-        {t("common.logOut")}
-      </SecondaryButton>
+      {state.currentUserId ? <CommunityRoomsLogout key={state.currentUserId} userId={state.currentUserId} /> : null}
 
       <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
@@ -1850,6 +1842,49 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </AppScreen>
       </View>
     </>
+  );
+}
+
+function CommunityRoomsLogout({ userId }: { userId: Id }) {
+  const { dispatch } = useKoinoActions();
+  const { t } = useAppTranslation();
+  const [status, setStatus] = useState<"idle" | "pending" | "failed">("idle");
+  const pending = useRef(false);
+  const mounted = useRef(false);
+
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  async function signOut() {
+    if (!mounted.current || pending.current) return;
+    pending.current = true;
+    setStatus("pending");
+    try {
+      await dispatch({ type: "signOut", expectedUserId: userId });
+      if (mounted.current) setStatus("idle");
+    } catch {
+      if (mounted.current) setStatus("failed");
+    } finally {
+      pending.current = false;
+    }
+  }
+
+  const label = status === "pending" ? "identity.account.loggingOut"
+    : status === "failed" ? "identity.account.retryLogout" : "common.logOut";
+
+  return (
+    <View style={{ gap: 8 }}>
+      {status === "failed" ? (
+        <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive">
+          {t("identity.account.logoutError")}
+        </BodyText>
+      ) : null}
+      <SecondaryButton disabled={status === "pending"} icon="log-out" onPress={signOut}>
+        {t(label)}
+      </SecondaryButton>
+    </View>
   );
 }
 

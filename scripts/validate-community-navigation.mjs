@@ -53,7 +53,7 @@ const mocks = {
   "expo-router": `
     import React from "react";
     const h = globalThis.__communityNavigation;
-    export const router = { navigate: route => { h.navigated = route; h.route = (typeof route === "string" ? route : route.pathname).split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace() {}, dismissTo: route => { h.dismissedTo = route; } };
+    export const router = { navigate: route => { h.navigated = route; h.route = (typeof route === "string" ? route : route.pathname).split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace: route => { h.replaced?.push(route); }, dismissTo: route => { h.dismissedTo = route; } };
     export const useNavigation = () => ({ canGoBack: () => true, setOptions() {} });
     export const useLocalSearchParams = () => (h.params ?? {});
     export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
@@ -378,6 +378,7 @@ try {
       export { HomePrayerFlowScreen } from "./features/home-prayer-flow-screen";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
+      export { default as Rooms } from "./app/(tabs)/community/rooms";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
       export { default as CheckIns } from "./app/(tabs)/community/checkins";`, resolveDir: process.cwd(), loader: "tsx" },
     outfile, bundle: true, platform: "node", format: "cjs", jsx: "automatic",
@@ -1096,8 +1097,114 @@ try {
     if (entryVisibility === "room") assert.ok(JSON.stringify(tree.toJSON()).includes("community.composer.sharedWithCommunity"));
     await act(() => tree.unmount());
   }
-  // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
   const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+  const roomsState = { ...baseState, currentGroupId: undefined, groups: [], memberships: [] };
+  const nextRoomsState = { ...roomsState, currentUserId: "second-reader", users: [{ id: "second-reader", name: "Second Reader" }] };
+  const roomsCopy = key => screens.translateMessage(harness.language, key);
+  const roomsButton = (type, key) => tree.root.findAllByType(type).find(node => node.props.children === roomsCopy(key));
+  const roomsSheet = () => tree.root.findAllByType("BottomSheet").find(node => node.props.title === roomsCopy("community.rooms.joinOrCreate"));
+  const roomsField = key => roomsSheet().findAllByType("TextInputField").find(node => node.props.placeholder === roomsCopy(key));
+  const logoutAlert = () => tree.root.findAll(node => node.props.accessibilityRole === "alert" && node.props.children === roomsCopy("identity.account.logoutError"))[0];
+  const updateRooms = async (state) => {
+    harness.state = state;
+    await act(() => tree.update(React.createElement(screens.Rooms)));
+  };
+  try {
+    for (const language of ["en", "sv"]) {
+      harness.language = language;
+      harness.localized = true;
+      harness.route = "rooms";
+      harness.state = roomsState;
+      harness.actions = [];
+      harness.replaced = [];
+      const first = deferred();
+      harness.dispatch = action => action.type === "signOut" ? first.promise : undefined;
+      await act(() => { tree = create(React.createElement(screens.Rooms)); });
+      let attempt;
+      await act(() => {
+        attempt = roomsButton("SecondaryButton", "common.logOut").props.onPress();
+        void Promise.resolve(attempt).catch(() => undefined);
+      });
+      await act(async () => {
+        first.reject(new Error("Simulated sign-out persistence failure"));
+        await assert.doesNotReject(async () => attempt, "Community Rooms must handle the rejected logout promise");
+      });
+      assert.deepEqual(harness.actions, [{ type: "signOut", expectedUserId: "reader" }]);
+      assert.equal(logoutAlert()?.props.accessibilityLiveRegion, "assertive", `${language} failure copy is presented as an accessible alert`);
+      assert.equal(roomsSheet(), undefined, "Failure is visible on Rooms without opening Join/Create");
+      assert.equal(harness.state.currentUserId, "reader");
+      assert.deepEqual(harness.replaced, [], "Failure must leave navigation in the current session");
+
+      const retry = deferred();
+      harness.dispatch = action => action.type === "signOut" ? retry.promise : undefined;
+      const retryButton = roomsButton("SecondaryButton", "identity.account.retryLogout");
+      assert.ok(retryButton, "A failed logout offers a labeled retry action");
+      assert.equal(Boolean(retryButton.props.disabled), false, "A failed logout offers an enabled retry");
+      await act(() => { attempt = retryButton.props.onPress(); void retryButton.props.onPress(); });
+      assert.equal(roomsButton("SecondaryButton", "identity.account.loggingOut")?.props.disabled, true, "The pending action is disabled");
+      assert.equal(harness.actions.length, 2, "Repeated presses dispatch only one retry");
+      assert.equal(logoutAlert(), undefined, "Retry clears the prior logout error");
+      await act(async () => { retry.resolve(); await attempt; });
+      assert.deepEqual(harness.actions.at(-1), { type: "signOut", expectedUserId: "reader" });
+      assert.deepEqual(harness.replaced, [], "Success lets the auth boundary own the navigation reset");
+
+      // A previously queued page press cannot dismiss the native Join/Create sheet.
+      const queued = deferred();
+      harness.dispatch = action => action.type === "signOut" ? queued.promise : undefined;
+      const queuedPress = roomsButton("SecondaryButton", "common.logOut").props.onPress;
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      await act(() => {
+        roomsField("community.rooms.code").props.onChangeText("room123");
+        roomsField("community.rooms.newNamePlaceholder").props.onChangeText("Unsaved community");
+        attempt = queuedPress();
+      });
+      assert.ok(roomsSheet(), "A pending logout leaves the existing Join/Create sheet open");
+      await act(async () => { queued.reject(new Error("Queued sign-out failed")); await attempt; });
+      assert.ok(roomsSheet(), "Failed logout retains the existing Join/Create sheet");
+      assert.equal(roomsField("community.rooms.code").props.value, "ROOM123", "Failed logout retains the invite code draft");
+      assert.equal(roomsField("community.rooms.newNamePlaceholder").props.value, "Unsaved community", "Failed logout retains the new community draft");
+      await act(() => roomsSheet().props.onClose());
+      assert.equal(roomsSheet(), undefined, "Join/Create still closes independently of logout");
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      assert.equal(roomsField("community.rooms.code").props.value, "ROOM123", "Ordinary sheet close and reopen still preserves the invite code");
+      await act(async () => { await roomsButton("PrimaryButton", "community.rooms.joinByCode").props.onPress(); });
+      assert.deepEqual(harness.actions.at(-1), { type: "joinGroup", inviteCode: "ROOM123" });
+      assert.equal(roomsSheet(), undefined, "Successful join still closes Join/Create");
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      assert.equal(roomsField("community.rooms.code").props.value, "", "Successful join still resets the invite code");
+      await act(async () => { await roomsButton("PrimaryButton", "community.rooms.createAction").props.onPress(); });
+      assert.deepEqual(harness.actions.at(-1), { type: "createGroup", name: "Unsaved community" });
+      assert.equal(roomsSheet(), undefined, "Successful create still closes Join/Create");
+
+      const stale = deferred();
+      harness.dispatch = action => action.type === "signOut" ? stale.promise : undefined;
+      const stalePress = roomsButton("SecondaryButton", "identity.account.retryLogout").props.onPress;
+      await act(() => { attempt = stalePress(); });
+      await updateRooms(nextRoomsState);
+      await act(async () => { stale.reject(new Error("Old account logout failed")); await attempt; });
+      assert.equal(logoutAlert(), undefined, "Old logout completion cannot show an error to the new account");
+      const replacementLogout = roomsButton("SecondaryButton", "common.logOut");
+      assert.ok(replacementLogout, "The replacement account has a fresh logout action");
+      assert.equal(Boolean(replacementLogout.props.disabled), false, "Old pending state cannot disable logout for the replacement account");
+      const countBeforeStalePress = harness.actions.length;
+      await act(async () => { await stalePress(); });
+      assert.equal(harness.actions.length, countBeforeStalePress, "A captured logout press cannot act in the replacement account");
+      await updateRooms(roomsState);
+      await act(async () => { await stalePress(); });
+      assert.equal(harness.actions.length, countBeforeStalePress, "Returning to the same UID does not revive its old logout callback");
+      assert.deepEqual(harness.replaced, [], "An old completion cannot navigate the replacement account");
+      await act(() => tree.unmount());
+      tree = undefined;
+    }
+  } finally {
+    delete harness.localized;
+    delete harness.language;
+    delete harness.dispatch;
+    delete harness.replaced;
+    harness.route = "index";
+  }
+  console.log("Community Rooms logout passed: scoped dispatch, accessible EN/SV failure and retry, pending duplicate guard, auth-owned navigation, account replacement, and Join/Create lifecycle.");
+  // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
   const modalDefaults = { visible: true, step: "details", mood: "peaceful", note: "", verses: [], roomName: "Test community", share: false, onBack() {}, onClose() {}, onDone() {}, onMood() {}, onNote() {}, onShare() {}, onVerses() {} };
   let modalProps;
   const updateModal = async changes => { modalProps = { ...modalProps, ...changes }; await act(() => tree.update(React.createElement(screens.RealCheckInModal, modalProps))); };
