@@ -6,17 +6,14 @@ import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bi
 import { tabBarHeight } from "@/ui/navigation-layout";
 import AsyncStorage from "@/state/encryption/local-storage";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   AppState,
   BackHandler,
-  Easing,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -35,14 +32,12 @@ import {
   type BibleHistory,
 } from "@/features/bible-history";
 import {
-  bibleChapterAsync,
   bibleCrossReferences,
   bibleVersionFor,
   buildBibleVerse,
   nextBibleChapter,
   normalizeBiblePosition,
   previousBibleChapter,
-  type BibleChapter,
   type BibleCrossReference,
   type BibleFootnote,
   type BiblePosition,
@@ -68,7 +63,6 @@ import {
   type SelectedBibleFootnote,
   type ReaderToast,
   type PendingVerseComposerAction,
-  type ChapterSwipeDirection,
   type BibleReaderPreferences,
   type VerseQuickAction,
 } from "@/features/bible-reader/types";
@@ -105,7 +99,12 @@ import { BibleReaderHeader } from "@/features/bible-reader/header";
 import { BiblePlanReaderPanel } from "@/features/bible-reader/plan-panel";
 import { BibleText } from "@/features/bible-reader/chapter-text";
 import { useVisibleVerseSelection } from "@/features/bible-reader/use-visible-verse";
-import { ChapterSwipeIndicator } from "@/features/bible-reader/swipe-indicator";
+import { ChapterPager, useChapterCursor, type ChapterPagerHandle } from "@/features/bible-reader/chapter-pager";
+import { ChapterPageScrollView } from "@/features/bible-reader/chapter-page";
+import { useChapterWindow } from "@/features/bible-reader/chapter-window";
+import { chapterIndex, readerChapterKey, ReaderScrollIntent, type ReaderNavigationIntent } from "@/features/bible-reader/chapter-navigation";
+import { chapterSelectionHaptic } from "@/features/bible-reader/chapter-haptics";
+import { useReducedMotion } from "@/ui/use-reduced-motion";
 import { BibleBottomReadingControls } from "@/features/bible-reader/reading-controls";
 import { SelectedVerseSuggestionBar, VerseActionSheet } from "@/features/bible-reader/verse-actions";
 import { ReaderToastMessage } from "@/features/bible-reader/toast";
@@ -118,9 +117,10 @@ import { ScriptureSearchContent } from "@/features/bible-search/search-content";
 import { useScriptureSearchSession } from "@/features/bible-search/use-search";
 import { ReaderCircleButton } from "@/features/bible-reader/header";
 
-function isChapterSwipeGesture(dx: number, dy: number) {
-  return Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.8;
-}
+const ignorePreviewEvent = () => {};
+const emptyVerseNumbers: number[] = [];
+
+type ReaderNavigationOptions = { scroll?: boolean; highlight?: boolean; fromAudio?: boolean; intent?: ReaderNavigationIntent; haptic?: boolean };
 
 type BibleReaderPreferenceSyncStatus = {
   userId?: string;
@@ -137,16 +137,6 @@ type PendingBibleReaderCloudSave = {
   snapshot: StoredBibleReaderPreferences;
   sync: BibleReaderPreferenceSyncStatus;
 };
-
-const chapterSwipeActivationDistance = 12;
-
-const chapterSwipeActivationRatio = 1.6;
-
-const chapterScrollIntentDistance = 6;
-
-const chapterSwipeDistanceRatio = 0.24;
-
-const chapterSwipeVelocity = 0.7;
 
 export function BibleScreen() {
   const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
@@ -170,18 +160,22 @@ export function BibleScreen() {
   const actionReturnFocusRef = useRef<View | null>(null);
   const verseRowsRef = useRef<Record<number, MeasurableView | null>>({});
   const readerScrollOffsetRef = useRef(0);
-  const pendingScrollVerseRef = useRef<number | undefined>(undefined);
+  const readerScrollIntent = useRef(new ReaderScrollIntent());
+  const chapterFeedbackRevisionRef = useRef<number | undefined>(undefined);
+  const programmaticTopRef = useRef(false);
   const programmaticScrollVerseRef = useRef<number | undefined>(undefined);
   const positionRef = useRef<BiblePosition>(defaultPosition);
   const historyRef = useRef<BibleHistory>(initialBibleHistory(defaultPosition));
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const chapterSwipeX = useRef(new Animated.Value(0)).current;
-  const chapterSwipeAnimatingRef = useRef(false);
-  const chapterSwipeBlockedByScrollRef = useRef(false);
+  const pagerRef = useRef<ChapterPagerHandle>(null);
+  const pagerInteractingRef = useRef(false);
   const verseLongPressActiveRef = useRef(false);
 
   const [position, setPosition] = useState<BiblePosition>(defaultPosition);
+  const [navigationRevision, setNavigationRevision] = useState(0);
+  const chapterCursor = useChapterCursor(position);
+  const reducedMotion = useReducedMotion();
   const [history, setHistory] = useState<BibleHistory>(() => initialBibleHistory(defaultPosition));
   const [highlightedPosition, setHighlightedPosition] = useState<BiblePosition | undefined>();
   const [bibleVersionId, setBibleVersionId] = useState<BibleVersionId>(defaultBibleVersionId);
@@ -229,10 +223,9 @@ export function BibleScreen() {
     return () => { highlightFeedbackRef.current.active = false; };
   }, []);
   const [pendingVerseComposerAction, setPendingVerseComposerAction] = useState<PendingVerseComposerAction | undefined>();
-  const [chapterSwipeDirection, setChapterSwipeDirection] = useState<ChapterSwipeDirection>("idle");
   const [highlightColorManagerVisible, setHighlightColorManagerVisible] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
-  const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
+  const [chapterControlsHeight, setChapterControlsHeight] = useState(48);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
   const readerPreferencesSyncRef = useRef<BibleReaderPreferenceSyncStatus>({
     connectionKnown: false,
@@ -268,8 +261,9 @@ export function BibleScreen() {
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
   const readerLayoutKey = `${chapterKey}:${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}:${width}`;
   if (layoutChapterKeyRef.current !== readerLayoutKey) {
-    if (layoutChapterKeyRef.current.startsWith(`${chapterKey}:`)) {
-      pendingScrollVerseRef.current = positionRef.current.verse;
+    if (layoutChapterKeyRef.current.startsWith(`${chapterKey}:`) && readerScrollIntent.current.pending?.target.kind !== "top") {
+      readerScrollIntent.current.request(chapterKey, readerScrollOffsetRef.current <= 1 && positionRef.current.verse === 1
+        ? { kind: "top" } : { kind: "verse", verse: positionRef.current.verse });
     }
     layoutChapterKeyRef.current = readerLayoutKey;
     verseOffsetsRef.current = {};
@@ -277,21 +271,8 @@ export function BibleScreen() {
     verseHeightsRef.current = {};
     verseRowsRef.current = {};
   }
-  const [loadedChapter, setLoadedChapter] = useState<{ key: string; value: BibleChapter }>();
-  const [chapterLoadError, setChapterLoadError] = useState(false);
-  const [chapterLoadAttempt, setChapterLoadAttempt] = useState(0);
+  const { pages: chapterPages, loadedChapter, retry: retryChapter } = useChapterWindow(position, bibleVersionId);
   const chapter = loadedChapter?.key === chapterKey ? loadedChapter.value : { heading: undefined, subtitles: [], verses: [] };
-  useEffect(() => {
-    let active = true;
-    setChapterLoadError(false);
-    void bibleChapterAsync(position.book, position.chapter, bibleVersionId).then((value) => {
-      if (active) setLoadedChapter({ key: chapterKey, value });
-    }).catch((error) => {
-      if (active) setChapterLoadError(true);
-      console.error("[bible] Could not load chapter", error);
-    });
-    return () => { active = false; };
-  }, [chapterKey, chapterLoadAttempt]);
   const chapterVerses = chapter.verses;
   const { select: selectVisibleAudioVerse, retry: retryAudioSelection, layoutChanged: audioSelectionLayoutChanged, cancel: cancelAudioSelection } = useVisibleVerseSelection({
     chapterKey,
@@ -325,10 +306,9 @@ export function BibleScreen() {
       ? { day: selectedPlan.days[index], index, isBeforeStart: false, isAfterEnd: false }
       : currentPlanDay(selectedPlan);
   }, [selectedPlan, selectedPlanDayNumber]);
-  const selectedPlanMarkers = useMemo(
-    () => (selectedPlan ? planMarkersForChapter(selectedPlan, position, selectedPlanCurrentDay?.day) : []),
-    [position.book, position.chapter, selectedPlan, selectedPlanCurrentDay],
-  );
+  const pagePlanMarkers = useMemo(() => Object.fromEntries(chapterPages.map(page => [page.key,
+    selectedPlan ? planMarkersForChapter(selectedPlan, page.position, selectedPlanCurrentDay?.day) : [],
+  ])), [chapterPages, selectedPlan, selectedPlanCurrentDay]);
   const selectedVerseRanges = useMemo(() => selectedVerseRangesFor(selectedVerseNumbers), [selectedVerseNumbers]);
   const selectedVerseReference = useMemo(() => selectedVerseReferenceLabel(position, selectedVerseRanges), [position, selectedVerseRanges]);
   const selectedPassages = useMemo(
@@ -343,12 +323,12 @@ export function BibleScreen() {
     ),
     [selectedPassages, selectedVerseRanges.length, state.savedVerses],
   );
-  const chapterHighlightByVerse = useMemo(() => {
+  const pageHighlights = useMemo(() => Object.fromEntries(chapterPages.map(page => {
     const highlights = state.bibleHighlights
       .filter(
         (highlight) =>
-          highlight.book === position.book &&
-          highlight.chapter === position.chapter &&
+          highlight.book === page.position.book &&
+          highlight.chapter === page.position.chapter &&
           highlight.translation === bibleVersion.translation,
       )
       .sort((a, b) => highlightTime(b) - highlightTime(a));
@@ -362,8 +342,8 @@ export function BibleScreen() {
       }
     });
 
-    return byVerse;
-  }, [bibleVersion.translation, position.book, position.chapter, state.bibleHighlights]);
+    return [page.key, byVerse];
+  })), [bibleVersion.translation, chapterPages, state.bibleHighlights]);
   const selectedHighlightIds = useMemo(() => {
     if (selectedVerseRanges.length === 0) return [];
 
@@ -474,6 +454,8 @@ export function BibleScreen() {
       const nextPreferences: BibleReaderPreferences = source === "cloud"
         ? { ...snapshot.preferences, appTheme: "light" }
         : snapshot.preferences;
+      const signature = readerPreferencesSignature(nextPreferences);
+      const unchanged = didHydrate && sync.lastSignature === signature;
       const appliedSnapshot = { preferences: nextPreferences, updatedAt: snapshot.updatedAt };
       const pendingSave = pendingReaderCloudSaveRef.current;
       if (pendingSave?.sync === sync && pendingSave.snapshot.updatedAt <= snapshot.updatedAt) {
@@ -481,13 +463,19 @@ export function BibleScreen() {
       }
       sync.localSnapshot = appliedSnapshot;
       sync.updatedAt = snapshot.updatedAt;
-      sync.lastSignature = readerPreferencesSignature(nextPreferences);
+      sync.lastSignature = signature;
       didHydrate = true;
       clearTimeout(fallbackTimeout);
       void AsyncStorage.setItem(storageKey, serializeStoredBibleReaderPreferences(appliedSnapshot));
 
+      // Acknowledging our own save must not become another verse navigation.
+      // Its delayed echo can arrive during the very next chapter gesture.
+      if (unchanged) return;
+
       verseOffsetsRef.current = {};
-      pendingScrollVerseRef.current = nextPreferences.position.verse;
+      readerScrollIntent.current.request(readerChapterKey(nextPreferences.bibleVersionId, nextPreferences.position), { kind: "verse", verse: nextPreferences.position.verse });
+      programmaticTopRef.current = false;
+      setNavigationRevision(value => value + 1);
       positionRef.current = nextPreferences.position;
       historyRef.current = nextPreferences.history;
       setHistory(nextPreferences.history);
@@ -701,17 +689,36 @@ export function BibleScreen() {
     setSelectedFootnote(undefined);
   }, [bibleVersionId]);
 
-  const tryScrollToVerse = useCallback((verse: number, animated: boolean) => {
+  const tryScrollToVerse = useCallback((verse: number, animated: boolean, request = readerScrollIntent.current.pending) => {
+    if (!request || request.target.kind !== "verse" || request.target.verse !== verse ||
+      !readerScrollIntent.current.isCurrent(request, chapterKey) || layoutChapterKeyRef.current !== readerLayoutKey) return false;
     const offset = verseOffsetsRef.current[verse];
     if (typeof offset !== "number") return false;
-    pendingScrollVerseRef.current = undefined;
+    readerScrollIntent.current.complete(request);
+    programmaticTopRef.current = false;
     programmaticScrollVerseRef.current = verse;
     scrollRef.current?.scrollTo({ animated, y: Math.max(0, offset - 18) });
     return true;
-  }, []);
+  }, [chapterKey, readerLayoutKey]);
+
+  const tryScrollToChapterTop = useCallback((request = readerScrollIntent.current.pending) => {
+    if (!request || request.target.kind !== "top" || !readerScrollIntent.current.isCurrent(request, chapterKey) ||
+      loadedChapter?.key !== chapterKey || !scrollRef.current) return;
+    programmaticScrollVerseRef.current = undefined;
+    programmaticTopRef.current = true;
+    readerScrollOffsetRef.current = 0;
+    scrollRef.current.scrollTo({ y: 0, animated: false });
+    readerScrollIntent.current.complete(request);
+    if (chapterFeedbackRevisionRef.current === request.revision) {
+      chapterFeedbackRevisionRef.current = undefined;
+      chapterSelectionHaptic();
+    }
+  }, [chapterKey, loadedChapter?.key]);
+
+  useLayoutEffect(() => { tryScrollToChapterTop(); }, [tryScrollToChapterTop, navigationRevision, readerLayoutKey]);
 
   const scrollToAudioVerse = useCallback(() => {
-    if (!isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter || loadedChapter?.key !== chapterKey) return;
+    if (pagerInteractingRef.current || !isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter || loadedChapter?.key !== chapterKey) return;
     if (flowingParagraphText && AppState.currentState !== "active") return;
     audioFollowScroll.current.tryScroll(chapterKey, (verse, done) => {
       if (!readerViewportRef.current) return;
@@ -742,6 +749,7 @@ export function BibleScreen() {
         }));
       });
     }, (offset, verse) => {
+      programmaticTopRef.current = false;
       programmaticScrollVerseRef.current = verse;
       scrollRef.current?.scrollTo({ animated: true, y: offset });
     });
@@ -791,12 +799,15 @@ export function BibleScreen() {
   }, [ensureVerseVisibleAboveSelection, selectedVerseNumbers]);
 
   const jumpToPosition = useCallback(
-    (nextPosition: Partial<BiblePosition>, shouldScroll = true, shouldHighlight = false, fromAudio = false) => {
+    (nextPosition: Partial<BiblePosition>, { scroll: shouldScroll = true, highlight: shouldHighlight = false, fromAudio = false, intent = "verse", haptic = intent === "chapter" }: ReaderNavigationOptions = {}) => {
       cancelAudioSelection();
       if (!fromAudio) { setFollowAudio(false); audioFollowScroll.current.cancel(); }
       const normalized = normalizeBiblePosition(nextPosition, fromAudio ? "reformationsbibeln2026" : bibleVersionId);
       const current = positionRef.current;
       programmaticScrollVerseRef.current = undefined;
+      programmaticTopRef.current = false;
+      chapterFeedbackRevisionRef.current = undefined;
+      readerScrollIntent.current.cancel();
       const nextHistory = visitBiblePosition(historyRef.current, normalized);
       if (nextHistory !== historyRef.current) {
         historyRef.current = nextHistory;
@@ -811,19 +822,22 @@ export function BibleScreen() {
       }
 
       if (shouldScroll) {
-        pendingScrollVerseRef.current = normalized.verse;
-        if (sameChapter) {
-          requestAnimationFrame(() => tryScrollToVerse(normalized.verse, true));
+        const request = readerScrollIntent.current.request(readerChapterKey(fromAudio ? "reformationsbibeln2026" : bibleVersionId, normalized),
+          intent === "chapter" ? { kind: "top" } : { kind: "verse", verse: normalized.verse });
+        if (haptic && intent === "chapter") chapterFeedbackRevisionRef.current = request.revision;
+        if (sameChapter && intent === "verse") {
+          requestAnimationFrame(() => tryScrollToVerse(normalized.verse, !reducedMotion, request));
         }
       }
 
       positionRef.current = normalized;
       setPosition(normalized);
+      setNavigationRevision(value => value + 1);
       if (shouldHighlight) {
         showTemporaryHighlight(normalized);
       }
     },
-    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection],
+    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion],
   );
 
   const hadAudioSession = useRef(false);
@@ -847,12 +861,12 @@ export function BibleScreen() {
 
   useEffect(() => {
     if (!audioChapter || !activelyFollowingAudio || !isAudioPageFocused || !spokenVerse) { audioFollowScroll.current.cancel(); return; }
-    pendingScrollVerseRef.current = undefined;
+    readerScrollIntent.current.cancel();
     const targetKey = `reformationsbibeln2026:${audioChapter.book}:${audioChapter.chapter}`;
     audioFollowScroll.current.request(targetKey, spokenVerse);
     if (bibleVersionId !== "reformationsbibeln2026") setBibleVersionId("reformationsbibeln2026");
     if (positionRef.current.book !== audioChapter.book || positionRef.current.chapter !== audioChapter.chapter) {
-      jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse }, false, false, true);
+      jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse }, { scroll: false, fromAudio: true });
     }
     const frame = requestAnimationFrame(scrollToAudioVerse);
     return () => { cancelAnimationFrame(frame); audioFollowScroll.current.cancel(); };
@@ -869,17 +883,19 @@ export function BibleScreen() {
     const destination = nextHistory.entries[nextHistory.index];
     const current = positionRef.current;
     programmaticScrollVerseRef.current = undefined;
+    programmaticTopRef.current = false;
     const sameChapter = current.book === destination.book && current.chapter === destination.chapter;
     if (!sameChapter) {
       verseOffsetsRef.current = {};
       verseRowsRef.current = {};
       setSelectedVerseNumbers([]);
     }
-    pendingScrollVerseRef.current = destination.verse;
-    if (sameChapter) requestAnimationFrame(() => tryScrollToVerse(destination.verse, true));
+    const request = readerScrollIntent.current.request(readerChapterKey(bibleVersionId, destination), { kind: "verse", verse: destination.verse });
+    if (sameChapter) requestAnimationFrame(() => tryScrollToVerse(destination.verse, !reducedMotion, request));
     positionRef.current = destination;
     setPosition(destination);
-  }, [bibleVersionId, tryScrollToVerse, cancelAudioSelection]);
+    setNavigationRevision(value => value + 1);
+  }, [bibleVersionId, tryScrollToVerse, cancelAudioSelection, reducedMotion]);
 
   useEffect(() => {
     if (!preferencesReady || !planParams.planId || !planParams.planJump || handledPlanJump.current === planParams.planJump) return;
@@ -890,13 +906,13 @@ export function BibleScreen() {
     handledPlanJump.current = planParams.planJump;
     setSelectedPlanId(plan.id);
     setSelectedPlanDayNumber(day.dayNumber);
-    jumpToPosition(start, true, true);
+    jumpToPosition(start, { highlight: true });
   }, [activeBiblePlans, jumpToPosition, planParams.planId, planParams.planDay, planParams.planJump, preferencesReady]);
 
   const jumpToSelectedPlanDay = useCallback(() => {
     const start = firstPositionForPlanDay(selectedPlanCurrentDay?.day);
     if (start) {
-      jumpToPosition(start, true, true);
+      jumpToPosition(start, { highlight: true });
     }
   }, [jumpToPosition, selectedPlanCurrentDay?.day]);
 
@@ -914,6 +930,10 @@ export function BibleScreen() {
     cancelAudioSelection();
     setFollowAudio(false); audioFollowScroll.current.cancel();
     const nextPosition = normalizeBiblePosition(positionRef.current, nextVersionId);
+    readerScrollIntent.current.request(readerChapterKey(nextVersionId, nextPosition), { kind: "verse", verse: nextPosition.verse });
+    programmaticTopRef.current = false;
+    chapterFeedbackRevisionRef.current = undefined;
+    setNavigationRevision(value => value + 1);
     positionRef.current = nextPosition;
     setPosition(nextPosition);
     const entries: BiblePosition[] = [];
@@ -946,11 +966,12 @@ export function BibleScreen() {
       verseOffsetsRef.current[verse] = absoluteOffset;
       if (verse === paragraphSpokenVerse && changed) refreshParagraphAudioFollow();
       else requestAnimationFrame(scrollToAudioVerse);
-      if (pendingScrollVerseRef.current === verse) {
-        requestAnimationFrame(() => tryScrollToVerse(verse, true));
+      const request = readerScrollIntent.current.pending;
+      if (request?.target.kind === "verse" && request.target.verse === verse) {
+        requestAnimationFrame(() => tryScrollToVerse(verse, !reducedMotion, request));
       }
     },
-    [readerLayoutKey, tryScrollToVerse, scrollToAudioVerse, audioSelectionLayoutChanged, paragraphSpokenVerse, refreshParagraphAudioFollow],
+    [readerLayoutKey, tryScrollToVerse, scrollToAudioVerse, audioSelectionLayoutChanged, paragraphSpokenVerse, refreshParagraphAudioFollow, reducedMotion],
   );
 
   const handleVerseRef = useCallback((verse: number, node: MeasurableView | null) => {
@@ -958,6 +979,28 @@ export function BibleScreen() {
     verseRowsRef.current[verse] = node;
     audioSelectionLayoutChanged();
   }, [readerLayoutKey, audioSelectionLayoutChanged]);
+
+  const handleReaderOrigin = useCallback((y: number) => {
+    if (layoutChapterKeyRef.current !== readerLayoutKey) return;
+    readerContentOriginRef.current = y;
+    audioSelectionLayoutChanged();
+    for (const [verse, offset] of Object.entries(relativeVerseOffsetsRef.current)) handleVerseLayout(Number(verse), offset);
+  }, [readerLayoutKey, audioSelectionLayoutChanged, handleVerseLayout]);
+
+  const handlePagerInteraction = useCallback((active: boolean) => {
+    const wasActive = pagerInteractingRef.current;
+    pagerInteractingRef.current = active;
+    if (!active && wasActive) requestAnimationFrame(scrollToAudioVerse);
+  }, [scrollToAudioVerse]);
+
+  const handleReaderScrollBeginDrag = useCallback(() => {
+    setFollowAudio(false);
+    audioFollowScroll.current.cancel();
+    readerScrollIntent.current.cancel();
+    chapterFeedbackRevisionRef.current = undefined;
+    programmaticScrollVerseRef.current = undefined;
+    programmaticTopRef.current = false;
+  }, []);
 
   const openCrossReferences = useCallback(
     (verse: number) => {
@@ -977,9 +1020,13 @@ export function BibleScreen() {
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (layoutChapterKeyRef.current !== readerLayoutKey || pagerInteractingRef.current || readerScrollIntent.current.pending) return;
+      if (programmaticTopRef.current) {
+        if (event.nativeEvent.contentOffset.y > 1) return;
+        programmaticTopRef.current = false;
+      }
       readerScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
       retryAudioSelection();
-      if (pendingScrollVerseRef.current) return;
       const now = Date.now();
       if (now - lastScrollCommitRef.current < 140) return;
 
@@ -1024,7 +1071,7 @@ export function BibleScreen() {
       historyRef.current = nextHistory;
       setHistory(nextHistory);
     },
-    [chapterVerses, flowingParagraphText, retryAudioSelection],
+    [chapterVerses, flowingParagraphText, retryAudioSelection, readerLayoutKey],
   );
 
   const openSearch = useCallback(() => {
@@ -1081,6 +1128,7 @@ export function BibleScreen() {
   }, [bibleVersionId]);
 
   const handleVerseLongPress = useCallback((verse: number) => {
+    pagerRef.current?.blockCurrentTouch();
     const verseNode = verseRowsRef.current[verse];
     actionReturnFocusRef.current = verseNode && "focusTarget" in verseNode ? verseNode.focusTarget : verseNode ?? null;
     verseLongPressActiveRef.current = true;
@@ -1309,129 +1357,6 @@ export function BibleScreen() {
     // TODO: Persist end-of-chapter reflection actions when the product flow is defined.
   }, []);
 
-  const shouldCaptureChapterSwipe = useCallback(
-    (dx: number, dy: number) => {
-      if (chapterSwipeAnimatingRef.current) return false;
-      const horizontalDistance = Math.abs(dx);
-      const verticalDistance = Math.abs(dy);
-      if (verticalDistance >= chapterScrollIntentDistance && verticalDistance >= horizontalDistance) {
-        chapterSwipeBlockedByScrollRef.current = true;
-        return false;
-      }
-      if (chapterSwipeBlockedByScrollRef.current) return false;
-
-      const hasTarget = dx < 0 ? Boolean(nextChapter) : Boolean(previousChapter);
-      return hasTarget && horizontalDistance > chapterSwipeActivationDistance && horizontalDistance > verticalDistance * chapterSwipeActivationRatio;
-    },
-    [nextChapter, previousChapter],
-  );
-
-  const resetReaderTouchIntent = useCallback(() => {
-    chapterSwipeBlockedByScrollRef.current = false;
-  }, []);
-
-  const handleReaderScrollBeginDrag = useCallback(() => {
-    chapterSwipeBlockedByScrollRef.current = true;
-    programmaticScrollVerseRef.current = undefined;
-  }, []);
-
-  const resetChapterSwipe = useCallback(() => {
-    chapterSwipeAnimatingRef.current = false;
-    setChapterSwipeDirection("idle");
-  }, []);
-
-  const chapterSwipePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) => shouldCaptureChapterSwipe(gesture.dx, gesture.dy),
-        onPanResponderGrant: () => {
-          chapterSwipeX.stopAnimation();
-        },
-        onPanResponderMove: (_event, gesture) => {
-          if (Math.abs(gesture.dy) > Math.abs(gesture.dx) * 2 && Math.abs(gesture.dy) > 30) {
-            chapterSwipeBlockedByScrollRef.current = true;
-            Animated.spring(chapterSwipeX, {
-              damping: 20,
-              stiffness: 210,
-              toValue: 0,
-              useNativeDriver: true,
-            }).start(() => resetChapterSwipe());
-            return;
-          }
-
-          const target = gesture.dx < 0 ? nextChapter : previousChapter;
-          const direction: ChapterSwipeDirection = gesture.dx < 0 ? "next" : "previous";
-          if (!target) {
-            chapterSwipeX.setValue(0);
-            setChapterSwipeDirection("idle");
-            return;
-          }
-
-          const maxDrag = Math.max(96, width * 0.42);
-          const clampedDx = Math.max(-maxDrag, Math.min(maxDrag, gesture.dx));
-          chapterSwipeX.setValue(clampedDx);
-          setChapterSwipeDirection(direction);
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          const target = gesture.dx < 0 ? nextChapter : previousChapter;
-          const direction: ChapterSwipeDirection = gesture.dx < 0 ? "next" : "previous";
-          const hasCommittedDistance = Math.abs(gesture.dx) >= Math.max(86, width * chapterSwipeDistanceRatio);
-          const hasCommittedVelocity = Math.abs(gesture.vx) >= chapterSwipeVelocity;
-
-          if (!target || !(hasCommittedDistance || hasCommittedVelocity) || !isChapterSwipeGesture(gesture.dx, gesture.dy)) {
-            Animated.spring(chapterSwipeX, {
-              damping: 20,
-              stiffness: 210,
-              toValue: 0,
-              useNativeDriver: true,
-            }).start(() => resetChapterSwipe());
-            return;
-          }
-
-          chapterSwipeAnimatingRef.current = true;
-          setChapterSwipeDirection(direction);
-          Animated.timing(chapterSwipeX, {
-            duration: 180,
-            easing: Easing.out(Easing.cubic),
-            toValue: direction === "next" ? -width : width,
-            useNativeDriver: true,
-          }).start(({ finished }) => {
-            if (!finished) {
-              resetChapterSwipe();
-              return;
-            }
-
-            const entryX = direction === "next" ? width : -width;
-            chapterSwipeX.setValue(entryX);
-            jumpToPosition(target, true, false);
-            requestAnimationFrame(() => {
-              Animated.timing(chapterSwipeX, {
-                duration: 220,
-                easing: Easing.out(Easing.cubic),
-                toValue: 0,
-                useNativeDriver: true,
-              }).start(() => {
-                resetChapterSwipe();
-              });
-            });
-          });
-        },
-        onPanResponderTerminationRequest: () => true,
-        onPanResponderTerminate: () => {
-          Animated.spring(chapterSwipeX, {
-            damping: 20,
-            stiffness: 210,
-            toValue: 0,
-            useNativeDriver: true,
-          }).start(() => {
-            resetChapterSwipe();
-          });
-        },
-        onShouldBlockNativeResponder: () => false,
-      }),
-    [chapterSwipeX, jumpToPosition, nextChapter, previousChapter, resetChapterSwipe, shouldCaptureChapterSwipe, width],
-  );
-
   useEffect(() => {
     if (!readerToast) return;
     const timeout = setTimeout(() => setReaderToast(undefined), 2200);
@@ -1487,95 +1412,96 @@ export function BibleScreen() {
         onOpenAudio={selectVisibleAudioVerse}
         palette={readerPalette}
         title={chapterLabel(position, bookLanguage)}
+        chapterIndex={chapterIndex(position)}
+        chapterCursor={chapterCursor}
+        previousChapterTitle={previousChapter ? chapterLabel(previousChapter, bookLanguage) : undefined}
+        nextChapterTitle={nextChapter ? chapterLabel(nextChapter, bookLanguage) : undefined}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={insets.top}
       />
 
-      <View
-        ref={readerViewportRef}
-        collapsable={false}
+      <ChapterPager
+        ref={pagerRef}
+        pages={chapterPages}
+        currentKey={chapterKey}
+        cursor={chapterCursor}
+        width={width}
+        layoutKey={`${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}`}
+        navigationRevision={navigationRevision}
+        reducedMotion={reducedMotion}
+        enabled={preferencesReady && isAudioPageFocused && !pickerVisible && !searchVisible && !settingsVisible && !versionPickerVisible && !selectedVersePosition && !selectedFootnote && !crossReferencePosition && !scriptureComposerVisible}
+        backgroundColor={readerPalette.background}
+        viewportRef={readerViewportRef}
         onLayout={() => {
           audioSelectionLayoutChanged();
           if (flowingParagraphText) refreshParagraphAudioFollow();
           else requestAnimationFrame(scrollToAudioVerse);
         }}
-        {...chapterSwipePanResponder.panHandlers}
-        onTouchCancel={resetReaderTouchIntent}
-        onTouchEnd={resetReaderTouchIntent}
-        onTouchStart={resetReaderTouchIntent}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          ref={scrollRef}
+        onCommit={(page) => jumpToPosition(page.position, { intent: "chapter", haptic: false })}
+        onInteractionChange={handlePagerInteraction}
+        onRetry={retryChapter}
+        onLoadError={() => setReaderToast({ tone: "error", message: language === "sv" ? "Kapitlet kunde inte läsas in. Försök igen." : "Could not load chapter. Please try again." })}
+        renderPage={(page, active) => <ChapterPageScrollView
+          active={active}
+          activeScrollRef={scrollRef}
+          onOrigin={active ? handleReaderOrigin : ignorePreviewEvent}
           contentInsetAdjustmentBehavior="never"
           directionalLockEnabled
           keyboardShouldPersistTaps="handled"
-          onScroll={handleScroll}
-          onMomentumScrollEnd={flowingParagraphText ? refreshParagraphAudioFollow : undefined}
+          onScroll={active ? handleScroll : undefined}
+          onMomentumScrollEnd={active && flowingParagraphText ? refreshParagraphAudioFollow : undefined}
+          onContentSizeChange={active ? () => tryScrollToChapterTop() : undefined}
           removeClippedSubviews={false}
-          onScrollBeginDrag={() => { setFollowAudio(false); audioFollowScroll.current.cancel(); pendingScrollVerseRef.current = undefined; programmaticScrollVerseRef.current = undefined; handleReaderScrollBeginDrag(); }}
+          onScrollBeginDrag={active ? handleReaderScrollBeginDrag : undefined}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
-          contentContainerStyle={{
-            alignSelf: "stretch",
-            paddingBottom: readerBottomPadding,
-            paddingHorizontal: 22,
-            paddingTop: 18,
-          }}
+          contentContainerStyle={{ alignSelf: "stretch", paddingBottom: readerBottomPadding, paddingHorizontal: 22, paddingTop: 18 }}
+          contentStyle={{ alignSelf: "center", gap: 28, maxWidth: contentWidth, width: "100%" }}
         >
-          <Animated.View
-            onLayout={({ nativeEvent }) => {
-              readerContentOriginRef.current = nativeEvent.layout.y;
-              audioSelectionLayoutChanged();
-              for (const [verse, offset] of Object.entries(relativeVerseOffsetsRef.current)) handleVerseLayout(Number(verse), offset);
+          <BiblePlanReaderPanel
+            currentDay={selectedPlanCurrentDay}
+            markers={pagePlanMarkers[page.key] ?? []}
+            onJump={jumpToSelectedPlanDay}
+            onMarkRead={toggleSelectedPlanDay}
+            onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
+            onSelectDay={(dayNumber) => {
+              const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
+              const start = firstPositionForPlanDay(day);
+              if (start) { setSelectedPlanDayNumber(dayNumber); jumpToPosition(start, { highlight: true }); }
             }}
-            style={{ alignSelf: "center", gap: 28, maxWidth: contentWidth, transform: [{ translateX: chapterSwipeX }], width: "100%" }}
-          >
-            <BiblePlanReaderPanel
-              currentDay={selectedPlanCurrentDay}
-              markers={selectedPlanMarkers}
-              onJump={jumpToSelectedPlanDay}
-              onMarkRead={toggleSelectedPlanDay}
-              onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
-              onSelectDay={(dayNumber) => {
-                const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
-                const start = firstPositionForPlanDay(day);
-                if (start) { setSelectedPlanDayNumber(dayNumber); jumpToPosition(start, true, true); }
-              }}
-              palette={readerPalette}
-              plan={selectedPlan}
-              plans={activeBiblePlans}
-            />
-            {loadedChapter?.key === chapterKey ? <BibleText
-              key={readerLayoutKey}
-              flowingParagraphText={flowingParagraphText}
-              spokenVerse={audioMatchesChapter ? spokenVerse : undefined}
-              chapterHeading={chapter.heading}
-              chapterHighlightByVerse={chapterHighlightByVerse}
-              highlightedPosition={highlightedPosition}
-              onFootnotePress={handleFootnotePress}
-              onVersePress={handleVersePress}
-              onVersePressIn={handleVersePressIn}
-              onVerseLayout={handleVerseLayout}
-              onVerseLongPress={handleVerseLongPress}
-              onVerseRef={handleVerseRef}
-              palette={readerPalette}
-              position={position}
-              readerLineHeight={readerLineHeight}
-              readerTextStyle={readerTextStyle}
-              planMarkers={selectedPlanMarkers}
-              selectedVerseNumbers={selectedVerseNumbers}
-              selectedVersePosition={selectedVersePosition}
-              showVerseNumbers={showVerseNumbers}
-              subtitles={chapter.subtitles}
-              verses={chapterVerses}
-            /> : chapterLoadError ? <Pressable onPress={() => setChapterLoadAttempt((attempt) => attempt + 1)} style={{ alignItems: "center", justifyContent: "center", minHeight: 180 }}>
-              <Text style={{ color: readerPalette.text }}>{language === "sv" ? "Kapitlet kunde inte läsas in. Tryck för att försöka igen." : "Could not load chapter. Tap to try again."}</Text>
-            </Pressable> : <ActivityIndicator color={readerPalette.text} style={{ minHeight: 180 }} />}
-          </Animated.View>
-        </ScrollView>
-      </View>
+            palette={readerPalette}
+            plan={selectedPlan}
+            plans={activeBiblePlans}
+          />
+          {page.chapter ? <BibleText
+            key={`${page.key}:${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}:${width}`}
+            flowingParagraphText={flowingParagraphText}
+            spokenVerse={active && audioMatchesChapter ? spokenVerse : undefined}
+            chapterHeading={page.chapter.heading}
+            chapterHighlightByVerse={pageHighlights[page.key]}
+            highlightedPosition={active ? highlightedPosition : undefined}
+            onFootnotePress={active ? handleFootnotePress : ignorePreviewEvent}
+            onVersePress={active ? handleVersePress : ignorePreviewEvent}
+            onVersePressIn={active ? handleVersePressIn : ignorePreviewEvent}
+            onVerseLayout={active ? handleVerseLayout : ignorePreviewEvent}
+            onVerseLongPress={active ? handleVerseLongPress : ignorePreviewEvent}
+            onVerseRef={active ? handleVerseRef : ignorePreviewEvent}
+            palette={readerPalette}
+            position={active ? position : page.position}
+            readerLineHeight={readerLineHeight}
+            readerTextStyle={readerTextStyle}
+            planMarkers={pagePlanMarkers[page.key] ?? []}
+            selectedVerseNumbers={active ? selectedVerseNumbers : emptyVerseNumbers}
+            selectedVersePosition={active ? selectedVersePosition : undefined}
+            showVerseNumbers={showVerseNumbers}
+            subtitles={page.chapter.subtitles}
+            verses={page.chapter.verses}
+          /> : page.error ? <Pressable accessibilityRole="button" onPress={() => retryChapter(page.key)} style={{ alignItems: "center", justifyContent: "center", minHeight: 180 }}>
+            <Text style={{ color: readerPalette.text }}>{language === "sv" ? "Kapitlet kunde inte läsas in. Tryck för att försöka igen." : "Could not load chapter. Tap to try again."}</Text>
+          </Pressable> : <ActivityIndicator color={readerPalette.text} style={{ minHeight: 180 }} />}
+        </ChapterPageScrollView>}
+      />
 
       <BibleAudioPlayer visible={audioVisible} onClose={() => setAudioVisible(false)} onOpen={() => setAudioVisible(true)}
         onMiniHeightChange={setAudioMiniHeight}
@@ -1589,18 +1515,11 @@ export function BibleScreen() {
             setFollowedAudioPassageKey(audio.session?.passage || audio.session?.topic ? audioPassageKey : undefined);
             setBibleVersionId("reformationsbibeln2026");
             setFollowAudio(true);
-            jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse ?? 1 }, false, false, true);
+            jumpToPosition({ book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse ?? 1 }, { scroll: false, fromAudio: true });
             audioFollowScroll.current.request(`reformationsbibeln2026:${audioChapter.book}:${audioChapter.chapter}`, spokenVerse ?? 1);
             requestAnimationFrame(scrollToAudioVerse);
           }
         }} />
-      <ChapterSwipeIndicator
-        direction={chapterSwipeDirection}
-        nextChapter={nextChapter}
-        palette={readerPalette}
-        previousChapter={previousChapter}
-        progress={chapterSwipeX}
-      />
 
       {chapterControlsVisible ? (
         <BibleBottomReadingControls
@@ -1608,8 +1527,8 @@ export function BibleScreen() {
           maxWidth={contentWidth}
           nextChapter={nextChapter}
           onHeightChange={setChapterControlsHeight}
-          onNext={() => nextChapter && jumpToPosition(nextChapter)}
-          onPrevious={() => previousChapter && jumpToPosition(previousChapter)}
+          onNext={() => pagerRef.current?.step(1)}
+          onPrevious={() => pagerRef.current?.step(-1)}
           palette={readerPalette}
           previousChapter={previousChapter}
         />
@@ -1715,9 +1634,9 @@ export function BibleScreen() {
           await dispatch({ type: "removeSavedVerse", id });
           setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
         }}
-        onSelect={(nextPosition) => {
+        onSelect={(nextPosition, intent = "verse") => {
           setPickerVisible(false);
-          jumpToPosition(nextPosition);
+          jumpToPosition(nextPosition, { intent });
         }}
         palette={readerPalette}
         savedVerses={state.savedVerses}
@@ -1749,7 +1668,7 @@ export function BibleScreen() {
               if (!verse.book || !verse.chapter || !verse.startVerse) return;
               closeSearch();
               setSearchReturn({ userId: state.currentUserId });
-              jumpToPosition({ book: verse.book, chapter: verse.chapter, verse: verse.startVerse }, true, true);
+              jumpToPosition({ book: verse.book, chapter: verse.chapter, verse: verse.startVerse }, { highlight: true });
             }} />
         </View> : null}
       </Modal>

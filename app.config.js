@@ -54,6 +54,7 @@ const baseConfig = {
     "expo-secure-store",
     ["react-native-libsodium", {}],
     "./plugins/with-variant-android-scheme.cjs",
+    "./plugins/with-fresh-embedded-updates.cjs",
   ],
   experiments: {
     typedRoutes: true,

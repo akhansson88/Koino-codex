@@ -15,6 +15,7 @@ import { displayBibleBookName, displayBibleReference } from "@/features/bible-se
 import type { BibleHighlight, JournalEntry, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { type ReaderPalette, type PickerStage } from "@/features/bible-reader/types";
+import type { ReaderNavigationIntent } from "./chapter-navigation";
 import {
   biblePositionFromVerse,
   testamentForBook,
@@ -64,7 +65,7 @@ export function BibleDrawer({
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
   onRemoveSavedVerse: (id: string) => Promise<void>;
-  onSelect: (position: BiblePosition) => void;
+  onSelect: (position: BiblePosition, intent?: ReaderNavigationIntent) => void;
   palette: ReaderPalette;
   savedVerses: SavedVerse[];
   versionLabel: string;
@@ -122,7 +123,7 @@ export function BibleDrawer({
     [hiddenSavedVerseIds, savedVerses],
   );
   const closeWithAnimation = useCallback((afterClose?: () => void) => sheetRef.current?.dismiss(afterClose), []);
-  const onSelect = useCallback((position: BiblePosition) => sheetRef.current?.dismiss(() => selectPosition(position)), [selectPosition]);
+  const onSelect = useCallback((position: BiblePosition, intent: ReaderNavigationIntent = "verse") => sheetRef.current?.dismiss(() => selectPosition(position, intent)), [selectPosition]);
   const onOpenPlans = () => sheetRef.current?.dismiss(openPlans);
   const onOpenReflection = (id: string) => sheetRef.current?.dismiss(() => openReflection(id));
 
@@ -234,7 +235,7 @@ export function BibleDrawer({
   }
 
   function chooseChapter(chapter: number) {
-    onSelect(normalizeBiblePosition({ book: selectedBook, chapter, verse: 1 }, bibleVersionId));
+    onSelect(normalizeBiblePosition({ book: selectedBook, chapter, verse: 1 }, bibleVersionId), "chapter");
   }
 
   return (
@@ -390,6 +391,7 @@ export function BibleDrawer({
                 <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "900", textTransform: "uppercase" }}>{t("bible.navigator.chapter")}</Text>
                 <PickerGrid
                   palette={palette}
+                  accessibilityLabel={(value) => `${displayBibleBookName(selectedBook, bookLanguage)}, ${t("bible.navigator.chapter")} ${value}`}
                   selected={initialPosition.book === selectedBook ? initialPosition.chapter : undefined}
                   values={book?.chapters ?? []}
                   onSelect={chooseChapter}

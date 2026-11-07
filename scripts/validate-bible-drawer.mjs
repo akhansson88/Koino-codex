@@ -51,8 +51,8 @@ try {
     } }],
   });
   const { BibleDrawer } = require(outfile);
-  let selected;
-  const props = { biblePlanCount: 0, bibleVersionId: "kjv", initialStage: "home", initialPosition: { book: "John", chapter: 6, verse: 1 }, highlights: [], journalEntries: [], savedVerses: [], palette: {}, versionLabel: "KJV", visible: true, onClose() {}, onSelect: value => { selected = value; } };
+  let selected, selectionIntent;
+  const props = { biblePlanCount: 0, bibleVersionId: "kjv", initialStage: "home", initialPosition: { book: "John", chapter: 6, verse: 1 }, highlights: [], journalEntries: [], savedVerses: [], palette: {}, versionLabel: "KJV", visible: true, onClose() {}, onSelect: (value, intent) => { selected = value; selectionIntent = intent; } };
   const root = () => renderer.root;
   const books = () => root().findAllByType("DrawerBookRow");
   const scroll = () => root().findByType("scroll");
@@ -105,8 +105,10 @@ try {
   await act(async () => { root().findByType("DrawerSearchBox").props.onChangeText(""); });
   assert.equal(books().length, 66);
   await act(async () => { books()[0].props.onPress(); });
+  assert.match(root().findByType("PickerGrid").props.accessibilityLabel(2), /Genesis.*2$/);
   await act(async () => { root().findByType("PickerGrid").props.onSelect(2); });
   assert.deepEqual(selected, { book: "Genesis", chapter: 2, verse: 1 });
+  assert.equal(selectionIntent, "chapter", "The chapter grid preserves its navigation intent through sheet dismissal");
   await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, visible: false })); });
   await act(async () => { renderer.update(React.createElement(BibleDrawer, { ...props, initialPosition: { book: "Exodus", chapter: 1, verse: 1 } })); });
   await act(async () => { measure(); });

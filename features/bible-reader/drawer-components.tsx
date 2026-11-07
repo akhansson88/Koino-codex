@@ -356,11 +356,13 @@ export function DrawerEmptyState({ palette, text }: { palette: ReaderPalette; te
 }
 
 export function PickerGrid({
+  accessibilityLabel,
   palette,
   onSelect,
   selected,
   values,
 }: {
+  accessibilityLabel?: (value: number) => string;
   palette: ReaderPalette;
   onSelect: (value: number) => void;
   selected?: number;
@@ -372,20 +374,22 @@ export function PickerGrid({
         const isSelected = value === selected;
         return (
           <Pressable
+            accessibilityLabel={accessibilityLabel?.(value)}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             key={value}
             onPress={() => onSelect(value)}
-            style={{
+            style={({ pressed }) => ({
               alignItems: "center",
-              backgroundColor: isSelected ? palette.peach : palette.surface,
+              backgroundColor: isSelected || pressed ? palette.peach : palette.surface,
               borderColor: isSelected ? palette.accent : palette.line,
               borderRadius: radius.md,
               borderWidth: 1,
-              height: 46,
+              height: 48,
               justifyContent: "center",
               width: 54,
-            }}
+              opacity: pressed ? 0.72 : 1,
+            })}
           >
             <Text style={{ color: isSelected ? palette.accent : palette.text, fontSize: 15, fontVariant: ["tabular-nums"], fontWeight: "900" }}>{value}</Text>
           </Pressable>

@@ -16,6 +16,7 @@ const mocks = {
   "react-native": `
     import React from "react";
     export const Platform = { OS: "android", select: values => values.android ?? values.default };
+    export const Keyboard = { dismiss() {} };
     export const ActivityIndicator = "ActivityIndicator", Pressable = "Pressable",
       ScrollView = "ScrollView", Text = "Text", View = "View";
     export function FlatList({ data, renderItem, ListHeaderComponent }) {

@@ -80,17 +80,17 @@ function ReaderControlButton({
       disabled={disabled}
       hitSlop={8}
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: palette.surface,
+        backgroundColor: pressed ? palette.peach : palette.surface,
         borderColor: palette.line,
         borderRadius: 999,
         borderWidth: 1,
-        height: 46,
+        height: 48,
         justifyContent: "center",
-        opacity: disabled ? 0.46 : 1,
-        width: 46,
-      }}
+        opacity: disabled ? 0.46 : pressed ? 0.8 : 1,
+        width: 48,
+      })}
     >
       <Feather name={icon} size={20} color={disabled ? palette.muted : palette.accent} />
     </Pressable>

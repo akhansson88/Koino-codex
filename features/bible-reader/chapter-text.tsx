@@ -1,6 +1,6 @@
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { NativePressable } from "@/ui/native-pressable";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, Platform, Text, type TextLayoutEventData, TextStyle, View, ViewStyle } from "react-native";
 import { bibleTextSegments } from "@/features/bible-footnotes";
 import {
@@ -98,6 +98,13 @@ export const BibleText = memo(function BibleText({
     if (textOffsetRef.current !== undefined) {
       if (height === undefined) onVerseLayout(verse, textOffsetRef.current + offset);
       else onVerseLayout(verse, textOffsetRef.current + offset, height);
+    }
+  }, [onVerseLayout]);
+  useLayoutEffect(() => {
+    if (textOffsetRef.current === undefined) return;
+    for (const [verse, { offset, height }] of Object.entries(verseOffsetsRef.current)) {
+      if (height === undefined) onVerseLayout(Number(verse), textOffsetRef.current + offset);
+      else onVerseLayout(Number(verse), textOffsetRef.current + offset, height);
     }
   }, [onVerseLayout]);
   return (
@@ -223,7 +230,9 @@ const BibleParagraph = memo(function BibleParagraph({
   const openingWidth = contentWidth - indent;
   const layoutKey = `${contentWidth}:${indent}:${chapterHeight}:${fontKey}:${readerLineHeight}:${showVerseNumbers}`;
   const [split, setSplit] = useState<{ key: string; projection: typeof projection; openingEnd: number; continuationStart: number }>();
-  const measuredSplit = split?.key === layoutKey && split.projection === projection ? split : undefined;
+  // Window/plan updates can regroup identical verses. Native text does not emit
+  // fresh line measurements when its content is unchanged, so retain that split.
+  const measuredSplit = split?.key === layoutKey && split.projection.text === projection.text ? split : undefined;
   const openingEnd = measuredSplit?.openingEnd ?? projection.text.length;
   const continuationStart = measuredSplit?.continuationStart ?? projection.text.length;
   const openingId = `${layoutKey}:0:${openingEnd}`;
@@ -247,6 +256,9 @@ const BibleParagraph = memo(function BibleParagraph({
       onRowLayout(bound.verse, blockOffset.current + contentOffset.current + bound.y, bound.height);
     }
   }, [projection, onRowLayout, onVerseRef]);
+  // A measured preview becomes active without remounting or waiting for another
+  // native layout event. Preserve paragraph wrapping while publishing its refs.
+  useLayoutEffect(() => { publishLayout(); }, [publishLayout]);
   const reportGeometry = useCallback((chunk: ParagraphChunkGeometry) => {
     if (!requiredChunks.current.includes(chunk.id)) return;
     geometry.current.set(chunk.id, chunk);
@@ -324,7 +336,7 @@ const BibleParagraph = memo(function BibleParagraph({
             onLines={lines => {
               if (!lines.length) return;
               const next = paragraphOpeningSplit(projection, lines, chapterHeight);
-              setSplit(current => current?.key === layoutKey && current.projection === projection &&
+              setSplit(current => current?.key === layoutKey && current.projection.text === projection.text &&
                 current.openingEnd === next.openingEnd && current.continuationStart === next.continuationStart
                 ? current : { key: layoutKey, projection, ...next });
             }} />

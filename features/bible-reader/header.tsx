@@ -1,8 +1,24 @@
 import { Feather } from "@expo/vector-icons";
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useAppTranslation } from "@/ui/app-language";
 import { type FeatherName, type ReaderPalette } from "@/features/bible-reader/types";
+
+function ChapterTitle({ title, index, cursor, previous, next, color }: {
+  title: string; index: number; cursor: SharedValue<number>; previous?: string; next?: string; color: string;
+}) {
+  // Fade through, so neighboring chapter numbers never combine into a false label.
+  const currentStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - Math.abs(cursor.value - index) * 2) }), [index]);
+  const previousStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (index - cursor.value) * 2 - 1)) }), [index]);
+  const nextStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (cursor.value - index) * 2 - 1)) }), [index]);
+  const textStyle = { color, fontSize: 15, fontWeight: "900" as const };
+  return <View style={{ flex: 1, minWidth: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Animated.Text numberOfLines={1} style={[textStyle, currentStyle]}>{title}</Animated.Text>
+    <Animated.Text numberOfLines={1} style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, previousStyle]}>{previous}</Animated.Text>
+    <Animated.Text numberOfLines={1} style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, nextStyle]}>{next}</Animated.Text>
+  </View>;
+}
 
 export function ReaderCircleButton({
   accessibilityLabel,
@@ -61,6 +77,10 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   onOpenVersionPicker,
   palette,
   title,
+  chapterIndex,
+  chapterCursor,
+  previousChapterTitle,
+  nextChapterTitle,
   translationLabel,
   topInset,
 }: {
@@ -79,6 +99,10 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   onOpenVersionPicker: () => void;
   palette: ReaderPalette;
   title: string;
+  chapterIndex?: number;
+  chapterCursor?: SharedValue<number>;
+  previousChapterTitle?: string;
+  nextChapterTitle?: string;
   translationLabel: string;
   topInset: number;
 }) {
@@ -98,15 +122,16 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
         {canGoBack ? <ReaderCircleButton accessibilityLabel={t("bible.accessibility.back")} icon="arrow-left" onPress={onBack} palette={palette} /> : null}
 
         <Pressable
-          accessibilityLabel={t("bible.accessibility.chooseChapter")}
+          accessibilityLabel={`${t("bible.accessibility.chooseChapter")}, ${title}`}
           accessibilityRole="button"
           hitSlop={10}
           onPress={onOpenPicker}
-          style={{ alignItems: "center", flexDirection: "row", flex: 1, gap: 3, minWidth: 0 }}
+          style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flex: 1, gap: 3, minWidth: 0, minHeight: 48, opacity: pressed ? 0.65 : 1 })}
         >
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
+          {chapterCursor && chapterIndex !== undefined ? <ChapterTitle title={title} index={chapterIndex} cursor={chapterCursor}
+            previous={previousChapterTitle} next={nextChapterTitle} color={palette.text} /> : <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
             {title}
-          </Text>
+          </Text>}
           <Feather name="chevron-down" size={14} color={palette.muted} />
         </Pressable>
 

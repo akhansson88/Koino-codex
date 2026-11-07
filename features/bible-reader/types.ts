@@ -75,8 +75,6 @@ export type PendingVerseComposerAction = {
   verse: BibleVerse;
 };
 
-export type ChapterSwipeDirection = "idle" | "previous" | "next";
-
 export type SelectedBibleFootnote = {
   footnote: BibleFootnote;
   marker: string;

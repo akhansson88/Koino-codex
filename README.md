@@ -26,6 +26,10 @@ package ID `com.akhansson.koinomvp.dev`. It can stay installed alongside the
 Google Play internal-test app (`com.akhansson.koinomvp`). Local builds do not
 use EAS cloud-build credits.
 
+Release APK builds regenerate their embedded update manifest each time. This
+ensures reinstalling a local APK runs its new JavaScript instead of an older
+bundle cached by `expo-updates` under the same update ID.
+
 Connect and unlock the phone, enable USB debugging, and accept the computer's
 RSA authorization prompt. Confirm that `adb devices` reports `device`, then run:
 
