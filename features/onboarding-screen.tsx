@@ -162,7 +162,7 @@ export function OnboardingScreen() {
                 Enter the rhythm
               </PillButton>
 
-              <PillButton variant="ghost" onPress={() => dispatch({ type: "signOut" })}>
+              <PillButton variant="ghost" onPress={() => void dispatch({ type: "signOut", expectedUserId: state.currentUserId }).catch(() => undefined)}>
                 Log out
               </PillButton>
             </>

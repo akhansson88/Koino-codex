@@ -1,6 +1,7 @@
 import AsyncStorage from "@/state/encryption/local-storage";
 import { useEffect, useState } from "react";
 
+import { parseBibleHistory } from "@/features/bible-history";
 import { isBibleVersionId, type BibleVersionId } from "@/features/bible-versions";
 
 export const defaultBibleVersionId: BibleVersionId = "reformationsbibeln2026";
@@ -17,6 +18,19 @@ export function bibleVersionFromStoredPreferences(value: string | null): BibleVe
     return isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId;
   } catch {
     return defaultBibleVersionId;
+  }
+}
+
+export function hasRecordedBibleReadingPosition(value: string | null) {
+  if (!value) return false;
+  try {
+    const parsed = JSON.parse(value) as { bibleVersionId?: unknown; history?: unknown } | null;
+    if (!isBibleVersionId(parsed?.bibleVersionId)) return false;
+    const history = parseBibleHistory(parsed.history, parsed.bibleVersionId);
+    // A single position can come from reader initialization, even on a fresh account.
+    return Boolean(history && history.entries.length > 1);
+  } catch {
+    return false;
   }
 }
 

@@ -1,13 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, Text, View } from "react-native";
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { checkInExistsForDay } from "@/state/check-ins";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
+import type { Action, CommunitySubmissionOutcome, CommunitySubmissionRequest } from "@/state/store/types";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import { EntryVisibility, feedItemKind, normalizeEntryKind, roomTabs, visibility } from "@/state/product";
 import {
@@ -51,8 +52,8 @@ import { tabContentClearance } from "@/ui/navigation-layout";
 import { PostCard } from "@/ui/post-card";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
-import { SharedComposer } from "@/ui/shared-composer";
-import { colors } from "@/ui/theme";
+import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-composer";
+import { colors, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import {
   type RoomView,
@@ -84,7 +85,7 @@ import {
   CommunityPrayerMomentDetailScreen,
   CommunityPrayerScreen,
 } from "@/features/community/prayer-screens";
-import { CommunityPrayerMemberModal, CommunityPrayerActions } from "@/features/community/prayer-actions";
+import { CommunityPrayerMemberModal } from "@/features/community/prayer-actions";
 import { FocusedScreenHeader } from "@/features/community/focused-header";
 import { MembersPanel } from "@/features/community/members-panel";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
@@ -99,15 +100,64 @@ import {
   CommunityFeedErrorState,
 } from "@/features/community/feed-components";
 
+const overviewTabs = roomTabs.filter((tab) => tab.value === "recent" || tab.value === "reflections");
+
+const COMMUNITY_SUBMISSION_CONFIRMATION_MS = 15_000;
+const COMMUNITY_PUBLICATION_FEEDBACK_MS = 8_000;
+type CommunityPublicationReceipt = {
+  owner: string;
+  viewVersion: number;
+  roomView: RoomView;
+  routeRoomView: RoomView;
+  communityName: string;
+  postId: string;
+  edited: boolean;
+};
+// A one-use handoff lets an explicit tap on a standalone Prayer route select
+// Recent in the existing overview instance, without changing its Back behavior.
+let pendingRecentPublicationNavigation: { token: string; owner: string; expiresAt: number } | undefined;
+type CommunityComposerDraft = {
+  kind: EntryKind;
+  title: string;
+  body: string;
+  verses: BibleVerse[];
+  editingPost?: Extract<FeedItem, { type: "post" }>;
+};
+type CommunityComposerAttempt = {
+  owner: string;
+  viewVersion: number;
+  draft: CommunityComposerDraft;
+  action: Extract<Action, { type: "createPost" | "editPost" }>;
+  request: Omit<CommunitySubmissionRequest, "report" | "previouslyUnknown">;
+  status: CommunityComposerSubmission["status"];
+  inFlight: boolean;
+  previouslyUnknown: boolean;
+  outcome?: CommunitySubmissionOutcome;
+  attachedView: object;
+  timer?: ReturnType<typeof setTimeout>;
+};
+// Process-memory only. Native navigation can remount SettingsScreen while an
+// SDK transaction is still alive; that must not create a new submission ID.
+const communityComposerAttempts = new Map<string, CommunityComposerAttempt>();
+const communityComposerObservers = new Set<(attempt: CommunityComposerAttempt) => void>();
+
+function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
+  for (const observer of communityComposerObservers) {
+    try { observer(attempt); } catch { /* An obsolete view cannot change the write outcome. */ }
+  }
+}
+
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
   const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
-  const { prayerMomentId } = useLocalSearchParams<{ prayerMomentId?: string }>();
+  const { prayerMomentId, communityRecentRequest } = useLocalSearchParams<{ prayerMomentId?: string; communityRecentRequest?: string }>();
   const [roomView, setRoomView] = useState<RoomView>(routeRoomView);
-  const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
+  const [activeDetailTab, setDetailTab] = useState<RoomDetailTab>("recent");
+  // Retained state from the former Prayer/Check-ins filters opens the mixed feed.
+  const detailTab = activeDetailTab === "reflections" ? "reflections" : "recent";
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const [joinInviteCode, setJoinInviteCode] = useState("");
@@ -121,6 +171,134 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [composerBody, setComposerBody] = useState("");
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
+  const [composerSubmission, setComposerSubmission] = useState<CommunityComposerSubmission>({ status: "idle", inFlight: false });
+  const [publicationReceipt, setPublicationReceipt] = useState<CommunityPublicationReceipt>();
+  const [publicationViewportHeight, setPublicationViewportHeight] = useState(0);
+  const publicationReceiptRef = useRef<CommunityPublicationReceipt | undefined>(undefined);
+  const publicationFocusedRef = useRef(true);
+  const publicationRecentAvailableRef = useRef(false);
+  const composerOwner = JSON.stringify([state.currentUserId ?? null, state.currentGroupId ?? null]);
+  const publicationGroup = state.groups.find((item) => item.id === state.currentGroupId);
+  const publicationScreenRef = useRef({ composerOwner, roomView, routeRoomView, composerVisible, communityName: "", communityAvailable: false });
+  publicationScreenRef.current = {
+    composerOwner, roomView, routeRoomView, composerVisible,
+    communityName: publicationGroup?.name ?? "",
+    communityAvailable: Boolean(publicationGroup && !publicationGroup.migrationPending),
+  };
+  const composerPublicationOriginRef = useRef({ roomView, routeRoomView });
+  const currentComposerOwnerRef = useRef(composerOwner);
+  currentComposerOwnerRef.current = composerOwner;
+  const composerOwnerRef = useRef<string | undefined>(undefined);
+  const composerViewVersionRef = useRef(0);
+  const composerViewIdentityRef = useRef({});
+  const renderedComposerVersion = composerViewVersionRef.current;
+  const composerAttemptRef = useRef<CommunityComposerAttempt | undefined>(undefined);
+  // Memory-only retention prevents a scope switch from turning an uncertain save
+  // into a fresh-ID submission. Drafts are never exposed to another scope.
+  const composerAttemptsRef = useRef(communityComposerAttempts);
+  const composerMountedRef = useRef(true);
+
+  function composerIsLocked() {
+    const attempt = composerAttemptRef.current;
+    return Boolean(attempt && attempt.owner === currentComposerOwnerRef.current
+      && (attempt.inFlight || attempt.status === "unknown"));
+  }
+
+  function composerAttemptIsVisible(attempt: CommunityComposerAttempt) {
+    return composerMountedRef.current && composerAttemptRef.current === attempt
+      && attempt.attachedView === composerViewIdentityRef.current
+      && currentComposerOwnerRef.current === attempt.owner && composerOwnerRef.current === attempt.owner
+      && composerViewVersionRef.current === attempt.viewVersion;
+  }
+
+  function publishComposerSubmission(attempt: CommunityComposerAttempt) {
+    notifyCommunityComposer(attempt);
+  }
+
+  function clearPublicationReceipt() {
+    publicationReceiptRef.current = undefined;
+    setPublicationReceipt(undefined);
+  }
+
+  function publicationIsCurrent(receipt: CommunityPublicationReceipt) {
+    const screen = publicationScreenRef.current;
+    return composerMountedRef.current && publicationFocusedRef.current
+      && publicationReceiptRef.current === receipt && screen.composerOwner === receipt.owner && screen.communityAvailable
+      && composerViewVersionRef.current === receipt.viewVersion && !screen.composerVisible
+      && screen.roomView === receipt.roomView && screen.routeRoomView === receipt.routeRoomView;
+  }
+
+  function receiveComposerSubmission(attempt: CommunityComposerAttempt) {
+    if (!composerAttemptIsVisible(attempt)) return;
+    if (attempt.outcome?.status === "success") {
+      composerViewVersionRef.current++;
+      const screen = publicationScreenRef.current;
+      const origin = composerPublicationOriginRef.current;
+      if (publicationFocusedRef.current && screen.roomView === origin.roomView && screen.routeRoomView === origin.routeRoomView
+        && (screen.roomView === "detail" || screen.roomView === "prayer") && screen.communityAvailable && screen.communityName) {
+        const receipt: CommunityPublicationReceipt = {
+          owner: attempt.owner, viewVersion: composerViewVersionRef.current,
+          roomView: screen.roomView, routeRoomView: screen.routeRoomView,
+          communityName: screen.communityName,
+          postId: attempt.action.type === "editPost" ? attempt.action.id : attempt.request.attemptId,
+          edited: attempt.action.type === "editPost",
+        };
+        publicationReceiptRef.current = receipt;
+        setPublicationReceipt(receipt);
+      }
+      composerAttemptRef.current = undefined;
+      setComposerSubmission({ status: "idle", inFlight: false });
+      setComposerVisible(false);
+      setComposerBody("");
+      setComposerTitle("");
+      setComposerVerses([]);
+      setEditingPost(undefined);
+    } else setComposerSubmission({ status: attempt.status, inFlight: attempt.inFlight });
+  }
+
+  function changeComposerDraft(change: () => void) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked()) return;
+    const attempt = composerAttemptRef.current;
+    if (attempt?.owner === currentComposerOwnerRef.current) {
+      composerAttemptsRef.current.delete(attempt.owner);
+      composerAttemptRef.current = undefined;
+      setComposerSubmission({ status: "idle", inFlight: false });
+    }
+    change();
+  }
+
+  useLayoutEffect(() => {
+    if (composerOwnerRef.current && composerOwnerRef.current !== composerOwner) {
+      composerViewVersionRef.current++;
+      composerOwnerRef.current = undefined;
+      composerAttemptRef.current = undefined;
+      setComposerVisible(false);
+      setComposerSubmission({ status: "idle", inFlight: false });
+    }
+  }, [composerOwner]);
+
+  useLayoutEffect(() => {
+    const receipt = publicationReceiptRef.current;
+    if (receipt && !publicationIsCurrent(receipt)) clearPublicationReceipt();
+  }, [composerOwner, composerVisible, roomView, routeRoomView, state.groups]);
+
+  useFocusEffect(useCallback(() => {
+    publicationFocusedRef.current = true;
+    return () => {
+      publicationFocusedRef.current = false;
+      clearPublicationReceipt();
+    };
+  }, []));
+
+  useLayoutEffect(() => {
+    composerMountedRef.current = true;
+    communityComposerObservers.add(receiveComposerSubmission);
+    return () => {
+      composerMountedRef.current = false;
+      communityComposerObservers.delete(receiveComposerSubmission);
+    };
+  }, []);
   const selectedPrayerMomentId = prayerMomentId;
   const [prayerMomentEncouragementDraft, setPrayerMomentEncouragementDraft] = useState("");
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
@@ -240,6 +418,38 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     if (prayerFilter === "answered") return Boolean(item.answeredAt);
     return true;
   });
+  const activePublicationReceipt = publicationReceipt && publicationIsCurrent(publicationReceipt) && !group?.migrationPending ? publicationReceipt : undefined;
+  const publicationPost = activePublicationReceipt && !activePublicationReceipt.edited
+    ? partitionCommunityFeed(feedItems, Math.max(communityFeedClock, Date.now())).recent.find((item) => item.type === "post" && item.id === activePublicationReceipt.postId)
+    : undefined;
+  const publicationHiddenByFilter = publicationPost?.type === "post" && (roomView === "detail"
+    ? filterCommunityFeedItems([publicationPost], detailTab).length === 0
+    : roomView === "prayer" && (normalizeEntryKind(publicationPost.kind) !== "prayer_request"
+      || (prayerFilter === "open" && Boolean(publicationPost.answeredAt))
+      || (prayerFilter === "answered" && !publicationPost.answeredAt)));
+  const offerViewRecent = Boolean(activePublicationReceipt && publicationHiddenByFilter && communityFeedReadyForGroup && !communityFeedError);
+  publicationRecentAvailableRef.current = offerViewRecent;
+  const publicationMessage = activePublicationReceipt
+    ? activePublicationReceipt.edited ? t("community.composer.publication.updated")
+      : t("community.composer.publication.shared", { community: activePublicationReceipt.communityName })
+    : undefined;
+
+  useEffect(() => {
+    if (!activePublicationReceipt || !publicationMessage || Platform.OS !== "ios") return;
+    // Let the composer dismissal finish. A changed scope/session cancels speech.
+    const announcement = setTimeout(() => {
+      if (publicationIsCurrent(activePublicationReceipt)) AccessibilityInfo.announceForAccessibility(publicationMessage);
+    }, 350);
+    return () => clearTimeout(announcement);
+  }, [activePublicationReceipt, publicationMessage]);
+
+  useEffect(() => {
+    if (!activePublicationReceipt || offerViewRecent) return;
+    const expiry = setTimeout(() => {
+      if (publicationIsCurrent(activePublicationReceipt)) clearPublicationReceipt();
+    }, COMMUNITY_PUBLICATION_FEEDBACK_MS);
+    return () => clearTimeout(expiry);
+  }, [activePublicationReceipt, offerViewRecent]);
   const selectedPrayerMomentItem = selectCommunityPostById(state.posts, state.currentGroupId, selectedPrayerMomentId);
   const selectedPrayerMoment =
     selectedPrayerMomentItem && isPrayerMomentKind(selectedPrayerMomentItem.kind) ? selectedPrayerMomentItem : undefined;
@@ -272,6 +482,12 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   useFocusEffect(
     useCallback(() => {
       setCommunityFeedClock(Date.now());
+      const attempt = composerAttemptRef.current;
+      if (attempt && composerOwnerRef.current === currentComposerOwnerRef.current) {
+        attempt.attachedView = composerViewIdentityRef.current;
+        attempt.viewVersion = composerViewVersionRef.current;
+        receiveComposerSubmission(attempt);
+      }
     }, []),
   );
 
@@ -319,6 +535,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   );
 
   const navigateToRoomView = useCallback((nextView: RoomView, direction: TransitionDirection = "forward") => {
+    if (composerIsLocked()) return;
     // Prayer and check-ins stay in the mounted overview screen. On Android,
     // pushing either view onto the nested native stack can leave its view tree
     // present but its drawing surface blank until the tab is reselected.
@@ -334,6 +551,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }, [navigation, roomView, routeRoomView]);
   const openCheckInsView = useCallback(() => navigateToRoomView("checkins"), [navigateToRoomView]);
   const goBackFromRoomView = useCallback(() => {
+    if (composerIsLocked()) return true;
     if (routeRoomView === "detail" && (roomView === "prayer" || roomView === "checkins")) {
       setRoomView("detail");
     } else if (navigation.canGoBack()) router.back();
@@ -347,7 +565,41 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return () => subscription.remove();
   }, [goBackFromRoomView, roomView, routeRoomView]);
 
+  function resumeComposerAttempt() {
+    const attempt = composerAttemptsRef.current.get(currentComposerOwnerRef.current);
+    if (!attempt) return false;
+    clearPublicationReceipt();
+    composerPublicationOriginRef.current = { roomView, routeRoomView };
+    composerOwnerRef.current = attempt.owner;
+    attempt.attachedView = composerViewIdentityRef.current;
+    attempt.viewVersion = ++composerViewVersionRef.current;
+    composerAttemptRef.current = attempt;
+    setComposerContext("room");
+    setComposerVisibility(visibility.room);
+    setComposerKind(attempt.draft.kind);
+    setComposerTitle(attempt.draft.title);
+    setComposerBody(attempt.draft.body);
+    setComposerVerses(attempt.draft.verses);
+    setEditingPost(attempt.draft.editingPost);
+    setComposerSubmission({ status: attempt.status, inFlight: attempt.inFlight });
+    setComposerVisible(true);
+    return true;
+  }
+
+  function beginComposerSession() {
+    clearPublicationReceipt();
+    composerPublicationOriginRef.current = { roomView, routeRoomView };
+    composerViewVersionRef.current++;
+    composerOwnerRef.current = currentComposerOwnerRef.current;
+    composerAttemptRef.current = undefined;
+    setComposerSubmission({ status: "idle", inFlight: false });
+  }
+
   function openComposer(kind: EntryKind = "reflection") {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     setEditingPost(undefined);
     setComposerContext("room");
     setComposerKind(kind);
@@ -359,6 +611,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openScriptureReflection(item: Extract<FeedItem, { type: "post" }>) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
     setEditingPost(undefined);
     setComposerContext("journal");
@@ -371,6 +627,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function editPost(item: Extract<FeedItem, { type: "post" }>) {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
+    if (resumeComposerAttempt()) return;
+    beginComposerSession();
     setComposerContext("room");
     setEditingPost(item);
     setComposerKind(normalizeEntryKind(item.kind));
@@ -382,14 +642,87 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function closeComposer() {
+    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
+    if (composerIsLocked()) return;
+    composerViewVersionRef.current++;
+    if (composerOwnerRef.current) composerAttemptsRef.current.delete(composerOwnerRef.current);
+    composerAttemptRef.current = undefined;
+    setComposerSubmission({ status: "idle", inFlight: false });
     setComposerVisible(false);
     setEditingPost(undefined);
   }
 
   async function submitComposer() {
+    if (!composerVisible || composerOwnerRef.current !== composerOwner || currentComposerOwnerRef.current !== composerOwner
+      || renderedComposerVersion !== composerViewVersionRef.current) return;
     const canSubmit = composerContext === "room" && composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
     if (!canSubmit) return;
     if (composerContext === "room" && !editingPost && composerKind === "update") return;
+    if (composerContext === "room") {
+      let attempt = composerAttemptRef.current;
+      if (attempt?.inFlight) return;
+      if (!attempt) {
+        const draft = JSON.parse(JSON.stringify({ kind: composerKind, title: composerTitle, body: composerBody, verses: composerVerses, editingPost })) as CommunityComposerDraft;
+        const titleFreeKind = draft.kind === "reflection" || draft.kind === "praise" || draft.kind === "scripture";
+        const content = { kind: draft.kind, ...(titleFreeKind ? {} : { title: draft.title }), body: draft.body, verse: primaryBibleVerse(draft.verses), verses: draft.verses };
+        attempt = {
+          owner: composerOwner,
+          attachedView: composerViewIdentityRef.current,
+          viewVersion: composerViewVersionRef.current,
+          draft,
+          action: draft.editingPost ? { type: "editPost", id: draft.editingPost.id, ...content } : { type: "createPost", ...content },
+          request: {
+            attemptId: `post_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`,
+            createdAt: new Date().toISOString(),
+            userId: state.currentUserId ?? "",
+            groupId: state.currentGroupId ?? "",
+            ...(draft.editingPost ? { baseline: draft.editingPost } : {}),
+          },
+          status: "idle", inFlight: false, previouslyUnknown: false,
+        };
+        composerAttemptRef.current = attempt;
+        composerAttemptsRef.current.set(attempt.owner, attempt);
+      }
+      // Set synchronously, before dispatch or React state updates can yield.
+      attempt.inFlight = true;
+      attempt.status = "pending";
+      attempt.outcome = undefined;
+      publishComposerSubmission(attempt);
+      const operation = attempt;
+      operation.timer = setTimeout(() => {
+        if (!operation.inFlight) return;
+        operation.status = "unknown";
+        publishComposerSubmission(operation);
+      }, COMMUNITY_SUBMISSION_CONFIRMATION_MS);
+      let outcome: CommunitySubmissionOutcome | undefined;
+      try {
+        await dispatch({
+          ...operation.action,
+          communitySubmission: {
+            ...operation.request,
+            previouslyUnknown: operation.previouslyUnknown,
+            report: (result) => { outcome ??= result; },
+          },
+        });
+      } catch {
+        // A missing/throwing boundary cannot be treated as a failed write.
+        outcome ??= { status: "unknown", reason: "transport" };
+      }
+      if (operation.timer) clearTimeout(operation.timer);
+      operation.timer = undefined;
+      operation.inFlight = false;
+      outcome ??= { status: "unknown", reason: "transport" };
+      operation.outcome = outcome;
+      if (outcome.status === "success") {
+        publishComposerSubmission(operation);
+        if (composerAttemptsRef.current.get(operation.owner) === operation) composerAttemptsRef.current.delete(operation.owner);
+      } else {
+        operation.status = outcome.status;
+        operation.previouslyUnknown ||= outcome.status === "unknown";
+        publishComposerSubmission(operation);
+      }
+      return;
+    }
     const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
     const title = titleFreeKind ? {} : { title: composerTitle };
     if (editingPost) {
@@ -409,6 +742,10 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     } else {
       await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
+    // Private journal writes keep their existing behavior; an old completion
+    // must nevertheless never clear a newer Community composer session.
+    if (!composerMountedRef.current || currentComposerOwnerRef.current !== composerOwner
+      || composerOwnerRef.current !== composerOwner || composerViewVersionRef.current !== renderedComposerVersion) return;
     setComposerVisible(false);
     setComposerBody("");
     setComposerTitle("");
@@ -489,18 +826,45 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
-    if (tab === detailTab) return;
+    if (composerIsLocked()) return;
+    const nextTab = tab === "reflections" ? "reflections" : "recent";
+    if (nextTab === detailTab) return;
+    clearPublicationReceipt();
     if (group) {
-      const targetKey = `${group.id}:${tab}`;
+      const targetKey = `${group.id}:${nextTab}`;
       pendingCommunityScrollRestoreRef.current = {
         key: targetKey,
         offset: communityScrollOffsetsRef.current[targetKey] ?? 0,
       };
     }
-    setDetailTab(tab);
+    setDetailTab(nextTab);
   }
 
+  function viewPublicationInRecent() {
+    if (!activePublicationReceipt || !publicationIsCurrent(activePublicationReceipt) || !publicationRecentAvailableRef.current || composerIsLocked()) return;
+    clearPublicationReceipt();
+    if (routeRoomView === "detail") {
+      handleCommunityTabChange("recent");
+      navigateToRoomView("detail");
+    } else {
+      const token = `recent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+      pendingRecentPublicationNavigation = { token, owner: activePublicationReceipt.owner, expiresAt: Date.now() + 5_000 };
+      router.dismissTo({ pathname: "/(tabs)/community", params: { communityRecentRequest: token } } as never);
+    }
+  }
+
+  useEffect(() => {
+    const request = pendingRecentPublicationNavigation;
+    if (routeRoomView !== "detail" || !request || request.token !== communityRecentRequest) return;
+    pendingRecentPublicationNavigation = undefined;
+    if (request.owner !== currentComposerOwnerRef.current || Date.now() > request.expiresAt
+      || composerVisible || composerIsLocked() || !group || group.migrationPending) return;
+    handleCommunityTabChange("recent");
+    navigateToRoomView("detail");
+  }, [communityRecentRequest, composerOwner, routeRoomView]);
+
   function openPrayerDetail(item: Extract<FeedItem, { type: "post" }>, returnView: "detail" | "prayer" = "prayer") {
+    if (composerIsLocked()) return;
     if (isPrayerMomentKind(item.kind)) {
 
       setPrayerMomentEncouragementDraft("");
@@ -548,6 +912,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function prayForItem(item: FeedItem) {
+    if (composerIsLocked()) return;
     const prayer = itemPrayerState(item);
     const displayBody = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t).body : item.body;
     setPrayerTarget({
@@ -561,6 +926,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function startCommunityPrayer(member: Pick<CommunityMember, "id" | "image" | "name">) {
+    if (composerIsLocked()) return;
     if (!member.id.trim()) return;
 
     setDirectPrayerResult(undefined);
@@ -636,6 +1002,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function togglePostAction(item: FeedItem) {
+    if (composerIsLocked()) return;
     if (item.type === "post" && normalizeEntryKind(item.kind) === "scripture") {
       openScriptureReflection(item);
       return;
@@ -753,6 +1120,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }
 
   function openCheckInComposer() {
+    if (composerIsLocked()) return;
     if (todaysCheckIn || !state.privateCheckInsReady || !state.checkInDailyClaimsReady || !communityFeedReadyForGroup) return;
     resetCommunityCheckIn();
     setCheckInVisible(true);
@@ -796,12 +1164,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setJoinSheetVisible(false);
   }
 
-  async function handleSignOut() {
-    setJoinSheetVisible(false);
-    await dispatch({ type: "signOut" });
-    router.replace("/");
-  }
-
   function openRoomOverview() {
     navigateToRoomView("rooms");
     setJoinSheetVisible(false);
@@ -815,6 +1177,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       return (
         <CheckInCard
           key={key}
+          overview
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
@@ -834,6 +1197,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       return (
         <PrayerRequestCard
           key={key}
+          overview
           authorImage={userImageById.get(item.userId)}
           authorName={userById.get(item.userId) ?? t("common.someone")}
           item={item}
@@ -854,6 +1218,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return (
       <PostCard
         key={key}
+        overview
         authorImage={userImageById.get(item.userId)}
         authorName={userById.get(item.userId) ?? t("common.someone")}
         item={item}
@@ -943,6 +1308,53 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     </BottomSheet>
   ) : null;
 
+  function measurePublicationViewport(event: LayoutChangeEvent) {
+    setPublicationViewportHeight(event.nativeEvent.layout.height);
+  }
+
+  // Only the message can scroll. The footer and its controls keep their full
+  // height above the tabs while the feed takes the remaining viewport.
+  const publicationFeedback = activePublicationReceipt && publicationMessage ? (
+    <View style={{ flexShrink: 0, marginHorizontal: 18, marginBottom: tabContentClearance(insets.bottom) }}>
+      <Card style={{ flexShrink: 0, gap: 8, padding: 12 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 }}>
+          <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+            <Feather name="check-circle" size={18} color={colors.olive} />
+          </View>
+          <ScrollView
+            contentInsetAdjustmentBehavior="never"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+            style={{ flex: 1, minWidth: 0, maxHeight: Math.max(44, (publicationViewportHeight - tabContentClearance(insets.bottom)) * 0.4) }}
+          >
+            <View
+              accessible
+              accessibilityLabel={publicationMessage}
+              accessibilityLiveRegion={Platform.OS === "ios" ? "none" : "polite"}
+            >
+              <Text style={[typography.bodyMedium, { color: colors.ink }]}>{publicationMessage}</Text>
+            </View>
+          </ScrollView>
+          <Pressable
+            accessibilityLabel={t("community.composer.publication.dismiss")}
+            accessibilityRole="button"
+            onPress={() => { if (publicationIsCurrent(activePublicationReceipt)) clearPublicationReceipt(); }}
+            style={{ alignItems: "center", alignSelf: "flex-start", justifyContent: "center", minHeight: 44, minWidth: 44 }}
+          >
+            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+              <Feather name="x" size={18} color={colors.muted} />
+            </View>
+          </Pressable>
+        </View>
+        {offerViewRecent ? (
+          <SecondaryButton onPress={viewPublicationInRecent} style={{ flexShrink: 0, minHeight: 44 }}>
+            {t("community.composer.publication.viewRecent")}
+          </SecondaryButton>
+        ) : null}
+      </Card>
+    </View>
+  ) : null;
+
   if (group?.migrationPending && roomView !== "rooms") {
     return <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <AppScreen topInset={false}>
@@ -998,7 +1410,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   if (roomView === "prayer" && group) {
     return (
       <>
-        <View style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View onLayout={measurePublicationViewport} style={{ flex: 1, backgroundColor: colors.cream }}>
           <CommunityPrayerScreen
             communityName={group.name}
             filter={prayerFilter}
@@ -1006,7 +1418,11 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             onCreatePrayer={() => openComposer("prayer_request")}
             onEditPrayer={editPost}
             onDeletePrayer={deletePost}
-            onFilter={setPrayerFilter}
+            onFilter={(filter) => {
+              if (composerIsLocked() || filter === prayerFilter) return;
+              clearPublicationReceipt();
+              setPrayerFilter(filter);
+            }}
             onOpenPrayer={openPrayerDetail}
             onPray={prayForItem}
             onPrayForSomeone={() => setMemberSelectVisible(true)}
@@ -1022,20 +1438,22 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             userById={userById}
             userImageById={userImageById}
           />
+          {publicationFeedback}
         </View>
         <SharedComposer
-          visible={composerVisible}
+          visible={composerVisible && composerOwnerRef.current === composerOwner}
+          submission={composerContext === "room" ? composerSubmission : undefined}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}
           body={composerBody}
           verses={composerVerses}
-          onKind={setComposerKind}
-          onVisibility={setComposerVisibility}
-          onTitle={setComposerTitle}
-          onBody={setComposerBody}
-          onVerses={setComposerVerses}
+          onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
+          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
+          onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
+          onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
@@ -1106,8 +1524,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   if (roomView === "detail" && group) {
     return (
       <>
-        <View style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View onLayout={measurePublicationViewport} style={{ flex: 1, backgroundColor: colors.cream }}>
           <FlatList
+            style={{ flex: 1, minHeight: 0 }}
             data={communityFeedRows}
             initialNumToRender={6}
             maxToRenderPerBatch={6}
@@ -1154,22 +1573,60 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <Feather name="chevron-right" size={17} color={colors.muted} />
               </Pressable>
 
-              <CommunityPrayerActions
-                groupId={group.id}
-                members={otherCommunityMembers}
-                onPrayForPerson={(assignedMember) => {
-                  if (!assignedMember) {
-                    setMemberSelectVisible(true);
-                    return;
-                  }
-
-                  startCommunityPrayer(assignedMember);
-                }}
-                onPrayForRequests={() => {
-                  setPrayerFilter("open");
-                  navigateToRoomView("prayer");
-                }}
-              />
+              <View style={{ alignItems: "stretch", flexDirection: "row", gap: 10 }}>
+                {[
+                  {
+                    key: "prayer",
+                    icon: "list" as const,
+                    title: t("community.overview.prayerRequests"),
+                    subtitle: t("community.overview.prayTogether"),
+                    primary: true,
+                    onPress: () => {
+                      setPrayerFilter("open");
+                      navigateToRoomView("prayer");
+                    },
+                  },
+                  {
+                    key: "checkins",
+                    icon: "check-circle" as const,
+                    title: t("community.page.checkIns"),
+                    subtitle: t("community.overview.shareHowYouFeel"),
+                    primary: false,
+                    onPress: openCheckInsView,
+                  },
+                ].map(({ key, icon, title, subtitle, primary, onPress }) => (
+                  <Pressable
+                    accessibilityLabel={`${title}. ${subtitle}`}
+                    accessibilityRole="button"
+                    key={key}
+                    onPress={onPress}
+                    style={{
+                      backgroundColor: primary ? colors.accentWarm : colors.cream,
+                      borderColor: primary ? colors.accentWarm : colors.border,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      flex: 1,
+                      flexBasis: 0,
+                      gap: 8,
+                      minHeight: 104,
+                      minWidth: 0,
+                      padding: 12,
+                    }}
+                  >
+                    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                      <Feather name={icon} size={20} color={primary ? colors.onAccent : colors.textPrimary} />
+                    </View>
+                    <View style={{ gap: 3, minWidth: 0 }}>
+                      <Text style={[typography.cardTitle, { color: primary ? colors.onAccent : colors.textPrimary }]}>
+                        {title}
+                      </Text>
+                      <Text style={[typography.caption, { color: primary ? colors.onAccent : colors.textSecondary }]}>
+                        {subtitle}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
 
               <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
                 <View style={{ flex: 1, minWidth: 148 }}>
@@ -1177,25 +1634,15 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
                   </SectionHeading>
                 </View>
-                {detailTab === "prayer" ? (
-                  <PrimaryButton icon="heart" onPress={() => navigateToRoomView("prayer")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.openPrayer")}
-                  </PrimaryButton>
-                ) : detailTab === "checkins" ? (
-                  <PrimaryButton icon="check-circle" onPress={openCheckInsView} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.openCheckIns")}
-                  </PrimaryButton>
-                ) : (
-                  <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
-                    {t("community.feed.share")}
-                  </PrimaryButton>
-                )}
+                <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
+                  {t("community.feed.share")}
+                </PrimaryButton>
               </View>
 
               <CommunityFilterChips
                 value={detailTab}
                 onChange={handleCommunityTabChange}
-                options={roomTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
+                options={overviewTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
               />
             </View>
 
@@ -1210,31 +1657,29 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   <BodyText muted>
                     {detailTab === "recent"
                       ? t("community.empty.recent")
-                      : detailTab === "prayer"
-                        ? t("community.empty.prayer")
-                        : detailTab === "checkins"
-                          ? t("community.empty.checkIns")
-                          : t("community.empty.reflections")}
+                      : t("community.empty.reflections")}
                   </BodyText>
                 </Card>
               ) : null}
             </View>
             </>}
           />
+          {publicationFeedback}
         </View>
         <SharedComposer
-          visible={composerVisible}
+          visible={composerVisible && composerOwnerRef.current === composerOwner}
+          submission={composerContext === "room" ? composerSubmission : undefined}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
           title={composerTitle}
           body={composerBody}
           verses={composerVerses}
-          onKind={setComposerKind}
-          onVisibility={setComposerVisibility}
-          onTitle={setComposerTitle}
-          onBody={setComposerBody}
-          onVerses={setComposerVerses}
+          onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
+          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
+          onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
+          onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
@@ -1368,9 +1813,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </Card>
       </View>
 
-      <SecondaryButton icon="log-out" onPress={handleSignOut}>
-        {t("common.logOut")}
-      </SecondaryButton>
+      {state.currentUserId ? <CommunityRoomsLogout key={state.currentUserId} userId={state.currentUserId} /> : null}
 
       <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
         <View style={{ gap: 8 }}>
@@ -1399,6 +1842,49 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </AppScreen>
       </View>
     </>
+  );
+}
+
+function CommunityRoomsLogout({ userId }: { userId: Id }) {
+  const { dispatch } = useKoinoActions();
+  const { t } = useAppTranslation();
+  const [status, setStatus] = useState<"idle" | "pending" | "failed">("idle");
+  const pending = useRef(false);
+  const mounted = useRef(false);
+
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  async function signOut() {
+    if (!mounted.current || pending.current) return;
+    pending.current = true;
+    setStatus("pending");
+    try {
+      await dispatch({ type: "signOut", expectedUserId: userId });
+      if (mounted.current) setStatus("idle");
+    } catch {
+      if (mounted.current) setStatus("failed");
+    } finally {
+      pending.current = false;
+    }
+  }
+
+  const label = status === "pending" ? "identity.account.loggingOut"
+    : status === "failed" ? "identity.account.retryLogout" : "common.logOut";
+
+  return (
+    <View style={{ gap: 8 }}>
+      {status === "failed" ? (
+        <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive">
+          {t("identity.account.logoutError")}
+        </BodyText>
+      ) : null}
+      <SecondaryButton disabled={status === "pending"} icon="log-out" onPress={signOut}>
+        {t(label)}
+      </SecondaryButton>
+    </View>
   );
 }
 

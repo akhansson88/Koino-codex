@@ -1,4 +1,4 @@
-import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -7,11 +7,29 @@ export type Profile = User & {
 };
 
 export type CreatePostKind = EntryKind;
+type AccountGroupScope = { userId: Id; groupId: Id };
+
+export type CommunitySubmissionOutcome = {
+  status: "success" | "failure" | "unknown";
+  reason?: "precondition" | "conflict" | "rejected" | "transport" | "session";
+};
+
+// Opt-in only: ordinary dispatch callers retain their existing Promise<void>
+// and error behavior. An attempt's identity and payload stay fixed on retry.
+export type CommunitySubmissionRequest = {
+  attemptId: string;
+  userId: string;
+  groupId: string;
+  createdAt: string;
+  baseline?: Post;
+  previouslyUnknown: boolean;
+  report: (outcome: CommunitySubmissionOutcome) => void;
+};
 
 export type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
-  | { type: "signOut" }
+  | { type: "signOut"; expectedUserId?: Id }
   | { type: "requestPasswordReset"; email: string }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
@@ -28,11 +46,11 @@ export type Action =
   | { type: "uploadUserAvatar"; localUri: string }
   | { type: "deleteUserAvatar" }
   | { type: "deleteGroup"; id: Id }
-  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; expectedScope?: AccountGroupScope }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
-  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[] }
+  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
+  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id; answeredUpdate?: string }
   | { type: "updatePrayerAnswer"; id: Id; answeredUpdate?: string }
@@ -45,6 +63,7 @@ export type Action =
       startedAt: string;
       recipientUserId?: Id;
       throwOnError?: boolean;
+      expectedScope?: AccountGroupScope;
     }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }

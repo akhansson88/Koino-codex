@@ -1,3 +1,4 @@
+import { isCheckInJournalEntry } from "@/state/check-ins";
 import { heartMoods, journalEntryTypeFor, moodOptionForValue } from "@/state/product";
 import type { JournalEntry, JournalEntryType } from "@/state/types";
 import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
@@ -21,7 +22,7 @@ const typeLabelKeys: Record<JournalEntryType, TranslationKey> = {
   prayer: "me.journey.type.prayer",
   answered_prayer: "me.journey.type.praise",
   heart_checkin: "me.journey.type.checkIn",
-  scripture_note: "me.journey.type.reflection",
+  scripture_note: "me.journey.type.scripture",
 };
 
 function sameDisplayText(first?: string, second?: string) {
@@ -29,8 +30,19 @@ function sameDisplayText(first?: string, second?: string) {
   return first.trim().toLocaleLowerCase() === second.trim().toLocaleLowerCase();
 }
 
+export function presentedJournalEntryType(entry: JournalEntry) {
+  if (isCheckInJournalEntry(entry)) return "heart_checkin";
+  // Older edits could update the kind without updating the journal type.
+  const kindType = journalEntryTypeFor({ entryKind: entry.entryKind, source: entry.source });
+  return kindType === "reflection" ? journalEntryTypeFor(entry) : kindType;
+}
+
+export function journalEntryHasSharedCopy(entry: JournalEntry) {
+  return Boolean(entry.sharedPostId) || entry.isPrivate === false;
+}
+
 export function journalEntryPresentation(entry: JournalEntry, t: TranslationFunction) {
-  const journalType = entry.entryKind === "update" ? "heart_checkin" : journalEntryTypeFor(entry);
+  const journalType = presentedJournalEntryType(entry);
   const exactMood = entry.heartMood ? heartMoods.find((item) => item.value === entry.heartMood) : undefined;
   const numericMood = typeof entry.mood === "number" ? moodOptionForValue(entry.mood) : undefined;
   const moodLabel = entry.heartMood

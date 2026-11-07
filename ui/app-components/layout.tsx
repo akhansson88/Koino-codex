@@ -58,15 +58,17 @@ export function AppScreen({
 export function FullScreenModal({
   animationType = "slide",
   children,
+  onDismiss,
   onRequestClose,
   presentationStyle,
   visible,
-}: PropsWithChildren<Pick<ModalProps, "animationType" | "onRequestClose" | "presentationStyle" | "visible">>) {
+}: PropsWithChildren<Pick<ModalProps, "animationType" | "onDismiss" | "onRequestClose" | "presentationStyle" | "visible">>) {
   return (
     <FullScreenModalHost
       animationType={animationType}
       presentationStyle={presentationStyle}
       visible={visible}
+      onDismiss={onDismiss}
       onRequestClose={onRequestClose}
     >
       {children}

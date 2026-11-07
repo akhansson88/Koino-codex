@@ -6,20 +6,12 @@ import { Tabs } from "expo-router";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { OnboardingScreen } from "@/features/onboarding-screen";
-import { useKoinoSelector } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, platformShadow, typography } from "@/ui/theme";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const authReady = useKoinoSelector((state) => state.authReady);
-  const currentUserId = useKoinoSelector((state) => state.currentUserId);
   const { t } = useAppTranslation();
-
-  if (authReady && !currentUserId) {
-    return <OnboardingScreen />;
-  }
 
   return (
     <Tabs

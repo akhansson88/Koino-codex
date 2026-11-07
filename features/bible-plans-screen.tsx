@@ -2,10 +2,11 @@ import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { displayBibleBookName, displayBibleReference } from "@/features/bible-book-names";
 import { useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import {
+  biblePlanReadingRoute,
   buildBiblePlanDays,
   completionPercent,
   dayKeyForPlanDay,
@@ -68,7 +69,8 @@ function announcementJoined(plan: GroupBiblePlanAnnouncement, plans: BiblePlan[]
 export function BiblePlansScreen() {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
-  const [tab, setTab] = useState<PlanTab>("active");
+  const { tab: initialTab } = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<PlanTab>(initialTab === "saved" || initialTab === "completed" ? initialTab : "active");
   const [creating, setCreating] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [title, setTitle] = useState("");
@@ -215,7 +217,7 @@ export function BiblePlansScreen() {
               }
               onJump={(dayNumber) => {
                 const day = plan.days.find((item) => item.dayNumber === dayNumber);
-                if (firstPositionForPlanDay(day)) router.push({ pathname: "/(tabs)/bible", params: { planId: plan.id, planDay: String(dayNumber), planJump: String(Date.now()) } });
+                if (firstPositionForPlanDay(day)) router.push(biblePlanReadingRoute(plan.id, dayNumber));
               }}
               onMarkDay={(dayNumber, read) => dispatch({ type: "markBiblePlanDay", planId: plan.id, dayNumber, read })}
               onPause={() => dispatch({ type: "pauseBiblePlan", planId: plan.id })}

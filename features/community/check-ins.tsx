@@ -77,21 +77,32 @@ export function CommunityCheckInsScreen({
   const { t } = useAppTranslation();
   return (
     <AppScreen>
-      <FocusedCommunityScreenIntro
-        communityName={communityName}
-        description={t("community.checkIns.pageDescription")}
-        onBack={onBack}
-        title={t("community.page.checkIns")}
-      />
-      {!feedLoading && !feedError && !checkedInToday ? (
-        <Card>
-          <SectionHeading>{t("community.checkIns.weeklyTitle")}</SectionHeading>
-          <BodyText muted>{t("community.checkIns.weeklyDescription")}</BodyText>
-          <PrimaryButton icon="edit-3" onPress={onCheckIn}>
-            {t("community.checkIns.action")}
-          </PrimaryButton>
-        </Card>
-      ) : null}
+      <View style={{ gap: 12 }}>
+        <FocusedCommunityScreenIntro
+          communityName={communityName}
+          description={t("community.checkIns.pageDescription")}
+          onBack={onBack}
+          title={t("community.page.checkIns")}
+        />
+        {!feedLoading && !feedError && !checkedInToday ? (
+          <Card style={{ backgroundColor: colors.warmSoft, borderColor: colors.border, gap: 10, padding: 14 }}>
+            <Text accessibilityRole="header" style={[typography.cardTitle, { color: colors.ink }]}>
+              {t("community.checkIns.weeklyTitle")}
+            </Text>
+            <BodyText muted>{t("community.checkIns.weeklyDescription")}</BodyText>
+            <PrimaryButton
+              icon="edit-3"
+              onPress={onCheckIn}
+              style={{ alignSelf: "flex-start", maxWidth: "100%", minHeight: 44, paddingHorizontal: 14, paddingVertical: 8 }}
+            >
+              {t("community.checkIns.action")}
+            </PrimaryButton>
+          </Card>
+        ) : null}
+        {!feedLoading && !feedError && checkedInToday ? (
+          <BodyText muted>{t("community.checkIns.completedToday")}</BodyText>
+        ) : null}
+      </View>
       <SectionHeading>{t("community.checkIns.recent")}</SectionHeading>
       {feedOffline && !feedError ? <CommunityFeedOfflineState /> : null}
       {feedLoading ? (
@@ -136,6 +147,7 @@ export function CheckInCard({
   onDelete,
   onOpen,
   onReact,
+  overview = false,
   ownsItem,
   reacted,
   reactedBy,
@@ -147,6 +159,7 @@ export function CheckInCard({
   onDelete?: () => void;
   onOpen: () => void;
   onReact: () => void;
+  overview?: boolean;
   ownsItem: boolean;
   reacted: boolean;
   reactedBy?: { name: string; image?: GroupImage }[];
@@ -229,6 +242,7 @@ export function CheckInCard({
           icon="heart"
           label={communityActionLabel(itemKind, reacted, t)}
           onPress={onReact}
+          overview={overview || undefined}
           tone="check_in"
         />
       }
@@ -261,9 +275,11 @@ export function CheckInCard({
         onOpen();
       }}
       overlay={menu}
+      overview={overview || undefined}
       responseSummary={
-        reactedBy?.length ? (
+        (overview ? reactionCount > 0 : reactedBy?.length) ? (
           <CommunityCardResponseSummary
+            compact={overview || undefined}
             count={reactionCount}
             label={communityResponseNoun(item, reactionCount, t)}
             users={reactedBy}

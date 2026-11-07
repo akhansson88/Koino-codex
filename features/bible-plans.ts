@@ -5,7 +5,7 @@ import {
   type BiblePosition,
 } from "@/features/bible-canon";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange, BiblePlanStatus } from "@/state/types";
-import { scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
+import { nextUnreadPlanDay, scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
 
 type ChapterKey = `${string} ${number}`;
 
@@ -176,6 +176,29 @@ export function planMarkersForChapter(plan: BiblePlan, chapter: Pick<BiblePositi
 
 export function firstPositionForPlanDay(day?: BiblePlanDay) {
   return day?.ranges[0]?.start;
+}
+
+export function highlightedBiblePlan(ownedPlans: BiblePlan[], date: string): { plan: BiblePlan; day?: BiblePlanDay } | undefined {
+  const activePlans = ownedPlans.filter((plan) => plan.status === "active");
+  let catchUp: { plan: BiblePlan; day: BiblePlanDay } | undefined;
+
+  // The store supplies most recently updated plans first.
+  for (const plan of activePlans) {
+    if (plan.pausedAt) continue;
+    const next = nextUnreadPlanDay(plan);
+    if (!next) continue;
+    const today = todayPlanDay(plan, date);
+    if (today && !today.completedAt && firstPositionForPlanDay(today)) return { plan, day: today };
+    if (!catchUp && firstPositionForPlanDay(next)) catchUp = { plan, day: next };
+  }
+
+  if (catchUp) return catchUp;
+  const plan = activePlans.find((item) => !item.pausedAt) ?? activePlans[0];
+  return plan ? { plan } : undefined;
+}
+
+export function biblePlanReadingRoute(planId: string, dayNumber: number) {
+  return { pathname: "/(tabs)/bible" as const, params: { planId, planDay: String(dayNumber), planJump: String(Date.now()) } };
 }
 
 export function completedDayNumbers(days: BiblePlanDay[]) {

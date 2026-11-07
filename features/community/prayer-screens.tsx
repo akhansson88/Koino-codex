@@ -10,7 +10,6 @@ import {
   BodyText,
   Card,
   ExpandableBodyText,
-  PrimaryButton,
   SecondaryButton,
   SectionHeading,
   StatusPill,
@@ -102,32 +101,46 @@ export function CommunityPrayerScreen({
 
   return (
     <AppScreen>
-      <FocusedCommunityScreenIntro
-        communityName={communityName}
-        description={t("community.prayer.pageDescription")}
-        onBack={onBack}
-        title={t("community.page.prayer")}
-      />
-      <CommunityFilterChips
-        value={filter}
-        onChange={onFilter}
-        options={prayerFilters.map((item) => ({ label: communityPrayerFilterLabel(item.value, t), value: item.value }))}
-      />
-      <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
-        <BodyText muted style={{ flex: 1, minWidth: 140 }}>
-          {feedLoading
-            ? t("community.feed.loading")
-            : feedError
-              ? t("community.feed.unavailable")
-              : t(prayerCountKey, { count: prayerPosts.length })}
-        </BodyText>
-        <PrimaryButton icon="heart" onPress={onCreatePrayer} style={{ minHeight: 44, paddingHorizontal: 14 }}>
-          {t("community.prayer.share")}
-        </PrimaryButton>
+      <View style={{ gap: 12 }}>
+        <FocusedCommunityScreenIntro
+          communityName={communityName}
+          description={t("community.prayer.pageDescription")}
+          onBack={onBack}
+          title={t("community.page.prayer")}
+        />
+        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ maxWidth: "100%", minHeight: 44, paddingHorizontal: 12, paddingVertical: 8 }}>
+            {t("community.prayer.prayForSomeone")}
+          </SecondaryButton>
+          <Pressable
+            accessibilityLabel={t("community.prayer.share")}
+            accessibilityRole="button"
+            onPress={onCreatePrayer}
+            style={{ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, maxWidth: "100%", minHeight: 44, minWidth: 0, paddingHorizontal: 4, paddingVertical: 8 }}
+          >
+            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+              <Feather name="plus" size={16} color={colors.textSecondary} />
+            </View>
+            <Text style={[typography.label, { color: colors.textSecondary, flexShrink: 1 }]}>
+              {t("community.prayer.share")}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={{ gap: 6 }}>
+          <CommunityFilterChips
+            value={filter}
+            onChange={onFilter}
+            options={prayerFilters.map((item) => ({ label: communityPrayerFilterLabel(item.value, t), value: item.value }))}
+          />
+          <BodyText muted>
+            {feedLoading
+              ? t("community.feed.loading")
+              : feedError
+                ? t("community.feed.unavailable")
+                : t(prayerCountKey, { count: prayerPosts.length })}
+          </BodyText>
+        </View>
       </View>
-      <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ minHeight: 44 }}>
-        {t("community.prayer.prayForSomeone")}
-      </SecondaryButton>
       {feedOffline && !feedError ? <CommunityFeedOfflineState /> : null}
       {feedLoading ? (
         <CommunityFeedLoadingState />
@@ -136,7 +149,7 @@ export function CommunityPrayerScreen({
       ) : prayerPosts.length === 0 ? (
         <Card>
           <BodyText muted>
-            {t(filter === "answered" ? "community.prayer.emptyAnswered" : "community.prayer.empty")}
+            {t(filter === "open" ? "community.prayer.emptyOpen" : filter === "answered" ? "community.prayer.emptyAnswered" : "community.prayer.empty")}
           </BodyText>
         </Card>
       ) : (
@@ -144,6 +157,7 @@ export function CommunityPrayerScreen({
           const prayer = prayerState(item);
           return (
             <PrayerRequestCard
+              focused
               key={item.id}
               authorImage={userImageById.get(item.userId)}
               authorName={userById.get(item.userId) ?? t("common.someone")}
@@ -313,11 +327,13 @@ function PrayerMomentPill() {
 export function PrayerRequestCard({
   authorImage,
   authorName,
+  focused = false,
   item,
   onDelete,
   onEdit,
   onOpen,
   onPray,
+  overview = false,
   ownsItem,
   prayed,
   prayedBy,
@@ -325,11 +341,13 @@ export function PrayerRequestCard({
 }: {
   authorImage?: GroupImage;
   authorName: string;
+  focused?: boolean;
   item: Extract<FeedItem, { type: "post" }>;
   onDelete?: () => void;
   onEdit?: () => void;
   onOpen: () => void;
   onPray: () => void;
+  overview?: boolean;
   ownsItem: boolean;
   prayed: boolean;
   prayedBy?: { name: string; image?: GroupImage }[];
@@ -338,7 +356,8 @@ export function PrayerRequestCard({
   const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
-  const answered = Boolean(item.answeredAt);
+  const prayerStatus = item.answeredAt ? "answered" : "open";
+  const prayerStatusLabel = t(`shared.status.${prayerStatus}`);
   const prayerMoment = isPrayerMomentKind(item.kind);
   const displayCopy = communityPrayerMomentDisplayCopy(item, t);
 
@@ -426,13 +445,52 @@ export function PrayerRequestCard({
     <CommunityFeedCard
       actions={
         prayerMoment ? (
-          <CommunityCardAction active icon="pray" label={t("community.action.prayer.completed")} tone="prayer" />
+          <CommunityCardAction
+            active
+            icon="pray"
+            label={t("community.action.prayer.completed")}
+            overview={overview || undefined}
+            tone="prayer"
+          />
+        ) : focused && !prayed ? (
+          <Pressable
+            accessibilityLabel={t("community.prayer.prayForRequest", { name: authorName })}
+            accessibilityRole="button"
+            accessibilityState={{ selected: false }}
+            onPress={(event) => {
+              event.stopPropagation();
+              onPray();
+            }}
+            style={{
+              alignItems: "center",
+              backgroundColor: colors.warmSoft,
+              borderColor: colors.accentWarm,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 7,
+              maxWidth: "100%",
+              minHeight: 44,
+              minWidth: 0,
+              paddingHorizontal: 13,
+              paddingVertical: 8,
+            }}
+          >
+            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+              <MaterialCommunityIcons name="hands-pray" size={20} color={colors.textPrimary} />
+            </View>
+            <Text style={[typography.label, { color: colors.textPrimary, flexShrink: 1 }]}>
+              {communityActionLabel("prayer_request", false, t)}
+            </Text>
+          </Pressable>
         ) : (
           <CommunityCardAction
+            accessibilityLabel={focused ? t("community.prayer.prayAgainForRequest", { name: authorName }) : undefined}
             active={prayed}
             icon="pray"
             label={communityActionLabel("prayer_request", prayed, t)}
             onPress={onPray}
+            overview={overview || undefined}
             tone="prayer"
           />
         )
@@ -464,17 +522,26 @@ export function PrayerRequestCard({
         onOpen();
       }}
       overlay={menu}
+      overview={overview || undefined}
       responseSummary={
-        prayerMoment ? undefined : (
+        prayerMoment || (overview && prayerCount === 0) ? undefined : (
           <CommunityCardResponseSummary
+            compact={overview || undefined}
             count={prayerCount}
             label={communityPrayerNoun(prayerCount, t)}
-            showWhenEmpty
+            showWhenEmpty={!overview}
             users={prayedBy}
           />
         )
       }
-      status={prayerMoment ? undefined : <StatusPill status={answered ? "answered" : "open"} />}
+      status={prayerMoment ? undefined : overview ? (
+        <Text
+          accessibilityLabel={`${t("community.prayer.status.label")}. ${prayerStatusLabel}`}
+          style={[typography.caption, { color: colors.textSecondary, flexShrink: 1 }]}
+        >
+          {prayerStatusLabel}
+        </Text>
+      ) : <StatusPill status={prayerStatus} />}
       style={{ zIndex: menuOpen ? 10 : 1 }}
     />
   );

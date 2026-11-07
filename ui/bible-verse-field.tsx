@@ -1,14 +1,14 @@
 import { displayBibleReference } from "@/features/bible-book-names";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, Text, View } from "react-native";
 
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoinoSelector } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
 import { AppScreen, FullScreenModal, SectionHeading, SecondaryButton, VersePreviewCard } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 const LazyBibleVersePicker = lazy(() =>
   import("@/ui/bible-verse-picker").then((module) => ({ default: module.BibleVersePicker })),
@@ -16,12 +16,14 @@ const LazyBibleVersePicker = lazy(() =>
 
 export function BibleVerseField({
   attachedFromBible = false,
+  communityComposer = false,
   label,
   onChange,
   onOpenInBible,
   verses,
 }: {
   attachedFromBible?: boolean;
+  communityComposer?: boolean;
   label?: string;
   onChange: (verses: BibleVerse[]) => void;
   onOpenInBible?: (verse: BibleVerse) => void;
@@ -64,11 +66,19 @@ export function BibleVerseField({
     onChange([...withoutDuplicate, nextVerse].slice(0, 5));
   }
 
+  function openPicker() {
+    // Avoid keeping the writing keyboard underneath the nested picker modal.
+    if (communityComposer) Keyboard.dismiss();
+    setPickerVisible(true);
+  }
+
   return (
     <View style={{ gap: 8 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        <SectionHeading>{label || t("shared.scripturePicker.fieldLabel")}</SectionHeading>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
+        {communityComposer ? (
+          <Text style={[typography.label, { color: colors.ink, flex: 1, minWidth: 0 }]}>{label || t("shared.scripturePicker.fieldLabel")}</Text>
+        ) : <SectionHeading>{label || t("shared.scripturePicker.fieldLabel")}</SectionHeading>}
+        <Text style={communityComposer ? [typography.caption, { color: colors.muted, flexShrink: 0 }] : { color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
       </View>
       {selectedVerses.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -98,13 +108,13 @@ export function BibleVerseField({
             </View>
           ))}
           {canAddVerse ? (
-            <SecondaryButton icon="plus" onPress={() => setPickerVisible(true)}>
+            <SecondaryButton icon="plus" onPress={openPicker}>
               {t("shared.scripturePicker.addAnother")}
             </SecondaryButton>
           ) : null}
         </View>
       ) : (
-        <SecondaryButton icon="plus" onPress={() => setPickerVisible(true)}>
+        <SecondaryButton icon="plus" onPress={openPicker}>
           {t("shared.scripturePicker.addBibleVerse")}
         </SecondaryButton>
       )}
