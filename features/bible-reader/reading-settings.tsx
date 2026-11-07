@@ -4,7 +4,7 @@ import { useCallback, useRef, type ReactNode } from "react";
 import { Pressable, Text, TextStyle, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppTranslation } from "@/ui/app-language";
-import { type BibleReaderFontId, type BibleReaderThemeId, type ReaderPalette } from "@/features/bible-reader/types";
+import { type BibleReaderFontId, type ReaderPalette } from "@/features/bible-reader/types";
 import {
   BibleSheetTop,
   bibleSheetHeaderMinHeight,
@@ -18,8 +18,6 @@ import {
   minFontSize,
   fontSizeStep,
   maxFontSize,
-  readerThemes,
-  readerThemeLabel,
 } from "@/features/bible-reader/preferences";
 
 export function ReadingSettingsSheet({
@@ -28,12 +26,10 @@ export function ReadingSettingsSheet({
   flowingParagraphText,
   onChangeFlowingParagraphText,
   onChangeFont,
-  onChangeReaderTheme,
   onChangeShowVerseNumbers,
   onClose: notifyClose,
   onFontSizeChange,
   palette,
-  readerTheme,
   showVerseNumbers,
   visible,
 }: {
@@ -42,12 +38,10 @@ export function ReadingSettingsSheet({
   flowingParagraphText: boolean;
   onChangeFlowingParagraphText: (value: boolean) => void;
   onChangeFont: (fontId: BibleReaderFontId) => void;
-  onChangeReaderTheme: (theme: BibleReaderThemeId) => void;
   onChangeShowVerseNumbers: (value: boolean) => void;
   onClose: () => void;
   onFontSizeChange: (delta: number) => void;
   palette: ReaderPalette;
-  readerTheme: BibleReaderThemeId;
   showVerseNumbers: boolean;
   visible: boolean;
 }) {
@@ -109,21 +103,6 @@ export function ReadingSettingsSheet({
                   {fontSize}
                 </Text>
                 <SettingsStepperButton disabled={fontSize >= maxFontSize} icon="plus" label={t("bible.settings.increaseTextSize")} onPress={() => onFontSizeChange(fontSizeStep)} palette={palette} />
-              </View>
-            </SettingsGroup>
-
-            <SettingsGroup palette={palette} title={t("bible.settings.theme")}>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                {readerThemes.map((theme) => (
-                  <SettingChip
-                    icon={theme.id === "dark" ? "moon" : theme.id === "sepia" ? "circle" : "sun"}
-                    key={theme.id}
-                    label={readerThemeLabel(theme.id, t)}
-                    onPress={() => onChangeReaderTheme(theme.id)}
-                    palette={palette}
-                    selected={theme.id === readerTheme}
-                  />
-                ))}
               </View>
             </SettingsGroup>
 

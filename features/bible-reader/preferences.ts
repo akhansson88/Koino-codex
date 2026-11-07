@@ -3,7 +3,6 @@ import { initialBibleHistory, readBibleHistory } from "@/features/bible-history"
 import { isBibleVersionId, normalizeBiblePosition } from "@/features/bible-kjv";
 import { defaultBibleVersionId } from "@/features/bible-preferences";
 import type { TranslationFunction } from "@/ui/localization";
-import { type ThemeName } from "@/ui/theme";
 import {
   type BibleReaderFontId,
   type BibleReaderThemeId,
@@ -15,12 +14,6 @@ export const readerFonts = [
   { id: "classic", label: "Classic" },
   { id: "humanist", label: "Humanist" },
   { id: "system", label: "System" },
-] as const;
-
-export const readerThemes = [
-  { id: "light", label: "Ljus" },
-  { id: "sepia", label: "Sepia" },
-  { id: "dark", label: "Mörk" },
 ] as const;
 
 export const defaultPosition = normalizeBiblePosition({ book: "Philippians", chapter: 4, verse: 4 });
@@ -43,14 +36,6 @@ export const fontSizeStep = 2;
 
 function isReaderFontId(value: unknown): value is BibleReaderFontId {
   return typeof value === "string" && readerFonts.some((font) => font.id === value);
-}
-
-function isReaderThemeId(value: unknown): value is BibleReaderThemeId {
-  return typeof value === "string" && readerThemes.some((theme) => theme.id === value);
-}
-
-function isAppTheme(value: unknown): value is ThemeName {
-  return value === "light" || value === "dark";
 }
 
 export function normalizeFontSize(value: unknown) {
@@ -79,13 +64,13 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
     const position = normalizeBiblePosition(parsed?.position, bibleVersionId);
     const history = readBibleHistory(parsed?.history, position, bibleVersionId);
     return {
-      appTheme: isAppTheme(parsed?.appTheme) ? parsed.appTheme : undefined,
+      appTheme: "light",
       bibleVersionId,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position: history.entries[history.index],
       history,
-      readerTheme: isReaderThemeId(parsed?.readerTheme) ? parsed.readerTheme : defaultReaderTheme,
+      readerTheme: defaultReaderTheme,
       showVerseNumbers: typeof parsed?.showVerseNumbers === "boolean" ? parsed.showVerseNumbers : defaultShowVerseNumbers,
       flowingParagraphText: typeof parsed?.flowingParagraphText === "boolean" ? parsed.flowingParagraphText : defaultFlowingParagraphText,
     };
@@ -125,10 +110,4 @@ export function readerFontLabel(fontId: BibleReaderFontId, t: TranslationFunctio
   if (fontId === "humanist") return t("bible.settings.font.humanist");
   if (fontId === "system") return t("bible.settings.font.system");
   return t("bible.settings.font.serif");
-}
-
-export function readerThemeLabel(themeId: BibleReaderThemeId, t: TranslationFunction) {
-  if (themeId === "dark") return t("bible.settings.theme.dark");
-  if (themeId === "sepia") return t("bible.settings.theme.sepia");
-  return t("bible.settings.theme.light");
 }

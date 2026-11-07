@@ -50,8 +50,18 @@ try {
   for (const value of [null, "{", "{}", '{"flowingParagraphText":"true"}', '{"flowingParagraphText":1}']) {
     assert.equal(parsePreferences(value).flowingParagraphText, false, "legacy and invalid preferences retain verse rows");
   }
+  for (const legacyTheme of ["dark", "sepia", "brand"]) {
+    const legacy = parsePreferences(JSON.stringify({ appTheme: legacyTheme, readerTheme: legacyTheme, fontSize: 22, flowingParagraphText: true }));
+    assert.equal(legacy.appTheme, "light");
+    assert.equal(legacy.readerTheme, "light");
+    assert.equal(legacy.fontSize, 22);
+    assert.equal(legacy.flowingParagraphText, true);
+    const cloud = sync.parseCloudBibleReaderPreferences({ appTheme: legacyTheme, readerTheme: legacyTheme, fontSize: 22, updatedAt: 1 });
+    assert.equal(cloud.preferences.readerTheme, "light");
+    assert.equal(cloud.preferences.fontSize, 22);
+  }
   for (const flowingParagraphText of [true, false]) {
-    const preferences = { ...parsePreferences(null), appTheme: "dark", flowingParagraphText };
+    const preferences = { ...parsePreferences(null), appTheme: "light", flowingParagraphText };
     const candidate = { preferences, updatedAt: flowingParagraphText ? 10 : 20 };
     const stored = sync.serializeStoredBibleReaderPreferences(candidate);
     assert.deepEqual(sync.readStoredBibleReaderPreferences(stored), candidate, "local restart restores the layout");

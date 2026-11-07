@@ -1,4 +1,3 @@
-import type { ThemeName } from "@/ui/theme";
 
 export type Id = string;
 
@@ -354,7 +353,6 @@ export type KoinoState = {
   checkInDailyClaimsReady: boolean;
   prayerNotificationsHasMore: boolean;
   prayerNotificationsLoadingMore: boolean;
-  theme: ThemeName;
   users: User[];
   groups: Group[];
   groupMemberCounts: Record<Id, number>;

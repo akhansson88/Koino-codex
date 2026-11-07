@@ -5,14 +5,13 @@ import type { BibleHistory } from "@/features/bible-history";
 import type { BibleFootnote, BiblePosition, BibleVersionId } from "@/features/bible-kjv";
 import type { BibleVerse } from "@/state/types";
 import type { TranslationKey } from "@/ui/localization";
-import type { ThemeName } from "@/ui/theme";
-import type { readerFonts, readerThemes } from "@/features/bible-reader/preferences";
+import type { readerFonts } from "@/features/bible-reader/preferences";
 
 export type FeatherName = ComponentProps<typeof Feather>["name"];
 
 export type BibleReaderFontId = (typeof readerFonts)[number]["id"];
 
-export type BibleReaderThemeId = (typeof readerThemes)[number]["id"];
+export type BibleReaderThemeId = "light";
 
 export type PickerStage = "home" | "myPlaces" | "search" | "book" | "chapter" | "saved" | "highlights" | "reflections";
 
@@ -21,7 +20,7 @@ export type TestamentFilter = "all" | "old" | "new";
 export type VerseQuickAction = "highlight" | "journal" | "pray" | "save" | "share";
 
 export type BibleReaderPreferences = {
-  appTheme?: ThemeName;
+  appTheme?: "light";
   bibleVersionId: BibleVersionId;
   fontId: BibleReaderFontId;
   fontSize: number;
@@ -32,7 +31,6 @@ export type BibleReaderPreferences = {
   flowingParagraphText: boolean;
 };
 
-export type BibleReaderThemePreference = Pick<BibleReaderPreferences, "appTheme" | "readerTheme">;
 
 export type BibleTopicResult = {
   count: number;

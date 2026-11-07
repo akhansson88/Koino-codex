@@ -1,7 +1,6 @@
 import * as FirebaseAuth from "@firebase/auth";
 import type { User as FirebaseUser } from "@firebase/auth";
 import { get, ref, update } from "@/state/encryption/database";
-import { normalizeTheme } from "@/ui/theme";
 import { Group, Membership } from "@/state/types";
 import { now, id, inviteCode } from "@/state/store/helpers";
 import { database } from "@/state/store/firebase";
@@ -20,7 +19,6 @@ export async function ensureProfile(user: FirebaseUser, name?: string) {
     id: user.uid,
     name: resolvedName,
     createdAt: existing?.createdAt ?? timestamp,
-    theme: normalizeTheme(existing?.theme),
   });
 
   if (user.displayName) {
@@ -32,7 +30,6 @@ export async function ensureProfile(user: FirebaseUser, name?: string) {
     id: user.uid,
     name: resolvedName,
     createdAt: existing?.createdAt ?? timestamp,
-    theme: normalizeTheme(existing?.theme),
   } satisfies Profile;
 }
 

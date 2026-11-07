@@ -42,7 +42,6 @@ import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } f
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
 import { roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
-import { applyTheme, normalizeTheme, ThemeName } from "@/ui/theme";
 import {
   ActivityNotification,
   BibleHighlight,
@@ -208,7 +207,6 @@ const pendingSavedVerseDedupKeys = new Set<string>();
 
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
 
-const themeStorageKey = "koino.theme";
 
 const noCommunityPages: CommunityPageAvailability = {
   checkIns: false,
@@ -321,18 +319,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const olderRepliesRef = useRef<Reply[]>([]);
   const olderPrayerReactionsRef = useRef<PrayerReaction[]>([]);
   const olderPostReactionsRef = useRef<PostReaction[]>([]);
-  const [theme, setTheme] = useState<ThemeName>("light");
   const userMemberships = useMemo(() => [...legacyMemberships.filter((legacy) => !encryptedUserMemberships.some((member) => member.groupId === legacy.groupId)), ...encryptedUserMemberships], [legacyMemberships, encryptedUserMemberships]);
   const groups = useMemo(() => [...legacyGroups.filter((legacy) => !encryptedUserMemberships.some((member) => member.groupId === legacy.id)), ...encryptedGroups], [legacyGroups, encryptedGroups, encryptedUserMemberships]);
   const membershipGroupIds = useMemo(() => [...new Set(encryptedUserMemberships.map((item) => item.groupId))].sort(), [encryptedUserMemberships]);
   const membershipGroupKey = JSON.stringify(membershipGroupIds);
   const currentGroupEncrypted = Boolean(profile?.currentGroupId && userGroupsSnapshotReady && encryptedUserMemberships.some((member) => member.groupId === profile.currentGroupId));
   const currentGroupMigrationPending = Boolean(profile?.currentGroupId && !currentGroupEncrypted && legacyMemberships.some((member) => member.groupId === profile.currentGroupId));
-  const [themeReady, setThemeReady] = useState(false);
-  const themeRef = useRef<ThemeName>("light");
-  const hasStoredThemeRef = useRef(false);
-  const isThemeSyncPendingRef = useRef(false);
-
   const clearUserSession = useCallback(() => {
     setFirebaseUser(null);
     setProfile(null);
@@ -395,19 +387,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const storedTheme = await AsyncStorage.getItem(themeStorageKey);
-        hasStoredThemeRef.current = Boolean(storedTheme);
-        const nextTheme = normalizeTheme(storedTheme);
-        themeRef.current = nextTheme;
-        applyTheme(nextTheme);
-        setTheme(nextTheme);
-      } finally {
-        setThemeReady(true);
-      }
-    })();
-
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthReady(true);
@@ -430,14 +409,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
     setBibleHighlights([]);
   }, [firebaseUser?.uid]);
-
-  useEffect(() => {
-    themeRef.current = theme;
-    applyTheme(theme);
-    if (themeReady) {
-      void AsyncStorage.setItem(themeStorageKey, theme);
-    }
-  }, [theme, themeReady]);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -467,13 +438,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         const nextProfile = snapshot.val() as Profile;
         setProfile(nextProfile);
         setProfileSnapshotReady(true);
-        const nextTheme = normalizeTheme(nextProfile.theme);
-        if (isThemeSyncPendingRef.current && nextTheme === themeRef.current) {
-          isThemeSyncPendingRef.current = false;
-        }
-        if (!hasStoredThemeRef.current && !isThemeSyncPendingRef.current && nextTheme !== themeRef.current) {
-          setTheme(nextTheme);
-        }
         setProfileReady(true);
         markStartupMilestone("profileReady");
       },
@@ -1028,7 +992,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       checkInDailyClaimsReady,
       prayerNotificationsHasMore,
       prayerNotificationsLoadingMore,
-      theme,
       users,
       groups,
       groupMemberCounts,
@@ -1065,7 +1028,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     communityFeedReady,
     communityPageAvailability,
     communityContentLoadingMore,
-    theme,
     authReady,
     checkIns,
     firebaseUser,
@@ -2416,21 +2378,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "setNotificationPreference": {
               if (!firebaseUser) return;
               await update(ref(database, `notificationPreferences/${firebaseUser.uid}`), { [action.key]: action.value });
-              return;
-            }
-            case "setTheme": {
-              if (!firebaseUser) return;
-              hasStoredThemeRef.current = true;
-              isThemeSyncPendingRef.current = true;
-              themeRef.current = action.theme;
-              applyTheme(action.theme);
-              setTheme(action.theme);
-              const profileRef = ref(database, `profiles/${firebaseUser.uid}`);
-              try {
-                await update(profileRef, { theme: action.theme });
-              } catch {
-                isThemeSyncPendingRef.current = false;
-              }
               return;
             }
 

@@ -60,13 +60,12 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
   useEffect(() => {
-    traceIdentity(`state theme=${state.theme} language=${language} sheet=${activeSheet ?? "none"} switcher=${switcherVisible}`);
-  }, [state.theme, language, activeSheet, switcherVisible]);
+    traceIdentity(`state language=${language} sheet=${activeSheet ?? "none"} switcher=${switcherVisible}`);
+  }, [language, activeSheet, switcherVisible]);
   useEffect(() => {
     traceIdentity("mounted");
     return () => traceIdentity("unmounted");
   }, []);
-  const themeLabel = t(state.theme === "dark" ? "identity.appearance.night" : "identity.appearance.light");
 
   function openAvatarCropper(source: RoomImageCropSource) {
     if (Platform.OS === "web") {
@@ -166,17 +165,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
 
       <SettingsSection label={t("identity.section.identity")}>
         <SettingsRow icon="user" title={t("identity.profile.title")} subtitle={t("identity.profile.subtitle")} onPress={() => setActiveSheet("profile")} />
-        <SettingsRow
-          icon="sun"
-          title={t("identity.appearance.title")}
-          subtitle={t("identity.appearance.subtitle")}
-          value={themeLabel}
-          onPress={() => {
-            traceIdentity("appearance.press");
-            void dispatch({ type: "setTheme", theme: state.theme === "dark" ? "light" : "dark" });
-          }}
-          showDivider
-        />
         <SettingsRow
           icon="globe"
           title={t("settings.language.title")}

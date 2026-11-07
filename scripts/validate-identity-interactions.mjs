@@ -7,7 +7,6 @@ import { build } from "esbuild";
 import React from "react";
 import { act, create } from "react-test-renderer";
 import ts from "typescript";
-import vm from "node:vm";
 
 // Exercise real Identity handlers, language state and palette values. Native
 // sheets, navigation, photo picking and persistence boundaries are mocked;
@@ -21,10 +20,10 @@ const h = globalThis.__identityInteractions = {
   storage: new Map(), storageWrites: [], actions: [], route: "identity", history: ["identity"],
   identityMounts: 0, identityUnmounts: 0, identityDismissals: 0,
   permissionCalls: 0, pickerCalls: 0, permissionGranted: true,
-  pickerResult: { canceled: true, assets: [] }, resetFailure: false, activeRawListeners: new Set(), themeWrites: [],
+  pickerResult: { canceled: true, assets: [] }, resetFailure: false, activeRawListeners: new Set(),
 };
 const freshState = () => ({
-  currentUserId: "member", currentGroupId: "room", authEmail: "member@example.test", theme: "light",
+  currentUserId: "member", currentGroupId: "room", authEmail: "member@example.test",
   users: [{ id: "member", name: "Member" }], groups: [{ id: "room", name: "Test community", ownerId: "member" }],
   groupMemberCounts: { room: 1 }, memberships: [], notificationPreferences: { pushEnabled: true },
 });
@@ -55,7 +54,7 @@ const mocks = {
     const h=globalThis.__identityInteractions;
     const subscribe=listener=>{h.listeners.add(listener);return()=>h.listeners.delete(listener);};
     const useSnapshot=()=>useSyncExternalStore(subscribe,()=>h.state,()=>h.state);
-    const dispatch=async action=>{h.actions.push(action);if(action.type==="setTheme")return h.runActualTheme(action);if(action.type==="requestPasswordReset"&&h.resetFailure)throw Error("Reset fixture failed");};
+    const dispatch=async action=>{h.actions.push(action);if(action.type==="requestPasswordReset"&&h.resetFailure)throw Error("Reset fixture failed");};
     export const useKoino=()=>({state:useSnapshot(),dispatch});
     export const useKoinoFields=keys=>{const state=useSnapshot();return Object.fromEntries(keys.map(key=>[key,state[key]]));};
   `,
@@ -100,7 +99,7 @@ try {
   const outfile = path.join(directory, "identity.cjs");
   await build({
     stdin: {
-      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {colors,applyTheme} from "./ui/theme";export {setEmulatorMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";`,
+      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {setEmulatorMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";`,
       resolveDir: projectRoot, loader: "tsx",
     },
     outfile, bundle: true, format: "cjs", platform: "node", jsx: "automatic",
@@ -113,54 +112,7 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "tsx", resolveDir: projectRoot }));
     } }],
   });
-  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, colors, applyTheme, setEmulatorMode, EncryptionSettings, AvatarButton } = require(outfile);
-  // Execute the actual setTheme case instead of mirroring its implementation
-  // in the state mock. Only state refs and database boundaries are injected.
-  const storeSource = await readFile(path.join(projectRoot, "state/koino-store.tsx"), "utf8");
-  const storeAst = ts.createSourceFile("store.tsx", storeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const themeCases = [];
-  function findThemeCase(node) {
-    if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression) && node.expression.text === "setTheme") themeCases.push(node);
-    ts.forEachChild(node, findThemeCase);
-  }
-  findThemeCase(storeAst);
-  assert.equal(themeCases.length, 1);
-  const themeBody = themeCases[0].statements.map(statement => statement.getText(storeAst)).join("\n");
-  const themeJavascript = ts.transpileModule(`(async function runThemeCase(){${themeBody}})`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-  const freshThemeRefs = () => ({ hasStoredThemeRef: { current: false }, isThemeSyncPendingRef: { current: false }, themeRef: { current: "light" } });
-  const runActualTheme = (action, write = async () => {}, firebaseUser = { uid: "member" }) => {
-    h.themeRefs ??= freshThemeRefs();
-    return vm.runInNewContext(themeJavascript, {
-      action, firebaseUser, ...h.themeRefs, applyTheme, database: {},
-      setTheme: theme => { h.state = { ...h.state, theme }; notify(); },
-      ref: (_database, path) => ({ path }),
-      update: (reference, patch) => { h.themeWrites.push({ reference, patch }); return write(reference, patch); },
-    })();
-  };
-  h.runActualTheme = action => runActualTheme(action);
-  h.state = freshState(); h.themeRefs = freshThemeRefs(); applyTheme("light");
-  const originalBackground = colors.cream;
-  let resolveThemeWrite;
-  const delayedWrite = new Promise(resolve => { resolveThemeWrite = resolve; });
-  const pendingTheme = runActualTheme({ type: "setTheme", theme: "dark" }, () => delayedWrite);
-  assert.equal(h.state.theme, "dark", "The real theme action sets state before the database acknowledges");
-  assert.notEqual(colors.cream, originalBackground, "The real theme action applies the palette before the database acknowledges");
-  assert.equal(h.themeRefs.hasStoredThemeRef.current, true);
-  assert.equal(h.themeRefs.isThemeSyncPendingRef.current, true);
-  assert.equal(h.themeRefs.themeRef.current, "dark");
-  assert.equal(h.themeWrites[0].reference.path, "profiles/member");
-  assert.equal(h.themeWrites[0].patch.theme, "dark");
-  assert.deepEqual(Object.keys(h.themeWrites[0].patch), ["theme"]);
-  let themeSettled = false; pendingTheme.then(() => { themeSettled = true; });
-  await Promise.resolve(); assert.equal(themeSettled, false);
-  resolveThemeWrite(); await pendingTheme;
-  h.state = freshState(); h.themeRefs = freshThemeRefs(); applyTheme("light");
-  const rejectedTheme = runActualTheme({ type: "setTheme", theme: "dark" }, async () => { throw Error("Fixture database rejection"); });
-  assert.equal(h.state.theme, "dark"); assert.notEqual(colors.cream, originalBackground);
-  await rejectedTheme;
-  assert.equal(h.state.theme, "dark", "A rejected write must not roll back the real action's local theme");
-  assert.equal(h.themeRefs.isThemeSyncPendingRef.current, false);
-
+  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, setEmulatorMode, EncryptionSettings, AvatarButton } = require(outfile);
   function LanguageProbe() { h.translation = useAppTranslation(); return null; }
   function MountedIdentity() {
     React.useEffect(() => { h.identityMounts++; return () => { h.identityUnmounts++; }; }, []);
@@ -191,9 +143,9 @@ try {
     h.os = os; h.state = freshState(); h.storage.set("koino.language", storedLanguage);
     h.storageWrites = []; h.actions = []; h.route = "/identity"; h.history = ["/home", "/identity"];
     h.identityMounts = 0; h.identityUnmounts = 0; h.identityDismissals = 0;
-    h.themeRefs = freshThemeRefs(); h.themeWrites = []; h.activeRawListeners.clear();
+    h.activeRawListeners.clear();
     h.permissionCalls = 0; h.pickerCalls = 0; h.permissionGranted = true; h.pickerResult = { canceled: true, assets: [] }; h.resetFailure = false;
-    setEmulatorMode(emulator); applyTheme("light");
+    setEmulatorMode(emulator);
     await act(async () => { tree = create(React.createElement(AppLanguageProvider, null, React.createElement(LanguageProbe), React.createElement(RootFixture))); });
     assert.equal(h.translation.language, storedLanguage);
     assert.equal(tree.root.findByType("IdentitySheet").props.modal, false, "The transparent native Identity route must be the sole modal host");
@@ -201,6 +153,7 @@ try {
 
   for (const os of ["ios", "android"]) {
     await mount(os);
+    assert.equal(tree.root.findAllByType(SettingsRow).some(node => ["Appearance", "Utseende"].includes(node.props.title)), false, "Appearance choices are absent");
     for (let repeat = 0; repeat < 3; repeat++) {
       await pressRow("settings.language.title"); assert.ok(sheet("settings.language.sheetTitle")); await closeSheet("settings.language.sheetTitle");
       await pressRow("identity.security.title"); assert.ok(sheet("identity.security.title")); await closeSheet("identity.security.title");
@@ -209,13 +162,6 @@ try {
       await act(() => tree.root.findByType("RoomSwitcherSheet").props.onClose());
       assert.equal(tree.root.findAllByType("RoomSwitcherSheet").length, 0);
     }
-    const lightBackground = colors.cream;
-    await pressRow("identity.appearance.title");
-    assert.equal(h.state.theme, "dark");
-    assert.equal(row("identity.appearance.title").props.value, t("identity.appearance.night"));
-    assert.notEqual(colors.cream, lightBackground, "The handler must apply actual palette values in this fixture");
-    await pressRow("identity.appearance.title"); assert.equal(h.state.theme, "light"); assert.equal(colors.cream, lightBackground);
-
     await pressRow("settings.language.title");
     await pressRow("settings.language.option.swedish");
     assert.equal(h.translation.language, "sv");
@@ -333,7 +279,7 @@ try {
   assert.equal(option("presentation")?.text, "transparentModal");
   assert.equal(option("gestureEnabled")?.kind, ts.SyntaxKind.FalseKeyword);
   assert.equal(option("animation")?.text, "none");
-  console.log("Identity handler regressions passed on iOS/Android fixtures: repeated language/security/join sheets, real setTheme action before pending/rejected writes, language persistence, three complete JS history cycles through real Encryption Back and Avatar reopen, emulator restrictions and production reset/photo controls. Native Expo navigation, gestures, picker presentation and platform touch delivery still require device testing.");
+  console.log("Identity handler regressions passed on iOS/Android fixtures: repeated language/security/join sheets, language persistence, three complete JS history cycles through real Encryption Back and Avatar reopen, emulator restrictions and production reset/photo controls. Native Expo navigation, gestures, picker presentation and platform touch delivery still require device testing.");
 } finally {
   if (tree) await act(() => tree.unmount());
   delete globalThis.__identityInteractions;

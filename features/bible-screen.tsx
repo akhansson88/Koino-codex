@@ -62,11 +62,9 @@ import { savedVerseIdentity } from "@/state/saved-verses";
 import type { BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
-import { type ThemeName } from "@/ui/theme";
 import {
   type MeasurableView,
   type BibleReaderFontId,
-  type BibleReaderThemePreference,
   type SelectedBibleFootnote,
   type ReaderToast,
   type PendingVerseComposerAction,
@@ -154,7 +152,7 @@ export function BibleScreen() {
   const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
   const handledPlanJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
-  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "savedVerses", "theme"]);
+  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "savedVerses"]);
   const { dispatch } = useKoinoActions();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
@@ -191,10 +189,6 @@ export function BibleScreen() {
   const bookLanguage = useBibleBookLanguage(bibleVersionId);
   const [fontId, setFontId] = useState<BibleReaderFontId>(defaultFontId);
   const [fontSize, setFontSize] = useState(defaultFontSize);
-  const [readerThemePreference, setReaderThemePreference] = useState<BibleReaderThemePreference>({
-    appTheme: state.theme,
-    readerTheme: state.theme,
-  });
   const [showVerseNumbers, setShowVerseNumbers] = useState(defaultShowVerseNumbers);
   const [flowingParagraphText, setFlowingParagraphText] = useState(defaultFlowingParagraphText);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -240,9 +234,6 @@ export function BibleScreen() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
   const [chapterControlsHeight, setChapterControlsHeight] = useState(46);
   const [selectionControlsHeight, setSelectionControlsHeight] = useState(164);
-  const persistedAppThemeRef = useRef<ThemeName | undefined>(undefined);
-  const appThemeRef = useRef(state.theme);
-  appThemeRef.current = state.theme;
   const readerPreferencesSyncRef = useRef<BibleReaderPreferenceSyncStatus>({
     connectionKnown: false,
     connected: false,
@@ -254,8 +245,7 @@ export function BibleScreen() {
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
-  const effectiveReaderTheme = readerThemePreference.appTheme === state.theme ? readerThemePreference.readerTheme : state.theme;
-  const readerPalette = useMemo(() => readerPaletteFor(effectiveReaderTheme), [effectiveReaderTheme]);
+  const readerPalette = useMemo(() => readerPaletteFor(), []);
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);
@@ -430,11 +420,6 @@ export function BibleScreen() {
     positionRef.current = position;
   }, [position]);
 
-  useEffect(() => {
-    if (readerThemePreference.appTheme === state.theme) return;
-    setReaderThemePreference({ appTheme: state.theme, readerTheme: state.theme });
-  }, [readerThemePreference.appTheme, state.theme]);
-
   const showTemporaryHighlight = useCallback((nextPosition: BiblePosition) => {
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
@@ -487,7 +472,7 @@ export function BibleScreen() {
       if (!active) return;
       if (source === "cloud" && sync.localSnapshot && sync.localSnapshot.updatedAt > snapshot.updatedAt) return;
       const nextPreferences: BibleReaderPreferences = source === "cloud"
-        ? { ...snapshot.preferences, appTheme: appThemeRef.current }
+        ? { ...snapshot.preferences, appTheme: "light" }
         : snapshot.preferences;
       const appliedSnapshot = { preferences: nextPreferences, updatedAt: snapshot.updatedAt };
       const pendingSave = pendingReaderCloudSaveRef.current;
@@ -511,8 +496,6 @@ export function BibleScreen() {
       notifyBibleVersionPreferenceChanged(nextPreferences.bibleVersionId);
       setFontId(nextPreferences.fontId);
       setFontSize(nextPreferences.fontSize);
-      persistedAppThemeRef.current = nextPreferences.appTheme;
-      setReaderThemePreference({ appTheme: nextPreferences.appTheme, readerTheme: nextPreferences.readerTheme });
       setShowVerseNumbers(nextPreferences.showVerseNumbers);
       setFlowingParagraphText(nextPreferences.flowingParagraphText);
       setPreferencesReady(true);
@@ -642,18 +625,17 @@ export function BibleScreen() {
     const sync = readerPreferencesSyncRef.current;
     if (sync.userId !== state.currentUserId) return;
     const payload: BibleReaderPreferences = {
-      appTheme: state.theme,
+      appTheme: "light",
       bibleVersionId,
       fontId,
       fontSize,
       position,
       history,
-      readerTheme: effectiveReaderTheme,
+      readerTheme: "light",
       showVerseNumbers,
       flowingParagraphText,
     };
     const signature = readerPreferencesSignature(payload);
-    persistedAppThemeRef.current = state.theme;
 
     const scheduleCloudSave = (pending: PendingBibleReaderCloudSave) => setTimeout(() => {
       if (pendingReaderCloudSaveRef.current !== pending) return;
@@ -666,9 +648,9 @@ export function BibleScreen() {
     }, 700);
 
     if (sync.lastSignature === signature) {
-      if (sync.localSnapshot && sync.localSnapshot.preferences.appTheme !== state.theme) {
-        const localSnapshot = {
-          preferences: { ...sync.localSnapshot.preferences, appTheme: state.theme },
+      if (sync.localSnapshot && sync.localSnapshot.preferences.appTheme !== "light") {
+        const localSnapshot: StoredBibleReaderPreferences = {
+          preferences: { ...sync.localSnapshot.preferences, appTheme: "light" },
           updatedAt: sync.localSnapshot.updatedAt,
         };
         sync.localSnapshot = localSnapshot;
@@ -697,7 +679,7 @@ export function BibleScreen() {
     const timeout = scheduleCloudSave(pendingSave);
 
     return () => clearTimeout(timeout);
-  }, [bibleVersionId, effectiveReaderTheme, fontId, fontSize, flowingParagraphText, history, position, preferencesReady, showVerseNumbers, state.currentUserId, state.theme, storageKey]);
+  }, [bibleVersionId, fontId, fontSize, flowingParagraphText, history, position, preferencesReady, showVerseNumbers, state.currentUserId, storageKey]);
 
   useEffect(() => {
     return () => {
@@ -1683,12 +1665,10 @@ export function BibleScreen() {
         fontId={fontId}
         fontSize={fontSize}
         onChangeFont={setFontId}
-        onChangeReaderTheme={(readerTheme) => setReaderThemePreference({ appTheme: state.theme, readerTheme })}
         onChangeShowVerseNumbers={setShowVerseNumbers}
         onClose={() => setSettingsVisible(false)}
         onFontSizeChange={changeFontSize}
         palette={readerPalette}
-        readerTheme={effectiveReaderTheme}
         showVerseNumbers={showVerseNumbers}
         visible={settingsVisible}
       />

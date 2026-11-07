@@ -14,12 +14,12 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 
-import { KoinoProvider, useKoinoSelector } from "@/state/koino-store";
+import { KoinoProvider } from "@/state/koino-store";
 import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
 import { EmulatorBadge } from "@/ui/emulator-badge";
-import { colors, statusBarStyle } from "@/ui/theme";
+import { colors } from "@/ui/theme";
 import { EncryptionBoundary } from "@/ui/encryption";
 
 const enableNativeBackGesture = Platform.OS === "ios";
@@ -47,12 +47,11 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const reducedMotion = useReducedMotion();
-  const theme = useKoinoSelector((state) => state.theme);
 
   return (
     <>
       <NotificationRuntime />
-      <StatusBar style={statusBarStyle(theme)} backgroundColor={colors.cream} />
+      <StatusBar style="dark" backgroundColor={colors.cream} />
       <Stack
         screenOptions={{
           animation: reducedMotion ? "none" : "default",

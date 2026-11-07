@@ -1,10 +1,9 @@
-import type { StoredThemeName, ThemeName } from "@/ui/theme";
 import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
   currentGroupId?: Id | null;
-  theme?: StoredThemeName;
+  theme?: string;
 };
 
 export type CreatePostKind = EntryKind;
@@ -80,8 +79,7 @@ export type Action =
   | { type: "markAllActivityNotificationsRead" }
   | { type: "registerPushToken"; token: string; platform: "android" | "ios" }
   | { type: "setDiscussionFollow"; targetType: "post" | "check_in"; targetId: Id; following: boolean }
-  | { type: "setNotificationPreference"; key: keyof NotificationPreferences; value: boolean }
-  | { type: "setTheme"; theme: ThemeName };
+  | { type: "setNotificationPreference"; key: keyof NotificationPreferences; value: boolean };
 
 export type KoinoContextValue = {
   state: KoinoState;

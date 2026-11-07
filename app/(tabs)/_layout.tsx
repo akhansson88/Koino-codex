@@ -9,13 +9,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OnboardingScreen } from "@/features/onboarding-screen";
 import { useKoinoSelector } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, platformShadow, typography, type ThemeName } from "@/ui/theme";
+import { colors, platformShadow, typography } from "@/ui/theme";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const authReady = useKoinoSelector((state) => state.authReady);
   const currentUserId = useKoinoSelector((state) => state.currentUserId);
-  const theme = useKoinoSelector((state) => state.theme);
   const { t } = useAppTranslation();
 
   if (authReady && !currentUserId) {
@@ -33,16 +32,11 @@ export default function TabLayout() {
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.olive,
         tabBarInactiveTintColor: colors.muted,
-        tabBarBackground: () => <TabBarGlassBackground theme={theme} />,
+        tabBarBackground: () => <TabBarGlassBackground />,
         tabBarStyle: {
-          backgroundColor:
-            Platform.OS === "web"
-              ? theme === "dark"
-                ? "rgba(17, 26, 44, 0.28)"
-                : "rgba(255, 255, 255, 0.22)"
-              : "transparent",
+          backgroundColor: Platform.OS === "web" ? "rgba(255, 255, 255, 0.22)" : "transparent",
           borderRadius: 0,
-          borderTopColor: theme === "dark" ? "rgba(255, 255, 255, 0.36)" : "rgba(255, 255, 255, 0.95)",
+          borderTopColor: "rgba(255, 255, 255, 0.95)",
           borderTopWidth: 1,
           bottom: 0,
           height: tabBarHeight(insets.bottom),
@@ -52,23 +46,17 @@ export default function TabLayout() {
           position: "absolute",
           right: 0,
           ...platformShadow({
-            boxShadow:
-              theme === "dark"
-                ? "0 18px 42px rgba(0, 0, 0, 0.36)"
-                : "0 18px 42px rgba(11, 18, 32, 0.16)",
+            boxShadow: "0 18px 42px rgba(11, 18, 32, 0.16)",
             elevation: 12,
             offset: { width: 0, height: 12 },
-            opacity: theme === "dark" ? 0.34 : 0.16,
+            opacity: 0.16,
             radius: 26,
           }),
           ...(Platform.OS === "web"
             ? {
                 WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
                 backdropFilter: "blur(34px) saturate(220%) contrast(115%)",
-                boxShadow:
-                  theme === "dark"
-                    ? "inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.36)"
-                    : "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
               }
             : {}),
         },
@@ -120,17 +108,15 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
+function TabBarGlassBackground() {
   if (Platform.OS === "web") return null;
-
-  const isDark = theme === "dark";
 
   return (
     <BlurView
       blurReductionFactor={2}
       experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : "none"}
       intensity={90}
-      tint={isDark ? "systemMaterialDark" : "systemMaterial"}
+      tint="systemMaterial"
       style={{
         ...StyleSheet.absoluteFillObject,
         borderRadius: 0,
@@ -140,8 +126,8 @@ function TabBarGlassBackground({ theme }: { theme: ThemeName }) {
       <View
         style={{
           ...StyleSheet.absoluteFillObject,
-          backgroundColor: isDark ? "rgba(17, 26, 44, 0.34)" : "rgba(255, 255, 255, 0.28)",
-          borderTopColor: isDark ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.88)",
+          backgroundColor: "rgba(255, 255, 255, 0.28)",
+          borderTopColor: "rgba(255, 255, 255, 0.88)",
           borderTopWidth: 1,
         }}
       />

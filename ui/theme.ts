@@ -68,7 +68,7 @@ export const softTints = {
   cyanSoft: "rgba(142, 220, 218, 0.22)",
 } as const;
 
-const lightTheme: ThemeColors = {
+export const colors: ThemeColors = {
   background: brandPalette.warmCanvas,
   surface: brandPalette.surfaceWhite,
   textPrimary: brandPalette.deepNavy,
@@ -111,66 +111,6 @@ const lightTheme: ThemeColors = {
   onAccent: brandPalette.deepNavy,
   white: brandPalette.surfaceWhite,
 };
-
-export type ThemeName = "light" | "dark";
-export type LegacyThemeName = "classic" | "brand";
-export type StoredThemeName = ThemeName | LegacyThemeName;
-
-const darkTheme: ThemeColors = {
-  background: brandPalette.deepNavy,
-  surface: "#111A2C",
-  textPrimary: brandPalette.paperOffWhite,
-  textSecondary: "#A7B0C0",
-  textMuted: "#D1D5E0",
-  border: "#2A3549",
-  accentWarm: brandPalette.warmPersika,
-  accentPrayer: brandPalette.blushRosa,
-  accentReflection: brandPalette.lavenderHaze,
-  accentRhythm: brandPalette.softCyan,
-  accentScripture: brandPalette.warmPersika,
-  cardPaper: "#1C2740",
-  warmSoft: "rgba(255, 199, 154, 0.14)",
-  prayerSoft: "rgba(243, 172, 200, 0.14)",
-  blushSoft: "rgba(243, 172, 200, 0.18)",
-  reflectionSoft: "rgba(200, 188, 231, 0.14)",
-  lavenderSoft: "rgba(200, 188, 231, 0.18)",
-  rhythmSoft: "rgba(142, 220, 218, 0.14)",
-  cyanSoft: "rgba(142, 220, 218, 0.18)",
-  cream: brandPalette.deepNavy,
-  paper: "#111A2C",
-  elevated: "#172237",
-  input: "#0F192B",
-  ink: brandPalette.paperOffWhite,
-  muted: "#A7B0C0",
-  olive: "#D1D5E0",
-  moss: "#FFB985",
-  clay: "#E99B89",
-  gold: "#F8BE88",
-  line: "#2A3549",
-  rose: "#F0A090",
-  roseSurface: "#33201E",
-  mossSurface: "#342417",
-  accentSubtle: "#3A281C",
-  danger: "#FDA29B",
-  dangerBorder: "#7A271A",
-  dangerSurface: "#2A1716",
-  disabled: "#263145",
-  disabledText: "#7D8797",
-  onAccent: brandPalette.deepNavy,
-  white: brandPalette.paperOffWhite,
-};
-
-export const themes: Record<ThemeName, ThemeColors> = {
-  light: lightTheme,
-  dark: darkTheme,
-};
-
-export const themeLabels: Record<ThemeName, string> = {
-  light: "Light",
-  dark: "Night",
-};
-
-export const colors: ThemeColors = { ...themes.light };
 
 export const fontFamilies = {
   headingLight: "Montserrat_300Light",
@@ -262,22 +202,6 @@ export const typography = {
     lineHeight: 14,
   },
 } satisfies Record<string, TextStyle>;
-
-export function normalizeTheme(theme: string | null | undefined): ThemeName {
-  if (theme === "dark" || theme === "brand") return "dark";
-  return "light";
-}
-
-export function applyTheme(theme: ThemeName) {
-  const next = themes[theme];
-  for (const key of Object.keys(next) as Array<keyof ThemeColors>) {
-    colors[key] = next[key];
-  }
-}
-
-export function statusBarStyle(theme: ThemeName): "dark" | "light" {
-  return theme === "dark" ? "light" : "dark";
-}
 
 export const radius = {
   sm: 8,
