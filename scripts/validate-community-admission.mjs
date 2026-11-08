@@ -142,6 +142,35 @@ const membershipRecords = (owner, member, groupId, name) => {
 };
 const logicalGet = async (client, logicalPath) => (await client.api.adapter.get(client.api.adapter.ref(client.database, logicalPath))).val();
 const logicalSet = (client, logicalPath, value) => client.api.adapter.set(client.api.adapter.ref(client.database, logicalPath), value);
+const invoke = (client, operation, data) => client.api.session.encryptedOperation(operation, data);
+async function submitInvite(member, owner, group, overrides = {}) {
+  const applicant = member.api.session.session().vault.identity;
+  const recipient = owner.api.session.session().vault.identity;
+  return invoke(member, "requestJoin", {
+    code: group.inviteCode,
+    identity: { publicKey: applicant.publicKey, signingPublicKey: applicant.signingPublicKey },
+    name: member.api.session.crypto.seal({ name: `Dummy applicant ${member.label}` }, recipient.publicKey),
+    expectedGroupId: group.id,
+    expectedOwnerSigningPublicKey: recipient.signingPublicKey,
+    ...overrides,
+  });
+}
+async function verifyReceipt(client, group, status) {
+  const requests = await client.api.session.listCommunityJoinRequests(client.user.uid);
+  const receipts = requests.filter((item) => item.groupId === group.id);
+  assert.equal(receipts.length, 1, "Admission has one receipt per caller and community");
+  const [receipt] = receipts;
+  const inviteHint = group.inviteCode.length >= 5 ? group.inviteCode.slice(-2) : undefined;
+  assert.ok(Number.isFinite(receipt.updatedAt));
+  assert.deepEqual(receipt, { groupId: group.id, status, ...(inviteHint ? { inviteHint } : {}), updatedAt: receipt.updatedAt });
+  return receipt;
+}
+async function createStatusGroup(owner, name) {
+  await owner.api.profiles.createGroupForUser(owner.user, name);
+  const { currentGroupId } = await logicalGet(owner, `profiles/${owner.user.uid}`);
+  const { id, inviteCode } = await logicalGet(owner, `groups/${currentGroupId}`);
+  return { id, inviteCode };
+}
 async function verifyPrivate(owner, other, fixture) {
   const journalPath = `journalEntries/${owner.user.uid}/${fixture.journalId}`;
   assert.equal((await logicalGet(owner, journalPath)).body, fixture.privateBody);
@@ -223,9 +252,30 @@ try {
         assert.equal(request.publicKey, member.api.session.session().vault.identity.publicKey);
         assert.equal(typeof request.name, "string"); assert.ok(!request.name.includes(memberName));
       });
+      await step(`${member.label} reads only their own pending receipt`, async () => {
+        const initial = await verifyReceipt(member, group, "pending");
+        const requestPath = `e2eeJoinRequests/${group.id}/${member.user.uid}`;
+        const pending = (await get(ref(member.database, requestPath))).val();
+        assert.ok(pending, "The applicant may read the existing own request leaf");
+        assert.deepEqual(await submitInvite(member, owner, group), { groupId: group.id, status: "pending" });
+        assert.deepEqual(await verifyReceipt(member, group, "pending"), initial, "A pending retry does not refresh or duplicate its receipt");
+        assert.deepEqual((await get(ref(owner.database, requestPath))).val(), pending, "A pending retry does not replace its encrypted request");
+        const { requests } = await invoke(owner, "listJoinRequests", { userId: member.user.uid });
+        assert.ok(!requests.some((request) => request.groupId === group.id), "A valid caller cannot request someone else's receipt");
+        await denied(() => get(ref(outsider.database, requestPath)));
+        await denied(() => get(ref(member.database, `e2eeJoinRequests/${group.id}`)));
+        await denied(() => get(ref(member.database, `e2eeJoinRequestStatuses/${member.user.uid}/${group.id}`)));
+        await denied(() => set(ref(member.database, `e2eeJoinRequestStatuses/${member.user.uid}/${group.id}`), { status: "approved", updatedAt: Date.now() }));
+      });
       const fingerprint = member.api.session.crypto.fingerprint(member.api.session.session().vault.identity.signingPublicKey);
       await step(`${owner.label} rejects an unverified fingerprint`, () => assert.rejects(owner.api.session.approveGroupMember(group.id, member.user.uid, "wrong fingerprint", name => membershipRecords(owner, member, group.id, name)), /Member fingerprint does not match/));
       await step(`${owner.label} approveGroupMember and encrypted membership fanout`, () => owner.api.session.approveGroupMember(group.id, member.user.uid, ` ${fingerprint} `, name => membershipRecords(owner, member, group.id, name)));
+      await step(`${member.label} approved receipt corresponds to membership`, async () => {
+        const approved = await verifyReceipt(member, group, "approved");
+        assert.equal((await get(ref(member.database, `e2eeJoinRequests/${group.id}/${member.user.uid}`))).exists(), false);
+        assert.deepEqual(await submitInvite(member, owner, group), { groupId: group.id, status: "approved" });
+        assert.deepEqual(await verifyReceipt(member, group, "approved"), approved);
+      });
       await step(`${member.label} decrypts historical group content`, () => verifyGroup(owner, member, group));
       const post = { id: `after_${run}_${member.label}`, userId: member.user.uid, groupId: group.id, kind: "reflection", body: `Dummy admitted member content ${run} ${member.label}`, createdAt: new Date().toISOString() };
       await step(`${member.label} writes encrypted shared content`, () => logicalSet(member, `posts/${group.id}/${post.id}`, post));
@@ -234,6 +284,73 @@ try {
       await step(`${member.label} cannot bypass owner authorization at callable`, () => denied(() => member.api.session.encryptedOperation("groupChange", { group: owner.api.session.session().groups[group.id], records: {} })));
       writePrivate("private-state.json", manifest);
     }
+    await step("pending and terminal receipts preserve admission boundaries", async () => {
+      const rejected = await createStatusGroup(A, `Rejected admission ${run}`);
+      const pending = await createStatusGroup(A, `Pending admission ${run}`);
+      const closed = await createStatusGroup(A, `Closed admission ${run}`);
+      manifest.statusGroups = { rejected, pending, closed };
+
+      await assert.rejects(submitInvite(B, A, pending, { expectedGroupId: rejected.id }), (error) => error?.code === "functions/aborted");
+      const applicantKey = B.api.session.session().vault.identity.signingPublicKey;
+      await assert.rejects(submitInvite(B, A, pending, { expectedOwnerSigningPublicKey: applicantKey }), (error) => error?.code === "functions/aborted");
+      assert.equal((await get(ref(B.database, `e2eeJoinRequests/${pending.id}/${B.user.uid}`))).exists(), false, "A stale invite binding cannot create a request");
+
+      assert.deepEqual(await submitInvite(B, A, pending), { groupId: pending.id, status: "pending" });
+      const oldRequestPath = `e2eeJoinRequests/${pending.id}/${B.user.uid}`;
+      const oldRequest = (await get(ref(A.database, oldRequestPath))).val();
+      // Remove metadata from this dummy request to model the older backend.
+      const legacyReceipt = new URL(`http://127.0.0.1:19001/e2eeJoinRequestStatuses/${encodeURIComponent(B.user.uid)}/${encodeURIComponent(pending.id)}.json?ns=demo-koino-default-rtdb`);
+      const legacyBinding = new URL(`http://127.0.0.1:19001/${oldRequestPath}/ownerSigningPublicKey.json?ns=demo-koino-default-rtdb`);
+      for (const url of [legacyReceipt, legacyBinding]) {
+        assert.ok((await fetch(url, { method: "DELETE", headers: { authorization: "Bearer owner" } })).ok);
+      }
+      assert.deepEqual(await submitInvite(B, A, pending), { groupId: pending.id, status: "pending" });
+      const rebound = (await get(ref(A.database, oldRequestPath))).val();
+      assert.equal(rebound.publicKey, oldRequest.publicKey);
+      assert.equal(rebound.ownerSigningPublicKey, oldRequest.ownerSigningPublicKey);
+      assert.notEqual(rebound.name, oldRequest.name, "Re-entering an older invite seals the request to the current owner");
+      await verifyReceipt(B, pending, "pending");
+
+      assert.deepEqual(await submitInvite(B, A, rejected), { groupId: rejected.id, status: "pending" });
+      const rejection = { groupId: rejected.id, userId: B.user.uid };
+      await denied(() => invoke(B, "rejectJoin", rejection));
+      const result = { groupId: rejected.id, status: "rejected" };
+      assert.deepEqual(await invoke(A, "rejectJoin", rejection), result);
+      assert.deepEqual(await invoke(A, "rejectJoin", rejection), result, "An owner can safely retry a lost rejection response");
+      assert.deepEqual(await submitInvite(B, A, rejected), result, "A rejected applicant cannot reapply through the same invite");
+      await verifyReceipt(B, rejected, "rejected");
+      assert.equal((await get(ref(A.database, `e2eeJoinRequests/${rejected.id}/${B.user.uid}`))).exists(), false);
+      assert.equal((await get(ref(B.database, `encryptedData/userGroups/${B.user.uid}/${rejected.id}`))).exists(), false);
+      await denied(() => get(ref(B.database, `e2eeGroups/${rejected.id}`)));
+      const fingerprint = B.api.session.crypto.fingerprint(applicantKey);
+      await assert.rejects(A.api.session.approveGroupMember(rejected.id, B.user.uid, fingerprint, () => assert.fail("A rejected request cannot generate membership")), /Member fingerprint does not match/);
+
+      assert.deepEqual(await submitInvite(B, A, closed), { groupId: closed.id, status: "pending" });
+      await A.api.session.deleteEncryptedGroup(closed.id);
+      await verifyReceipt(B, closed, "closed");
+      assert.equal((await get(ref(B.database, `encryptedData/userGroups/${B.user.uid}/${closed.id}`))).exists(), false);
+
+      const { device } = B.api.session.session();
+      const unsigned = { operation: "listJoinRequests", data: {}, deviceId: device.id, timestamp: Date.now(), requestId: `receipt_list_${run}` };
+      const signed = { ...unsigned, signature: B.api.session.crypto.signature(unsigned, device.identity.signingPrivateKey) };
+      const callable = httpsCallable(B.functions, "encryptedAccount");
+      assert.deepEqual((await callable(signed)).data, (await callable(signed)).data, "A read can repeat without a replay-ledger mutation");
+      await denied(() => httpsCallable(outsider.functions, "encryptedAccount")({ ...signed, requestId: `outsider_list_${run}` }));
+    });
+    await step("concurrent approval and decline settle one membership outcome", async () => {
+      const group = await createStatusGroup(A, `Concurrent admission ${run}`);
+      await submitInvite(B, A, group);
+      const fingerprint = B.api.session.crypto.fingerprint(B.api.session.session().vault.identity.signingPublicKey);
+      const [approval, decline] = await Promise.allSettled([
+        A.api.session.approveGroupMember(group.id, B.user.uid, fingerprint, name => membershipRecords(A, B, group.id, name)),
+        A.api.session.rejectGroupJoinRequest(group.id, B.user.uid),
+      ]);
+      assert.notEqual(approval.status, decline.status, "Only one decision can commit");
+      const approved = approval.status === "fulfilled";
+      await verifyReceipt(B, group, approved ? "approved" : "rejected");
+      assert.equal((await get(ref(B.database, `encryptedData/userGroups/${B.user.uid}/${group.id}`))).exists(), approved);
+      if (!approved) await denied(() => get(ref(B.database, `e2eeGroups/${group.id}`)));
+    });
     await step("outsider rules enforce group and journal boundaries", async () => {
       for (const group of Object.values(manifest.groups)) {
         await denied(() => get(ref(outsider.database, `e2eeGroups/${group.id}`)));
@@ -250,7 +367,7 @@ try {
     await step("both memberships and shared posts decrypt", async () => { await verifyGroup(A, B, manifest.groups.A); await verifyGroup(B, A, manifest.groups.B); });
     manifest.initialComplete = true;
     writePrivate("private-state.json", manifest);
-    console.log("Admission initial PASS: actual setup/profile/create/join/approval/adapter pipelines, reciprocal normalized invites, pending membership, fingerprint checks, encrypted group access, owner authorization and private journal rules. Restart verification is still required.");
+    console.log("Admission initial PASS: real encrypted setup, admission and approval, applicant-only status, duplicate and stale requests, rejection and closed communities, owner authorization, and journal privacy. Restart verification is still required.");
   } else {
     assert.ok(existsSync(manifestPath), "Restart requires an initial-stage fixture");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -263,8 +380,13 @@ try {
       await step(`${person.label} ensureProfile after restart`, () => person.api.profiles.ensureProfile(person.user, manifest.people[person.label].name));
     }
     await step("restart decrypts both memberships and historical/new shared content", async () => { await verifyGroup(A, B, manifest.groups.A); await verifyGroup(B, A, manifest.groups.B); });
+    await step("restart preserves applicant-only admission outcomes", async () => {
+      await verifyReceipt(A, manifest.groups.B, "approved");
+      await verifyReceipt(B, manifest.groups.A, "approved");
+      for (const status of ["pending", "rejected", "closed"]) await verifyReceipt(B, manifest.statusGroups[status], status);
+    });
     await step("restart preserves private journals and access boundaries", async () => { await verifyPrivate(A, B, manifest.people.A); await verifyPrivate(B, A, manifest.people.B); });
-    console.log("Admission restart PASS: both real clients unlock persisted device grants, decrypt both memberships/shared histories and preserve journal privacy after a fresh emulator process.");
+    console.log("Admission restart PASS: real clients unlock persisted device grants, decrypt memberships and shared histories, and retain private journals and applicant-only admission receipts.");
   }
 } catch (error) {
   console.error(JSON.stringify({ suite: "community-admission", stage, operation, ...safeError(error) }));

@@ -74,7 +74,7 @@ export function installEmulatorNetworkGuards(): () => void {
   } as typeof Socket.prototype.connect;
   return () => { globalThis.fetch = previousFetch; Socket.prototype.connect = previousConnect; };
 }
-const allowedOperations = new Set(["setup", "recover", "requestDevice", "approveDevice", "backup", "revokeDevice", "createGroup", "resolveInvite", "requestJoin", "groupChange", "beginMigration", "readLegacyArchive", "deleteLegacyBatch", "finishMigration", "leaveGroup", "deleteGroup", "removeCommunityContent"]);
+const allowedOperations = new Set(["setup", "recover", "requestDevice", "approveDevice", "backup", "revokeDevice", "createGroup", "resolveInvite", "requestJoin", "listJoinRequests", "rejectJoin", "groupChange", "beginMigration", "readLegacyArchive", "deleteLegacyBatch", "finishMigration", "leaveGroup", "deleteGroup", "removeCommunityContent"]);
 export function assertEmulatorOperationAllowed(operation: string) {
   if (emulatorTestConfiguration() && !allowedOperations.has(operation)) throw new HttpsError("failed-precondition", `${operation} is disabled in emulator test mode.`);
 }

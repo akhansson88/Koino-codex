@@ -2,6 +2,7 @@ import sodium from "react-native-libsodium";
 import { get, ref, onValue } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { auth, database, functions } from "@/state/store/firebase";
+import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
 import storage from "./local-storage";
 import { createCrypto, type Identity, type EncryptedRecord } from "./crypto";
 
@@ -291,11 +292,53 @@ export async function publishGroup(group: GroupState, records?: unknown) {
   await invoke("groupChange", { group, records: records ?? {} });
   await loadGroup(group.id);
 }
-export async function groupJoinRequest(code: string, name: string) {
+export async function groupJoinRequest(code: string, name: string): Promise<JoinRequestReceipt> {
   const state = session();
   const invite = await invoke<{ groupId: string; owner: PublicIdentity }>("resolveInvite", { code });
   if (session() !== state) throw new Error("The account changed while joining a community.");
-  await invoke("requestJoin", { code, identity: publicIdentity(state.vault.identity), name: crypto.seal({ name }, invite.owner.publicKey) }, state.device);
+  const result = await invoke<Partial<JoinRequestReceipt>>("requestJoin", {
+    code,
+    expectedGroupId: invite.groupId,
+    expectedOwnerSigningPublicKey: invite.owner.signingPublicKey,
+    identity: publicIdentity(state.vault.identity),
+    name: crypto.seal({ name }, invite.owner.publicKey),
+  }, state.device);
+  if (session() !== state) throw new Error("The account changed while joining a community.");
+  if (result?.groupId === invite.groupId && (result.status === "pending" || result.status === "approved" || result.status === "rejected")) {
+    return { groupId: invite.groupId, status: result.status };
+  }
+  // An older callable acknowledges without a receipt. Read this account's
+  // existing request and membership paths to verify the outcome.
+  if (result && Object.keys(result).length === 0) {
+    const [request, membership] = await Promise.all([
+      get(ref(database, `e2eeJoinRequests/${invite.groupId}/${state.uid}`)),
+      get(ref(database, `encryptedData/userGroups/${state.uid}/${invite.groupId}`)),
+    ]);
+    if (session() !== state) throw new Error("The account changed while joining a community.");
+    if (membership.exists()) return { groupId: invite.groupId, status: "approved" };
+    if (request.exists()) return { groupId: invite.groupId, status: "pending" };
+  }
+  throw new Error("The community access request could not be confirmed.");
+}
+
+export async function listCommunityJoinRequests(userId: string) {
+  const state = session();
+  if (state.uid !== userId) throw new Error("The account changed while opening community requests.");
+  const result = await invoke<{ requests: CommunityJoinRequest[] }>("listJoinRequests", {}, state.device);
+  if (session() !== state) throw new Error("The account changed while opening community requests.");
+  if (!Array.isArray(result?.requests)) throw new Error("Community requests could not be read.");
+  return result.requests;
+}
+
+export function communityJoinFingerprint(userId: string) {
+  if (current?.uid !== userId || auth.currentUser?.uid !== userId) return undefined;
+  return crypto.fingerprint(current.vault.identity.signingPublicKey);
+}
+
+export async function rejectGroupJoinRequest(groupId: string, userId: string) {
+  const state = session();
+  await invoke("rejectJoin", { groupId, userId }, state.device);
+  if (session() !== state) throw new Error("The account changed while reviewing community requests.");
 }
 export async function approveGroupMember(groupId: string, uid: string, fingerprint: string, records: (name: string) => unknown) {
   const state = session();

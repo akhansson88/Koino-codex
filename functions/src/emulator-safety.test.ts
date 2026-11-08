@@ -82,7 +82,7 @@ test("installed transport guards and emulator operation checks restore their env
       assert.equal(await (await fetch(`http://127.0.0.1:${address.port}/`)).text(), "local-only");
       await assert.rejects(fetch("https://example.test/"), /external network/);
       assert.throws(() => socket.connect(443, "example.test"), /external sockets/);
-      for (const operation of ["setup", "recover", "requestDevice", "approveDevice", "backup", "revokeDevice", "createGroup", "resolveInvite", "requestJoin", "groupChange", "beginMigration", "readLegacyArchive", "deleteLegacyBatch", "finishMigration", "leaveGroup", "deleteGroup", "removeCommunityContent"]) assert.doesNotThrow(() => assertEmulatorOperationAllowed(operation));
+      for (const operation of ["setup", "recover", "requestDevice", "approveDevice", "backup", "revokeDevice", "createGroup", "resolveInvite", "requestJoin", "listJoinRequests", "rejectJoin", "groupChange", "beginMigration", "readLegacyArchive", "deleteLegacyBatch", "finishMigration", "leaveGroup", "deleteGroup", "removeCommunityContent"]) assert.doesNotThrow(() => assertEmulatorOperationAllowed(operation));
       for (const operation of ["imageUpload", "imageDownload", "imageDelete", "legacyImage", "futureOperation"]) assert.throws(() => assertEmulatorOperationAllowed(operation), error => (error as { code?: string }).code === "failed-precondition" && /disabled in emulator test mode/.test(String(error)));
       assert.throws(assertExternalStorageAllowed, /disabled in emulator test mode/);
     } finally { socket.destroy(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); restore(); }

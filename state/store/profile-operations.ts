@@ -108,5 +108,5 @@ export async function joinGroupByInvite(user: FirebaseUser, code: string, userNa
   const generation = sessionGeneration();
   const userProfile = await ensureProfile(user, userName);
   if (auth.currentUser?.uid !== user.uid || sessionGeneration() !== generation) throw new Error("The account changed while joining a community.");
-  await groupJoinRequest(normalizedCode, userProfile.name);
+  return groupJoinRequest(normalizedCode, userProfile.name);
 }
