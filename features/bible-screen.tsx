@@ -6,7 +6,7 @@ import { BibleBookVersionContext, useBibleBookLanguage } from "@/features/use-bi
 import { tabBarHeight } from "@/ui/navigation-layout";
 import AsyncStorage from "@/state/encryption/local-storage";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -59,8 +59,10 @@ import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
+import type { Action } from "@/state/store/types";
 import type { BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
+import type { TranslationKey } from "@/ui/localization";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
 import { type ThemeName } from "@/ui/theme";
 import {
@@ -154,7 +156,7 @@ export function BibleScreen() {
   const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
   const handledPlanJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
-  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "savedVerses", "theme"]);
+  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "savedVerses", "theme"]);
   const { dispatch } = useKoinoActions();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
@@ -224,6 +226,34 @@ export function BibleScreen() {
   const [scriptureComposerTitle, setScriptureComposerTitle] = useState("");
   const [scriptureComposerBody, setScriptureComposerBody] = useState("");
   const [scriptureComposerVerses, setScriptureComposerVerses] = useState<BibleVerse[]>([]);
+  const [scriptureJournalSaving, setScriptureJournalSaving] = useState(false);
+  const [scriptureJournalFeedback, setScriptureJournalFeedback] = useState<TranslationKey>();
+  const scriptureJournalRef = useRef<{ userId: string; audience?: { groupId: string }; inFlight?: boolean } | undefined>(undefined);
+  const scriptureJournalDraft = scriptureJournalRef.current;
+  const scriptureJournalAudience = scriptureJournalDraft?.audience;
+  const journalShareGroupId = state.journalShareGroupId === state.currentGroupId
+    && state.groups.some((group) => group.id === state.journalShareGroupId && !group.migrationPending && group.name)
+    ? state.journalShareGroupId : undefined;
+  const liveScriptureJournal = useRef({ userId: state.currentUserId, groupId: journalShareGroupId });
+  liveScriptureJournal.current = { userId: state.currentUserId, groupId: journalShareGroupId };
+  useLayoutEffect(() => () => { scriptureJournalRef.current = undefined; }, []);
+  useLayoutEffect(() => {
+    const draft = scriptureJournalRef.current;
+    if (!draft) return;
+    if (draft.userId !== state.currentUserId) {
+      scriptureJournalRef.current = undefined;
+      setScriptureComposerVisible(false);
+      setScriptureComposerTitle("");
+      setScriptureComposerBody("");
+      setScriptureComposerVerses([]);
+      setScriptureJournalSaving(false);
+      setScriptureJournalFeedback(undefined);
+    } else if (draft.audience && draft.audience.groupId !== journalShareGroupId) {
+      draft.audience = undefined;
+      setScriptureComposerVisibility(visibility.private);
+      setScriptureJournalFeedback("me.journey.composer.communityChanged");
+    }
+  }, [state.currentUserId, journalShareGroupId]);
   const [readerToast, setReaderToast] = useState<ReaderToast | undefined>();
   const [selectionSaving, setSelectionSaving] = useState(false);
   const highlightFeedbackRef = useRef({ revision: 0, reported: 0, active: true, userId: state.currentUserId });
@@ -1223,6 +1253,10 @@ export function BibleScreen() {
   }, [performHighlightMutation, selectedHighlightIds, selectionSaving]);
 
   const openScriptureComposer = useCallback((intent: BibleComposerIntent, context: "journal" | "room", kind: EntryKind, verse: BibleVerse) => {
+    const userId = liveScriptureJournal.current.userId;
+    if (scriptureJournalRef.current?.inFlight || (context === "journal" && !userId)) return;
+    scriptureJournalRef.current = context === "journal" && userId ? { userId } : undefined;
+    setScriptureJournalFeedback(undefined);
     setScriptureComposerIntent(intent);
     setScriptureComposerContext(context);
     setScriptureComposerKind(kind);
@@ -1231,7 +1265,7 @@ export function BibleScreen() {
     setScriptureComposerBody("");
     setScriptureComposerVerses([verse]);
     setScriptureComposerVisible(true);
-  }, []);
+  }, [bookLanguage]);
 
   const openVerseInReader = useCallback(
     (verse: BibleVerse) => {
@@ -1290,23 +1324,51 @@ export function BibleScreen() {
     }
   }, [openScriptureComposer, pendingVerseComposerAction]);
 
+  function scriptureJournalIsCurrent() {
+    return Boolean(scriptureJournalDraft && scriptureJournalRef.current === scriptureJournalDraft
+      && liveScriptureJournal.current.userId === scriptureJournalDraft.userId);
+  }
+
+  function changeScriptureDraft(change: () => void) {
+    if (scriptureComposerContext === "room" || (scriptureJournalIsCurrent() && !scriptureJournalDraft?.inFlight)) change();
+  }
+
+  function changeScriptureVisibility(value: EntryVisibility) {
+    changeScriptureDraft(() => {
+      if (scriptureComposerContext === "journal") {
+        if (!scriptureJournalDraft || scriptureJournalDraft.audience !== scriptureJournalAudience
+          || (value === visibility.room && (!journalShareGroupId || liveScriptureJournal.current.groupId !== journalShareGroupId))) return;
+        if (value !== scriptureComposerVisibility) {
+          scriptureJournalDraft.audience = value === visibility.room && journalShareGroupId ? { groupId: journalShareGroupId } : undefined;
+        }
+        setScriptureJournalFeedback(undefined);
+      }
+      setScriptureComposerVisibility(value);
+    });
+  }
+
+  function closeScriptureComposer() {
+    changeScriptureDraft(() => {
+      if (scriptureComposerContext === "journal") scriptureJournalRef.current = undefined;
+      setScriptureComposerVisible(false);
+    });
+  }
+
   async function submitScriptureComposer() {
     const canSubmit = scriptureComposerContext === "room" && scriptureComposerKind === "scripture"
       ? scriptureComposerVerses.length > 0
       : Boolean(scriptureComposerBody.trim());
     if (!canSubmit) return;
     const verse = scriptureComposerVerses[0];
-    if (scriptureComposerVisibility === visibility.room) {
-      await dispatch({
+    const action: Action = scriptureComposerVisibility === visibility.room
+      ? {
         type: "createPost",
         body: scriptureComposerBody,
         kind: scriptureComposerKind,
         ...(scriptureComposerKind === "prayer_request" ? { title: scriptureComposerTitle } : {}),
         verse,
         verses: scriptureComposerVerses,
-      });
-    } else {
-      await dispatch({
+      } : {
         type: "createJournalEntry",
         body: scriptureComposerBody,
         entryKind: scriptureComposerKind,
@@ -1315,7 +1377,36 @@ export function BibleScreen() {
         verse,
         verses: scriptureComposerVerses,
         shareWithGroup: false,
-      });
+      };
+    if (scriptureComposerContext === "room") {
+      await dispatch(action);
+    } else {
+      if (!scriptureJournalIsCurrent() || !scriptureJournalDraft || scriptureJournalDraft.inFlight
+        || scriptureJournalDraft.audience !== scriptureJournalAudience
+        || (scriptureJournalAudience && scriptureJournalAudience.groupId !== liveScriptureJournal.current.groupId)) return;
+      const userId = scriptureJournalDraft.userId;
+      const groupId = scriptureJournalAudience?.groupId;
+      const expectedScope = groupId ? { userId, groupId } : undefined;
+      if (action.type === "createPost" && !expectedScope) return;
+      const scopedAction = action.type === "createPost"
+        ? { ...action, expectedScope }
+        : { ...action, journalScope: { userId } };
+      scriptureJournalDraft.inFlight = true;
+      setScriptureJournalSaving(true);
+      setScriptureJournalFeedback(undefined);
+      try {
+        await dispatch(scopedAction);
+      } catch {
+        if (scriptureJournalIsCurrent() && scriptureJournalDraft.audience === scriptureJournalAudience) {
+          setScriptureJournalFeedback(action.type === "createPost" ? "me.journey.composer.shareUnconfirmed" : "me.journey.composer.saveFailed");
+        }
+        return;
+      } finally {
+        scriptureJournalDraft.inFlight = false;
+        if (scriptureJournalIsCurrent()) setScriptureJournalSaving(false);
+      }
+      if (!scriptureJournalIsCurrent()) return;
+      scriptureJournalRef.current = undefined;
     }
     setScriptureComposerVisible(false);
     setScriptureComposerBody("");
@@ -1775,23 +1866,26 @@ export function BibleScreen() {
       </Modal>
       <SharedComposer
         bibleIntent={scriptureComposerIntent}
-        visible={scriptureComposerVisible}
+        visible={scriptureComposerVisible && (scriptureComposerContext === "room" || scriptureJournalIsCurrent())}
         context={scriptureComposerContext}
         kind={scriptureComposerKind}
         entryVisibility={scriptureComposerVisibility}
         title={scriptureComposerTitle}
         body={scriptureComposerBody}
         verses={scriptureComposerVerses}
-        onKind={setScriptureComposerKind}
-        onOpenVerseInBible={(verse) => {
-          setScriptureComposerVisible(false);
+        submission={scriptureComposerContext === "journal" && scriptureJournalSaving ? { status: "pending", inFlight: true } : undefined}
+        submissionFeedback={scriptureComposerContext === "journal" ? scriptureJournalSaving ? "me.journey.composer.saving" : scriptureJournalFeedback : undefined}
+        communityAudienceAvailable={scriptureComposerContext === "room" || Boolean(journalShareGroupId)}
+        onKind={(kind) => changeScriptureDraft(() => setScriptureComposerKind(kind))}
+        onOpenVerseInBible={(verse) => changeScriptureDraft(() => {
+          closeScriptureComposer();
           requestAnimationFrame(() => openVerseInReader(verse));
-        }}
-        onVisibility={setScriptureComposerVisibility}
-        onTitle={setScriptureComposerTitle}
-        onBody={setScriptureComposerBody}
-        onVerses={setScriptureComposerVerses}
-        onClose={() => setScriptureComposerVisible(false)}
+        })}
+        onVisibility={changeScriptureVisibility}
+        onTitle={(title) => changeScriptureDraft(() => setScriptureComposerTitle(title))}
+        onBody={(body) => changeScriptureDraft(() => setScriptureComposerBody(body))}
+        onVerses={(verses) => changeScriptureDraft(() => setScriptureComposerVerses(verses))}
+        onClose={closeScriptureComposer}
         onSubmit={submitScriptureComposer}
         roomName={group?.name}
         roomImage={group?.image}

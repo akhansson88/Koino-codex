@@ -21,7 +21,9 @@ const mocks = {
       globalThis.__meJourney.resume = callback;
       return { remove() { delete globalThis.__meJourney.resume; } };
     } };
-    export const View = "View", Text = "Text";
+    export const AccessibilityInfo = { announceForAccessibility: message => { (globalThis.__meJourney.announcements ??= []).push(message); } };
+    export const useWindowDimensions = () => ({ width: 390, fontScale: 1 });
+    export const View = "View", Text = "Text", ScrollView = "ScrollView", ActivityIndicator = "ActivityIndicator";
     export function Pressable(props) {
       return <PressableHost {...props}>{typeof props.children === "function" ? props.children({ pressed: false }) : props.children}</PressableHost>;
     }
@@ -39,11 +41,12 @@ const mocks = {
     };
   `,
   "@expo/vector-icons": 'export const Feather = "Feather";',
+  "react-native-safe-area-context": "export const useSafeAreaInsets = () => ({ top: 44, bottom: 34 });",
   "@/features/me-bible-plans": 'export const MeBiblePlans = "MeBiblePlans";',
   "@/features/use-bible-book-language": 'export const useBibleBookLanguage = () => globalThis.__meJourney.language;',
   "@/state/koino-store": `
     const harness = globalThis.__meJourney;
-    const dispatch = async action => { harness.actions.push(action); };
+    const dispatch = async action => { harness.actions.push(action); await harness.dispatch?.(action); };
     export const useKoinoFields = () => harness.state;
     export const useKoinoActions = () => ({ dispatch });
     export const useKoino = () => ({ state: harness.state, dispatch });
@@ -58,9 +61,11 @@ const mocks = {
   "@/ui/app-components": `
     export const AppScreen = "AppScreen", BodyText = "BodyText", Card = "Card", BottomSheet = "BottomSheet",
       IconButton = "IconButton", RoomImage = "RoomImage", PrimaryButton = "PrimaryButton",
-      SecondaryButton = "SecondaryButton", SectionHeading = "SectionHeading", VerseList = "VerseList";
+      SecondaryButton = "SecondaryButton", SectionHeading = "SectionHeading", VerseList = "VerseList",
+      FilterChips = "FilterChips", TextInputField = "TextInputField", FullScreenModal = "FullScreenModal";
   `,
   "@/ui/brand-wave-motif": 'export const BrandWaveMotif = "BrandWaveMotif";',
+  "@/ui/bible-verse-field": 'export const BibleVerseField = "BibleVerseField";',
   "@/ui/link-preview": 'export const LinkPreview = "LinkPreview";',
   "@/ui/shared-composer": 'export const SharedComposer = "SharedComposer";',
 };
@@ -70,7 +75,11 @@ try {
   const outfile = path.join(directory, "screens.cjs");
   await build({
     stdin: {
-      contents: 'export { JournalScreen } from "./features/journal-screen"; export { JournalDetailScreen } from "./features/journal-detail-screen";',
+      contents: `
+        export { JournalScreen } from "./features/journal-screen";
+        export { JournalDetailScreen } from "./features/journal-detail-screen";
+        export { SharedComposer as RealSharedComposer } from "./ui/shared-composer";
+      `,
       resolveDir: process.cwd(),
       loader: "tsx",
     },
@@ -83,7 +92,7 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "tsx", resolveDir: process.cwd() }));
     } }],
   });
-  const { JournalScreen, JournalDetailScreen } = require(outfile);
+  const { JournalScreen, JournalDetailScreen, RealSharedComposer } = require(outfile);
   mock.timers.enable({ apis: ["Date", "setTimeout"], now: new Date("2026-11-05T22:59:59Z") });
 
   const entry = (id, createdAt, extra = {}) => ({
@@ -91,7 +100,7 @@ try {
   });
   const yesterday = entry("yesterday", "2026-11-04T22:59:59Z", { updatedAt: "2026-11-05T22:59:58Z" });
   const checkIn = entry("check-in", "2026-11-05T19:00:00Z", { source: "private_check_in", journalType: "reflection", entryKind: "reflection", heartMood: "grateful" });
-  const prayer = entry("prayer", "2026-11-05T20:00:00Z", { journalType: "reflection", entryKind: "prayer_request", isPrivate: false, title: "A prayer" });
+  const prayer = entry("prayer", "2026-11-05T20:00:00Z", { journalType: "reflection", entryKind: "prayer_request", isPrivate: false, sharedPostId: "original-post", title: "A prayer" });
   const scripture = entry("scripture", "2026-11-05T21:00:00Z", { journalType: "scripture_note", passage: { reference: "John 4:23" } });
   const outsider = entry("other-member", "2026-11-05T22:00:00Z", { userId: "other" });
   const todaysReflection = entry("today-reflection", "2026-11-04T23:00:00Z", { entryKind: "reflection" });
@@ -120,11 +129,15 @@ try {
   await press(prompt());
   assert.equal(composer().visible, true);
   assert.equal(composer().entryVisibility, "private");
+  assert.equal(composer().communityAudienceAvailable, false, "Solo drafts offer a private destination only");
   assert.equal(composer().kind, "reflection");
+  await act(() => composer().onVisibility("room"));
+  assert.equal(composer().entryVisibility, "private", "A solo draft cannot select a missing community");
   await act(() => composer().onBody("A private reflection"));
   await act(() => composer().onSubmit());
-  assert.deepEqual(harness.actions.at(-1), { type: "createJournalEntry", journalType: "reflection", entryKind: "reflection", body: "A private reflection", title: "", verse: undefined, verses: [], shareWithGroup: false });
+  assert.deepEqual(harness.actions.at(-1), { type: "createJournalEntry", journalType: "reflection", entryKind: "reflection", body: "A private reflection", title: "", verse: undefined, verses: [], shareWithGroup: false, journalScope: { userId: "member" } });
   assert.equal(composer().visible, false);
+  assert.match(rendered(), /Saved privately in your journal/);
 
   harness.state = { ...baseState, journalEntries: [...baseState.journalEntries, todaysReflection] };
   await update();
@@ -151,17 +164,82 @@ try {
   assert.equal(harness.actions.at(-1).type, "createJournalEntry");
   assert.equal(harness.actions.at(-1).body, "A solo reflection from Home");
   assert.equal(harness.actions.at(-1).shareWithGroup, false);
+  assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "member" });
   await update();
   assert.equal(composer().visible, false, "An already handled route parameter does not reopen the composer");
+
+  const rooms = [{ id: "room-a", name: "First community" }, { id: "room-b", name: "Second community" }];
+  harness.state = { ...baseState, groups: rooms, currentGroupId: "room-a" };
+  harness.params = { newEntry: "unverified-room" };
+  await update();
+  assert.equal(composer().communityAudienceAvailable, false, "A cached room cannot enable sharing without verified membership");
+  harness.state = { ...harness.state, journalShareGroupId: "room-a" };
+  await update();
+  assert.equal(composer().communityAudienceAvailable, true);
+  assert.equal(composer().entryVisibility, "private", "Verification enables choice without auto-selecting sharing");
+  await act(() => composer().onBody("Keep this draft"));
+  await act(() => composer().onVisibility("room"));
+  assert.equal(composer().entryVisibility, "room");
+  assert.equal(composer().roomName, "First community");
+  const originalShare = composer().onSubmit;
+  const chooseOriginalRoom = composer().onVisibility;
+  let rejectSave;
+  harness.dispatch = () => new Promise((_, reject) => { rejectSave = reject; });
+  let submission;
+  const attemptsBeforeShare = harness.actions.length;
+  await act(() => { submission = originalShare(); void originalShare(); composer().onClose(); });
+  assert.equal(harness.actions.length, attemptsBeforeShare + 1, "One pending submission per draft");
+  assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "member", groupId: "room-a" });
+  assert.equal(harness.actions.at(-1).shareWithGroup, true);
+  assert.equal(composer().visible, true, "The draft remains visible while awaiting acknowledgement");
+  assert.equal(composer().submission.inFlight, true);
+  assert.equal(composer().submissionFeedback, "me.journey.composer.saving");
+  assert.doesNotMatch(rendered(), /Saved in your journal and shared/);
+  await act(async () => { rejectSave(new Error("Unknown acknowledgement")); await submission; });
+  assert.equal(composer().body, "Keep this draft");
+  assert.equal(composer().entryVisibility, "room");
+  assert.equal(composer().submissionFeedback, "me.journey.composer.shareUnconfirmed");
+
+  harness.state = { ...harness.state, currentGroupId: "room-b", journalShareGroupId: "room-b" };
+  await update();
+  assert.equal(composer().entryVisibility, "private", "Switching rooms withdraws the previous sharing selection");
+  assert.equal(composer().submissionFeedback, "me.journey.composer.communityChanged");
+  assert.equal(composer().body, "Keep this draft");
+  await act(async () => { await originalShare(); chooseOriginalRoom("room"); });
+  assert.equal(harness.actions.length, attemptsBeforeShare + 1, "A stale Share action cannot save privately or publish to the new room");
+  assert.equal(composer().entryVisibility, "private");
+  await act(() => composer().onVisibility("room"));
+  harness.dispatch = undefined;
+  await act(async () => { await composer().onSubmit(); });
+  assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "member", groupId: "room-b" });
+  assert.equal(composer().visible, false);
+  assert.match(rendered(), /Saved in your journal and shared with Second community/);
+
+  harness.state = { ...baseState, groups: [{ ...rooms[0], migrationPending: true }], journalShareGroupId: "room-a" };
+  harness.params = { newEntry: "private-retry" };
+  await update();
+  assert.equal(composer().communityAudienceAvailable, false, "A migration-pending room stays unavailable");
+  await act(() => composer().onBody("Private retry"));
+  harness.dispatch = () => { throw new Error("Private save failed"); };
+  await act(async () => { await composer().onSubmit(); });
+  assert.equal(composer().visible, true);
+  assert.equal(composer().body, "Private retry");
+  assert.equal(composer().submissionFeedback, "me.journey.composer.saveFailed");
+  assert.doesNotMatch(rendered(), /Saved privately in your journal/);
+  harness.dispatch = undefined;
 
   harness.params = { newEntry: "another-home-reflection" };
   await update();
   await act(() => composer().onBody("Previous account draft"));
+  const oldSubmit = composer().onSubmit;
   harness.params = {};
   harness.state = { ...baseState, currentUserId: "another-reader" };
   await update();
   assert.equal(composer().visible, false, "Account replacement closes the Home reflection composer");
   assert.equal(composer().body, "", "Account replacement clears the previous account's draft");
+  const attemptsBeforeReplacement = harness.actions.length;
+  await act(async () => { await oldSubmit(); });
+  assert.equal(harness.actions.length, attemptsBeforeReplacement, "A stale journal callback cannot write for another account");
 
   harness.state = { ...baseState, currentUserId: undefined };
   harness.language = "sv";
@@ -179,6 +257,22 @@ try {
   await update(JournalDetailScreen);
   assert.match(rendered(), /A copy was shared with a community/);
   assert.doesNotMatch(rendered(), /Only you can see this/);
+  await press(tree.root.findAllByType("SecondaryButton").find((button) => button.props.children === "Edit"));
+  assert.equal(composer().communityAudienceAvailable, false, "Editing cannot change the audience of the existing shared copy");
+  assert.equal(composer().entryVisibility, "room");
+  assert.equal(composer().roomName, undefined, "A historical copy is not attributed to the active community");
+  await act(() => composer().onVisibility("private"));
+  assert.equal(composer().entryVisibility, "room");
+  await act(() => composer().onBody("Edit only the journal copy"));
+  harness.dispatch = () => { throw new Error("Edit save failed"); };
+  await act(async () => { await composer().onSubmit(); });
+  assert.equal(composer().body, "Edit only the journal copy");
+  assert.equal(composer().submissionFeedback, "me.journey.composer.saveFailed");
+  harness.dispatch = undefined;
+  await act(async () => { await composer().onSubmit(); });
+  assert.equal(harness.actions.at(-1).sharedPostId, "original-post");
+  assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "member" });
+  assert.match(rendered(), /Changes saved in your journal/);
   harness.params = { id: todaysReflection.id };
   await update(JournalDetailScreen);
   assert.match(rendered(), /Only you can see this/);
@@ -189,8 +283,34 @@ try {
   assert.equal(harness.actions.at(-1).id, todaysReflection.id);
   assert.equal(harness.actions.at(-1).journalType, "prayer");
   assert.equal(harness.actions.at(-1).sharedPostId, undefined);
+  assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "member" });
 
-  console.log("Me Journey and Reflect Today passed: ownership, chronology, previews, accessibility labels, navigation, local midnight, private composer, sharing presentation, and edits.");
+  const noop = () => {};
+  const modal = {
+    visible: true, context: "journal", kind: "reflection", entryVisibility: "private", communityAudienceAvailable: false,
+    title: "", body: "Keep my writing", verses: [], onKind: noop, onVisibility: noop,
+    onTitle: noop, onBody: noop, onVerses: noop, onClose: noop, onSubmit: noop,
+  };
+  await act(() => tree.update(React.createElement(RealSharedComposer, modal)));
+  const audienceChips = () => tree.root.findAllByType("FilterChips").find(node => node.props.options.some(option => option.value === "room"));
+  assert.equal(audienceChips(), undefined);
+  assert.match(rendered(), /Only you can see this/);
+  assert.doesNotMatch(rendered(), /audience of a saved check-in/);
+  await act(() => tree.update(React.createElement(RealSharedComposer, { ...modal, entryVisibility: "room" })));
+  assert.equal(tree.root.findByType("PrimaryButton").props.disabled, true, "A stale unavailable sharing destination cannot submit");
+  await act(() => tree.update(React.createElement(RealSharedComposer, { ...modal, communityAudienceAvailable: true, roomName: "First community" })));
+  assert.ok(audienceChips(), "A ready room shows the explicit audience choice in the real composer");
+  harness.language = "sv";
+  await act(() => tree.update(React.createElement(RealSharedComposer, {
+    ...modal, submission: { status: "failure", inFlight: false }, submissionFeedback: "me.journey.composer.shareUnconfirmed",
+  })));
+  assert.match(rendered(), /Vi kunde inte bekräfta om din anteckning delades/);
+  assert.equal(harness.announcements.at(-1), "Vi kunde inte bekräfta om din anteckning delades. Ditt utkast finns kvar.");
+  await act(() => tree.update(React.createElement(RealSharedComposer, { ...modal, editing: true, entryVisibility: "room", roomName: "Unrelated room" })));
+  assert.equal(audienceChips(), undefined);
+  assert.doesNotMatch(rendered(), /Unrelated room/);
+
+  console.log("Me Journey and Reflect Today passed: scoped destinations, confirmed saves, preserved drafts, fixed edit audience, real composer options, accessibility, chronology and navigation.");
 } finally {
   if (tree) await act(() => tree.unmount());
   mock.timers.reset();

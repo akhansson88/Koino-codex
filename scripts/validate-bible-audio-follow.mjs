@@ -764,6 +764,74 @@ try {
   delete audio.dispatch; delete audio.buildVerse; delete audio.store;
   console.log('Bible highlight screen checks passed: immediate selection clearing, unlocked controls, multiple ranges, acknowledgement/error feedback, stale feedback, and batch deletion.');
 
+  const journalWrites = [];
+  const rooms = [{ id: "room-a", name: "Room A" }, { id: "room-b", name: "Room B" }];
+  audio.store = { currentUserId: "reader", currentGroupId: "room-a", groups: rooms };
+  audio.dispatch = action => new Promise((resolve, reject) => journalWrites.push({ action, resolve, reject }));
+  audio.buildVerse = (book, chapter, startVerse, endVerse) => ({ book, chapter, startVerse, endVerse, reference: `${book} ${chapter}:${startVerse}`, text: "Fixture", translation: "KJV" });
+  await mount();
+  const scriptureDraft = () => props("SharedComposer");
+  async function openVerseComposer(action) {
+    await act(async () => props("BibleText").onVerseLongPress(1));
+    await act(async () => props("VerseActionSheet").onAction(action));
+    await act(async () => props("VerseActionSheet").onClosed());
+    assert.equal(scriptureDraft().visible, true);
+  }
+  async function changeReaderAccount(changes) {
+    audio.store = { ...audio.store, ...changes };
+    await act(async () => renderer.update(React.createElement(BibleScreen)));
+  }
+  await openVerseComposer("journal");
+  assert.equal(scriptureDraft().communityAudienceAvailable, false, "A profile selection without verified membership cannot be a Bible Journal audience");
+  await act(async () => scriptureDraft().onVisibility("room"));
+  assert.equal(scriptureDraft().entryVisibility, "private");
+  await act(async () => scriptureDraft().onBody("A private Bible reflection"));
+  const saveBibleReflection = scriptureDraft().onSubmit;
+  await act(async () => { void saveBibleReflection(); void saveBibleReflection(); });
+  assert.equal(journalWrites.length, 1);
+  assert.equal(journalWrites[0].action.type, "createJournalEntry");
+  assert.deepEqual(journalWrites[0].action.journalScope, { userId: "reader" });
+  assert.deepEqual(scriptureDraft().submission, { status: "pending", inFlight: true });
+  await act(async () => { scriptureDraft().onClose(); scriptureDraft().onBody("Blocked edit"); });
+  await act(async () => journalWrites[0].reject(new Error("Private save denied")));
+  assert.equal(scriptureDraft().body, "A private Bible reflection");
+  assert.equal(scriptureDraft().submissionFeedback, "me.journey.composer.saveFailed");
+
+  await changeReaderAccount({ journalShareGroupId: "room-a" });
+  assert.equal(scriptureDraft().communityAudienceAvailable, true);
+  await act(async () => scriptureDraft().onVisibility("room"));
+  const staleShare = scriptureDraft().onSubmit;
+  await changeReaderAccount({ currentGroupId: "room-b", journalShareGroupId: "room-b" });
+  assert.equal(scriptureDraft().entryVisibility, "private");
+  assert.equal(scriptureDraft().submissionFeedback, "me.journey.composer.communityChanged");
+  await act(async () => { void staleShare(); });
+  assert.equal(journalWrites.length, 1, "A stale Share action cannot publish to the replacement room");
+  await act(async () => scriptureDraft().onVisibility("room"));
+  await act(async () => { void scriptureDraft().onSubmit(); });
+  assert.equal(journalWrites[1].action.type, "createPost", "Bible Journal sharing retains its community-only post behavior");
+  assert.deepEqual(journalWrites[1].action.expectedScope, { userId: "reader", groupId: "room-b" });
+  await act(async () => journalWrites[1].reject(new Error("Share denied")));
+  assert.equal(scriptureDraft().submissionFeedback, "me.journey.composer.shareUnconfirmed");
+  assert.equal(scriptureDraft().body, "A private Bible reflection");
+  await act(async () => { void scriptureDraft().onSubmit(); });
+  await changeReaderAccount({ currentUserId: "new-reader", journalShareGroupId: undefined });
+  await act(async () => journalWrites[2].resolve());
+  assert.equal(scriptureDraft().visible, false, "Previous-account completion cannot retain or reopen a draft");
+  assert.equal(scriptureDraft().body, "");
+  await openVerseComposer("pray");
+  assert.equal(scriptureDraft().kind, "prayer_request");
+  assert.equal(scriptureDraft().communityAudienceAvailable, false, "Bible Pray follows the same membership rule");
+  await act(async () => scriptureDraft().onClose());
+  await openVerseComposer("share");
+  assert.equal(scriptureDraft().context, "room");
+  await act(async () => { void scriptureDraft().onSubmit(); });
+  assert.equal(journalWrites[3].action.type, "createPost");
+  assert.equal(journalWrites[3].action.expectedScope, undefined, "The explicit Bible Share action keeps its existing contract");
+  await act(async () => journalWrites[3].resolve());
+  await unmount();
+  delete audio.dispatch; delete audio.buildVerse; delete audio.store;
+  console.log("Bible Journal audience passed: member gating, stale room and account callbacks, in-flight lock, preserved drafts on denial, and explicit Share compatibility.");
+
   await mount();
   await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
   await act(async () => { props("BibleText").onVersePress(7); });

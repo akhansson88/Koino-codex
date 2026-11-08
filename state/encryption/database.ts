@@ -327,10 +327,11 @@ export function onValue(reference: Firebase.Query, listener: (snapshot: Firebase
   }, onError);
   return () => { active = false; revision++; unsubscribe(); stopEncryption?.(); clearCache(); };
 }
-export async function set(reference: Firebase.DatabaseReference, value: unknown) {
+export async function set(reference: Firebase.DatabaseReference, value: unknown, canCommit?: () => boolean) {
   const path = logical(reference), token = sessionGeneration();
   await prepare(path, true);
   if (token !== sessionGeneration()) throw new Error("The encrypted session changed.");
+  if (canCommit && !canCommit()) throw new Error("The write audience changed.");
   if (historyRecord(path) && parts(path)[0] !== "activityNotifications" && parts(path).length > policies[parts(path)[0]].depth && historyPolicy.historyGeneration) {
     const recordPath = parts(path).slice(0, policies[parts(path)[0]].depth).join("/");
     return Firebase.update(Firebase.ref(sessionDatabase, "encryptedData"), {
@@ -340,7 +341,7 @@ export async function set(reference: Firebase.DatabaseReference, value: unknown)
   }
   return Firebase.set(reference, encodeAt(path, value));
 }
-export async function update(reference: Firebase.DatabaseReference, values: Record<string, unknown>) {
+export async function update(reference: Firebase.DatabaseReference, values: Record<string, unknown>, canCommit?: () => boolean) {
   const base = logical(reference), token = sessionGeneration();
   const encoded: Record<string, unknown> = {};
   for (const [child, value] of Object.entries(values)) {
@@ -355,6 +356,7 @@ export async function update(reference: Firebase.DatabaseReference, values: Reco
     }
   }
   if (token !== sessionGeneration()) throw new Error("The encrypted session changed.");
+  if (canCommit && !canCommit()) throw new Error("The write audience changed.");
   return Firebase.update(Firebase.ref(sessionDatabase, "encryptedData"), encoded);
 }
 export const remove = (reference: Firebase.DatabaseReference) => set(reference, null);

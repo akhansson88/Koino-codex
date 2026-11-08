@@ -10,6 +10,7 @@ export type Profile = User & {
 
 export type CreatePostKind = EntryKind;
 type AccountGroupScope = { userId: Id; groupId: Id };
+type JournalScope = { userId: Id; groupId?: Id };
 
 export type CommunitySubmissionOutcome = {
   status: "success" | "failure" | "unknown";
@@ -50,7 +51,7 @@ export type Action =
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; expectedScope?: AccountGroupScope }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
+  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest; expectedScope?: AccountGroupScope }
   | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id; answeredUpdate?: string }
@@ -71,8 +72,8 @@ export type Action =
   | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; replyId?: Id }
   | { type: "deleteReply"; id: Id }
 
-  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string }
+  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string; journalScope?: JournalScope }
+  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string; journalScope?: JournalScope }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }

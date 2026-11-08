@@ -466,6 +466,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const membershipGroupKey = JSON.stringify(membershipGroupIds);
   const currentGroupEncrypted = Boolean(profile?.currentGroupId && userGroupsSnapshotReady && encryptedUserMemberships.some((member) => member.groupId === profile.currentGroupId));
   const currentGroupMigrationPending = Boolean(profile?.currentGroupId && !currentGroupEncrypted && legacyMemberships.some((member) => member.groupId === profile.currentGroupId));
+  const journalShareGroupId = firebaseUser && profileSnapshotReady && userGroupsSnapshotReady && profile?.id === firebaseUser.uid
+    && encryptedUserMemberships.some((member) => member.userId === firebaseUser.uid && member.groupId === profile.currentGroupId)
+    ? profile.currentGroupId ?? undefined
+    : undefined;
+  const journalShareGroupRef = useRef(journalShareGroupId);
+  journalShareGroupRef.current = journalShareGroupId;
   const [themeReady, setThemeReady] = useState(false);
   const themeRef = useRef<ThemeName>("light");
   const hasStoredThemeRef = useRef(false);
@@ -1161,6 +1167,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       userGroupsReady,
       currentUserId: firebaseUser?.uid,
       currentGroupId: profile?.currentGroupId ?? undefined,
+      journalShareGroupId,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
       authError,
       communityFeedError,
@@ -1220,6 +1227,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     firebaseUser,
     groupMemberCounts,
     groups,
+    journalShareGroupId,
     journalEntries,
     journalEntriesHasMore,
     journalEntriesLoadingMore,
@@ -1286,6 +1294,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
       setAuthError(undefined);
       const generation = sessionGeneration();
+      const journalScope = action.type === "createJournalEntry" || action.type === "updateJournalEntry" ? action.journalScope : undefined;
+      const sharedJournalMutation = action.type === "createJournalEntry" && action.shareWithGroup;
+      const scopedPost = action.type === "createPost" ? action.expectedScope : undefined;
+      const journalAccountIsCurrent = () => Boolean(firebaseUser && auth.currentUser?.uid === firebaseUser.uid
+        && communitySubmissionScopeRef.current.userId === firebaseUser.uid && !signOutPending.current
+        && (!journalScope || journalScope.userId === firebaseUser.uid) && sessionGeneration() === generation);
+      const canShareJournal = (groupId?: Id) => Boolean(groupId && journalAccountIsCurrent() && journalShareGroupRef.current === groupId);
       const highlightAction = action.type === "highlightVerses" || action.type === "removeBibleHighlight" || action.type === "removeBibleHighlights";
       const communitySubmission = (action.type === "createPost" || action.type === "editPost") ? action.communitySubmission : undefined;
 
@@ -1301,7 +1316,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           : action.type === "markBiblePlanDay" ? biblePlans.find((plan) => plan.id === action.planId) : undefined;
         const targetGroupId = explicitGroupId ?? (linkedPlan?.announcementId ? linkedPlan.groupId : undefined) ?? profile?.currentGroupId;
         const pendingTarget = targetGroupId && legacyMemberships.some((member) => member.groupId === targetGroupId) && !encryptedUserMemberships.some((member) => member.groupId === targetGroupId);
-        const sharedJournalMutation = action.type === "createJournalEntry" && action.shareWithGroup;
         const linkedPlanMutation = Boolean(linkedPlan?.announcementId);
         const groupPrayerMutation = action.type === "finishPrayer" && ["post", "check_in", "reply", "user"].includes(action.targetType);
         if (pendingTarget && action.type === "loadOlderCommunityContent") return;
@@ -1676,18 +1690,23 @@ export function KoinoProvider({ children }: PropsWithChildren) {
              }
              case "createPost": {
                const verses = actionVerses(action);
-               if (!firebaseUser || !profile?.currentGroupId || !validPostContent(action.kind, action.body, verses)) return;
+               const groupId = scopedPost ? scopedPost.groupId : profile?.currentGroupId;
+               const canPublish = scopedPost ? () => canShareJournal(scopedPost.groupId) : undefined;
+               if (!firebaseUser || !groupId || !validPostContent(action.kind, action.body, verses) || (canPublish && !canPublish())) {
+                 if (scopedPost) throw new Error("The selected community is no longer available.");
+                 return;
+               }
                const post: Post = {
                  id: id("post"),
                  userId: firebaseUser.uid,
-                 groupId: profile.currentGroupId,
+                 groupId,
                  kind: action.kind,
                  ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                  body: action.body.trim(),
                  ...(verses[0] ? { verse: verses[0], verses } : {}),
                  createdAt: now(),
                };
-               await set(ref(database, `posts/${profile.currentGroupId}/${post.id}`), post);
+               await set(ref(database, `posts/${groupId}/${post.id}`), post, canPublish);
                return;
              }
              case "editPost": {
@@ -2052,9 +2071,16 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createJournalEntry": {
-              if (!firebaseUser || !action.body.trim()) return;
+              if (!firebaseUser || !action.body.trim()) {
+                if (journalScope || sharedJournalMutation) throw new Error("The journal entry could not be saved.");
+                return;
+              }
+              if (!journalAccountIsCurrent()) throw new Error("The journal account changed.");
+              const groupId = action.shareWithGroup ? journalScope?.groupId : undefined;
+              const canShare = () => canShareJournal(groupId);
+              if (action.shareWithGroup && !canShare()) throw new Error("The selected community is no longer available.");
               const timestamp = now();
-              const postId = action.shareWithGroup && profile?.currentGroupId ? id("post") : undefined;
+              const postId = groupId ? id("post") : undefined;
               const verses = actionVerses(action);
               const entry: JournalEntry = {
                 id: id("journal"),
@@ -2071,12 +2097,12 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 createdAt: timestamp,
                 updatedAt: timestamp,
               };
-              if (postId && profile?.currentGroupId) {
+              if (postId && groupId) {
                 const postKind = action.entryKind ?? "reflection";
                 const post: Post = {
                   id: postId,
                   userId: firebaseUser.uid,
-                  groupId: profile.currentGroupId,
+                  groupId,
                   kind: postKind,
                   ...(postSupportsTitle(postKind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                   body: action.body.trim(),
@@ -2085,15 +2111,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 };
                 await update(ref(database), {
                   [`journalEntries/${firebaseUser.uid}/${entry.id}`]: entry,
-                  [`posts/${profile.currentGroupId}/${post.id}`]: post,
-                });
+                  [`posts/${groupId}/${post.id}`]: post,
+                }, canShare);
                 return;
               }
-              await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry);
+              await set(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), entry, journalScope ? journalAccountIsCurrent : undefined);
               return;
             }
             case "updateJournalEntry": {
-              if (!firebaseUser) return;
+              if (!firebaseUser || !journalAccountIsCurrent()) {
+                if (journalScope) throw new Error("The journal account changed.");
+                return;
+              }
               const updatedAt = now();
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
@@ -2103,10 +2132,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 heartMood: action.heartMood ?? null,
                 verse: actionVerses(action)[0] ?? null,
                 verses: actionVerses(action).length ? actionVerses(action) : null,
-                sharedPostId: action.sharedPostId ?? null,
+                ...(journalScope ? {} : { sharedPostId: action.sharedPostId ?? null }),
                 images: null,
                 updatedAt,
-              });
+              }, journalAccountIsCurrent);
+              if (!journalAccountIsCurrent()) return;
               setJournalEntries((current) => current.map((entry) => entry.id === action.id ? {
                 ...entry,
                 body: action.body.trim(),
@@ -2116,7 +2146,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 heartMood: action.heartMood,
                 verse: actionVerses(action)[0],
                 verses: actionVerses(action).length ? actionVerses(action) : undefined,
-                sharedPostId: action.sharedPostId,
+                ...(journalScope ? {} : { sharedPostId: action.sharedPostId }),
                 images: undefined,
                 updatedAt,
               } : entry));
@@ -2129,7 +2159,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 heartMood: action.heartMood,
                 verse: actionVerses(action)[0],
                 verses: actionVerses(action).length ? actionVerses(action) : undefined,
-                sharedPostId: action.sharedPostId,
+                ...(journalScope ? {} : { sharedPostId: action.sharedPostId }),
                 images: undefined,
                 updatedAt,
               } : entry);
@@ -2676,6 +2706,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           if (auth.currentUser?.uid === firebaseUser?.uid) setAuthError(authMessage(error));
           throw error;
         }
+        if (journalScope || sharedJournalMutation || scopedPost) throw error;
         if (expectedUserId && (auth.currentUser?.uid !== expectedUserId || sessionGeneration() !== generation)) throw error;
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (

@@ -42,7 +42,9 @@ const mocks = {
     } };
     export const useWindowDimensions = () => ({ width: 390, height: 800, fontScale: 1, scale: 3, ...globalThis.__communityNavigation.windowDimensions });
     export const AppState = { addEventListener: () => ({ remove() {} }) };
+    export const Alert = { alert() {} };
     export const ActivityIndicator = "ActivityIndicator", KeyboardAvoidingView = "KeyboardAvoidingView", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View";
+    export const Modal = props => props.visible ? React.createElement("Modal", props) : null;
     export const Share = { sharedAction: "sharedAction", dismissedAction: "dismissedAction", share: payload => globalThis.__communityNavigation.share(payload) };
     export const FlatList = React.forwardRef(function FlatList(props, ref) {
       React.useImperativeHandle(ref, () => ({ scrollToOffset: options => globalThis.__communityNavigation.scrollRestores.push(options) }), []);
@@ -60,7 +62,7 @@ const mocks = {
     export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
     export const Tabs = Object.assign(props => React.createElement("Tabs", props), { Screen: () => null });
   `,
-  "@react-navigation/native": 'export const useIsFocused = () => globalThis.__communityNavigation.focused !== false;',
+  "@react-navigation/native": 'export const useIsFocused = () => globalThis.__communityNavigation.focused !== false; export const useNavigation = () => ({ dispatch() {} }); export const usePreventRemove = () => {};',
   "@/state/koino-store": `
     const dispatch = async action => {
       const h = globalThis.__communityNavigation;
@@ -117,7 +119,7 @@ const communityModules = (await readdir("features/community"))
   .filter(file => /\.tsx?$/.test(file))
   .map(file => `features/community/${file}`);
 const leafUiImports = new Map();
-for (const file of ["features/settings-screen.tsx", "features/home-screen.tsx", "features/home-scripture.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/app-components/layout.tsx", "ui/shared-composer.tsx", "ui/bible-verse-field.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
+for (const file of ["features/settings-screen.tsx", "features/feed-detail-screen.tsx", "features/home-screen.tsx", "features/home-scripture.tsx", "features/check-in-modal.tsx", "features/journal-detail-screen.tsx", "ui/app-components/layout.tsx", "ui/shared-composer.tsx", "ui/bible-verse-field.tsx", "ui/post-card.tsx", ...communityModules, "app/(tabs)/_layout.tsx"]) {
   const source = ts.createSourceFile(file, await readFile(file, "utf8"), ts.ScriptTarget.Latest, true);
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
@@ -384,6 +386,7 @@ try {
       export { HomePrayerFlowScreen } from "./features/home-prayer-flow-screen";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
+      export { FeedDetailScreen } from "./features/feed-detail-screen";
       export { default as Rooms } from "./app/(tabs)/community/rooms";
       export { RoomSwitcherSheet } from "./features/identity/room-switcher";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
@@ -1792,7 +1795,7 @@ try {
     assert.equal(actualComposer().props.visible, false);
     await act(() => tree.unmount());
 
-    // Private Scripture reflection keeps its legacy journal route and audience.
+    // Private Scripture reflection uses an acknowledged journal write without a group scope.
     harness.state = densityFixture;
     harness.actions = [];
     await act(async () => { tree = create(React.createElement(screens.Overview)); });
@@ -1804,9 +1807,61 @@ try {
     await act(async () => { await actualSave().props.onPress(); });
     assert.equal(harness.actions.at(-1).type, "createJournalEntry");
     assert.equal(harness.actions.at(-1).shareWithGroup, false);
+    assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "reader" });
     assert.equal(harness.actions.at(-1).communitySubmission, undefined);
     assert.equal(actualComposer().props.visible, false);
     await act(() => tree.unmount());
+
+    for (const Screen of [screens.Overview, screens.FeedDetailScreen]) {
+      const eligible = { ...densityFixture, journalShareGroupId: "room", discussionFollows: [] };
+      harness.state = eligible;
+      harness.actions = [];
+      harness.params = { id: "scripture", targetType: "post" };
+      await act(async () => { tree = create(React.createElement(Screen)); });
+      if (Screen === screens.Overview) {
+        await act(() => press(actionNodes("scripture")[0].findByType("Pressable")));
+      } else {
+        const reflection = tree.root.findAll(node => node.type?.name === "CommunityCardAction")
+          .find(node => node.props.label === "community.action.scripture.default");
+        await act(() => reflection.props.onPress());
+      }
+      assert.equal(actualComposer().props.communityAudienceAvailable, true);
+      await act(() => actualComposer().props.onBody("Keep this Scripture reflection"));
+      await act(() => actualComposer().props.onVisibility("room"));
+      const attemptedDraft = composerDraft();
+      const share = actualComposer().props.onSubmit;
+      pendingPrivateOperation = deferred();
+      let submission;
+      await act(() => { submission = share(); void share(); });
+      assert.equal(harness.actions.length, 1, "Duplicate presses cannot start another journal write");
+      assert.deepEqual(harness.actions[0].journalScope, { userId: "reader", groupId: "room" });
+      assert.equal(harness.actions[0].shareWithGroup, true);
+      assert.equal(actualComposer().props.submission.inFlight, true);
+      assert.equal(actualBody().props.editable, false);
+      await act(async () => { pendingPrivateOperation.reject(new Error("Denied")); await submission; });
+      assert.deepEqual(composerDraft(), attemptedDraft, "A denied share retains the exact draft and audience");
+      assert.ok(actualComposer().findAllByType("View").some(node => node.props.accessibilityRole === "alert"
+        && node.props.accessibilityLabel === "me.journey.composer.shareUnconfirmed"), "The denial is announced in the composer");
+
+      harness.state = { ...eligible, journalShareGroupId: undefined };
+      await act(() => tree.update(React.createElement(Screen)));
+      assert.equal(actualComposer().props.communityAudienceAvailable, false);
+      assert.ok(renderedTree().includes("me.journey.composer.communityChanged"));
+      assert.deepEqual(composerDraft(), { ...attemptedDraft, entryVisibility: "private" });
+      await act(async () => { await share(); });
+      assert.equal(harness.actions.length, 1, "A captured Share press never writes a private copy after losing access");
+
+      pendingPrivateOperation = deferred();
+      await act(() => { submission = actualComposer().props.onSubmit(); });
+      assert.deepEqual(harness.actions.at(-1).journalScope, { userId: "reader" });
+      assert.equal(harness.actions.at(-1).shareWithGroup, false);
+      assert.equal(actualComposer().props.visible, true, "Explicit private save waits for acknowledgement");
+      await act(async () => { pendingPrivateOperation.resolve(); await submission; });
+      assert.equal(actualComposer().props.visible, false);
+      pendingPrivateOperation = undefined;
+      delete harness.params;
+      await act(() => tree.unmount());
+    }
 
     harness.state = densityFixture;
     pendingPrivateOperation = deferred();
@@ -1823,7 +1878,7 @@ try {
     const privateStaleDraft = composerDraft();
     await act(async () => { pendingPrivateOperation.resolve(); await privateSubmission; });
     assert.equal(actualComposer().props.visible, true);
-    assert.deepEqual(composerDraft(), privateStaleDraft, "A late legacy private save cannot clear a different room composer session");
+    assert.deepEqual(composerDraft(), privateStaleDraft, "A late private save cannot clear a different room composer session");
     pendingPrivateOperation = undefined;
     await act(() => actualComposer().props.onClose());
     await act(() => tree.unmount());
@@ -2822,7 +2877,7 @@ try {
   console.log("Community navigation passed: translated balanced Prayer requests/Check-ins cards, personal prayer within Prayer, Recent/Reflections and Share, stale filter fallback, iOS/Android filter/scroll and Back, dedicated page/content/empty/loading/error/offline rendering.");
   console.log("Feed card density passed: overview opt-in, one author avatar and primary action, secondary prayer, nonzero response counts, mood and Scripture, and explicit history reveal.");
   console.log("Managed Community composer passed: EN/SV pending and unknown feedback, locked draft/close/picker controls, explicit retry-only uncertainty and preserved failure drafts.");
-  console.log("Community parent submission passed: synchronous duplicate guard, failure/success drafts, timeout uncertainty, stable retry, stale callbacks, scoped draft recovery and unchanged private Scripture reflection.");
+  console.log("Community parent submission passed: synchronous duplicate guard, failure/success drafts, timeout uncertainty, stable retry, stale callbacks, scoped draft recovery and Scripture journal acknowledgements.");
   console.log("Community Share clarity passed: EN/SV four-type labels and contextual copy, named audience above fields, Scripture-first layout without picker remount, retained drafts, correct defaults, hidden-title payload exclusion and preserved journal/Bible behavior.");
   console.log("Community S3 mocked contracts passed: native keyboard inset/scroll props, multiline newline-only input, localized persistent labels and radio selection, narrow/large-text wrapping, deduplicated iOS status/validation announcements, Android live regions and Community-only picker keyboard dismissal; native iPhone geometry and VoiceOver remain unverified.");
 } finally {

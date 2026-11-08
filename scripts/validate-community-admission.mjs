@@ -10,7 +10,7 @@ import { build } from "esbuild";
 import sodium from "libsodium-wrappers";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { getDatabase, connectDatabaseEmulator, ref, get, set, goOffline } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator, ref, get, set, update, goOffline } from "firebase/database";
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
 
 // Full client admission against a separately launched, loopback-only fixture.
@@ -142,6 +142,7 @@ const membershipRecords = (owner, member, groupId, name) => {
 };
 const logicalGet = async (client, logicalPath) => (await client.api.adapter.get(client.api.adapter.ref(client.database, logicalPath))).val();
 const logicalSet = (client, logicalPath, value) => client.api.adapter.set(client.api.adapter.ref(client.database, logicalPath), value);
+const logicalUpdate = (client, values, canCommit) => client.api.adapter.update(client.api.adapter.ref(client.database), values, canCommit);
 const invoke = (client, operation, data) => client.api.session.encryptedOperation(operation, data);
 async function submitInvite(member, owner, group, overrides = {}) {
   const applicant = member.api.session.session().vault.identity;
@@ -173,11 +174,59 @@ async function createStatusGroup(owner, name) {
 }
 async function verifyPrivate(owner, other, fixture) {
   const journalPath = `journalEntries/${owner.user.uid}/${fixture.journalId}`;
-  assert.equal((await logicalGet(owner, journalPath)).body, fixture.privateBody);
+  const journal = await logicalGet(owner, journalPath);
+  assert.equal(journal.body, fixture.privateBody);
+  assert.equal(journal.source, "manual");
+  assert.equal(journal.isPrivate, true);
+  assert.equal(journal.sharedPostId, undefined, "A private journal needs no community or shared copy");
   const ciphertext = (await get(ref(owner.database, `encryptedData/${journalPath}`))).val();
   assert.ok(!JSON.stringify(ciphertext).includes(fixture.privateBody), "Journal plaintext must not reach RTDB");
+  assert.ok(ciphertext.body.keyId.startsWith(`user:${owner.user.uid}:`));
   await denied(() => get(ref(other.database, `encryptedData/${journalPath}`)));
   await denied(() => set(ref(other.database, `encryptedData/${journalPath}/body`), "forbidden"));
+}
+function journalShare(writer, group, suffix) {
+  const uid = writer.user.uid, createdAt = new Date().toISOString();
+  const body = `Dummy journal share ${suffix}`;
+  const post = { id: `journal_post_${suffix}`, userId: uid, groupId: group.id, kind: "reflection", body, createdAt };
+  const entry = {
+    id: `journal_${suffix}`, userId: uid, journalType: "reflection", body, source: "manual", entryKind: "reflection",
+    isPrivate: false, sharedPostId: post.id, createdAt, updatedAt: createdAt,
+  };
+  return { journalPath: `journalEntries/${uid}/${entry.id}`, postPath: `posts/${group.id}/${post.id}`, entry, post };
+}
+const shareValues = ({ journalPath, postPath, entry, post }) => ({ [journalPath]: entry, [postPath]: post });
+function encryptedShare(writer, keyHolder, share) {
+  const { crypto } = writer.api.session;
+  const signer = writer.api.session.session().device.identity;
+  const { key, keyId } = keyHolder.api.session.keyForScope(`group:${share.post.groupId}`);
+  const context = crypto.canonical({ subject: writer.user.uid });
+  const { body, kind, ...metadata } = share.post;
+  const encrypt = (field, value) => crypto.encrypt(value, `${share.postPath}/${field}`, keyId, key, signer, undefined, context);
+  return {
+    [share.journalPath]: writer.api.adapter.encodeAt(share.journalPath, share.entry),
+    [share.postPath]: { ...metadata, historyGeneration: 1, body: encrypt("body", body), kind: encrypt("kind", kind) },
+  };
+}
+async function verifyShareAbsent(writer, owner, share) {
+  assert.equal((await get(ref(writer.database, `encryptedData/${share.journalPath}`))).exists(), false, "No partial journal write survives a denied share");
+  assert.equal((await get(ref(owner.database, `encryptedData/${share.postPath}`))).exists(), false, "No unauthorized shared copy was written");
+}
+async function verifySharedJournal(writer, owner, share) {
+  const journal = await logicalGet(writer, share.journalPath);
+  const post = await logicalGet(owner, share.postPath);
+  assert.equal(journal.body, share.entry.body);
+  assert.equal(journal.isPrivate, false);
+  assert.equal(journal.sharedPostId, post.id);
+  assert.equal(post.body, share.post.body);
+  assert.equal(post.userId, writer.user.uid);
+  assert.equal(post.groupId, share.post.groupId);
+  await denied(() => get(ref(owner.database, `encryptedData/${share.journalPath}`)));
+  const journalWire = (await get(ref(writer.database, `encryptedData/${share.journalPath}`))).val();
+  const postWire = (await get(ref(owner.database, `encryptedData/${share.postPath}`))).val();
+  assert.ok(journalWire.body.keyId.startsWith(`user:${writer.user.uid}:`));
+  assert.ok(postWire.body.keyId.startsWith(`group:${share.post.groupId}:`));
+  assert.ok(!JSON.stringify(journalWire).includes(share.entry.body) && !JSON.stringify(postWire).includes(share.post.body));
 }
 async function verifyGroup(owner, member, groupFixture) {
   const groupId = groupFixture.id;
@@ -218,7 +267,14 @@ try {
       await step(`${person.label} ensureProfile`, () => person.api.profiles.ensureProfile(person.user, name));
       const privateFixture = { uid: person.user.uid, name, journalId: `private_${run}_${person.label}`, privateBody: `Dummy private journal ${run} ${person.label}` };
       manifest.people[person.label] = privateFixture;
-      await step(`${person.label} private journal persistence`, () => logicalSet(person, `journalEntries/${person.user.uid}/${privateFixture.journalId}`, { id: privateFixture.journalId, userId: person.user.uid, body: privateFixture.privateBody, source: "journal", isPrivate: true, createdAt: new Date().toISOString() }));
+      await step(`${person.label} creates a private journal as a solo account`, async () => {
+        assert.equal((await logicalGet(person, `profiles/${person.user.uid}`)).currentGroupId, undefined);
+        assert.equal((await get(ref(person.database, `encryptedData/userGroups/${person.user.uid}`))).exists(), false);
+        await logicalSet(person, `journalEntries/${person.user.uid}/${privateFixture.journalId}`, {
+          id: privateFixture.journalId, userId: person.user.uid, body: privateFixture.privateBody, source: "manual", isPrivate: true, createdAt: new Date().toISOString(),
+        });
+        await verifyPrivate(person, outsider, privateFixture);
+      });
       writePrivate("private-state.json", manifest);
     }
     for (const owner of [A, B]) {
@@ -351,6 +407,55 @@ try {
       assert.equal((await get(ref(B.database, `encryptedData/userGroups/${B.user.uid}/${group.id}`))).exists(), approved);
       if (!approved) await denied(() => get(ref(B.database, `e2eeGroups/${group.id}`)));
     });
+    await step("shared Journal preserves private and group access boundaries atomically", async () => {
+      const group = await createStatusGroup(A, `Journal share ${run}`);
+      const profileField = `profiles/${B.user.uid}/currentGroupId`;
+      const rawRoot = (person) => ref(person.database, "encryptedData");
+      const pending = journalShare(B, group, `pending_${run}`);
+      await submitInvite(B, A, group);
+      await verifyReceipt(B, group, "pending");
+      // The owner-controlled authority and the user's editable selection are
+      // independent. A forged or stale profile selection grants zero access.
+      await logicalUpdate(B, { [profileField]: group.id });
+      assert.equal((await logicalGet(B, `profiles/${B.user.uid}`)).currentGroupId, group.id);
+      await denied(() => logicalUpdate(B, shareValues(pending)));
+      // Encode an active-device-signed payload using the owner's dummy group
+      // key. This exercises server rules independently of client key gating.
+      await denied(() => update(rawRoot(B), encryptedShare(B, A, pending)));
+      await verifyShareAbsent(B, A, pending);
+      await denied(() => get(ref(B.database, `encryptedData/${pending.postPath}`)));
+
+      const applicantKey = B.api.session.session().vault.identity.signingPublicKey;
+      const fingerprint = B.api.session.crypto.fingerprint(applicantKey);
+      await A.api.session.approveGroupMember(group.id, B.user.uid, fingerprint, (name) => membershipRecords(A, B, group.id, name));
+      await verifyReceipt(B, group, "approved");
+      const shared = journalShare(B, group, `member_${run}`);
+      const wire = encryptedShare(B, A, shared);
+      await denied(() => update(rawRoot(B), { ...wire, [shared.postPath]: { ...wire[shared.postPath], userId: A.user.uid } }));
+      await verifyShareAbsent(B, A, shared);
+      await assert.rejects(logicalUpdate(B, shareValues(shared), () => false), /audience changed/);
+      await verifyShareAbsent(B, A, shared);
+      await logicalUpdate(B, shareValues(shared));
+      await verifySharedJournal(B, A, shared);
+      assert.equal((await logicalGet(B, shared.postPath)).body, shared.post.body);
+      await denied(() => get(ref(outsider.database, `encryptedData/${shared.journalPath}`)));
+      await denied(() => get(ref(outsider.database, `encryptedData/${shared.postPath}`)));
+
+      const stale = journalShare(B, group, `stale_${run}`);
+      const delayedWire = encryptedShare(B, B, stale);
+      await denied(() => update(rawRoot(A), delayedWire));
+      await verifyShareAbsent(B, A, stale);
+      await B.api.session.leaveEncryptedGroup(group.id);
+      assert.equal((await get(ref(B.database, `encryptedData/userGroups/${B.user.uid}/${group.id}`))).exists(), false);
+      assert.equal((await logicalGet(B, `profiles/${B.user.uid}`)).currentGroupId, group.id, "Retain the stale selection for the rules check");
+      await denied(() => update(rawRoot(B), delayedWire));
+      await verifyShareAbsent(B, A, stale);
+      await denied(() => get(ref(B.database, `encryptedData/${shared.postPath}`)));
+      await verifySharedJournal(B, A, shared);
+      await logicalUpdate(B, { [profileField]: manifest.groups.B.id });
+      await logicalUpdate(A, { [`profiles/${A.user.uid}/currentGroupId`]: manifest.groups.A.id });
+      manifest.journalShare = shared;
+    });
     await step("outsider rules enforce group and journal boundaries", async () => {
       for (const group of Object.values(manifest.groups)) {
         await denied(() => get(ref(outsider.database, `e2eeGroups/${group.id}`)));
@@ -386,6 +491,10 @@ try {
       for (const status of ["pending", "rejected", "closed"]) await verifyReceipt(B, manifest.statusGroups[status], status);
     });
     await step("restart preserves private journals and access boundaries", async () => { await verifyPrivate(A, B, manifest.people.A); await verifyPrivate(B, A, manifest.people.B); });
+    await step("restart preserves the personal Journal and authorized shared copy after departure", async () => {
+      await verifySharedJournal(B, A, manifest.journalShare);
+      await denied(() => get(ref(B.database, `encryptedData/${manifest.journalShare.postPath}`)));
+    });
     console.log("Admission restart PASS: real clients unlock persisted device grants, decrypt memberships and shared histories, and retain private journals and applicant-only admission receipts.");
   }
 } catch (error) {

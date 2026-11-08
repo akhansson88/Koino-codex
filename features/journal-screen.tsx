@@ -1,31 +1,21 @@
-import { displayBibleReference } from "@/features/bible-book-names";
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
 import { MeBiblePlans } from "@/features/me-bible-plans";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
-import { useBibleBookLanguage } from "@/features/use-bible-book-language";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { AppState, Pressable, Text, View } from "react-native";
 
-import { isCheckInJournalEntry } from "@/state/check-ins";
-import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
+import { type EntryVisibility, visibility } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { localDayKey } from "@/state/store/helpers";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, KoinoState } from "@/state/types";
 import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
-import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
+import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
 import { SharedComposer } from "@/ui/shared-composer";
 import { colors, typography } from "@/ui/theme";
-
-function composerKindForJournalType(type: JournalEntryType): EntryKind {
-  if (type === "prayer") return "prayer_request";
-  if (type === "answered_prayer") return "praise";
-  if (type === "scripture_note") return "scripture";
-  return "reflection";
-}
 
 function journalTypeForKind(kind: EntryKind): JournalEntryType {
   if (kind === "prayer_request" || kind === "prayer_moment") return "prayer";
@@ -62,7 +52,10 @@ function useLocalJournalDay() {
   return day;
 }
 
-const journalFields = ["authError", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "theme"] as const;
+const journalFields = ["authError", "biblePlans", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "theme"] as const;
+
+type DraftAudience = { groupId: string };
+type DraftFeedback = "me.journey.composer.communityChanged" | "me.journey.composer.saveFailed" | "me.journey.composer.shareUnconfirmed";
 
 export function JournalScreen() {
   // Palette tokens mutate in place, so theme-only store updates must render Me.
@@ -71,22 +64,27 @@ export function JournalScreen() {
 }
 
 function JournalContent({ state }: { state: Pick<KoinoState, typeof journalFields[number]> }) {
-  const bookLanguage = useBibleBookLanguage();
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ newEntry?: string }>();
-  const [composerVisible, setComposerVisible] = useState(false);
+  const [draft, setDraft] = useState<symbol>();
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
-  const [entryVisibility, setEntryVisibility] = useState<EntryVisibility>(visibility.private);
-  const [journalType, setJournalType] = useState<JournalEntryType>("reflection");
+  const [audience, setAudience] = useState<DraftAudience>();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [verses, setVerses] = useState<BibleVerse[]>([]);
-  const [editingEntry, setEditingEntry] = useState<JournalEntry | undefined>();
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<DraftFeedback>();
+  const [saved, setSaved] = useState<{ community?: string }>();
+  const draftRef = useRef<symbol | undefined>(undefined);
+  const pending = useRef(false);
+  const audienceRef = useRef<DraftAudience | undefined>(undefined);
+  const liveShareTarget = useRef<DraftAudience | undefined>(undefined);
   const lastNewEntryParamRef = useRef<string | undefined>(undefined);
 
-  const editingCheckIn = Boolean(editingEntry && isCheckInJournalEntry(editingEntry));
-  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const group = state.groups.find((item) => item.id === state.journalShareGroupId && !item.migrationPending && item.name);
+  const groupId = group?.id;
+  const shareTarget = useMemo(() => groupId ? { groupId } : undefined, [groupId]);
   const entries = useMemo(
     () => ownedJournalEntries(state.journalEntries, state.currentUserId),
     [state.currentUserId, state.journalEntries],
@@ -95,74 +93,90 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
   const today = useLocalJournalDay();
   const todaysReflection = reflectionForJournalDay(entries, today);
 
+  useLayoutEffect(() => () => { draftRef.current = undefined; }, []);
+  useLayoutEffect(() => {
+    liveShareTarget.current = shareTarget;
+    if (audienceRef.current && audienceRef.current !== shareTarget) {
+      audienceRef.current = undefined;
+      setAudience(undefined);
+      setFeedback("me.journey.composer.communityChanged");
+    }
+  }, [shareTarget]);
+
   function openEntry(entry: JournalEntry) {
     router.push({ pathname: "/me/[id]", params: { id: entry.id } });
   }
 
-  function beginEntry(type: JournalEntryType = "reflection", share: EntryVisibility = visibility.private, attachedVerse?: BibleVerse, initialBody = "") {
-    const kind = composerKindForJournalType(type);
-    setJournalType(type);
-    setEntryKind(kind);
-    setEntryVisibility(share);
-    setTitle(attachedVerse ? displayBibleReference(attachedVerse.reference, bookLanguage, attachedVerse.translation) : "");
-    setBody(initialBody);
-    setVerses(attachedVerse ? [attachedVerse] : []);
-    setEditingEntry(undefined);
-    setComposerVisible(true);
+  function clearDraft() {
+    draftRef.current = undefined;
+    setDraft(undefined);
+    audienceRef.current = undefined;
+    setAudience(undefined);
+    setTitle("");
+    setBody("");
+    setVerses([]);
+    setFeedback(undefined);
   }
 
-  function editEntry(entry: JournalEntry) {
-    const type = journalEntryTypeFor(entry);
-    setEditingEntry(entry);
-    setJournalType(type);
-    setEntryKind(entry.entryKind ?? composerKindForJournalType(type));
-    setEntryVisibility(entry.sharedPostId ? visibility.room : visibility.private);
-    setTitle(entry.title ?? "");
-    setBody(entry.body);
-    setVerses(normalizeBibleVerses(entry.verse, entry.verses));
-    setComposerVisible(true);
+  function beginEntry() {
+    if (!state.currentUserId || pending.current) return;
+    clearDraft();
+    setSaved(undefined);
+    setEntryKind("reflection");
+    const nextDraft = Symbol();
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+  }
+
+  function changeAudience(next: EntryVisibility) {
+    if (!draft || draftRef.current !== draft || pending.current) return;
+    const nextTarget = next === visibility.room ? shareTarget : undefined;
+    if (next === visibility.room && (!nextTarget || liveShareTarget.current !== nextTarget)) return;
+    audienceRef.current = nextTarget;
+    setAudience(nextTarget);
+    setFeedback(undefined);
   }
 
   async function submitEntry() {
-    if (!body.trim()) return;
-    const resolvedJournalType = editingEntry ? journalType : journalTypeForKind(entryKind);
-    if (editingEntry) {
-      await dispatch({
-        type: "updateJournalEntry",
-        id: editingEntry.id,
-        body,
-        entryKind,
-        journalType: resolvedJournalType,
-        title,
-        verse: primaryBibleVerse(verses),
-        verses,
-        ...(editingCheckIn ? { heartMood: editingEntry.heartMood } : {}),
-        sharedPostId: editingCheckIn
-          ? editingEntry.sharedPostId : entryVisibility === visibility.room ? editingEntry.sharedPostId : undefined,
-      });
-    } else {
+    const userId = state.currentUserId;
+    if (!userId || !draft || draftRef.current !== draft || pending.current || !body.trim()) return;
+    // A captured Share action cannot become a private save or select a new room.
+    if (audienceRef.current !== audience || (audience && liveShareTarget.current !== audience)) return;
+    const destination = audience ? group : undefined;
+    if (audience && destination?.id !== audience.groupId) return;
+
+    pending.current = true;
+    setSaving(true);
+    setFeedback(undefined);
+    try {
       await dispatch({
         type: "createJournalEntry",
         body,
         entryKind,
-        journalType: resolvedJournalType,
+        journalType: journalTypeForKind(entryKind),
         title,
         verse: primaryBibleVerse(verses),
         verses,
-        shareWithGroup: entryVisibility === visibility.room,
+        shareWithGroup: Boolean(destination),
+        journalScope: destination ? { userId, groupId: destination.id } : { userId },
       });
+      if (draftRef.current !== draft) return;
+      setSaved(destination ? { community: destination.name } : {});
+      clearDraft();
+    } catch {
+      if (draftRef.current === draft) {
+        setFeedback(destination ? "me.journey.composer.shareUnconfirmed" : "me.journey.composer.saveFailed");
+      }
+    } finally {
+      pending.current = false;
+      setSaving(false);
     }
-    setComposerVisible(false);
-    setBody("");
-    setVerses([]);
-    setTitle("");
-    setEditingEntry(undefined);
   }
 
   useEffect(() => {
     if (!params.newEntry || params.newEntry === lastNewEntryParamRef.current) return;
     lastNewEntryParamRef.current = params.newEntry;
-    beginEntry("reflection", visibility.private);
+    beginEntry();
   }, [params.newEntry]);
 
   return (
@@ -174,8 +188,13 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
 
       <ReflectTodayCard
         completed={Boolean(todaysReflection)}
-        onPress={() => todaysReflection ? openEntry(todaysReflection) : beginEntry("reflection", visibility.private)}
+        onPress={() => todaysReflection ? openEntry(todaysReflection) : beginEntry()}
       />
+      {saved ? (
+        <BodyText accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {saved.community ? t("me.journey.composer.shared", { community: saved.community }) : t("me.journey.composer.savedPrivate")}
+        </BodyText>
+      ) : null}
 
       <View style={{ gap: 6 }}>
         <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
@@ -214,24 +233,22 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
       ) : null}
 
       <SharedComposer
-        visible={composerVisible}
+        visible={Boolean(draft)}
         context="journal"
         kind={entryKind}
-        entryVisibility={entryVisibility}
+        entryVisibility={audience && audience === shareTarget ? visibility.room : visibility.private}
+        communityAudienceAvailable={Boolean(shareTarget)}
         title={title}
         body={body}
         verses={verses}
-        audienceLocked={editingCheckIn}
-        editing={Boolean(editingEntry)}
-        onKind={(kind) => {
-          setEntryKind(kind);
-          if (!editingEntry) setJournalType(journalTypeForKind(kind));
-        }}
-        onVisibility={setEntryVisibility}
+        submission={saving ? { status: "pending", inFlight: true } : feedback ? { status: "failure", inFlight: false } : undefined}
+        submissionFeedback={saving ? "me.journey.composer.saving" : feedback}
+        onKind={setEntryKind}
+        onVisibility={changeAudience}
         onTitle={setTitle}
         onBody={setBody}
         onVerses={setVerses}
-        onClose={() => setComposerVisible(false)}
+        onClose={() => { if (draft && draftRef.current === draft && !pending.current) clearDraft(); }}
         onSubmit={submitEntry}
         roomName={group?.name}
         roomImage={group?.image}

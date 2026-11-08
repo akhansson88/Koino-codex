@@ -41,6 +41,7 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import type { TranslationKey } from "@/ui/localization";
 import {
   communityMemberCount,
   communityPrayerMomentDisplayCopy,
@@ -152,7 +153,7 @@ function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
 
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
-  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
+  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
@@ -182,6 +183,12 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [composerVerses, setComposerVerses] = useState<BibleVerse[]>([]);
   const [editingPost, setEditingPost] = useState<Extract<FeedItem, { type: "post" }>>();
   const [composerSubmission, setComposerSubmission] = useState<CommunityComposerSubmission>({ status: "idle", inFlight: false });
+  const [journalSubmissionError, setJournalSubmissionError] = useState<TranslationKey>();
+  const journalAudienceRef = useRef<Id | undefined>(undefined);
+  const journalPendingViewRef = useRef<number | undefined>(undefined);
+  const journalShareGroupId = state.journalShareGroupId === state.currentGroupId ? state.journalShareGroupId : undefined;
+  const liveJournalShareGroupRef = useRef(journalShareGroupId);
+  liveJournalShareGroupRef.current = journalShareGroupId;
   const [publicationReceipt, setPublicationReceipt] = useState<CommunityPublicationReceipt>();
   const [publicationViewportHeight, setPublicationViewportHeight] = useState(0);
   const publicationReceiptRef = useRef<CommunityPublicationReceipt | undefined>(undefined);
@@ -268,7 +275,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function changeComposerDraft(change: () => void) {
     if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
-    if (composerIsLocked()) return;
+    if (composerIsLocked() || journalPendingViewRef.current === renderedComposerVersion) return;
     const attempt = composerAttemptRef.current;
     if (attempt?.owner === currentComposerOwnerRef.current) {
       composerAttemptsRef.current.delete(attempt.owner);
@@ -277,6 +284,26 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     }
     change();
   }
+
+  function changeComposerVisibility(value: EntryVisibility) {
+    changeComposerDraft(() => {
+      if (composerContext === "journal") {
+        if (value === visibility.room && (!journalShareGroupId || liveJournalShareGroupRef.current !== journalShareGroupId)) return;
+        journalAudienceRef.current = value === visibility.room ? journalShareGroupId : undefined;
+        setJournalSubmissionError(undefined);
+        setComposerSubmission({ status: "idle", inFlight: false });
+      }
+      setComposerVisibility(value);
+    });
+  }
+
+  useLayoutEffect(() => {
+    if (composerContext !== "journal" || !journalAudienceRef.current || journalAudienceRef.current === journalShareGroupId
+      || journalPendingViewRef.current === composerViewVersionRef.current) return;
+    journalAudienceRef.current = undefined;
+    setComposerVisibility(visibility.private);
+    setJournalSubmissionError("me.journey.composer.communityChanged");
+  }, [composerContext, composerSubmission.inFlight, journalShareGroupId]);
 
   useLayoutEffect(() => {
     if (composerOwnerRef.current && composerOwnerRef.current !== composerOwner) {
@@ -601,6 +628,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     composerViewVersionRef.current++;
     composerOwnerRef.current = currentComposerOwnerRef.current;
     composerAttemptRef.current = undefined;
+    journalAudienceRef.current = undefined;
+    setJournalSubmissionError(undefined);
     setComposerSubmission({ status: "idle", inFlight: false });
   }
 
@@ -737,24 +766,45 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     if (editingPost) {
       await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     } else if (composerContext === "journal") {
-      await dispatch({
-        type: "createJournalEntry",
-        entryKind: composerKind,
-        title: composerTitle,
-        body: composerBody,
-        verse: primaryBibleVerse(composerVerses),
-        verses: composerVerses,
-        shareWithGroup: composerVisibility === visibility.room,
-      });
+      const userId = state.currentUserId;
+      const shareWithGroup = composerVisibility === visibility.room;
+      const groupId = journalAudienceRef.current;
+      if (!userId || journalPendingViewRef.current === renderedComposerVersion) return;
+      if (shareWithGroup !== Boolean(groupId) || (groupId && groupId !== liveJournalShareGroupRef.current)) return;
+      journalPendingViewRef.current = renderedComposerVersion;
+      setJournalSubmissionError(undefined);
+      setComposerSubmission({ status: "pending", inFlight: true });
+      try {
+        await dispatch({
+          type: "createJournalEntry",
+          entryKind: composerKind,
+          title: composerTitle,
+          body: composerBody,
+          verse: primaryBibleVerse(composerVerses),
+          verses: composerVerses,
+          shareWithGroup,
+          journalScope: { userId, ...(groupId ? { groupId } : {}) },
+        });
+      } catch {
+        if (composerMountedRef.current && currentComposerOwnerRef.current === composerOwner
+          && composerOwnerRef.current === composerOwner && composerViewVersionRef.current === renderedComposerVersion) {
+          setJournalSubmissionError(shareWithGroup ? "me.journey.composer.shareUnconfirmed" : "me.journey.composer.saveFailed");
+          setComposerSubmission({ status: "failure", inFlight: false });
+        }
+        return;
+      } finally {
+        if (journalPendingViewRef.current === renderedComposerVersion) journalPendingViewRef.current = undefined;
+      }
     } else if (composerVisibility === visibility.private) {
       await dispatch({ type: "createJournalEntry", entryKind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
     } else {
       await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
     }
-    // Private journal writes keep their existing behavior; an old completion
-    // must nevertheless never clear a newer Community composer session.
+    // An old completion cannot clear a newer composer session.
     if (!composerMountedRef.current || currentComposerOwnerRef.current !== composerOwner
       || composerOwnerRef.current !== composerOwner || composerViewVersionRef.current !== renderedComposerVersion) return;
+    composerViewVersionRef.current++;
+    setComposerSubmission({ status: "idle", inFlight: false });
     setComposerVisible(false);
     setComposerBody("");
     setComposerTitle("");
@@ -1464,7 +1514,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </View>
         <SharedComposer
           visible={composerVisible && composerOwnerRef.current === composerOwner}
-          submission={composerContext === "room" ? composerSubmission : undefined}
+          submission={composerContext === "room" || composerSubmission.status !== "idle" ? composerSubmission : undefined}
+          submissionFeedback={composerContext === "journal" ? composerSubmission.inFlight ? "me.journey.composer.saving" : journalSubmissionError : undefined}
+          communityAudienceAvailable={composerContext !== "journal" || Boolean(journalShareGroupId)}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
@@ -1472,7 +1524,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           body={composerBody}
           verses={composerVerses}
           onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
-          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onVisibility={changeComposerVisibility}
           onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
           onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
           onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
@@ -1690,7 +1742,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         </View>
         <SharedComposer
           visible={composerVisible && composerOwnerRef.current === composerOwner}
-          submission={composerContext === "room" ? composerSubmission : undefined}
+          submission={composerContext === "room" || composerSubmission.status !== "idle" ? composerSubmission : undefined}
+          submissionFeedback={composerContext === "journal" ? composerSubmission.inFlight ? "me.journey.composer.saving" : journalSubmissionError : undefined}
+          communityAudienceAvailable={composerContext !== "journal" || Boolean(journalShareGroupId)}
           context={composerContext}
           kind={composerKind}
           entryVisibility={composerVisibility}
@@ -1698,7 +1752,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           body={composerBody}
           verses={composerVerses}
           onKind={(value) => changeComposerDraft(() => setComposerKind(value))}
-          onVisibility={(value) => changeComposerDraft(() => setComposerVisibility(value))}
+          onVisibility={changeComposerVisibility}
           onTitle={(value) => changeComposerDraft(() => setComposerTitle(value))}
           onBody={(value) => changeComposerDraft(() => setComposerBody(value))}
           onVerses={(value) => changeComposerDraft(() => setComposerVerses(value))}
