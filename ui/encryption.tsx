@@ -7,12 +7,13 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors } from "@/ui/theme";
 import { useKoino } from "@/state/koino-store";
 import { encodeAt } from "@/state/encryption/database";
-import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
+import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
 import { hasOnboardingCommunity } from "@/state/store/profile-operations";
 import { OnboardingProgressContext } from "@/ui/onboarding-progress";
+import { confirmAction } from "@/ui/confirm";
 
 function useWords() {
   const { language } = useAppTranslation();
@@ -239,6 +240,7 @@ export function EncryptionSettings() {
   const [groupLocked, setGroupLocked] = useState(false);
   const [fingerprints, setFingerprints] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const working = useRef(false);
   const [error, setError] = useState("");
   const group = state.groups.find((item) => item.id === state.currentGroupId && item.ownerId === state.currentUserId);
   const uid = state.currentUserId;
@@ -253,8 +255,30 @@ export function EncryptionSettings() {
     return () => { joins(); leaves(); locks(); };
   }, [group?.id]);
   async function work(action: () => Promise<void>) {
+    if (working.current) return;
+    working.current = true;
     setBusy(true); setError("");
-    try { await action(); } catch (problem) { setError(problem instanceof Error ? problem.message : "Encryption operation failed."); } finally { setBusy(false); }
+    try { await action(); }
+    catch (problem) { setError(problem instanceof Error ? problem.message : w("Encryption operation failed.", "Krypteringsåtgärden misslyckades.")); }
+    finally { working.current = false; setBusy(false); }
+  }
+  function declineRequest(memberId: string) {
+    if (!group || !uid || auth.currentUser?.uid !== uid || working.current) return;
+    const generation = sessionGeneration();
+    confirmAction({
+      title: w("Decline access request?", "Avslå åtkomstförfrågan?"),
+      message: w("This person will see that the request was declined and will not receive access.", "Personen får se att förfrågan avslogs och får ingen åtkomst."),
+      confirmText: w("Decline request", "Avslå förfrågan"),
+      cancelText: w("Cancel", "Avbryt"),
+      destructive: true,
+      onConfirm: () => {
+        if (auth.currentUser?.uid !== uid || sessionGeneration() !== generation) return;
+        void work(async () => {
+          try { await rejectGroupJoinRequest(group.id, memberId); }
+          catch { throw new Error(w("Couldn’t decline the request. Check the latest requests and try again.", "Det gick inte att avslå förfrågan. Kontrollera de senaste förfrågningarna och försök igen.")); }
+        });
+      },
+    });
   }
   const requestCard = (id: string, identity: PublicIdentity, kind: "device" | "member") => <View key={`${kind}:${id}`} style={styles.card}>
     <Text style={styles.body}>{kind === "device" ? w("Device approval request", "Begäran om enhetsgodkännande") : w("Community access request", "Begäran om tillgång till gemenskapen")}</Text>
@@ -268,6 +292,9 @@ export function EncryptionSettings() {
         return { membership: encodeAt(`groupMembers/${group.id}/${id}`, membership), userMembership: encodeAt(`userGroups/${id}/${group.id}`, membership) };
       });
     })} />
+    {kind === "member" && group && !state.memberships.some((member) => member.groupId === group.id && member.userId === id)
+      ? <Button disabled={busy} label={w("Decline request", "Avslå förfrågan")} onPress={() => declineRequest(id)} />
+      : null}
   </View>;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Button label={w("Back", "Tillbaka")} onPress={() => router.back()} />

@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { OnboardingPage } from "@/features/onboarding-screen";
+import { CommunityJoinFingerprint } from "@/features/community/join-requests";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { OnboardingChoice } from "@/state/onboarding-progress";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
@@ -44,6 +45,7 @@ export function OnboardingGuide({ userId, journey }: { userId: string; journey: 
   }
 
   const joining = journey === "join";
+  const alreadyApproved = journey === "joinApproved";
   return (
     <OnboardingPage>
       <View style={{ gap: 8 }}>
@@ -53,11 +55,12 @@ export function OnboardingGuide({ userId, journey }: { userId: string; journey: 
       {journey !== "private" ? (
         <Card style={{ gap: 5 }}>
           <Text accessibilityRole="header" style={[typography.cardTitle, { color: colors.ink }]}>
-            {t(joining ? "community.encryption.requested" : "community.rooms.created")}
+            {t(joining ? "community.encryption.requested" : alreadyApproved ? "community.rooms.requestApproved" : "community.rooms.created")}
           </Text>
           <Text style={[typography.body, { color: colors.muted }]}>
-            {t(joining ? "onboarding.journey.requestedDescription" : "onboarding.journey.createdDescription")}
+            {t(joining ? "onboarding.journey.requestedDescription" : alreadyApproved ? "community.rooms.requestApprovedBody" : "onboarding.journey.createdDescription")}
           </Text>
+          {joining ? <CommunityJoinFingerprint userId={userId} /> : null}
         </Card>
       ) : null}
       <Card>

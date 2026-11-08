@@ -1,4 +1,5 @@
 import type { StoredThemeName, ThemeName } from "@/ui/theme";
+import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
@@ -35,7 +36,7 @@ export type Action =
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
   | { type: "createGroup"; name: string; expectedUserId?: Id }
-  | { type: "joinGroup"; inviteCode: string; expectedUserId?: Id }
+  | { type: "joinGroup"; inviteCode: string; expectedUserId?: Id; report?: (receipt: JoinRequestReceipt) => void }
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "removeGroupMember"; groupId: Id; userId: Id }

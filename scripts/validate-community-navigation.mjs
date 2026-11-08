@@ -42,7 +42,8 @@ const mocks = {
     } };
     export const useWindowDimensions = () => ({ width: 390, height: 800, fontScale: 1, scale: 3, ...globalThis.__communityNavigation.windowDimensions });
     export const AppState = { addEventListener: () => ({ remove() {} }) };
-    export const ActivityIndicator = "ActivityIndicator", KeyboardAvoidingView = "KeyboardAvoidingView", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View", Share = {};
+    export const ActivityIndicator = "ActivityIndicator", KeyboardAvoidingView = "KeyboardAvoidingView", Pressable = "Pressable", ScrollView = "ScrollView", Text = "Text", View = "View";
+    export const Share = { sharedAction: "sharedAction", dismissedAction: "dismissedAction", share: payload => globalThis.__communityNavigation.share(payload) };
     export const FlatList = React.forwardRef(function FlatList(props, ref) {
       React.useImperativeHandle(ref, () => ({ scrollToOffset: options => globalThis.__communityNavigation.scrollRestores.push(options) }), []);
       return React.createElement("FlatList", props,
@@ -59,6 +60,7 @@ const mocks = {
     export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
     export const Tabs = Object.assign(props => React.createElement("Tabs", props), { Screen: () => null });
   `,
+  "@react-navigation/native": 'export const useIsFocused = () => globalThis.__communityNavigation.focused !== false;',
   "@/state/koino-store": `
     const dispatch = async action => {
       const h = globalThis.__communityNavigation;
@@ -106,6 +108,8 @@ const mocks = {
   "@/features/onboarding-screen": `export const OnboardingScreen = "OnboardingScreen";`,
   "@/features/onboarding-journey": `export const OnboardingJourney = "OnboardingJourney";`,
   "@/features/onboarding-guide": `export const OnboardingGuide = "OnboardingGuide";`,
+  "@/features/community/join-requests": `export const CommunityJoinRequests = "CommunityJoinRequests", CommunityJoinFingerprint = "CommunityJoinFingerprint";`,
+  "@/features/identity/room-helpers": `export const roomMemberCount = () => 1;`,
 };
 
 // Keep screen logic and selectors real while replacing leaf UI dependencies.
@@ -381,6 +385,7 @@ try {
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
       export { default as Overview } from "./app/(tabs)/community/index";
       export { default as Rooms } from "./app/(tabs)/community/rooms";
+      export { RoomSwitcherSheet } from "./features/identity/room-switcher";
       export { default as Prayer } from "./app/(tabs)/community/prayer";
       export { default as CheckIns } from "./app/(tabs)/community/checkins";`, resolveDir: process.cwd(), loader: "tsx" },
     outfile, bundle: true, platform: "node", format: "cjs", jsx: "automatic",
@@ -914,8 +919,11 @@ try {
   assert.ok(!homeCheckInAction(), "A moderated claim cannot be retried");
 
   const solo = { ...homeFixture, currentGroupId: undefined, communityFeedGroupId: undefined, communityFeedReady: false, groups: [], memberships: [] };
+  const applicant = { ...homeFixture, memberships: homeFixture.memberships.filter(member => member.userId !== homeFixture.currentUserId) };
+  harness.params = { checkIn: "requested" };
   for (const [state, status] of [
     [solo, "home.checkIn.solo"],
+    [applicant, "home.communityDiscovery.title"],
     [{ ...homeFixture, userGroupsReady: false, communityFeedReady: false }, "home.communityPreview.loading"],
     [{ ...homeFixture, groups: [{ ...homeFixture.groups[0], migrationPending: true, migrationAwaitingApproval: true }] }, "community.encryption.approvalTitle"],
     [{ ...homeFixture, communityFeedOffline: true, communityFeedReady: false }, "home.communityPreview.offline"],
@@ -923,10 +931,14 @@ try {
   ]) {
     await updateHome(state);
     assert.ok(!homeCheckInAction(), "Only a verified, ready community can start a Heart Check-in");
+    assert.notEqual(homeModal()?.props.visible, true, `A Check-in link cannot bypass eligibility in ${status}`);
     assert.doesNotMatch(renderedTree(), /Please pray for tomorrow|confidential request|Private body cannot surface/);
     assert.ok(renderedTree().includes(status), `Home distinguishes ${status} from empty Community content`);
     assert.ok(renderedTree().includes("home.scripture.open"), "Scripture is available while Community is unavailable");
   }
+  await updateHome(homeFixture);
+  assert.equal(homeModal()?.props.visible, true, "A verified member can open the Check-in link");
+  delete harness.params;
   await updateHome(solo);
   const openHomeAction = async label => {
     harness.navigated = harness.pushed = undefined;
@@ -1168,12 +1180,44 @@ try {
       await act(() => roomsSheet().props.onClose());
       assert.equal(roomsSheet(), undefined, "Join/Create still closes independently of logout");
       await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
-      assert.equal(roomsField("community.rooms.code").props.value, "ROOM123", "Ordinary sheet close and reopen still preserves the invite code");
-      await act(async () => { await roomsButton("PrimaryButton", "community.rooms.joinByCode").props.onPress(); });
-      assert.deepEqual(harness.actions.at(-1), { type: "joinGroup", inviteCode: "ROOM123" });
-      assert.equal(roomsSheet(), undefined, "Successful join still closes Join/Create");
+      assert.equal(roomsField("community.rooms.code").props.value, "", "Explicit close clears the invite code");
+      await act(() => roomsField("community.rooms.code").props.onChangeText("missing"));
+      harness.dispatch = action => {
+        if (action.type === "joinGroup") throw Object.assign(new Error("Do not expose Firebase details"), { code: "functions/not-found" });
+      };
+      await act(async () => { await roomsButton("PrimaryButton", "onboarding.journey.request").props.onPress(); });
+      assert.equal(roomsField("community.rooms.code").props.value, "MISSING", "A failed request retains the entered code");
+      const joinStatus = key => roomsSheet().findAllByType("Text").find(node => node.props.children === roomsCopy(key));
+      assert.equal(joinStatus("community.error.inviteNotFound")?.props.accessibilityRole, "alert");
+      await act(() => roomsButton("SecondaryButton", "common.cancel").props.onPress());
       await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
-      assert.equal(roomsField("community.rooms.code").props.value, "", "Successful join still resets the invite code");
+      assert.equal(roomsField("community.rooms.code").props.value, "", "Cancel clears a rejected code and its error");
+      assert.equal(joinStatus("community.error.inviteNotFound"), undefined);
+      await act(() => roomsField("community.rooms.code").props.onChangeText("room123"));
+      const request = deferred();
+      harness.dispatch = async action => {
+        if (action.type === "joinGroup") action.report(await request.promise);
+      };
+      let submitted;
+      const submit = roomsButton("PrimaryButton", "onboarding.journey.request").props.onPress;
+      await act(() => { submitted = submit(); void submit(); });
+      assert.equal(harness.actions.filter(action => action.type === "joinGroup").length, 2, "Rapid submissions send one new request");
+      assert.equal(roomsSheet().props.dismissible, false);
+      const { report, ...joinAction } = harness.actions.at(-1);
+      assert.equal(typeof report, "function");
+      assert.deepEqual(joinAction, { type: "joinGroup", inviteCode: "ROOM123", expectedUserId: "reader" });
+      await act(async () => { request.resolve({ status: "pending", groupId: "requested-room" }); await submitted; });
+      assert.equal(joinStatus("community.encryption.requested")?.props.accessibilityRole, "alert");
+      assert.ok(joinStatus("onboarding.journey.requestedDescription"));
+      assert.equal(roomsSheet().findByType("CommunityJoinFingerprint").props.userId, "reader");
+      assert.equal(harness.state.currentGroupId, undefined, "Pending requests grant no membership");
+      await act(async () => { await submit(); });
+      assert.equal(harness.actions.filter(action => action.type === "joinGroup").length, 2, "A captured callback cannot resend after a receipt");
+      await act(() => roomsButton("SecondaryButton", "common.done").props.onPress());
+      assert.equal(roomsSheet(), undefined, "Acknowledging the receipt closes Join/Create");
+      assert.equal(tree.root.findByType("CommunityJoinRequests").props.active, true);
+      await act(() => roomsButton("PrimaryButton", "community.rooms.joinOrCreate").props.onPress());
+      assert.equal(roomsField("community.rooms.code").props.value, "", "A new Join starts empty after a receipt");
       await act(async () => { await roomsButton("PrimaryButton", "community.rooms.createAction").props.onPress(); });
       assert.deepEqual(harness.actions.at(-1), { type: "createGroup", name: "Unsaved community" });
       assert.equal(roomsSheet(), undefined, "Successful create still closes Join/Create");
@@ -1198,14 +1242,62 @@ try {
       await act(() => tree.unmount());
       tree = undefined;
     }
+
+    harness.language = "en";
+    harness.os = "ios";
+    harness.state = { ...baseState, groups: [{ ...baseState.groups[0], inviteCode: "SYNTH1" }] };
+    await act(() => { tree = create(React.createElement(screens.Rooms)); });
+    const inviteStatus = key => tree.root.findAllByType("Text").find(node => node.props.children === roomsCopy(key));
+    const invite = () => roomsButton("PrimaryButton", "community.rooms.invite").props.onPress();
+    harness.share = async payload => {
+      assert.match(payload.message, /Test community.*SYNTH1/);
+      return { action: "sharedAction" };
+    };
+    await act(async () => { await invite(); });
+    assert.ok(inviteStatus("community.rooms.inviteShared"));
+    harness.share = async () => ({ action: "dismissedAction" });
+    await act(async () => { await invite(); });
+    assert.equal(inviteStatus("community.rooms.inviteShared"), undefined, "Dismissed native shares clear the previous status");
+    assert.ok(!tree.root.findAllByType("Text").some(node => node.props.children === "Invite ready to share."));
+    const sharing = deferred();
+    harness.share = () => sharing.promise;
+    let inviteAttempt;
+    await act(() => { inviteAttempt = invite(); });
+    const joinAnother = tree.root.findAllByType("Pressable").find(node =>
+      node.findAllByType("Text").some(text => text.props.children === roomsCopy("community.rooms.joinAnother")));
+    await act(() => joinAnother.props.onPress());
+    await act(async () => { sharing.resolve({ action: "sharedAction" }); await inviteAttempt; });
+    assert.equal(inviteStatus("community.rooms.inviteShared"), undefined, "A prior native share cannot add status after opening Join/Create");
+    await act(() => tree.unmount());
+    tree = undefined;
+
+    harness.state = roomsState;
+    let closes = 0;
+    const switcher = visible => React.createElement(screens.RoomSwitcherSheet, { visible, onClose: () => { closes++; } });
+    await act(() => { tree = create(switcher(true)); });
+    for (const [status, key] of [["approved", "community.rooms.requestApproved"], ["rejected", "community.rooms.requestRejected"]]) {
+      assert.equal(roomsField("community.rooms.code").props.value, "");
+      await act(() => roomsField("community.rooms.code").props.onChangeText("ROOM123"));
+      harness.dispatch = action => { if (action.type === "joinGroup") action.report({ status, groupId: "requested-room" }); };
+      await act(async () => { await roomsButton("PrimaryButton", "onboarding.journey.request").props.onPress(); });
+      assert.equal(roomsSheet().findAllByType("Text").find(node => node.props.children === roomsCopy(key))?.props.accessibilityRole, "alert");
+      assert.equal(roomsSheet().findAllByType("CommunityJoinFingerprint").length, 0);
+      await act(() => roomsButton("SecondaryButton", "common.done").props.onPress());
+      await act(() => tree.update(switcher(false)));
+      await act(() => tree.update(switcher(true)));
+    }
+    assert.equal(closes, 2, "Identity switcher retains each receipt until acknowledged");
+    await act(() => tree.unmount());
+    tree = undefined;
   } finally {
     delete harness.localized;
     delete harness.language;
     delete harness.dispatch;
     delete harness.replaced;
+    delete harness.share;
     harness.route = "index";
   }
-  console.log("Community Rooms logout passed: scoped dispatch, accessible EN/SV failure and retry, pending duplicate guard, auth-owned navigation, account replacement, and Join/Create lifecycle.");
+  console.log("Community Rooms passed: scoped logout, EN/SV failure and retry, Join/Create cancellation, request statuses, and native invite feedback.");
   // Mount the actual modal for its async confirmation contract, keeping native UI mocked.
   const modalDefaults = { visible: true, step: "details", mood: "peaceful", note: "", verses: [], roomName: "Test community", share: false, onBack() {}, onClose() {}, onDone() {}, onMood() {}, onNote() {}, onShare() {}, onVerses() {} };
   let modalProps;

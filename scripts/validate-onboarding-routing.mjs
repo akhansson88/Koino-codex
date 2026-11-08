@@ -184,7 +184,7 @@ const mocks = {
     }
     export const identityRotationInProgress = () => false;
     export const crypto = {}, requestDeviceApproval = async () => "fixture", approveDevice = async () => {};
-    export const approveGroupMember = async () => {}, rotateGroup = async () => {}, draftRevocation = async () => {}, revokeDevice = async () => {};
+    export const approveGroupMember = async () => {}, rejectGroupJoinRequest = async () => {}, rotateGroup = async () => {}, draftRevocation = async () => {}, revokeDevice = async () => {};
   `,
   "@/state/encryption/migration": `
     const h = globalThis.__onboardingRouting;
@@ -207,6 +207,7 @@ const mocks = {
     };
   `,
   "@/ui/app-components": "export const AppScreen = 'AppScreen', BodyText = 'BodyText', PrimaryButton = 'PrimaryButton';",
+  "@/ui/confirm": "export const confirmAction = () => {};",
 };
 for (const [family, weight] of [
   ["inter", "400Regular"], ["inter", "500Medium"], ["montserrat", "300Light"], ["montserrat", "400Regular"],

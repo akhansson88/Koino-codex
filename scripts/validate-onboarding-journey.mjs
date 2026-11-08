@@ -20,6 +20,7 @@ const mocks = {
   `,
   "@expo/vector-icons": 'export const Feather = "Feather";',
   "@/features/onboarding-screen": 'export const OnboardingPage = "Page";',
+  "@/features/community/join-requests": 'export const CommunityJoinFingerprint = "CommunityJoinFingerprint";',
   "@/state/koino-store": `
     const harness = globalThis.__onboardingJourney;
     const dispatch = async action => { harness.actions.push(action); await harness.handleAction?.(action); };
@@ -118,14 +119,18 @@ try {
   assert.deepEqual(harness.choices, [], "A failed request leaves onboarding open");
   await enter("room123");
   let completeRequest;
-  harness.handleAction = () => new Promise(resolve => { completeRequest = resolve; });
+  harness.handleAction = (action) => new Promise(resolve => {
+    completeRequest = () => { action.report({ groupId: "requested-room", status: "pending" }); resolve(); };
+  });
   await act(() => {
     field().props.onSubmitEditing();
     field().props.onSubmitEditing();
   });
   assert.equal(button("Cancel").props.disabled, true);
   assert.equal(harness.actions.length, 2, "The failed request and one retry were submitted");
-  assert.deepEqual(harness.actions.at(-1), { type: "joinGroup", inviteCode: "ROOM123", expectedUserId: "invitee" });
+  const { report, ...request } = harness.actions.at(-1);
+  assert.equal(typeof report, "function");
+  assert.deepEqual(request, { type: "joinGroup", inviteCode: "ROOM123", expectedUserId: "invitee" });
   harness.handleChoice = () => { throw new Error("Local progress unavailable"); };
   await act(async () => completeRequest());
   assert.equal(headline().props.children, "Access request sent");
@@ -136,6 +141,22 @@ try {
   await tap("Continue");
   assert.deepEqual(harness.choices, [joinChoice, joinChoice]);
   assert.equal(harness.actions.length, 2, "A local progress retry does not resend the accepted request");
+
+  await mount("previous-applicant");
+  await tap("Join a community");
+  await enter("room123");
+  await tap("Request access");
+  assert.match(alerts(), /couldn’t send/i, "An unconfirmed request cannot advance");
+  assert.deepEqual(harness.choices, []);
+  harness.handleAction = (action) => action.report({ groupId: "requested-room", status: "rejected" });
+  await tap("Request access");
+  assert.match(alerts(), /declined/);
+  assert.equal(field().props.value, "ROOM123");
+  assert.deepEqual(harness.choices, [], "A declined receipt cannot advance as a pending request");
+  harness.handleAction = (action) => action.report({ groupId: "requested-room", status: "approved" });
+  await tap("Request access");
+  assert.deepEqual(harness.choices, [{ uid: "previous-applicant", choice: "joinApproved" }]);
+  assert.equal(headline().props.children, "Access approved.");
 
   await mount("owner");
   await tap("Create a community");
@@ -190,6 +211,7 @@ try {
   await mount("invitee", { journey: "join" });
   assert.ok(text().includes("Access request sent"));
   assert.match(text().join(" "), /approve your request/);
+  assert.equal(tree.root.findAllByType("CommunityJoinFingerprint").length, 1);
   await tap("Go to Home");
   assert.deepEqual(harness.completions, ["invitee"]);
 

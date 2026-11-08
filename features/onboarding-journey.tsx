@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { OnboardingPage } from "@/features/onboarding-screen";
+import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { OnboardingChoice } from "@/state/onboarding-progress";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
@@ -11,13 +12,15 @@ import type { TranslationKey } from "@/ui/localization";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
 import { colors, typography } from "@/ui/theme";
 
-type JourneyStep = "choice" | "join" | "create" | "requested" | "created";
+const receiptChoices = { requested: "join", approved: "joinApproved", created: "create" } as const;
+type JourneyStep = "choice" | "join" | "create" | keyof typeof receiptChoices;
 
 const stepCopy = {
   choice: { title: "onboarding.journey.title", body: "onboarding.journey.description" },
   join: { title: "onboarding.journey.join", body: "onboarding.journey.joinDescription" },
   create: { title: "onboarding.journey.create", body: "onboarding.journey.createDescription" },
   requested: { title: "community.encryption.requested", body: "onboarding.journey.requestedDescription" },
+  approved: { title: "community.rooms.requestApproved", body: "community.rooms.requestApprovedBody" },
   created: { title: "community.rooms.created", body: "onboarding.journey.createdDescription" },
 } satisfies Record<JourneyStep, { title: TranslationKey; body: TranslationKey }>;
 
@@ -66,10 +69,12 @@ export function OnboardingJourney({ userId }: { userId: string }) {
   function submitCommunity() {
     if ((step !== "join" && step !== "create") || !canSubmit) return;
     void run(async () => {
+      let receipt: JoinRequestReceipt | undefined;
       try {
         await dispatch(isJoin
-          ? { type: "joinGroup", inviteCode: value, expectedUserId: userId }
+          ? { type: "joinGroup", inviteCode: value, expectedUserId: userId, report: (result) => { receipt = result; } }
           : { type: "createGroup", name: value, expectedUserId: userId });
+        if (isJoin && !receipt) throw new Error("The community access request could not be confirmed.");
       } catch (problem) {
         const code = problem && typeof problem === "object" && "code" in problem ? problem.code : undefined;
         setError(isJoin
@@ -77,9 +82,14 @@ export function OnboardingJourney({ userId }: { userId: string }) {
           : "onboarding.journey.createFailed");
         return;
       }
+      if (receipt?.status === "rejected") {
+        setError("community.rooms.requestRejected");
+        return;
+      }
+      const nextStep = isJoin ? (receipt?.status === "approved" ? "approved" : "requested") : "created";
       setValue("");
-      setStep(isJoin ? "requested" : "created");
-      await continueOnboarding(isJoin ? "join" : "create");
+      setStep(nextStep);
+      await continueOnboarding(receiptChoices[nextStep]);
     });
   }
 
@@ -138,7 +148,7 @@ export function OnboardingJourney({ userId }: { userId: string }) {
           <SecondaryButton disabled={busy} onPress={() => changeStep("choice")}>{t("common.cancel")}</SecondaryButton>
         </>
       ) : (
-        <PrimaryButton disabled={busy} onPress={() => void run(() => continueOnboarding(step === "requested" ? "join" : "create"))}>
+        <PrimaryButton disabled={busy} onPress={() => void run(() => continueOnboarding(receiptChoices[step]))}>
           {continueLabel}
         </PrimaryButton>
       )}

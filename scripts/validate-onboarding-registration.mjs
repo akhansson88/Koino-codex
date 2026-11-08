@@ -132,7 +132,7 @@ try {
   auth.app.options.projectId = "other-project";
   assert.equal(await restarted.readOnboardingProgress(pendingUser.uid), null, "The same UID in another Firebase project cannot adopt the marker");
   auth.app.options.projectId = "demo-koino";
-  for (const journey of ["private", "join", "create"]) {
+  for (const journey of ["private", "join", "joinApproved", "create"]) {
     const guide = { phase: "guide", journey };
     await writeOnboardingProgress(pendingUser.uid, guide);
     await publishUser(null);

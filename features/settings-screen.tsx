@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, ScrollView, Text, View } from "react-native";
@@ -89,6 +90,8 @@ import { CommunityPrayerMemberModal } from "@/features/community/prayer-actions"
 import { FocusedScreenHeader } from "@/features/community/focused-header";
 import { MembersPanel } from "@/features/community/members-panel";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
+import { CommunityJoinForm, useCommunityJoinForm } from "@/features/community/join-form";
+import { CommunityJoinRequests } from "@/features/community/join-requests";
 import {
   MemoCommunityFeedCard,
   CommunityFeedEndpoint,
@@ -149,10 +152,11 @@ function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
 
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   const insets = useSafeAreaInsets();
-  const state = useKoinoFields(["authError", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
+  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   const navigation = useNavigation();
+  const roomsFocused = useIsFocused();
   const { prayerMomentId, communityRecentRequest } = useLocalSearchParams<{ prayerMomentId?: string; communityRecentRequest?: string }>();
   const [roomView, setRoomView] = useState<RoomView>(routeRoomView);
   const [activeDetailTab, setDetailTab] = useState<RoomDetailTab>("recent");
@@ -160,9 +164,15 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const detailTab = activeDetailTab === "reflections" ? "reflections" : "recent";
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
-  const [joinInviteCode, setJoinInviteCode] = useState("");
+  const joinForm = useCommunityJoinForm(state.currentUserId, joinSheetVisible);
   const [newGroupName, setNewGroupName] = useState("");
+  const [createGroupError, setCreateGroupError] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
+  const inviteRevision = useRef(0);
+  useLayoutEffect(() => {
+    setInviteMessage("");
+    return () => { inviteRevision.current++; };
+  }, [state.currentGroupId, state.currentUserId]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerContext, setComposerContext] = useState<ComposerContext>("room");
   const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
@@ -461,7 +471,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     }
     return latest;
   }, [sharedCheckIns]);
-  const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
 
   useEffect(() => {
@@ -1143,25 +1152,38 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   async function handleInvite() {
     if (!group) return;
+    const revision = ++inviteRevision.current;
+    setInviteMessage("");
     try {
-      setInviteMessage(await shareRoomInvite(group, t));
+      const message = await shareRoomInvite(group, t);
+      if (revision === inviteRevision.current) setInviteMessage(message);
     } catch {
-      setInviteMessage(t("community.rooms.inviteFallback"));
+      if (revision === inviteRevision.current) setInviteMessage(t("community.rooms.inviteFallback"));
     }
   }
 
-  async function handleJoinRoom() {
-    if (!canJoin) return;
-    await dispatch({ type: "joinGroup", inviteCode: joinInviteCode });
-    setJoinInviteCode("");
+  function openJoinSheet() {
+    inviteRevision.current++;
+    setInviteMessage("");
+    setCreateGroupError("");
+    setJoinSheetVisible(true);
+  }
+
+  function closeJoinSheet() {
+    setCreateGroupError("");
     setJoinSheetVisible(false);
   }
 
   async function handleCreateRoom() {
-    if (!canCreate) return;
-    await dispatch({ type: "createGroup", name: newGroupName });
-    setNewGroupName("");
-    setJoinSheetVisible(false);
+    if (!canCreate || joinForm.busy) return;
+    setCreateGroupError("");
+    try {
+      await dispatch({ type: "createGroup", name: newGroupName });
+      setNewGroupName("");
+      closeJoinSheet();
+    } catch (problem) {
+      setCreateGroupError(communitySystemError(problem instanceof Error ? problem.message : "", t));
+    }
   }
 
   function openRoomOverview() {
@@ -1746,20 +1768,22 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
               <SecondaryButton icon="message-circle" onPress={() => navigateToRoomView("detail", "back")}>
                 {t("community.rooms.open")}
               </SecondaryButton>
-              {inviteMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
+              {inviteMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
               </>}
             </>
           ) : (
             <>
               <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
               <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setJoinSheetVisible(true)}>
+              <PrimaryButton icon="plus" onPress={openJoinSheet}>
                 {t("community.rooms.joinOrCreate")}
               </PrimaryButton>
             </>
           )}
         </Card>
       </View>
+
+      <CommunityJoinRequests userId={state.currentUserId} active={roomsFocused && !joinSheetVisible} />
 
       <View style={{ gap: 10 }}>
         <SectionHeading>{t("community.rooms.other")}</SectionHeading>
@@ -1798,14 +1822,14 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           )}
         </Card>
         <Card style={{ gap: 0, padding: 0 }}>
-          <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
+          <Pressable accessibilityRole="button" onPress={openJoinSheet} style={{ paddingHorizontal: 16 }}>
             <Row icon="user-plus">
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.joinAnother")}</Text>
             </Row>
           </Pressable>
         </Card>
         <Card style={{ gap: 0, padding: 0 }}>
-          <Pressable accessibilityRole="button" onPress={() => setJoinSheetVisible(true)} style={{ paddingHorizontal: 16 }}>
+          <Pressable accessibilityRole="button" onPress={openJoinSheet} style={{ paddingHorizontal: 16 }}>
             <Row icon="plus">
               <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.createNew")}</Text>
             </Row>
@@ -1815,28 +1839,24 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
       {state.currentUserId ? <CommunityRoomsLogout key={state.currentUserId} userId={state.currentUserId} /> : null}
 
-      <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={() => setJoinSheetVisible(false)}>
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.enterCode")}</Text>
-          <TextInputField autoCapitalize="characters" autoCorrect={false} value={joinInviteCode} onChangeText={(value) => setJoinInviteCode(value.toUpperCase())} onSubmitEditing={handleJoinRoom} placeholder={t("community.rooms.code")} returnKeyType="join" />
-          <PrimaryButton disabled={!canJoin} onPress={handleJoinRoom}>
-            {t("community.rooms.joinByCode")}
-          </PrimaryButton>
-        </View>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-          <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>{t("common.or")}</Text>
-          <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
-        </View>
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.createNew")}</Text>
-          <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
-          <PrimaryButton disabled={!canCreate} onPress={handleCreateRoom}>
-            {t("community.rooms.createAction")}
-          </PrimaryButton>
-        </View>
-        {state.authError ? <Text style={{ color: colors.danger, fontWeight: "800" }}>{communitySystemError(state.authError, t)}</Text> : null}
-        <SecondaryButton onPress={() => setJoinSheetVisible(false)}>{t("common.cancel")}</SecondaryButton>
+      <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={closeJoinSheet} dismissible={!joinForm.busy}>
+        <CommunityJoinForm form={joinForm} />
+        {!joinForm.receipt ? <>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+            <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>{t("common.or")}</Text>
+            <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.createNew")}</Text>
+            <TextInputField editable={!joinForm.busy} value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
+            <PrimaryButton disabled={!canCreate || joinForm.busy} onPress={handleCreateRoom}>
+              {t("community.rooms.createAction")}
+            </PrimaryButton>
+          </View>
+          {createGroupError ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontWeight: "800" }}>{createGroupError}</Text> : null}
+        </> : null}
+        <SecondaryButton disabled={joinForm.busy} onPress={closeJoinSheet}>{t(joinForm.receipt ? "common.done" : "common.cancel")}</SecondaryButton>
       </BottomSheet>
 
         </AppScreen>

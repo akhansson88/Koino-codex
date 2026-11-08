@@ -139,7 +139,7 @@ const mocks = {
     export const session=()=>({vault:{identity:{signingPublicKey:"fixture-public-key"}},device:{id:"fixture-device"}});
     export const listenRaw=(path,listener)=>{h.activeRawListeners.add(path);listener(null);return()=>h.activeRawListeners.delete(path);};
     export const sessionGeneration=()=>1,identityRotationInProgress=()=>false,lockSession=()=>{};
-    export const unlockExisting=async()=>"setup",draftAccount=async()=>({}),confirmAccount=async()=>{},recoverAccount=async()=>{},requestDeviceApproval=async()=>{},approveDevice=async()=>{},approveGroupMember=async()=>{},rotateGroup=async()=>{},draftRevocation=async()=>({}),revokeDevice=async()=>{};
+    export const unlockExisting=async()=>"setup",draftAccount=async()=>({}),confirmAccount=async()=>{},recoverAccount=async()=>{},requestDeviceApproval=async()=>{},approveDevice=async()=>{},approveGroupMember=async()=>{},rejectGroupJoinRequest=async()=>{},rotateGroup=async()=>{},draftRevocation=async()=>({}),revokeDevice=async()=>{};
   `,
   "@/state/encryption/migration": 'export const personalMigrationComplete=async()=>true,migratePersonal=async()=>{},migrateOwnedGroups=async()=>{};',
   "@/state/supabase-storage": 'export const clearEncryptedImages=()=>{};',

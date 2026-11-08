@@ -72,6 +72,7 @@ import {
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
 import { auth, database, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
+import { announceJoinRequestChange } from "@/state/community-join-requests";
 import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
 import {
   authMessage,
@@ -1410,10 +1411,18 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
               return;
             }
-            case "joinGroup":
-              if (!firebaseUser) return;
-              await joinGroupByInvite(firebaseUser, action.inviteCode, profile?.name);
+            case "joinGroup": {
+              if (!firebaseUser || auth.currentUser?.uid !== firebaseUser.uid || signOutPending.current) {
+                throw new Error("Sign in to request community access.");
+              }
+              const receipt = await joinGroupByInvite(firebaseUser, action.inviteCode, profile?.name);
+              if (auth.currentUser?.uid !== firebaseUser.uid || sessionGeneration() !== generation || signOutPending.current) {
+                throw new Error("The account changed while joining a community.");
+              }
+              action.report?.(receipt);
+              announceJoinRequestChange(firebaseUser.uid);
               return;
+            }
             case "switchGroup":
               if (!firebaseUser || !userMemberships.some((membership) => membership.groupId === action.id)) return;
               await update(ref(database, `profiles/${firebaseUser.uid}`), { currentGroupId: action.id });

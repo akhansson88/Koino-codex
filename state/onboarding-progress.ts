@@ -3,7 +3,7 @@ import * as FirebaseAuth from "@firebase/auth";
 import storage from "@/state/encryption/local-storage";
 import { auth } from "@/state/store/firebase";
 
-export type OnboardingChoice = "private" | "join" | "create";
+export type OnboardingChoice = "private" | "join" | "joinApproved" | "create";
 type JourneyProgress = { phase: "journey"; signupName?: string; creationGroupId?: string };
 
 export type OnboardingProgress =
@@ -42,7 +42,7 @@ export async function readOnboardingProgress(uid: string): Promise<OnboardingPro
         ...(progress.creationGroupId === undefined ? {} : { creationGroupId: progress.creationGroupId }),
       };
     }
-    if (progress?.phase === "guide" && (progress.journey === "private" || progress.journey === "join" || progress.journey === "create")) {
+    if (progress?.phase === "guide" && (progress.journey === "private" || progress.journey === "join" || progress.journey === "joinApproved" || progress.journey === "create")) {
       return { phase: "guide", journey: progress.journey };
     }
   } catch {
