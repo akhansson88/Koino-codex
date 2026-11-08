@@ -125,11 +125,24 @@ try {
   fixture.response = response();
   fixture.audio = { refresh: async () => { fixture.refreshes++; }, session: undefined, pendingTopic: undefined };
   const { ScriptureSearchContent } = await bundle("features/bible-search/search-content.tsx", {
-    "react-native": `import React from "react"; export const ActivityIndicator="ActivityIndicator",Pressable="Pressable",ScrollView="ScrollView",Text="Text",TextInput="TextInput",View="View"; export const FlatList=React.forwardRef((props,ref)=>React.createElement("FlatList",{...props,ref},props.ListHeaderComponent,props.data.map((item,index)=>React.createElement(React.Fragment,{key:item.id},props.renderItem({item,index}))),props.ListFooterComponent));`,
+    "react-native": `import React from "react";
+      export const ActivityIndicator="ActivityIndicator",Pressable="Pressable",ScrollView="ScrollView",Text="Text",TextInput="TextInput",View="View";
+      export const FlatList=React.forwardRef((props,ref)=>{
+        const previous=React.useRef(props.data);
+        React.useLayoutEffect(()=>{
+          // Native position preservation follows an existing row when ranking inserts items before it.
+          if(globalThis.__scriptureSearchUI.simulateNativeReordering && props.maintainVisibleContentPosition && previous.current[0]) {
+            const index=props.data.findIndex(item=>item.id===previous.current[0].id);
+            if(index>0) props.onScroll({nativeEvent:{contentOffset:{y:index*100}}});
+          }
+          previous.current=props.data;
+        },[props.data,props.maintainVisibleContentPosition]);
+        return React.createElement("FlatList",{...props,ref},props.ListHeaderComponent,props.data.map((item,index)=>React.createElement(React.Fragment,{key:item.id},props.renderItem({item,index}))),props.ListFooterComponent);
+      });`,
     "react-native-safe-area-context": `export const useSafeAreaInsets=()=>({bottom:0,top:0});`,
     "@expo/vector-icons": `export const Feather="Feather";`,
     "@/features/bible-search": `export {displayBibleReference} from "@/features/bible-book-names";`,
-    "./use-search": `export const useScriptureSearch=()=>({response:globalThis.__scriptureSearchUI.response,loading:false,error:false,eligible:true,retry:()=>{},loadMore:()=>{globalThis.__scriptureSearchUI.loads=(globalThis.__scriptureSearchUI.loads||0)+1;},retryMore:()=>{globalThis.__scriptureSearchUI.retries=(globalThis.__scriptureSearchUI.retries||0)+1;},...globalThis.__scriptureSearchUI.searchOverrides});`,
+    "./use-search": `export const useScriptureSearch=(options)=>globalThis.__scriptureSearchUI.useRealSearch ? globalThis.__scriptureSearchUI.useRealSearch(options) : ({response:globalThis.__scriptureSearchUI.response,loading:false,error:false,eligible:true,retry:()=>{},loadMore:()=>{globalThis.__scriptureSearchUI.loads=(globalThis.__scriptureSearchUI.loads||0)+1;},retryMore:()=>{globalThis.__scriptureSearchUI.retries=(globalThis.__scriptureSearchUI.retries||0)+1;},...globalThis.__scriptureSearchUI.searchOverrides});`,
     "@/features/bible-audio/provider": `export const useBibleAudio=()=>globalThis.__scriptureSearchUI.audio;`,
     "@/features/bible-audio/topic-controls": `export const TopicPassageAudioControl="TopicPassageAudioControl",TopicPlaybackPanel="TopicPlaybackPanel";`,
     "@/ui/app-language": `import {translateMessage} from "@/ui/localization"; export const useAppTranslation=()=>({language:globalThis.__scriptureSearchUI.language,t:(key,values)=>translateMessage(globalThis.__scriptureSearchUI.language,key,values)});`,
@@ -330,6 +343,71 @@ try {
   });
   await flushFrames();
   assert.deepEqual(scrolls, [{ offset: 1750, animated: false }], "A larger returned viewport clamps restoration to the available content");
+
+  const previousList = tree.root.findByType("FlatList");
+  const searchInput = tree.root.findByType("TextInput");
+  scrolls.length = 0;
+  await act(async () => { searchInput.props.onChangeText("love"); });
+  const newQueryList = tree.root.findByType("FlatList");
+  assert.notEqual(newQueryList, previousList, "A new query gets a fresh native list instead of retaining the previous visible item");
+  assert.equal(tree.root.findByType("TextInput"), searchInput, "Typing keeps the same input mounted for keyboard focus");
+  assert.deepEqual(fixture.owner.scroll, { offset: 0, restore: false });
+  assert.deepEqual(scrolls, [{ offset: 0, animated: false }]);
+  await settleDebounce();
+  const freshRequest = fixture.calls.at(-1);
+  fixture.simulateNativeReordering = true;
+  await act(async () => { freshRequest.options.onPartialResults({ results: [laterResult], mode: "lexical", semanticState: "loading" }); });
+  fixture.audio.session = { topic: { definition: playlist, itemIndex: 1 } };
+  await act(async () => { freshRequest.resolve({ ...retainedResponse, hasMore: true }); });
+  await measureSearch();
+  assert.equal(fixture.owner.scroll.offset, 0, "A fresh search stays at the top when final ranking moves the initial word match down the list");
+  fixture.simulateNativeReordering = false;
+  assert.equal(tree.root.findByType("FlatList"), newQueryList, "Partial and final results stay in the same native list");
+  assert.deepEqual(scrolls, [{ offset: 0, animated: false }], "Audio from an older search cannot pull identical new results away from the top");
+  assert.notEqual(tree.root.findByType("TopicPlaybackPanel").props.definition.id, playlist.id, "Identical results from another search have their own audio snapshot");
+  fixture.audio.session = undefined;
+  await act(async () => {
+    scrollProps().onScrollBeginDrag();
+    scrollProps().onScroll({ nativeEvent: { contentOffset: { y: 720 } } });
+    scrollProps().onEndReached();
+  });
+  scrolls.length = 0;
+  const nextResult = numberedResults(2, 1)[0];
+  const evictedResult = { ...nextResult, contentState: "evicted", verses: [], verse: { ...nextResult.verse, text: "" } };
+  await act(async () => { fixture.pageCalls.at(-1).resolve({ ...response([evictedResult]), hasMore: false }); });
+  await act(async () => { scrollProps().onViewableItemsChanged({ viewableItems: [{ isViewable: true, index: 2 }] }); });
+  assert.equal(fixture.owner.search.response.results[2].contentState, undefined);
+  assert.equal(tree.root.findByType("FlatList"), newQueryList, "Pagination and passage hydration preserve the current list");
+  assert.equal(fixture.owner.scroll.offset, 720);
+  assert.deepEqual(scrolls, [], "Loading more passages does not reset the current position");
+  await act(async () => { fixture.owner.setQuery(" love "); });
+  assert.equal(tree.root.findByType("FlatList"), newQueryList, "Equivalent normalized queries keep the existing list and position");
+  assert.equal(fixture.owner.scroll.offset, 720);
+  assert.deepEqual(scrolls, []);
+
+  await act(async () => { fixture.hide(); });
+  await act(async () => { fixture.show(); });
+  await act(async () => {
+    scrollProps().onLayout({ nativeEvent: { layout: { height: 400 } } });
+    scrollProps().onContentSizeChange(400, 450);
+  });
+  await flushFrames();
+  scrolls.length = 0;
+  const clearSearch = tree.root.findAllByType("Pressable").find((node) => node.props.accessibilityLabel === "Clear Scripture search");
+  await act(async () => { clearSearch.props.onPress(); });
+  const clearedList = tree.root.findByType("FlatList");
+  assert.equal(fixture.owner.query, "");
+  assert.deepEqual(fixture.owner.scroll, { offset: 0, restore: false });
+  const topic = tree.root.findAllByType("Pressable").find((node) => node.findAllByType("Text").some((text) => text.props.children === "Hope"));
+  await act(async () => { topic.props.onPress(); });
+  assert.notEqual(tree.root.findByType("FlatList"), clearedList, "Selecting a suggested topic starts with a fresh native list");
+  await settleDebounce();
+  await act(async () => { fixture.calls.at(-1).resolve(retainedResponse); });
+  await measureSearch();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  await flushFrames();
+  assert.deepEqual(scrolls, [{ offset: 0, animated: false }, { offset: 0, animated: false }], "Clearing and choosing a topic cancel the previous pending scroll restoration");
+
   await act(async () => { fixture.owner.setQuery("peace"); });
   await settleDebounce();
   const interruptedRequest = fixture.calls.at(-1);
@@ -372,13 +450,38 @@ try {
   await act(async () => { tree.unmount(); });
   tree = undefined;
 
+  fixture.useRealSearch = useScriptureSearch;
+  for (const showInput of [true, false]) {
+    const localProps = { ...uiProps, showInput };
+    await act(async () => { tree = create(React.createElement(ScriptureSearchContent, localProps), {
+      createNodeMock: (element) => element.type === "FlatList" ? { scrollToOffset: (value) => scrolls.push(value), scrollToIndex: (value) => scrolls.push(value) } : null,
+    }); });
+    await settleDebounce();
+    await act(async () => { fixture.calls.at(-1).resolve(retainedResponse); });
+    await measureSearch();
+    const localList = tree.root.findByType("FlatList");
+    await act(async () => { scrollProps().onScrollBeginDrag(); scrollProps().onScroll({ nativeEvent: { contentOffset: { y: 720 } } }); });
+    scrolls.length = 0;
+    await act(async () => { tree.update(React.createElement(ScriptureSearchContent, { ...localProps, query: "peace" })); });
+    const replacementList = tree.root.findByType("FlatList");
+    assert.notEqual(replacementList, localList, `${showInput ? "Standalone search" : "Verse picker"}: a different query starts with a fresh native list`);
+    assert.deepEqual(scrolls, [{ offset: 0, animated: false }]);
+    await settleDebounce();
+    await act(async () => { fixture.calls.at(-1).resolve(retainedResponse); });
+    await measureSearch();
+    assert.equal(tree.root.findByType("FlatList"), replacementList);
+    assert.deepEqual(scrolls, [{ offset: 0, animated: false }], "New local results do not restore the previous query's offset");
+    await act(async () => { tree.unmount(); });
+    tree = undefined;
+  }
+
   const { normalizeBiblePosition, verseCountForChapter } = await bundle("features/bible-canon.ts");
   assert.equal(verseCountForChapter("Psalms", 3, "reformationsbibeln2026"), 9);
   assert.equal(verseCountForChapter("Psalms", 3, "kjv"), 8);
   assert.equal(normalizeBiblePosition({ book: "Psalms", chapter: 3, verse: 9 }, "reformationsbibeln2026").verse, 9);
   assert.equal(normalizeBiblePosition({ book: "Psalms", chapter: 3, verse: 9 }, "kjv").verse, 1);
   assert.equal(verseCountForChapter("Numbers", 12, "reformationsbibeln2026"), 15);
-  console.log("Shared Scripture search passed: retained sessions, native remount/scroll restoration, audio Sync, interrupted search/retry, account/translation isolation, partial results, ranges, and bilingual references.");
+  console.log("Shared Scripture search passed: retained sessions, fresh query/topic scroll, native remount/scroll restoration, audio Sync and search isolation, pagination/hydration scroll stability, interrupted search/retry, account/translation isolation, partial results, ranges, and bilingual references.");
 } finally {
   if (tree) await act(async () => { tree.unmount(); });
   globalThis.requestAnimationFrame = originalRequestFrame;

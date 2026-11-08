@@ -49,7 +49,7 @@ function useSearchDefinition(versionId: BibleVersionId, language: "en" | "sv", t
         reference: displayBibleReference(verse.reference, language, versionId), book: verse.book,
         chapter: verse.chapter, startVerse: verse.startVerse, endVerse: verse.endVerse ?? verse.startVerse });
     }
-    const definition: TopicDefinition = { id: `search:${versionId}:${(hash >>> 0).toString(36)}`, topic: title, title, translation: versionId,
+    const definition: TopicDefinition = { id: `search:${versionId}:${sessionId ?? "local"}:${(hash >>> 0).toString(36)}`, topic: title, title, translation: versionId,
       searchSessionId: sessionId, windowed: results.length > 100, items, unavailableCount: 0 };
     cache.current = { versionId, language, title, sessionId, count: results.length, first: results[0]?.id, last: results.at(-1)?.id, prefix: prefix(results.length), hash, definition };
     return definition;
@@ -107,6 +107,7 @@ function ScriptureSearchView({
   const searchRef = useRef(search);
   searchRef.current = search;
   const [following, setFollowing] = useState(!scrollState?.restore);
+  const [preservingPosition, setPreservingPosition] = useState(Boolean(scrollState?.restore));
   const restoreOffset = useRef<number | undefined>(scrollState?.restore ? scrollState.offset : undefined);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
@@ -148,7 +149,7 @@ function ScriptureSearchView({
         if (targetIndex.current !== index) {
           targetIndex.current = index;
           scrollRetryCount.current = 0;
-          scroll.current.scrollToIndex({ index: Math.min(index, Math.max(0, results.length - 1)), animated: false });
+          scroll.current.scrollToIndex({ index: Math.min(index, Math.max(0, searchRef.current.response.results.length - 1)), animated: false });
         }
         return;
       }
@@ -160,24 +161,33 @@ function ScriptureSearchView({
       if (index !== undefined && index > 0) return;
       scroll.current.scrollToOffset({ offset: Math.min(target, Math.max(0, contentHeight.current - viewportHeight.current)), animated: false });
     });
-  }, [results]);
+  }, []);
 
-  useEffect(() => () => {
+  const cancelScrollWork = useCallback(() => {
     if (restoreFrame.current !== undefined) cancelAnimationFrame(restoreFrame.current);
     if (scrollRetry.current !== undefined) clearTimeout(scrollRetry.current);
     if (restoreTimer.current !== undefined) clearTimeout(restoreTimer.current);
-  }, [restoreScroll]);
+    restoreFrame.current = undefined;
+    scrollRetry.current = undefined;
+    restoreTimer.current = undefined;
+  }, []);
 
   useLayoutEffect(() => {
-    if (!scrollState) return;
-    restoredSession.current = scrollState.restore;
-    restoreOffset.current = scrollState.restore ? scrollState.offset : undefined;
+    const restore = Boolean(scrollState?.restore);
+    restoredSession.current = restore;
+    restoreOffset.current = restore ? scrollState?.offset : undefined;
     restoreAnchorReady.current = false;
     allowRestoreClamp.current = false;
     targetIndex.current = undefined;
-    if (!scrollState.restore) scroll.current?.scrollToOffset({ offset: 0, animated: false });
-    setFollowing(!scrollState.restore);
-  }, [scrollState]);
+    scrollRetryCount.current = 0;
+    contentHeight.current = 0;
+    viewportHeight.current = 0;
+    rowHeights.current = {};
+    if (!restore) scroll.current?.scrollToOffset({ offset: 0, animated: false });
+    setFollowing(!restore);
+    setPreservingPosition(restore);
+    return cancelScrollWork;
+  }, [cancelScrollWork, scrollState, search.scrollKey]);
 
   useEffect(() => { if (visible && version.hasAudio) void audio.refresh(); }, [audio.refresh, version.hasAudio, visible]);
   useEffect(() => {
@@ -224,10 +234,11 @@ function ScriptureSearchView({
         <Text style={{ color: palette.accent, fontWeight: "700" }}>{t("bible.search.browse")}</Text>
       </Pressable> : null}
     </View> : null}
-    <FlatList ref={scroll} data={query.trim() ? results : []} keyExtractor={(item) => item.id}
+    {/* Fresh searches stay at the top while ranking settles; preserve a position only after scrolling or restoring. */}
+    <FlatList key={search.scrollKey} ref={scroll} data={query.trim() ? results : []} keyExtractor={(item) => item.id}
       keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
       initialNumToRender={8} maxToRenderPerBatch={8} windowSize={7}
-      maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+      maintainVisibleContentPosition={preservingPosition ? { minIndexForVisible: 0 } : undefined}
       onLayout={({ nativeEvent }) => { viewportHeight.current = nativeEvent.layout.height; restoreScroll(); }}
       onContentSizeChange={(_width, height) => {
         contentHeight.current = height;
@@ -239,7 +250,7 @@ function ScriptureSearchView({
       onScroll={({ nativeEvent }) => {
         if (visible && scrollState && restoreOffset.current === undefined) scrollState.offset = Math.max(0, nativeEvent.contentOffset.y);
       }} scrollEventThrottle={16}
-      onScrollBeginDrag={() => { restoreOffset.current = undefined; targetIndex.current = undefined; setFollowing(false); }}
+      onScrollBeginDrag={() => { restoreOffset.current = undefined; targetIndex.current = undefined; setFollowing(false); setPreservingPosition(true); }}
       onScrollToIndexFailed={({ averageItemLength, index }) => {
         scroll.current?.scrollToOffset({ offset: Math.max(0, averageItemLength * index), animated: false });
         if (scrollRetry.current !== undefined) clearTimeout(scrollRetry.current);

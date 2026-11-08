@@ -36,6 +36,7 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
   const cancelRequest = useRef<(() => void) | undefined>(undefined);
   const pageSession = useRef<{ key: string; value: ScriptureSearchPageSession } | undefined>(undefined);
   const pageRequest = useRef<{ key: string; controller: AbortController } | undefined>(undefined);
+  const scrollKey = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit]);
   const key = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit, retry]);
   const sessionId = useMemo(() => `search-session-${searchSessionSeed}-${++searchSessionCounter}`, [key]);
   const excerptCache = useRef<ExcerptCache | undefined>(undefined);
@@ -235,6 +236,7 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
     retryMore: () => loadMore(true),
     onVisibleResults,
     retryExcerpt: (index: number) => hydratePage(Math.floor(index / CACHE_PAGE_SIZE), true),
+    scrollKey,
     sessionId,
     eligible,
     retry: () => setRetry((value) => value + 1),
@@ -257,8 +259,7 @@ export function useScriptureSearchSession({ language, versionId, visible, scopeK
   const setQuery = useCallback((value: string) => setInput({ scopeKey, query: value }), [scopeKey]);
   useEffect(() => { setInput({ scopeKey, query: "" }); }, [scopeKey]);
   const search = useScriptureSearch({ language, versionId, visible, query, limit, scopeKey, retainOnHide: true });
-  const scrollKey = JSON.stringify([scopeKey, language, versionId, normalizeScriptureQuery(query), limit]);
-  const scroll = useMemo<ScriptureSearchScrollState>(() => ({ offset: 0, restore: false }), [scrollKey]);
+  const scroll = useMemo<ScriptureSearchScrollState>(() => ({ offset: 0, restore: false }), [search.scrollKey]);
   const wasVisible = useRef(visible);
   useEffect(() => {
     if (!visible && wasVisible.current) scroll.restore = true;
