@@ -1,9 +1,10 @@
 import { tabBarHeight } from "@/ui/navigation-layout";
 import { KoinoTabHeader } from "@/ui/tab-header";
-import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
+import { Feather } from "@expo/vector-icons";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppTranslation } from "@/ui/app-language";
@@ -22,37 +23,38 @@ export default function TabLayout() {
         header: () => <KoinoTabHeader />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
-        tabBarActiveTintColor: colors.olive,
+        tabBarActiveTintColor: colors.ink,
         tabBarInactiveTintColor: colors.muted,
-        tabBarBackground: () => <TabBarGlassBackground />,
+        tabBarActiveBackgroundColor: `${colors.accentWarm}80`,
+        tabBarBackground: () => <TabBarDockBackground bottomInset={insets.bottom} />,
+        tabBarButton: (props) => <DockTabButton {...props} />,
+        tabBarLabelPosition: "below-icon",
         tabBarStyle: {
-          backgroundColor: Platform.OS === "web" ? "rgba(255, 255, 255, 0.22)" : "transparent",
-          borderRadius: 0,
-          borderTopColor: "rgba(255, 255, 255, 0.95)",
-          borderTopWidth: 1,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
           bottom: 0,
           height: tabBarHeight(insets.bottom),
           left: 0,
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom, 8) + 12,
+          paddingTop: 12,
+          paddingHorizontal: 24,
           position: "absolute",
           right: 0,
-          ...platformShadow({
-            boxShadow: "0 18px 42px rgba(11, 18, 32, 0.16)",
-            elevation: 12,
-            offset: { width: 0, height: 12 },
-            opacity: 0.16,
-            radius: 26,
-          }),
-          ...(Platform.OS === "web"
-            ? {
-                WebkitBackdropFilter: "blur(34px) saturate(220%) contrast(115%)",
-                backdropFilter: "blur(34px) saturate(220%) contrast(115%)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.96), inset 0 -1px 0 rgba(255,255,255,0.34), 0 18px 42px rgba(11,18,32,0.16)",
-              }
-            : {}),
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarLabelStyle: typography.navLabel,
+        tabBarItemStyle: { marginHorizontal: 2, minWidth: 0 },
+        tabBarLabel: ({ children, color }) => (
+          <Text
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={1.2}
+            minimumFontScale={0.85}
+            numberOfLines={1}
+            style={[typography.navLabel, styles.label, { color }]}
+          >
+            {children}
+          </Text>
+        ),
       }}
     >
       <Tabs.Screen
@@ -60,9 +62,10 @@ export default function TabLayout() {
         options={{
           headerShown: false,
           title: t("tabs.bible"),
-          tabBarLabel: t("tabs.bible"),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "library" : "library-outline"} color={color} size={size} />
+          tabBarButtonTestID: "navigation-bible",
+          tabBarAccessibilityLabel: t("tabs.bible"),
+          tabBarIcon: ({ color }) => (
+            <Feather name="book-open" color={color} size={25} />
           ),
         }}
       />
@@ -70,9 +73,10 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t("tabs.home"),
-          tabBarLabel: t("tabs.home"),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "sunny" : "sunny-outline"} color={color} size={size} />
+          tabBarButtonTestID: "navigation-home",
+          tabBarAccessibilityLabel: t("tabs.home"),
+          tabBarIcon: ({ color }) => (
+            <Feather name="sun" color={color} size={25} />
           ),
         }}
       />
@@ -80,9 +84,10 @@ export default function TabLayout() {
         name="me"
         options={{
           title: t("tabs.me"),
-          tabBarLabel: t("tabs.me"),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} color={color} size={size} />
+          tabBarButtonTestID: "navigation-me",
+          tabBarAccessibilityLabel: t("tabs.me"),
+          tabBarIcon: ({ color }) => (
+            <Feather name="user" color={color} size={25} />
           ),
         }}
       />
@@ -91,38 +96,70 @@ export default function TabLayout() {
         options={{
           headerShown: false,
           title: t("tabs.community"),
-          tabBarLabel: t("tabs.community"),
-          tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons name={focused ? "people" : "people-outline"} color={color} size={size} />
+          tabBarButtonTestID: "navigation-community",
+          tabBarAccessibilityLabel: t("tabs.community"),
+          tabBarIcon: ({ color }) => (
+            <Feather name="users" color={color} size={25} />
           ),
         }}
       />
     </Tabs>
   );
 }
-function TabBarGlassBackground() {
-  if (Platform.OS === "web") return null;
-
+function DockTabButton({ style, ...props }: BottomTabBarButtonProps) {
   return (
-    <BlurView
-      blurReductionFactor={2}
-      experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : "none"}
-      intensity={90}
-      tint="systemMaterial"
-      style={{
-        ...StyleSheet.absoluteFillObject,
-        borderRadius: 0,
-        overflow: "hidden",
-      }}
-    >
-      <View
-        style={{
-          ...StyleSheet.absoluteFillObject,
-          backgroundColor: "rgba(255, 255, 255, 0.28)",
-          borderTopColor: "rgba(255, 255, 255, 0.88)",
-          borderTopWidth: 1,
-        }}
-      />
-    </BlurView>
+    <PlatformPressable
+      {...props}
+      android_ripple={{ borderless: false, color: colors.line }}
+      pressOpacity={0.72}
+      style={[style, styles.button]}
+    />
   );
 }
+
+function TabBarDockBackground({ bottomInset }: { bottomInset: number }) {
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cream }]}>
+      <View
+        style={[styles.dock, { bottom: Math.max(bottomInset, 8) }]}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  dock: {
+    ...StyleSheet.absoluteFillObject,
+    left: 12,
+    right: 12,
+    backgroundColor: colors.paper,
+    borderColor: colors.line,
+    borderCurve: "continuous",
+    borderRadius: 24,
+    borderWidth: 1,
+    ...platformShadow({
+      boxShadow: "0 4px 14px rgba(11, 18, 32, 0.06)",
+      elevation: 2,
+      offset: { width: 0, height: 4 },
+      opacity: 0.06,
+      radius: 14,
+    }),
+  },
+  button: {
+    borderCurve: "continuous",
+    borderRadius: 18,
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 48,
+    minWidth: 0,
+    overflow: "hidden",
+    paddingHorizontal: 0,
+    paddingVertical: 6,
+  },
+  label: {
+    fontSize: 11,
+    lineHeight: 15,
+    flexShrink: 1,
+    textAlign: "center",
+  },
+});

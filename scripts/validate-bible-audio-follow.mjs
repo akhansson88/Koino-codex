@@ -57,6 +57,35 @@ const mocks = {
   "expo-clipboard": `export const setStringAsync = async () => {};`,
   "@/ui/native-pressable": `export const NativePressable = "NativePressable";`,
   "@/ui/use-reduced-motion": `export const useReducedMotion = () => !!globalThis.__bibleAudioFollowTest.reducedMotion;`,
+  "react-native-reanimated": `export default { View: "AnimatedView", Text: "AnimatedText" };`,
+  // The header and native scroll event boundary are tested by validate:bible-header.
+  // These fixtures keep their existing viewport coordinates for the audio suite.
+  "@/features/bible-reader/use-reader-header": `
+    import { useRef } from "react";
+    export function useReaderHeader(options) {
+      const test = globalThis.__bibleAudioFollowTest;
+      test.headerEnabled = options.enabled;
+      return useRef({ height: 0, hidden: false, motion: {}, style: {}, onLayout() {},
+        reveal() { test.headerReveals = (test.headerReveals ?? 0) + 1; },
+        stopTracking() {}, suspend() {}, topOcclusion: () => test.headerTopInset ?? 0 }).current;
+    }
+  `,
+  "@/features/bible-reader/chapter-page": `
+    import { useLayoutEffect, useRef } from "react";
+    import { ScrollView, View } from "react-native";
+    export function ChapterPageScrollView({ active, activeScrollRef, onOrigin, contentStyle, children, headerMotion, pageKey, ...props }) {
+      const localRef = useRef(null), origin = useRef();
+      useLayoutEffect(() => {
+        if (active) { activeScrollRef.current = localRef.current; if (origin.current !== undefined) onOrigin(origin.current); }
+        return () => { if (activeScrollRef.current === localRef.current) activeScrollRef.current = null; };
+      }, [active, activeScrollRef, onOrigin]);
+      return <ScrollView {...props} ref={localRef} scrollEnabled={active}>
+        <View testID={active ? "bible-reader-content" : undefined} onLayout={({ nativeEvent }) => {
+          origin.current = nativeEvent.layout.y; if (active) onOrigin(origin.current);
+        }} style={contentStyle}>{children}</View>
+      </ScrollView>;
+    }
+  `,
   "@/features/bible-reader/chapter-haptics": `export const chapterSelectionHaptic = () => {
     const test = globalThis.__bibleAudioFollowTest; test.chapterHaptics = (test.chapterHaptics ?? 0) + 1;
   };`,
@@ -190,7 +219,7 @@ async function loadComponent(entryPoint) {
           if (name in mocks) return { path: name, namespace: "mock" };
           if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
         });
-        builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "js", resolveDir: projectRoot }));
+        builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "jsx", resolveDir: projectRoot }));
       },
     }],
   });
@@ -460,9 +489,11 @@ try {
   assert.equal(props("BibleAudioPlayer").bottom, dockedAudioBottom, "manual browsing keeps the player against the tab bar when chapter controls appear");
   assert.ok(props("BibleBottomReadingControls").bottom >= dockedAudioBottom + 136, "chapter controls sit above the player including its Follow button");
   await act(async () => { props("BibleText").onVersePress(12); });
+  assert.equal(audio.headerEnabled, false, "the verse action bar suspends header motion");
   assert.equal(props("BibleAudioPlayer").bottom, dockedAudioBottom, "verse selection cannot lift the player away from the tab bar");
   assert.ok(props("SelectedVerseSuggestionBar").bottom >= dockedAudioBottom + 136, "verse actions sit above the player");
   await act(async () => { props("SelectedVerseSuggestionBar").onClear(); props("BibleAudioPlayer").onMiniHeightChange(82); });
+  assert.equal(audio.headerEnabled, true, "clearing the verse selection restores header tracking");
   await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
   await flushFrames();
   assert.equal(audio.snapshot.playWhenReady, false, "another header tap replaces existing playing audio with a paused selection");
@@ -1111,6 +1142,46 @@ try {
   assert.equal(measuredScrolls.length, beforeManualTick, "recovery checks respect manual browsing until Follow is pressed");
   delete audio.appState;
   await unmount();
+
+  // An overlay changes the visible top without changing the native viewport.
+  // Verse targeting, history, headphones, and Follow must use that same inset.
+  audio.headerTopInset = 63;
+  await mount();
+  await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
+  await flushFrames();
+  await act(async () => {
+    layoutVerses(0, 100, 100);
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 2, "headphones skips text mostly obscured by the revealed header");
+  deferredMeasurements = [];
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  const movingHeaderMeasurements = deferredMeasurements;
+  deferredMeasurements = undefined;
+  audio.headerTopInset = 0;
+  await act(async () => { for (const complete of movingHeaderMeasurements) complete(); });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 1, "a header animation invalidates in-flight visible-verse measurements");
+  audio.headerTopInset = 63;
+  await act(async () => {
+    props("BibleDrawer").onSelect({ book: "Philippians", chapter: 4, verse: 8 });
+  });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 619, "explicit verse navigation lands below the header plus reading margin");
+  await act(async () => {
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 20 } } });
+  });
+  assert.equal(reader().position.verse, 2, "reading history follows the text below the visible header");
+  await unmount();
+  await mount({ session: session("Philippians", 4, undefined, 8), playWhenReady: true });
+  await act(async () => { layoutVerses(0, 100, 100); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 619, "audio Follow aligns its verse below the same visible header");
+  await unmount();
+  delete audio.headerTopInset;
 
   let verseRowNumberStyle;
   const reportedOffsets = [];

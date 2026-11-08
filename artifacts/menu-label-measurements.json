@@ -1,0 +1,114 @@
+[
+  {
+    "label": "Bible",
+    "fontSize": 11.0,
+    "measuredWidth": 26.03,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Home",
+    "fontSize": 11.0,
+    "measuredWidth": 31.07,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Me",
+    "fontSize": 11.0,
+    "measuredWidth": 16.5,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Community",
+    "fontSize": 11.0,
+    "measuredWidth": 60.33,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Bibeln",
+    "fontSize": 11.0,
+    "measuredWidth": 32.65,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Hem",
+    "fontSize": 11.0,
+    "measuredWidth": 24.42,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Jag",
+    "fontSize": 11.0,
+    "measuredWidth": 19.39,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Gemenskap",
+    "fontSize": 11.0,
+    "measuredWidth": 62.65,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Bible",
+    "fontSize": 13.2,
+    "measuredWidth": 31.23,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Home",
+    "fontSize": 13.2,
+    "measuredWidth": 37.28,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Me",
+    "fontSize": 13.2,
+    "measuredWidth": 19.8,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Community",
+    "fontSize": 13.2,
+    "measuredWidth": 72.39,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Bibeln",
+    "fontSize": 13.2,
+    "measuredWidth": 39.17,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Hem",
+    "fontSize": 13.2,
+    "measuredWidth": 29.31,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Jag",
+    "fontSize": 13.2,
+    "measuredWidth": 23.27,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  },
+  {
+    "label": "Gemenskap",
+    "fontSize": 13.2,
+    "measuredWidth": 75.18,
+    "availableAt320": 64,
+    "fitsAtSupportedScale": true
+  }
+]

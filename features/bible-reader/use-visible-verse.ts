@@ -12,6 +12,7 @@ type Reader = {
   viewport: RefObject<View | null>;
   rows: RefObject<Record<number, MeasurableView | null>>;
   offset: RefObject<number>;
+  topInset?: () => number;
   controlsTop?: number;
   onSelect: (verse: number) => void;
 };
@@ -47,19 +48,20 @@ export function useVisibleVerseSelection(reader: Reader) {
       const revision = layoutRevision.current;
       const offset = current.offset.current;
       const controlsTop = current.controlsTop;
+      const topInset = current.topInset?.() ?? 0;
       const bounds = new Map<number, Bounds>();
       let viewportBounds: Bounds | undefined;
       const finish = () => {
         if (measurement.current !== token || pending.current !== request) return;
         if (latest.current.chapterKey !== request.chapterKey || !latest.current.enabled || !latest.current.ready) return;
-        if (layoutRevision.current !== revision || latest.current.offset.current !== offset || latest.current.controlsTop !== controlsTop) {
+        if (layoutRevision.current !== revision || latest.current.offset.current !== offset || latest.current.controlsTop !== controlsTop || (latest.current.topInset?.() ?? 0) !== topInset) {
           scheduleMeasurement();
           return;
         }
         if (!viewportBounds || bounds.size !== rows.length) return;
         if ([viewportBounds, ...bounds.values()].some(row => !Number.isFinite(row.y) || !Number.isFinite(row.height) || row.height <= 0)) return;
-        const top = viewportBounds.y;
-        const bottom = Math.min(top + viewportBounds.height, controlsTop ?? Infinity);
+        const top = viewportBounds.y + topInset;
+        const bottom = Math.min(viewportBounds.y + viewportBounds.height, controlsTop ?? Infinity);
         if (bottom <= top) return;
         const visibleHeight = bottom - top;
         let clearest: { verse: number; visible: number } | undefined;

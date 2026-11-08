@@ -14,6 +14,8 @@ const require = createRequire(import.meta.url);
 const directory = await mkdtemp(path.join(tmpdir(), "koino-community-"));
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const harness = globalThis.__communityNavigation = { os: "android", route: "index", backs: 0, scrollRestores: [] };
+// 90dp dock + the mocked 24dp bottom inset + 24dp of content clearance.
+const expectedTabClearance = 138;
 const baseState = {
   authReady: true, currentUserId: "reader", currentGroupId: "room",
   groups: [{ id: "room", name: "Test community", ownerId: "reader" }],
@@ -48,7 +50,7 @@ const mocks = {
       return React.createElement("FlatList", props,
         props.ListHeaderComponent, ...(props.data ?? []).map((item, index) => props.renderItem({ item, index })));
     });
-    export const StyleSheet = { absoluteFillObject: {} };
+    export const StyleSheet = { absoluteFill: {}, absoluteFillObject: {}, create: styles => styles };
   `,
   "expo-router": `
     import React from "react";
@@ -80,6 +82,7 @@ const mocks = {
   `,
   "react-native-safe-area-context": `export const useSafeAreaInsets = () => ({ top: 24, bottom: 24 });`,
   "@expo/vector-icons": `export const Feather = "Feather", MaterialCommunityIcons = "MaterialCommunityIcons", Ionicons = "Ionicons";`,
+  "@react-navigation/elements": `export const PlatformPressable = "PlatformPressable";`,
   "expo-blur": `export const BlurView = "BlurView";`,
   "@/features/bible-preferences": `
     export { hasRecordedBibleReadingPosition, readerStorageKey } from "./features/bible-preferences";
@@ -2181,9 +2184,9 @@ try {
           assert.ok(receiptFooter);
           assert.equal(entryStyle(receiptFooter).flexShrink, 0, "The entire receipt cannot shrink below its message/control layout");
           assert.equal(entryStyle(receiptCard).flexShrink, 0);
-          assert.equal(entryStyle(receiptFooter).marginBottom, 104, "The complete footer reserves the existing tab bar plus safe-area clearance");
+          assert.equal(entryStyle(receiptFooter).marginBottom, expectedTabClearance, "The complete footer reserves the navigation dock plus safe-area clearance");
           await act(() => receiptFooter.parent.props.onLayout({ nativeEvent: { layout: { height: 600 } } }));
-          assert.ok(entryStyle(receiptScroll).maxHeight >= 44 && entryStyle(receiptScroll).maxHeight <= (600 - 104) / 2, "Only the message is bounded within the measured screen, leaving room for controls and feed");
+          assert.ok(entryStyle(receiptScroll).maxHeight >= 44 && entryStyle(receiptScroll).maxHeight <= (600 - expectedTabClearance) / 2, "Only the message is bounded within the measured screen, leaving room for controls and feed");
           assert.equal(entryStyle(receiptScroll).minWidth, 0);
           assert.equal(receiptScroll.props.contentInsetAdjustmentBehavior, "never");
           assert.ok(!receiptScroll.findAllByType("SecondaryButton").length, "The Recent action is outside the scrollable message body");
@@ -2342,7 +2345,7 @@ try {
     while (publicationViewport && !publicationViewport.props.onLayout) publicationViewport = publicationViewport.parent;
     for (const height of [600, 300, 480]) {
       await act(() => publicationViewport.props.onLayout({ nativeEvent: { layout: { height } } }));
-      assert.ok(entryStyle(largeTextScroll).maxHeight >= 44 && entryStyle(largeTextScroll).maxHeight < height - 104, "The message bound responds to the measured available height");
+      assert.ok(entryStyle(largeTextScroll).maxHeight >= 44 && entryStyle(largeTextScroll).maxHeight < height - expectedTabClearance, "The message bound responds to the measured available height");
       assert.equal(largeTextReceipt.props.accessibilityLabel, `Delat med ${longCommunityName}.`);
       assert.equal(largeTextReceipt.findByType("Text").props.numberOfLines, undefined);
       assert.equal(publicationRecentAction().props.children, "Visa i Senaste");
