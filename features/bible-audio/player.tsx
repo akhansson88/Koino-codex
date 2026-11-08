@@ -60,7 +60,7 @@ function Progress({ chapter, index, passage, palette, active = true, inSheet = f
         setDragging(null);
         if (canSeek && target) void seek(target.seconds);
       }}
-      minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={brandPalette.warmPersika} style={{ height: 44 }} />;
+      minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={brandPalette.warmPersika} style={{ height: compact ? 32 : 44 }} />;
   return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ flex: compact ? 1 : undefined, minWidth: 0, paddingTop: compact ? 0 : 30 }}>
     {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging.seconds / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
       <Text accessibilityLabel={t("audio.verse", { verse: selected.verse })} style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{selected.verse}</Text>
@@ -122,7 +122,7 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
   const play = selection ? () => void audio.playSelectedChapter() : audio.problem === "network" ? audio.retry : audio.toggle;
   const iconButton = (icon: "play" | "pause" | "skip-back" | "skip-forward" | "x", label: string, action: () => void, disabled = false, primary = false, compact = false) => <Pressable
     accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={action}
-    style={{ width: compact ? 44 : primary ? 68 : 48, height: compact ? 44 : primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: primary ? brandPalette.warmPersika : "transparent", opacity: disabled ? 0.35 : 1 }}>
+    style={{ width: compact ? 44 : primary ? 68 : 48, height: compact ? 44 : primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: compact && primary ? palette.surface : primary ? brandPalette.warmPersika : "transparent", borderColor: compact && primary ? palette.line : "transparent", borderWidth: compact && primary ? 1 : 0, opacity: disabled ? 0.35 : 1 }}>
     {primary && audio.loading ? <ActivityIndicator color={brandPalette.deepNavy} /> : <Feather name={icon} size={primary && !compact ? 28 : 22} color={primary ? brandPalette.deepNavy : palette.accent} />}
   </Pressable>;
   const close = () => { void audio.stop(); onClose(); };
@@ -133,19 +133,30 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
     {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), play, audio.loading || audio.commandPending, true)}
     {iconButton("skip-forward", t(topic ? "bible.topics.audio.nextPassage" : "audio.nextChapter"), () => { if (topic) void audio.moveTopicPassage(1); else void audio.moveChapter(1); }, (topic ? topicIndex < 0 || topicIndex >= topicItems.length - 1 : !audio.nextChapter) || audio.loading || audio.commandPending)}
   </View>;
+  const miniVerses = session ? progressPassage
+    ? session.chapter.verses.filter((item) => item.verse >= progressPassage.startVerse && item.verse <= progressPassage.endVerse)
+    : session.chapter.verses : [];
+  const miniIndex = Math.max(0, miniVerses.findIndex((item) => item.verse === session?.chapter.verses[session.index]?.verse));
+  const miniDuration = miniVerses.reduce((sum, item) => sum + item.duration, 0);
+  const miniElapsed = Math.min(miniDuration, miniVerses.slice(0, miniIndex).reduce((sum, item) => sum + item.duration, 0) + audio.position);
   return <>
-    {miniVisible ? <View ref={miniRef} collapsable={false} onLayout={(event) => { onMiniHeightChange?.(event.nativeEvent.layout.height); measureMini(); }} style={{ position: "absolute", bottom, left: 22, right: 22, zIndex: 19, backgroundColor: palette.sheet, borderWidth: 1, borderColor: palette.line, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${topicItem?.reference ?? t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ minWidth: 0, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Text numberOfLines={1} style={{ color: palette.text, fontWeight: "700", flexShrink: 1 }}>{title}</Text><Text numberOfLines={1} style={{ color: palette.muted, flexShrink: 0 }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
-      </Pressable>
+    {miniVisible ? <View ref={miniRef} collapsable={false} onLayout={(event) => { onMiniHeightChange?.(event.nativeEvent.layout.height); measureMini(); }} style={{ position: "absolute", bottom, left: 0, right: 0, zIndex: 19, backgroundColor: palette.sheet, borderTopWidth: 1, borderColor: palette.line, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 2 }}>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
+        {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), play, audio.loading || audio.commandPending, true, true)}
+        <Pressable accessibilityRole="button" accessibilityLabel={`${t("audio.open")}, ${title}, ${topicItem?.reference ?? t("audio.verse", { verse: verse ?? 1 })}`} onPress={onOpen} style={{ flex: 1, minHeight: 44, minWidth: 0, justifyContent: "center" }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 14, fontWeight: "700" }}>{title}</Text>
+          <View style={{ flexDirection: "row", gap: 3, marginTop: 2 }}>
+            <Text style={{ color: palette.muted, fontSize: 12 }}>SRB26 ·</Text>
+            <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12, flexShrink: 1 }}>{t("audio.verse", { verse: verse ?? 1 })}</Text>
+          </View>
+        </Pressable>
+        {session ? <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{time(miniElapsed)} / {time(miniDuration)}</Text> : null}
+        {iconButton("x", t("audio.close"), close, false, false, true)}
+      </View>
       {topicItem ? <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12 }}>{topicItem.reference} · {t("bible.topics.audio.position", { current: topicIndex + 1, count: topicItems.length })}</Text> : null}
       {topic?.phase === "gap" ? <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{t("bible.topics.audio.gap", { seconds: Math.max(0, Math.ceil(topic.gapRemainingSeconds ?? 0)) })}</Text> : null}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       {session ? <Progress key={progressKey} chapter={session.chapter} index={session.index} passage={progressPassage} palette={palette} active={!visible} compact />
-        : <View style={{ flex: 1 }}><Slider disabled accessibilityLabel={t("audio.progress")} minimumValue={0} maximumValue={1} value={0} minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={palette.muted} style={{ height: 44 }} /></View>}
-      {iconButton(audio.playWhenReady ? "pause" : "play", t(audio.playWhenReady ? "audio.pause" : "audio.play"), play, audio.loading || audio.commandPending, true, true)}
-      {iconButton("x", t("audio.close"), close, false, false, true)}
-      </View>
+        : <View><Slider disabled accessibilityLabel={t("audio.progress")} minimumValue={0} maximumValue={1} value={0} minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={palette.muted} style={{ height: 32 }} /></View>}
       {audio.problem ? <Text accessibilityLiveRegion="polite" style={{ color: palette.muted }}>{t(audio.problem === "network" ? "audio.network" : "audio.unavailable")}</Text> : null}
       {!follow || !matching ? <Pressable accessibilityRole="button" accessibilityLabel={t("audio.follow")} accessibilityState={{ selected: false }} onPress={onFollow}
         style={{ marginTop: 4, minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>

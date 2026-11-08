@@ -93,9 +93,11 @@ import {
   highlightTime,
   verseRangesOverlap,
   chapterLabel,
+  compactChapterLabel,
   bibleVersionShortLabel,
 } from "@/features/bible-reader/verse-helpers";
 import { BibleReaderHeader } from "@/features/bible-reader/header";
+import { BibleReaderToolsSheet } from "@/features/bible-reader/tools-sheet";
 import { BiblePlanReaderPanel } from "@/features/bible-reader/plan-panel";
 import { BibleText } from "@/features/bible-reader/chapter-text";
 import { useVisibleVerseSelection } from "@/features/bible-reader/use-visible-verse";
@@ -190,6 +192,7 @@ export function BibleScreen() {
   const [pickerInitialStage, setPickerInitialStage] = useState<"home" | "myPlaces" | "search">("home");
   const [versionPickerVisible, setVersionPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [moreVisible, setMoreVisible] = useState(false);
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [reflectionText, setReflectionText] = useState("");
@@ -283,6 +286,7 @@ export function BibleScreen() {
     viewport: readerViewportRef,
     rows: verseRowsRef,
     offset: readerScrollOffsetRef,
+    controlsTop: audioMiniTop,
     onSelect: (verse) => {
       setAudioVisible(false);
       setFollowedAudioPassageKey(undefined);
@@ -1396,6 +1400,7 @@ export function BibleScreen() {
     onOpenSearch: openSearch,
     onOpenMyPlaces: () => { setFollowAudio(false); audioFollowScroll.current.cancel(); setPickerInitialStage("myPlaces"); setPickerVisible(true); },
     onOpenSettings: () => setSettingsVisible(true),
+    onOpenMore: () => setMoreVisible(true),
     onOpenVersionPicker: () => setVersionPickerVisible(true),
   }), [travelHistory, openSearch]);
 
@@ -1412,10 +1417,11 @@ export function BibleScreen() {
         onOpenAudio={selectVisibleAudioVerse}
         palette={readerPalette}
         title={chapterLabel(position, bookLanguage)}
+        compactTitle={compactChapterLabel(position, bookLanguage)}
         chapterIndex={chapterIndex(position)}
         chapterCursor={chapterCursor}
-        previousChapterTitle={previousChapter ? chapterLabel(previousChapter, bookLanguage) : undefined}
-        nextChapterTitle={nextChapter ? chapterLabel(nextChapter, bookLanguage) : undefined}
+        previousChapterTitle={previousChapter ? compactChapterLabel(previousChapter, bookLanguage) : undefined}
+        nextChapterTitle={nextChapter ? compactChapterLabel(nextChapter, bookLanguage) : undefined}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={insets.top}
       />
@@ -1429,7 +1435,7 @@ export function BibleScreen() {
         layoutKey={`${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}`}
         navigationRevision={navigationRevision}
         reducedMotion={reducedMotion}
-        enabled={preferencesReady && isAudioPageFocused && !pickerVisible && !searchVisible && !settingsVisible && !versionPickerVisible && !selectedVersePosition && !selectedFootnote && !crossReferencePosition && !scriptureComposerVisible}
+        enabled={preferencesReady && isAudioPageFocused && !pickerVisible && !searchVisible && !settingsVisible && !moreVisible && !versionPickerVisible && !selectedVersePosition && !selectedFootnote && !crossReferencePosition && !scriptureComposerVisible}
         backgroundColor={readerPalette.background}
         viewportRef={readerViewportRef}
         onLayout={() => {
@@ -1508,7 +1514,7 @@ export function BibleScreen() {
         onMiniTopChange={setAudioMiniTop}
         onChooseTranslation={() => setBibleVersionId("reformationsbibeln2026")}
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
-        bottom={floatingControlsBottom + activeFloatingControlsHeight + 12} follow={activelyFollowingAudio}
+        bottom={tabBarHeight(insets.bottom) + activeFloatingControlsHeight} follow={activelyFollowingAudio}
         onFollow={() => {
           if (audioChapter && !boundedAudioPending) {
             if (audio.session?.topic) closeSearch();
@@ -1590,6 +1596,18 @@ export function BibleScreen() {
         palette={readerPalette}
         showVerseNumbers={showVerseNumbers}
         visible={settingsVisible}
+      />
+      <BibleReaderToolsSheet
+        canGoHistoryBack={history.index > 0}
+        canGoHistoryForward={history.index < history.entries.length - 1}
+        onClose={() => setMoreVisible(false)}
+        onHistoryBack={headerActions.onHistoryBack}
+        onHistoryForward={headerActions.onHistoryForward}
+        onOpenMyPlaces={headerActions.onOpenMyPlaces}
+        onOpenSearch={headerActions.onOpenSearch}
+        onOpenSettings={headerActions.onOpenSettings}
+        palette={readerPalette}
+        visible={moreVisible}
       />
       <BibleVersionSheet
         bibleVersionId={bibleVersionId}

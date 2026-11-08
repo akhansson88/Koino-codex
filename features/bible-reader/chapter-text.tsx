@@ -419,8 +419,21 @@ const BibleVerseRow = memo(function BibleVerseRow({
   const persistedHighlightStyle = persistedHighlightColor
     ? { backgroundColor: highlightColorWithOpacity(persistedHighlightColor, 0.16) }
     : undefined;
+  // Keep the outer row for focus and scroll offsets, but measure only the verse
+  // content so subtitles and plan markers cannot make it look visible to audio.
+  const rowRef = useRef<View | null>(null);
+  const textRef = useRef<View | null>(null);
+  const measurableRef = useRef<{ measureInWindow: View["measureInWindow"]; focusTarget: View | null }>({
+    focusTarget: null,
+    measureInWindow: callback => textRef.current?.measureInWindow(callback),
+  });
   const handleLayout = useCallback((event: LayoutChangeEvent) => onRowLayout(item.verse, event.nativeEvent.layout.y), [item.verse, onRowLayout]);
-  const handleRef = useCallback((node: MeasurableView | null) => onVerseRef(item.verse, node), [item.verse, onVerseRef]);
+  const publishRef = useCallback(() => {
+    measurableRef.current.focusTarget = rowRef.current;
+    onVerseRef(item.verse, rowRef.current && textRef.current ? measurableRef.current : null);
+  }, [item.verse, onVerseRef]);
+  const handleRef = useCallback((node: View | null) => { rowRef.current = node; publishRef(); }, [publishRef]);
+  const handleTextRef = useCallback((node: View | null) => { textRef.current = node; publishRef(); }, [publishRef]);
   return (
   <View
     key={item.reference}
@@ -469,7 +482,7 @@ const BibleVerseRow = memo(function BibleVerseRow({
     {isFirstVerse ? (
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 10 }}>
         <BibleChapterNumber number={chapterNumber} color={palette.accent} />
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
+        <View collapsable={false} ref={handleTextRef} style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}>
           {showVerseNumbers ? <BibleVerseNumber verse={item.verse} style={verseNumberStyle} highlightStyle={persistedHighlightStyle} /> : null}
           <BibleVerseText
             footnotes={item.footnotes}
@@ -483,7 +496,7 @@ const BibleVerseRow = memo(function BibleVerseRow({
         </View>
       </View>
     ) : (
-      <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+      <View collapsable={false} ref={handleTextRef} style={{ flexDirection: "row", alignItems: "flex-start" }}>
         {showVerseNumbers ? <BibleVerseNumber verse={item.verse} style={verseNumberStyle} highlightStyle={persistedHighlightStyle} /> : null}
         <BibleVerseText
           footnotes={item.footnotes}

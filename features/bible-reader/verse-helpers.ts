@@ -73,6 +73,30 @@ export function chapterLabel(position: BiblePosition, language: AppLanguage = "e
   return `${displayBibleBookName(position.book, language)} ${position.chapter}`;
 }
 
+const compactSwedishBookNames: Record<string, string> = {
+  Genesis: "1 Mos", Exodus: "2 Mos", Leviticus: "3 Mos", Numbers: "4 Mos", Deuteronomy: "5 Mos",
+  "1 Samuel": "1 Sam", "2 Samuel": "2 Sam", "1 Kings": "1 Kung", "2 Kings": "2 Kung",
+  "1 Chronicles": "1 Krön", "2 Chronicles": "2 Krön", Proverbs: "Ords",
+  Matthew: "Matt", Mark: "Mark", Luke: "Luk", John: "Joh", Acts: "Apg", Romans: "Rom",
+  "1 Corinthians": "1 Kor", "2 Corinthians": "2 Kor", Galatians: "Gal", Ephesians: "Ef",
+  Philippians: "Fil", Colossians: "Kol", "1 Thessalonians": "1 Thess", "2 Thessalonians": "2 Thess",
+  "1 Timothy": "1 Tim", "2 Timothy": "2 Tim", Philemon: "Filem", Hebrews: "Heb", James: "Jak",
+  "1 Peter": "1 Pet", "2 Peter": "2 Pet", "1 John": "1 Joh", "2 John": "2 Joh", "3 John": "3 Joh",
+  Revelation: "Upp",
+};
+
+const compactEnglishBookNames: Record<string, string> = {
+  Deuteronomy: "Deut", "1 Chronicles": "1 Chr", "2 Chronicles": "2 Chr",
+  "Solomon's Song": "Song", Matthew: "Matt", "1 Corinthians": "1 Cor", "2 Corinthians": "2 Cor",
+  Philippians: "Phil", "1 Thessalonians": "1 Thess", "2 Thessalonians": "2 Thess",
+  "1 Timothy": "1 Tim", "2 Timothy": "2 Tim", Revelation: "Rev",
+};
+
+export function compactChapterLabel(position: BiblePosition, language: AppLanguage = "en") {
+  const labels = language === "sv" ? compactSwedishBookNames : compactEnglishBookNames;
+  return `${labels[position.book] ?? displayBibleBookName(position.book, language)} ${position.chapter}`;
+}
+
 export function biblePositionFromVerse(verse?: Pick<BibleVerse, "book" | "chapter" | "reference" | "startVerse">, versionId: BibleVersionId = "kjv") {
   if (!verse) return undefined;
   if (verse.book && typeof verse.chapter === "number" && typeof verse.startVerse === "number") {

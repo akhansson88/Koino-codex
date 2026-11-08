@@ -12,11 +12,11 @@ function ChapterTitle({ title, index, cursor, previous, next, color }: {
   const currentStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - Math.abs(cursor.value - index) * 2) }), [index]);
   const previousStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (index - cursor.value) * 2 - 1)) }), [index]);
   const nextStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (cursor.value - index) * 2 - 1)) }), [index]);
-  const textStyle = { color, fontSize: 15, fontWeight: "900" as const };
+  const textStyle = { color, fontSize: 18, fontWeight: "800" as const };
   return <View style={{ flex: 1, minWidth: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-    <Animated.Text numberOfLines={1} style={[textStyle, currentStyle]}>{title}</Animated.Text>
-    <Animated.Text numberOfLines={1} style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, previousStyle]}>{previous}</Animated.Text>
-    <Animated.Text numberOfLines={1} style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, nextStyle]}>{next}</Animated.Text>
+    <Animated.Text numberOfLines={1} ellipsizeMode="middle" style={[textStyle, currentStyle]}>{title}</Animated.Text>
+    <Animated.Text numberOfLines={1} ellipsizeMode="middle" style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, previousStyle]}>{previous}</Animated.Text>
+    <Animated.Text numberOfLines={1} ellipsizeMode="middle" style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, nextStyle]}>{next}</Animated.Text>
   </View>;
 }
 
@@ -63,20 +63,15 @@ export function ReaderCircleButton({
 
 export const BibleReaderHeader = memo(function BibleReaderHeader({
   canGoBack,
-  canGoHistoryBack,
-  canGoHistoryForward,
   onBack,
-  onHistoryBack,
-  onHistoryForward,
   onOpenPicker,
-  onOpenSearch,
-  onOpenSettings,
   onOpenAudio,
   audioAvailable,
-  onOpenMyPlaces,
+  onOpenMore,
   onOpenVersionPicker,
   palette,
   title,
+  compactTitle,
   chapterIndex,
   chapterCursor,
   previousChapterTitle,
@@ -96,9 +91,11 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   onOpenAudio: () => void;
   audioAvailable: boolean;
   onOpenMyPlaces: () => void;
+  onOpenMore: () => void;
   onOpenVersionPicker: () => void;
   palette: ReaderPalette;
   title: string;
+  compactTitle?: string;
   chapterIndex?: number;
   chapterCursor?: SharedValue<number>;
   previousChapterTitle?: string;
@@ -111,14 +108,16 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
     <View
       style={{
         backgroundColor: palette.background,
-        paddingBottom: 10,
-        paddingHorizontal: 12,
+        borderBottomColor: palette.line,
+        borderBottomWidth: 1,
+        paddingBottom: 8,
+        paddingHorizontal: 14,
         paddingTop: topInset + 2,
         position: "relative",
         zIndex: 20,
       }}
     >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 5, minHeight: 52 }}>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 6, minHeight: 52 }}>
         {canGoBack ? <ReaderCircleButton accessibilityLabel={t("bible.accessibility.back")} icon="arrow-left" onPress={onBack} palette={palette} /> : null}
 
         <Pressable
@@ -126,13 +125,13 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
           accessibilityRole="button"
           hitSlop={10}
           onPress={onOpenPicker}
-          style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flex: 1, gap: 3, minWidth: 0, minHeight: 48, opacity: pressed ? 0.65 : 1 })}
+          style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flex: 1, gap: 4, minWidth: 0, minHeight: 48, opacity: pressed ? 0.65 : 1 })}
         >
-          {chapterCursor && chapterIndex !== undefined ? <ChapterTitle title={title} index={chapterIndex} cursor={chapterCursor}
-            previous={previousChapterTitle} next={nextChapterTitle} color={palette.text} /> : <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>
-            {title}
+          {chapterCursor && chapterIndex !== undefined ? <ChapterTitle title={compactTitle ?? title} index={chapterIndex} cursor={chapterCursor}
+            previous={previousChapterTitle} next={nextChapterTitle} color={palette.text} /> : <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: palette.text, fontSize: 18, fontWeight: "800", flexShrink: 1 }}>
+            {compactTitle ?? title}
           </Text>}
-          <Feather name="chevron-down" size={14} color={palette.muted} />
+          <Feather name="chevron-down" size={17} color={palette.muted} />
         </Pressable>
 
         <Pressable
@@ -148,34 +147,19 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
             borderWidth: 1,
             flexDirection: "row",
             gap: 4,
-            height: 38,
-            maxWidth: 82,
-            paddingHorizontal: 8,
+            height: 42,
+            maxWidth: 80,
+            paddingHorizontal: 9,
           }}
         >
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 12, fontWeight: "900" }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 13, fontWeight: "800" }}>
             {translationLabel}
           </Text>
           <Feather name="chevron-down" size={13} color={palette.muted} />
         </Pressable>
 
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <ReaderCircleButton accessibilityLabel={t("bible.accessibility.search")} icon="search" onPress={onOpenSearch} palette={palette} />
-          <ReaderCircleButton accessibilityLabel={t("bible.accessibility.readingSettings")} onPress={onOpenSettings} palette={palette} text="Aa" />
-        </View>
-      </View>
-      <View style={{ alignItems: "center", flexDirection: "row", marginTop: 2 }}>
-        <Pressable accessibilityLabel={t("bible.accessibility.historyBack")} accessibilityRole="button" accessibilityState={{ disabled: !canGoHistoryBack }} disabled={!canGoHistoryBack} onPress={onHistoryBack} style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
-          <Feather name="chevron-left" size={20} color={palette.muted} style={{ opacity: canGoHistoryBack ? 1 : 0.42 }} />
-        </Pressable>
-        <Pressable accessibilityLabel={t("bible.accessibility.historyForward")} accessibilityRole="button" accessibilityState={{ disabled: !canGoHistoryForward }} disabled={!canGoHistoryForward} onPress={onHistoryForward} style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}>
-          <Feather name="chevron-right" size={20} color={palette.muted} style={{ opacity: canGoHistoryForward ? 1 : 0.42 }} />
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <ReaderCircleButton accessibilityLabel={t("bible.navigator.myPlaces")} icon="bookmark" onPress={onOpenMyPlaces} palette={palette} />
-          {audioAvailable ? <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} /> : null}
-        </View>
+        {audioAvailable ? <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} /> : null}
+        <ReaderCircleButton accessibilityLabel={t("bible.accessibility.more")} icon="more-horizontal" onPress={onOpenMore} palette={palette} />
       </View>
     </View>
   );

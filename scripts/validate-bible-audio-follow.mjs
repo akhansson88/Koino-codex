@@ -159,6 +159,7 @@ const mocks = {
 const childBoundaries = {
   "@/features/bible-audio/player": ["BibleAudioPlayer"],
   "@/features/bible-reader/header": ["BibleReaderHeader", "ReaderCircleButton"],
+  "@/features/bible-reader/tools-sheet": ["BibleReaderToolsSheet"],
   "@/features/bible-reader/plan-panel": ["BiblePlanReaderPanel", "BiblePlanInlineMarker"],
   "@/features/bible-reader/chapter-text": ["BibleText"],
   "@/features/bible-reader/reading-controls": ["BibleBottomReadingControls"],
@@ -474,7 +475,7 @@ try {
   await unmount();
 
   // Native geometry, rather than the reading-position cache or scroll target,
-  // determines the selection. Rows are deliberately different heights here.
+  // determines the selection. The rows here have gaps between them.
   await mount();
   await act(async () => { props("BibleVersionSheet").onChangeBibleVersion("reformationsbibeln2026"); });
   await flushFrames();
@@ -494,7 +495,8 @@ try {
   assert.equal(measuredScrolls.at(-1).y, 2000, "moving the content origin refreshes cached offsets without row layout events");
   await act(async () => { renderer.root.findByProps({ testID: "bible-reader-content" }).props.onLayout({ nativeEvent: { layout: { y: 0 } } }); });
   for (const [y, expected, message] of [
-    [425, 4, "partially visible top row"],
+    [415, 4, "mostly visible top verse remains selected"],
+    [425, 5, "a clipped top verse yields to the next clear verse"],
     [460, 5, "gap after a fully scrolled-off row"],
     [480, 5, "exact row boundary"],
     [0, 1, "chapter heading"],
@@ -509,6 +511,26 @@ try {
     assert.equal(audio.snapshot.chapterSelection.verse, expected, message);
     assert.equal(audio.snapshot.playWhenReady, false, "headphones stages paused audio");
   }
+  await act(async () => {
+    layoutVerses(0, 1000, 900);
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 1100 } } });
+    props("BibleReaderHeader").onOpenAudio();
+  });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 2, "a long verse filling the reading area is clear enough to select");
+  await act(async () => {
+    layoutVerses(80, 100, 80);
+    props("BibleAudioPlayer").onMiniTopChange(180);
+    scrollView().onScrollBeginDrag();
+    scrollView().onScroll({ nativeEvent: { contentOffset: { y: 425 } } });
+  });
+  await flushFrames();
+  await act(async () => { props("BibleReaderHeader").onOpenAudio(); });
+  await flushFrames();
+  assert.equal(audio.snapshot.chapterSelection.verse, 4, "when the player obscures the next verse, the most visible text wins");
+  await act(async () => { props("BibleAudioPlayer").onMiniTopChange(undefined); });
+  await flushFrames();
   // Leave a pending scroll-to-1 target, then report a different visible row.
   await act(async () => {
     props("BibleDrawer").onSelect({ book: "Philippians", chapter: 4, verse: 1 });
@@ -538,7 +560,7 @@ try {
     beforeFontChange.forEach(deliver => deliver());
   });
   await flushFrames();
-  assert.equal(audio.snapshot.chapterSelection.verse, 5, "font reflow discards old row measurements");
+  assert.equal(audio.snapshot.chapterSelection.verse, 6, "font reflow discards old row measurements before choosing a clear verse");
 
   // Scroll changes while native callbacks are in flight must be remeasured.
   deferredMeasurements = [];
@@ -1083,15 +1105,30 @@ try {
 
   let verseRowNumberStyle;
   const reportedOffsets = [];
+  const rowRefs = new Map();
+  const rowNative = { measureInWindow: done => done(0, 100, 380, 300) };
+  const verseTextNative = { measureInWindow: done => done(0, 180, 380, 48) };
   const textProps = {
-    chapterHighlightByVerse: {}, onVerseLayout: (...args) => reportedOffsets.push(args), onVerseRef() {},
-    palette: { accent: "accent", peach: "peach" }, planMarkers: [], position: { book: "John", chapter: 1, verse: 1 },
+    chapterHighlightByVerse: {}, onVerseLayout: (...args) => reportedOffsets.push(args), onVerseRef: (verse, node) => rowRefs.set(verse, node),
+    palette: { accent: "accent", peach: "peach" }, planMarkers: [{ kind: "start", label: "Day", planId: "plan", verse: 2 }], position: { book: "John", chapter: 1, verse: 1 },
     readerLineHeight: 24, readerTextStyle: { fontSize: 18, lineHeight: 24 }, selectedVerseNumbers: [], showVerseNumbers: true,
-    subtitles: [], verses: [{ verse: 1, reference: "John 1:1", text: "Fixture", footnotes: [] }, { verse: 2, reference: "John 1:2", text: "Another verse", footnotes: [] }],
+    subtitles: [{ beforeVerse: 2, text: "A subtitle" }], verses: [{ verse: 1, reference: "John 1:1", text: "Fixture", footnotes: [] }, { verse: 2, reference: "John 1:2", text: "Another verse", footnotes: [] }],
   };
   let text;
   try {
-    await act(async () => { text = create(React.createElement(BibleText, { ...textProps, key: "John:1" })); });
+    await act(async () => { text = create(React.createElement(BibleText, { ...textProps, key: "John:1" }), {
+      createNodeMock: element => {
+        if (element.type !== "View") return null;
+        const style = flattenStyle(element.props.style);
+        if (style.paddingLeft === 12 && style.gap === 5) return rowNative;
+        if (element.props.collapsable === false && style.flexDirection === "row") return verseTextNative;
+        return null;
+      },
+    }); });
+    let measuredRowVerse;
+    rowRefs.get(2).measureInWindow((_x, y, _width, height) => { measuredRowVerse = { y, height }; });
+    assert.deepEqual(measuredRowVerse, { y: 180, height: 48 }, "row verse measurement excludes its subtitle and plan marker");
+    assert.equal(rowRefs.get(2).focusTarget, rowNative, "row verse retains its native focus target");
     verseRowNumberStyle = flattenStyle(numberText(text.root).props.style);
     const firstPressableProps = text.root.findAllByType('NativePressable')[0].props;
     await act(async () => { text.update(React.createElement(BibleText, { ...textProps, key: 'John:1' })); });
@@ -1129,7 +1166,7 @@ try {
   }
 
   const paragraphOffsets = [], paragraphRefs = new Map(), interactions = [];
-  const paragraphProps = { ...textProps, flowingParagraphText: true,
+  const paragraphProps = { ...textProps, subtitles: [], planMarkers: [], flowingParagraphText: true,
     palette: { peach: "peach", accent: "accent" },
     selectedVerseNumbers: [2], chapterHighlightByVerse: { 1: "#FF0000" }, spokenVerse: 2,
     verses: [{ ...textProps.verses[0], text: "Hello*", footnotes: [{ marker: "*", text: "Note" }] }, textProps.verses[1]],

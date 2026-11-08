@@ -12,6 +12,7 @@ type Reader = {
   viewport: RefObject<View | null>;
   rows: RefObject<Record<number, MeasurableView | null>>;
   offset: RefObject<number>;
+  controlsTop?: number;
   onSelect: (verse: number) => void;
 };
 
@@ -45,27 +46,39 @@ export function useVisibleVerseSelection(reader: Reader) {
       measurement.current = token;
       const revision = layoutRevision.current;
       const offset = current.offset.current;
+      const controlsTop = current.controlsTop;
       const bounds = new Map<number, Bounds>();
       let viewportBounds: Bounds | undefined;
       const finish = () => {
         if (measurement.current !== token || pending.current !== request) return;
         if (latest.current.chapterKey !== request.chapterKey || !latest.current.enabled || !latest.current.ready) return;
-        if (layoutRevision.current !== revision || latest.current.offset.current !== offset) {
+        if (layoutRevision.current !== revision || latest.current.offset.current !== offset || latest.current.controlsTop !== controlsTop) {
           scheduleMeasurement();
           return;
         }
         if (!viewportBounds || bounds.size !== rows.length) return;
         if ([viewportBounds, ...bounds.values()].some(row => !Number.isFinite(row.y) || !Number.isFinite(row.height) || row.height <= 0)) return;
-        // A clipped row still counts. In a gap, choose the next row; below all
-        // rows, retain the chapter's final verse rather than falling back to 1.
         const top = viewportBounds.y;
-        const selected = rows.find(row => {
+        const bottom = Math.min(top + viewportBounds.height, controlsTop ?? Infinity);
+        if (bottom <= top) return;
+        const visibleHeight = bottom - top;
+        let clearest: { verse: number; visible: number } | undefined;
+        let selected: number | undefined;
+        for (const row of rows) {
           const measured = bounds.get(row.verse)!;
-          return measured.y + measured.height > top;
-        }) ?? rows[rows.length - 1];
+          const visible = Math.max(0, Math.min(measured.y + measured.height, bottom) - Math.max(measured.y, top));
+          if (visible >= Math.min(measured.height, visibleHeight) / 2) {
+            selected = row.verse;
+            break;
+          }
+          if (visible > 0 && (!clearest || visible > clearest.visible)) clearest = { verse: row.verse, visible };
+        }
+        // If no verse is clear, use the one with the most text showing. In a
+        // heading or a gap, use the next verse; below the chapter, use its last.
+        selected ??= clearest?.verse ?? rows.find(row => bounds.get(row.verse)!.y >= top)?.verse ?? rows[rows.length - 1].verse;
         pending.current = undefined;
         measurement.current = undefined;
-        latest.current.onSelect(selected.verse);
+        latest.current.onSelect(selected);
       };
       viewport.measureInWindow((_x, y, _width, height) => {
         viewportBounds = { y, height };
@@ -89,7 +102,7 @@ export function useVisibleVerseSelection(reader: Reader) {
     latest.current = reader;
     retry();
   });
-  useLayoutEffect(() => { layoutChanged(); }, [reader.layoutKey, layoutChanged]);
+  useLayoutEffect(() => { layoutChanged(); }, [reader.layoutKey, reader.controlsTop, layoutChanged]);
   useLayoutEffect(() => cancel, [reader.chapterKey, reader.enabled, cancel]);
 
   const select = useCallback(() => {
