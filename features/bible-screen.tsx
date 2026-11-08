@@ -381,11 +381,12 @@ export function BibleScreen() {
   const contentWidth = width >= 780 ? 720 : undefined;
   const selectedVerseBarVisible = selectedVerseRanges.length > 0;
   const chapterControlsVisible = !selectedVerseBarVisible && !(hasAudioSelection && activelyFollowingAudio);
-  const floatingControlsBottom = tabBarHeight(insets.bottom) + 16;
+  const audioMiniBottom = tabBarHeight(insets.bottom);
+  const floatingControlsBottom = audioMiniBottom + (hasAudioSelection ? audioMiniHeight : 0) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
     ? selectionControlsHeight
     : chapterControlsVisible ? chapterControlsHeight : 0;
-  const readerBottomPadding = (hasAudioSelection ? audioMiniHeight + 12 : 0) + Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
+  const readerBottomPadding = Math.max(insets.bottom + 120, floatingControlsBottom + activeFloatingControlsHeight + 28);
   const readerToastBottom = floatingControlsBottom + activeFloatingControlsHeight + 14;
   const readerCanGoBack = canReturnToSearch || navigation.canGoBack();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -1514,7 +1515,7 @@ export function BibleScreen() {
         onMiniTopChange={setAudioMiniTop}
         onChooseTranslation={() => setBibleVersionId("reformationsbibeln2026")}
         palette={readerPalette} book={position.book} chapter={position.chapter} version={bibleVersionId}
-        bottom={tabBarHeight(insets.bottom) + activeFloatingControlsHeight} follow={activelyFollowingAudio}
+        bottom={audioMiniBottom} follow={activelyFollowingAudio}
         onFollow={() => {
           if (audioChapter && !boundedAudioPending) {
             if (audio.session?.topic) closeSearch();
