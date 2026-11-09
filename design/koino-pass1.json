@@ -1,0 +1,100 @@
+[
+  {
+    "command": "file.new",
+    "params": {}
+  },
+  {
+    "command": "file.rename",
+    "params": {
+      "name": "Koino Onboarding"
+    }
+  },
+  {
+    "command": "page.rename",
+    "params": {
+      "name": "Onboarding"
+    }
+  },
+  {
+    "command": "page.setBackground",
+    "params": {
+      "color": "#F1EEE7"
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "x": -60,
+      "y": -260,
+      "width": 1824,
+      "height": 1240,
+      "name": "Board · background",
+      "index": 0,
+      "select": false,
+      "props": {
+        "fill": "#F1EEE7"
+      }
+    }
+  },
+  {
+    "command": "frame.create",
+    "params": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 844,
+      "name": "01 · Välkommen",
+      "select": false,
+      "props": {
+        "fill": "#FAF8F4",
+        "clip": true
+      }
+    }
+  },
+  {
+    "command": "frame.create",
+    "params": {
+      "x": 438,
+      "y": 0,
+      "width": 390,
+      "height": 844,
+      "name": "02 · Bibeln",
+      "select": false,
+      "props": {
+        "fill": "#FAF8F4",
+        "clip": true
+      }
+    }
+  },
+  {
+    "command": "frame.create",
+    "params": {
+      "x": 876,
+      "y": 0,
+      "width": 390,
+      "height": 844,
+      "name": "03 · Gemenskap",
+      "select": false,
+      "props": {
+        "fill": "#FAF8F4",
+        "clip": true
+      }
+    }
+  },
+  {
+    "command": "frame.create",
+    "params": {
+      "x": 1314,
+      "y": 0,
+      "width": 390,
+      "height": 844,
+      "name": "04 · Din rytm",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "clip": true
+      }
+    }
+  }
+]

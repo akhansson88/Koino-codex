@@ -1,0 +1,6 @@
+[
+  {"command":"node.create","params":{"type":"ellipse","x":55,"y":55,"width":280,"height":280,"parent":2,"name":"Glow","props":{"fills":[{"type":"radialGradient","stops":["#FFC79A55","#F3ACC833","#FAF8F400"],"from":[0.5,0.5],"to":[1,1]}]}}},
+  {"command":"image.place","params":{"path":"C:\\Users\\alexh\\Downloads\\koino-codex\\koino-logo.png","x":100,"y":100,"width":190,"height":190,"parent":2,"name":"KOINO logo"}},
+  {"command":"node.create","params":{"type":"vector","x":0,"y":300,"width":390,"height":40,"parent":2,"name":"Wave","path":"M0 20 C 40 8 70 8 110 20 S 190 34 230 20 S 310 6 390 20","props":{"stroke":"#FFC79A","strokeWeight":2,"strokeCap":"round","fill":"none"}}},
+  {"command":"node.create","params":{"type":"ellipse","x":55,"y":400,"width":280,"height":280,"parent":2,"name":"Glow2","props":{"fills":[{"type":"radialGradient","stops":["#C8BCE780","#FAF8F400"],"from":[0.5,0.5],"to":[1,1]}]}}}
+]

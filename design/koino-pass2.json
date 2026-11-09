@@ -1,0 +1,4290 @@
+[
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 3,
+      "x": 96,
+      "y": 36,
+      "width": 332,
+      "height": 332,
+      "name": "Hero · sunrise halo",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#FFC79A70",
+              "#F3ACC83D",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.48,
+              0.45
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 3,
+      "x": 192,
+      "y": 156,
+      "width": 214,
+      "height": 214,
+      "name": "Hero · lavender breath",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#C8BCE740",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.5,
+              0.5
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "image.place",
+    "params": {
+      "path": "C:\\Users\\alexh\\Downloads\\koino-codex\\koino-logo.png",
+      "parent": 3,
+      "x": 170,
+      "y": 104,
+      "width": 190,
+      "height": 190,
+      "name": "Hero · KOINO mark"
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": -12,
+      "y": 296,
+      "width": 414,
+      "height": 26,
+      "name": "Horizon wave · peach",
+      "path": "M0 12 C 38 2 72 2 108 12 S 180 22 216 12 S 288 2 324 12 S 388 20 410 12",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFC79A",
+        "strokeWeight": 2,
+        "strokeCap": "round",
+        "opacity": 0.62
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": -12,
+      "y": 312,
+      "width": 414,
+      "height": 26,
+      "name": "Horizon wave · blush",
+      "path": "M0 12 C 38 2 72 2 108 12 S 180 22 216 12 S 288 2 324 12 S 388 20 410 12",
+      "props": {
+        "fill": "none",
+        "stroke": "#F3ACC8",
+        "strokeWeight": 2,
+        "strokeCap": "round",
+        "opacity": 0.46
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": -12,
+      "y": 328,
+      "width": 414,
+      "height": 26,
+      "name": "Horizon wave · lavender",
+      "path": "M0 12 C 38 2 72 2 108 12 S 180 22 216 12 S 288 2 324 12 S 388 20 410 12",
+      "props": {
+        "fill": "none",
+        "stroke": "#C8BCE7",
+        "strokeWeight": 2,
+        "strokeCap": "round",
+        "opacity": 0.38
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": -12,
+      "y": 344,
+      "width": 414,
+      "height": 26,
+      "name": "Horizon wave · cyan",
+      "path": "M0 12 C 38 2 72 2 108 12 S 180 22 216 12 S 288 2 324 12 S 388 20 410 12",
+      "props": {
+        "fill": "none",
+        "stroke": "#8EDCDA",
+        "strokeWeight": 2,
+        "strokeCap": "round",
+        "opacity": 0.28
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "KOINO",
+      "x": 32,
+      "y": 50,
+      "parent": 3,
+      "name": "Wordmark · KOINO",
+      "width": 120,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 12,
+        "lineHeight": 18,
+        "letterSpacing": 3.1,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 3,
+      "x": 100,
+      "y": 59,
+      "width": 5,
+      "height": 5,
+      "name": "Wordmark · full stop",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 318,
+      "y": 48,
+      "width": 40,
+      "height": 30,
+      "name": "Language · pill",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFCCC",
+        "cornerRadius": 15,
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "SV",
+      "x": 318,
+      "y": 55,
+      "parent": 3,
+      "name": "Language · SV",
+      "width": 40,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 1,
+        "fill": "#6F6B64",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ett stilla rum",
+      "x": 32,
+      "y": 390,
+      "parent": 3,
+      "name": "01 · Headline line 1",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "för tro och liv.",
+      "x": 32,
+      "y": 436,
+      "parent": 3,
+      "name": "01 · Headline line 2",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": 224,
+      "y": 474,
+      "width": 62,
+      "height": 12,
+      "name": "01 · Hand-drawn underline",
+      "path": "M2 8 C 18 3 40 2 60 6",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFC79A",
+        "strokeWeight": 4.5,
+        "strokeCap": "round",
+        "opacity": 0.9
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Bibel, bön och gemenskap —\npå din tid, i ditt tempo.",
+      "x": 32,
+      "y": 512,
+      "parent": 3,
+      "name": "01 · Body",
+      "width": 310,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 15.5,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 164.5,
+      "y": 596,
+      "width": 22,
+      "height": 6,
+      "name": "Pager dot 1",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 1
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 193.5,
+      "y": 596,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 2",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 206.5,
+      "y": 596,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 3",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 219.5,
+      "y": 596,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 4",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 32,
+      "y": 632,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 01 · pill",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 29,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B122024",
+            "offset": [
+              0,
+              16
+            ],
+            "radius": 36,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Kom igång",
+      "x": 58,
+      "y": 650,
+      "parent": 3,
+      "name": "CTA 01 · label",
+      "width": 226,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 15,
+        "lineHeight": 22,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 3,
+      "x": 310,
+      "y": 643,
+      "width": 36,
+      "height": 36,
+      "name": "CTA 01 · arrow bg",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF16"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 3,
+      "x": 319,
+      "y": 652,
+      "width": 18,
+      "height": 18,
+      "name": "CTA 01 · arrow",
+      "path": "M4 9h10 M10 4l5 5-5 5",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFFFFC",
+        "strokeWeight": 1.8,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 3,
+      "x": 32,
+      "y": 632,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 01",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Jag har redan ett konto",
+      "x": 32,
+      "y": 708,
+      "parent": 3,
+      "name": "CTAlink 01 · Logga in",
+      "width": 326,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 13.5,
+        "lineHeight": 20,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Genom att fortsätta godkänner du våra villkor och vår integritetspolicy.",
+      "x": 32,
+      "y": 782,
+      "parent": 3,
+      "name": "01 · Terms",
+      "width": 326,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "center",
+        "textAutoResize": "height",
+        "opacity": 0.7
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 128,
+      "y": 188,
+      "width": 330,
+      "height": 330,
+      "name": "02 · sunrise glow",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#FFC79A66",
+              "#F3ACC83A",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.5,
+              0.45
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": -82,
+      "y": 464,
+      "width": 240,
+      "height": 240,
+      "name": "02 · lavender glow",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#C8BCE740",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.5,
+              0.5
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 02 · circle",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 44,
+      "y": 56,
+      "width": 16,
+      "height": 16,
+      "name": "Back 02 · chevron",
+      "path": "M10 3L4 9l6 6",
+      "props": {
+        "fill": "none",
+        "stroke": "#0B1220",
+        "strokeWeight": 1.7,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 02",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Hoppa över",
+      "x": 282,
+      "y": 55,
+      "parent": 4,
+      "name": "Skip 02 · label",
+      "width": 76,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "right",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 276,
+      "y": 42,
+      "width": 82,
+      "height": 34,
+      "name": "Skip 02",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 32,
+      "y": 124,
+      "width": 4,
+      "height": 4,
+      "name": "Bibeln · dot",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Bibeln",
+      "x": 44,
+      "y": 118,
+      "parent": 4,
+      "name": "Bibeln · text",
+      "width": 220,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 1.7,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "textCase": "upper",
+        "opacity": 1
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ord för",
+      "x": 32,
+      "y": 144,
+      "parent": 4,
+      "name": "02 · Headline line 1",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "varje dag.",
+      "x": 32,
+      "y": 190,
+      "parent": 4,
+      "name": "02 · Headline line 2",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Medium",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Läs, lyssna och sök i Bibeln —\nhemma, på språng eller helt offline.",
+      "x": 32,
+      "y": 254,
+      "parent": 4,
+      "name": "02 · Body",
+      "width": 314,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 15.5,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 32,
+      "y": 322,
+      "width": 326,
+      "height": 330,
+      "name": "02 · Verse card",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 28,
+        "stroke": "#E9E4DCCC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside",
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B12201F",
+            "offset": [
+              0,
+              12
+            ],
+            "radius": 30,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 56,
+      "y": 342,
+      "width": 30,
+      "height": 30,
+      "name": "02 · Card icon bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A33"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 63,
+      "y": 349,
+      "width": 16,
+      "height": 16,
+      "name": "02 · Card book icon",
+      "path": "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
+      "props": {
+        "fill": "none",
+        "stroke": "#A96948",
+        "strokeWeight": 1.7,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "DAGENS ORD",
+      "x": 96,
+      "y": 349,
+      "parent": 4,
+      "name": "02 · Card eyebrow",
+      "width": 170,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 9.5,
+        "lineHeight": 14,
+        "letterSpacing": 1.25,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "3 min",
+      "x": 286,
+      "y": 349,
+      "parent": 4,
+      "name": "02 · Card time",
+      "width": 48,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "right",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Om vi bekänner våra synder, är han trofast och rättfärdig, så att han förlåter oss våra synder och renar oss från all orättfärdighet.",
+      "x": 56,
+      "y": 386,
+      "parent": 4,
+      "name": "02 · Verse text",
+      "width": 278,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 20,
+        "lineHeight": 30,
+        "letterSpacing": -0.25,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Första Johannesbrevet 1:9",
+      "x": 56,
+      "y": 544,
+      "parent": 4,
+      "name": "02 · Verse reference",
+      "width": 278,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 56,
+      "y": 570,
+      "width": 278,
+      "height": 1,
+      "name": "02 · Card divider",
+      "select": false,
+      "props": {
+        "fill": "#E9E4DC"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 56,
+      "y": 586,
+      "width": 36,
+      "height": 36,
+      "name": "02 · Play circle",
+      "select": false,
+      "props": {
+        "fill": "#0B1220"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 68,
+      "y": 596,
+      "width": 14,
+      "height": 14,
+      "name": "02 · Play triangle",
+      "path": "M5 3.8v12.4L15 10z",
+      "props": {
+        "fill": "#FFFFFC"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Lyssna på kapitlet",
+      "x": 102,
+      "y": 588,
+      "parent": 4,
+      "name": "02 · Audio title",
+      "width": 130,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 12.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Reformationsbibeln 2026",
+      "x": 102,
+      "y": 606,
+      "parent": 4,
+      "name": "02 · Audio source",
+      "width": 150,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 9.5,
+        "lineHeight": 14,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 242,
+      "y": 600.5,
+      "width": 2.4,
+      "height": 7,
+      "name": "02 · Wave bar 1",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 247,
+      "y": 597.5,
+      "width": 2.4,
+      "height": 13,
+      "name": "02 · Wave bar 2",
+      "select": false,
+      "props": {
+        "fill": "#F3ACC8",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 252,
+      "y": 594,
+      "width": 2.4,
+      "height": 20,
+      "name": "02 · Wave bar 3",
+      "select": false,
+      "props": {
+        "fill": "#C8BCE7",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 257,
+      "y": 598.5,
+      "width": 2.4,
+      "height": 11,
+      "name": "02 · Wave bar 4",
+      "select": false,
+      "props": {
+        "fill": "#8EDCDA",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 262,
+      "y": 595.5,
+      "width": 2.4,
+      "height": 17,
+      "name": "02 · Wave bar 5",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 267,
+      "y": 591.5,
+      "width": 2.4,
+      "height": 25,
+      "name": "02 · Wave bar 6",
+      "select": false,
+      "props": {
+        "fill": "#F3ACC8",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 272,
+      "y": 597.5,
+      "width": 2.4,
+      "height": 13,
+      "name": "02 · Wave bar 7",
+      "select": false,
+      "props": {
+        "fill": "#C8BCE7",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 277,
+      "y": 594.5,
+      "width": 2.4,
+      "height": 19,
+      "name": "02 · Wave bar 8",
+      "select": false,
+      "props": {
+        "fill": "#8EDCDA",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 282,
+      "y": 599.5,
+      "width": 2.4,
+      "height": 9,
+      "name": "02 · Wave bar 9",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "cornerRadius": 1.2
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "2:14",
+      "x": 292,
+      "y": 594,
+      "parent": 4,
+      "name": "02 · Audio length",
+      "width": 34,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "right",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 32,
+      "y": 676,
+      "width": 104,
+      "height": 34,
+      "name": "Chip · hela bibeln · chip",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 17,
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 43,
+      "y": 687,
+      "width": 12,
+      "height": 12,
+      "name": "Chip · hela bibeln · icon",
+      "path": "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
+      "props": {
+        "fill": "none",
+        "stroke": "#6F6B64",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Hela Bibeln",
+      "x": 63,
+      "y": 686,
+      "parent": 4,
+      "name": "Chip · hela bibeln · label",
+      "width": 69,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10.2,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 144,
+      "y": 676,
+      "width": 104,
+      "height": 34,
+      "name": "Chip · ljud · chip",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 17,
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 155,
+      "y": 687,
+      "width": 12,
+      "height": 12,
+      "name": "Chip · ljud · icon",
+      "path": "M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z",
+      "props": {
+        "fill": "none",
+        "stroke": "#6F6B64",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ljud & text",
+      "x": 175,
+      "y": 686,
+      "parent": 4,
+      "name": "Chip · ljud · label",
+      "width": 69,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10.2,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 256,
+      "y": 676,
+      "width": 102,
+      "height": 34,
+      "name": "Chip · sök · chip",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 17,
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 267,
+      "y": 687,
+      "width": 12,
+      "height": 12,
+      "name": "Chip · sök · icon",
+      "path": "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M16.5 16.5L21 21",
+      "props": {
+        "fill": "none",
+        "stroke": "#6F6B64",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Sök offline",
+      "x": 287,
+      "y": 686,
+      "parent": 4,
+      "name": "Chip · sök · label",
+      "width": 67,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10.2,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 32,
+      "y": 736,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 02 · pill",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 29,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B122024",
+            "offset": [
+              0,
+              16
+            ],
+            "radius": 36,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Nästa",
+      "x": 58,
+      "y": 754,
+      "parent": 4,
+      "name": "CTA 02 · label",
+      "width": 226,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 15,
+        "lineHeight": 22,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 4,
+      "x": 310,
+      "y": 747,
+      "width": 36,
+      "height": 36,
+      "name": "CTA 02 · arrow bg",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF16"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 4,
+      "x": 319,
+      "y": 756,
+      "width": 18,
+      "height": 18,
+      "name": "CTA 02 · arrow",
+      "path": "M4 9h10 M10 4l5 5-5 5",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFFFFC",
+        "strokeWeight": 1.8,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 32,
+      "y": 736,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 02",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 164.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 1",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 177.5,
+      "y": 814,
+      "width": 22,
+      "height": 6,
+      "name": "Pager dot 2",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 1
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 206.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 3",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 4,
+      "x": 219.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 4",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 188,
+      "y": 70,
+      "width": 266,
+      "height": 266,
+      "name": "03 · blush glow",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#F3ACC855",
+              "#C8BCE72E",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.5,
+              0.45
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": -86,
+      "y": 450,
+      "width": 240,
+      "height": 240,
+      "name": "03 · peach glow",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#FFC79A40",
+              "#FAF8F400"
+            ],
+            "from": [
+              0.5,
+              0.5
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 03 · circle",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 5,
+      "x": 44,
+      "y": 56,
+      "width": 16,
+      "height": 16,
+      "name": "Back 03 · chevron",
+      "path": "M10 3L4 9l6 6",
+      "props": {
+        "fill": "none",
+        "stroke": "#0B1220",
+        "strokeWeight": 1.7,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 03",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Hoppa över",
+      "x": 282,
+      "y": 55,
+      "parent": 5,
+      "name": "Skip 03 · label",
+      "width": 76,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "right",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 276,
+      "y": 42,
+      "width": 82,
+      "height": 34,
+      "name": "Skip 03",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 32,
+      "y": 124,
+      "width": 4,
+      "height": 4,
+      "name": "Gemenskap · dot",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Gemenskap",
+      "x": 44,
+      "y": 118,
+      "parent": 5,
+      "name": "Gemenskap · text",
+      "width": 220,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 1.7,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "textCase": "upper",
+        "opacity": 1
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Tro växer",
+      "x": 32,
+      "y": 144,
+      "parent": 5,
+      "name": "03 · Headline line 1",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "tillsammans.",
+      "x": 32,
+      "y": 190,
+      "parent": 5,
+      "name": "03 · Headline line 2",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Medium",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -1.1,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Dela det som är svårt, be för varandra\noch fira de små stegen.",
+      "x": 32,
+      "y": 254,
+      "parent": 5,
+      "name": "03 · Body",
+      "width": 314,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 15.5,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 32,
+      "y": 318,
+      "width": 36,
+      "height": 36,
+      "name": "Avatar · A · avatar",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#FFC79A",
+              "#F3ACC8"
+            ],
+            "from": [
+              0,
+              0
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ],
+        "stroke": "#FFFFFC",
+        "strokeWeight": 2.4,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "A",
+      "x": 32,
+      "y": 327,
+      "parent": 5,
+      "name": "Avatar · A · initial",
+      "width": 36,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 13,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 58,
+      "y": 318,
+      "width": 36,
+      "height": 36,
+      "name": "Avatar · M · avatar",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#F3ACC8",
+              "#C8BCE7"
+            ],
+            "from": [
+              0,
+              0
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ],
+        "stroke": "#FFFFFC",
+        "strokeWeight": 2.4,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "M",
+      "x": 58,
+      "y": 327,
+      "parent": 5,
+      "name": "Avatar · M · initial",
+      "width": 36,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 13,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 84,
+      "y": 318,
+      "width": 36,
+      "height": 36,
+      "name": "Avatar · J · avatar",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#C8BCE7",
+              "#8EDCDA"
+            ],
+            "from": [
+              0,
+              0
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ],
+        "stroke": "#FFFFFC",
+        "strokeWeight": 2.4,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "J",
+      "x": 84,
+      "y": 327,
+      "parent": 5,
+      "name": "Avatar · J · initial",
+      "width": 36,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 13,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 110,
+      "y": 318,
+      "width": 36,
+      "height": 36,
+      "name": "Avatar · S · avatar",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#8EDCDA",
+              "#C8BCE7"
+            ],
+            "from": [
+              0,
+              0
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ],
+        "stroke": "#FFFFFC",
+        "strokeWeight": 2.4,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "S",
+      "x": 110,
+      "y": 327,
+      "parent": 5,
+      "name": "Avatar · S · initial",
+      "width": 36,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 13,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "12 vänner i ditt rum",
+      "x": 154,
+      "y": 326,
+      "parent": 5,
+      "name": "03 · Cluster caption",
+      "width": 180,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 32,
+      "y": 360,
+      "width": 326,
+      "height": 214,
+      "name": "03 · Prayer card",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 28,
+        "stroke": "#E9E4DCCC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside",
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B12201F",
+            "offset": [
+              0,
+              12
+            ],
+            "radius": 30,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 54,
+      "y": 380,
+      "width": 36,
+      "height": 36,
+      "name": "Anna · avatar",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#FFC79A",
+              "#F3ACC8"
+            ],
+            "from": [
+              0,
+              0
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ],
+        "stroke": "#FFFFFC",
+        "strokeWeight": 2.4,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "A",
+      "x": 54,
+      "y": 389,
+      "parent": 5,
+      "name": "Anna · initial",
+      "width": 36,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 13,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Anna",
+      "x": 100,
+      "y": 382,
+      "parent": 5,
+      "name": "03 · Name",
+      "width": 120,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 12.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "för 2 min sedan",
+      "x": 100,
+      "y": 400,
+      "parent": 5,
+      "name": "03 · Time",
+      "width": 150,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 9.5,
+        "lineHeight": 14,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 298,
+      "y": 384,
+      "width": 38,
+      "height": 22,
+      "name": "03 · Tag bg",
+      "select": false,
+      "props": {
+        "fill": "#F3ACC82E",
+        "cornerRadius": 11
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Bön",
+      "x": 298,
+      "y": 388,
+      "parent": 5,
+      "name": "03 · Tag",
+      "width": 38,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 9,
+        "lineHeight": 13,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Be för mig — jag har en tuff vecka.",
+      "x": 54,
+      "y": 436,
+      "parent": 5,
+      "name": "03 · Prayer text",
+      "width": 284,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 21,
+        "lineHeight": 30,
+        "letterSpacing": -0.25,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 54,
+      "y": 508,
+      "width": 282,
+      "height": 1,
+      "name": "03 · Card divider",
+      "select": false,
+      "props": {
+        "fill": "#E9E4DC"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 5,
+      "x": 54,
+      "y": 525,
+      "width": 15,
+      "height": 15,
+      "name": "03 · Heart",
+      "path": "M12 20.7l-1.1-1C5.5 14.9 2 11.7 2 7.9 2 5.1 4.2 3 7 3c1.6 0 3.1.8 4 2 .9-1.2 2.4-2 4-2 2.8 0 5 2.1 5 4.9 0 3.8-3.5 7-8.9 11.8z",
+      "props": {
+        "fill": "#F3ACC8"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "12 vänner har bett för dig",
+      "x": 76,
+      "y": 523,
+      "parent": 5,
+      "name": "03 · Prayer count",
+      "width": 180,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 282,
+      "y": 516,
+      "width": 54,
+      "height": 32,
+      "name": "03 · Amen bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A38",
+        "cornerRadius": 16
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Amen",
+      "x": 282,
+      "y": 524,
+      "parent": 5,
+      "name": "03 · Amen",
+      "width": 54,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "center",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 32,
+      "y": 610,
+      "width": 34,
+      "height": 34,
+      "name": "Feature · prayer · circle",
+      "select": false,
+      "props": {
+        "fill": "#F3ACC82E"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 5,
+      "x": 40.5,
+      "y": 618.5,
+      "width": 17,
+      "height": 17,
+      "name": "Feature · prayer · icon",
+      "path": "M12 20.7l-1.1-1C5.5 14.9 2 11.7 2 7.9 2 5.1 4.2 3 7 3c1.6 0 3.1.8 4 2 .9-1.2 2.4-2 4-2 2.8 0 5 2.1 5 4.9 0 3.8-3.5 7-8.9 11.8z",
+      "props": {
+        "fill": "none",
+        "stroke": "#F3ACC8",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Be för varandra",
+      "x": 78,
+      "y": 608,
+      "parent": 5,
+      "name": "Feature · prayer title",
+      "width": 260,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 13.5,
+        "lineHeight": 19,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Bön delas bara med dem du väljer.",
+      "x": 78,
+      "y": 627,
+      "parent": 5,
+      "name": "Feature · prayer sub",
+      "width": 270,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 32,
+      "y": 668,
+      "width": 34,
+      "height": 34,
+      "name": "Feature · rooms · circle",
+      "select": false,
+      "props": {
+        "fill": "#C8BCE72E"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 5,
+      "x": 40.5,
+      "y": 676.5,
+      "width": 17,
+      "height": 17,
+      "name": "Feature · rooms · icon",
+      "path": "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+      "props": {
+        "fill": "none",
+        "stroke": "#C8BCE7",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Väx i små rum",
+      "x": 78,
+      "y": 666,
+      "parent": 5,
+      "name": "Feature · rooms title",
+      "width": 260,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 13.5,
+        "lineHeight": 19,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ärliga samtal, utan brus.",
+      "x": 78,
+      "y": 685,
+      "parent": 5,
+      "name": "Feature · rooms sub",
+      "width": 270,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 32,
+      "y": 734,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 03 · pill",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 29,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B122024",
+            "offset": [
+              0,
+              16
+            ],
+            "radius": 36,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Fortsätt",
+      "x": 58,
+      "y": 752,
+      "parent": 5,
+      "name": "CTA 03 · label",
+      "width": 226,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 15,
+        "lineHeight": 22,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 5,
+      "x": 310,
+      "y": 745,
+      "width": 36,
+      "height": 36,
+      "name": "CTA 03 · arrow bg",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF16"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 5,
+      "x": 319,
+      "y": 754,
+      "width": 18,
+      "height": 18,
+      "name": "CTA 03 · arrow",
+      "path": "M4 9h10 M10 4l5 5-5 5",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFFFFC",
+        "strokeWeight": 1.8,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 32,
+      "y": 734,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 03",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 164.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 1",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 177.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 2",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 190.5,
+      "y": 814,
+      "width": 22,
+      "height": 6,
+      "name": "Pager dot 3",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 1
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 5,
+      "x": 219.5,
+      "y": 814,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 4",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 3,
+        "opacity": 0.16
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 118,
+      "y": -212,
+      "width": 400,
+      "height": 400,
+      "name": "04 · top glow",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "radialGradient",
+            "stops": [
+              "#FFC79A4D",
+              "#F3ACC833",
+              "#0B122000"
+            ],
+            "from": [
+              0.5,
+              0.5
+            ],
+            "to": [
+              1,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 210,
+      "y": -180,
+      "width": 280,
+      "height": 280,
+      "name": "04 · rising sun",
+      "select": false,
+      "props": {
+        "fills": [
+          {
+            "type": "linearGradient",
+            "stops": [
+              "#FFD9B8",
+              "#F3ACC8",
+              "#C8BCE7"
+            ],
+            "from": [
+              0.2,
+              0
+            ],
+            "to": [
+              0.8,
+              1
+            ]
+          }
+        ],
+        "opacity": 0.7
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 194,
+      "y": -196,
+      "width": 312,
+      "height": 312,
+      "name": "04 · sun ring",
+      "select": false,
+      "props": {
+        "fill": "none",
+        "stroke": "#FFC79A33",
+        "strokeWeight": 1,
+        "strokeAlign": "center"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 44,
+      "y": 104,
+      "width": 2,
+      "height": 2,
+      "name": "04 · Star 1",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "opacity": 0.34
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 92,
+      "y": 66,
+      "width": 1.5,
+      "height": 1.5,
+      "name": "04 · Star 2",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "opacity": 0.34
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 360,
+      "y": 236,
+      "width": 1.5,
+      "height": 1.5,
+      "name": "04 · Star 3",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "opacity": 0.34
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 372,
+      "y": 284,
+      "width": 1.1,
+      "height": 1.1,
+      "name": "04 · Star 4",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "opacity": 0.34
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 04 · circle",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF0D",
+        "stroke": "#FFFFFF22",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 44,
+      "y": 56,
+      "width": 16,
+      "height": 16,
+      "name": "Back 04 · chevron",
+      "path": "M10 3L4 9l6 6",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFFFFC",
+        "strokeWeight": 1.7,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 32,
+      "y": 44,
+      "width": 40,
+      "height": 40,
+      "name": "Back 04",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "4 / 4",
+      "x": 300,
+      "y": 55,
+      "parent": 6,
+      "name": "04 · Step",
+      "width": 58,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11,
+        "lineHeight": 18,
+        "letterSpacing": 1.1,
+        "fill": "#0B1220",
+        "textAlign": "right",
+        "textAutoResize": "height",
+        "opacity": 0.5
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 32,
+      "y": 124,
+      "width": 4,
+      "height": 4,
+      "name": "Din rytm · dot",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Din rytm",
+      "x": 44,
+      "y": 118,
+      "parent": 6,
+      "name": "Din rytm · text",
+      "width": 220,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 10.5,
+        "lineHeight": 16,
+        "letterSpacing": 1.7,
+        "fill": "#FFC79A",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "textCase": "upper",
+        "opacity": 0.95
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Hitta din",
+      "x": 32,
+      "y": 144,
+      "parent": 6,
+      "name": "04 · Headline line 1",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -0.9,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "stilla stund.",
+      "x": 32,
+      "y": 190,
+      "parent": 6,
+      "name": "04 · Headline line 2",
+      "width": 326,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Medium",
+        "fontSize": 40,
+        "lineHeight": 46,
+        "letterSpacing": -1.1,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Välj en tid för en kort påminnelse.\nInget mer, inget mindre.",
+      "x": 32,
+      "y": 254,
+      "parent": 6,
+      "name": "04 · Body",
+      "width": 314,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 15.5,
+        "lineHeight": 24,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.66
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 32,
+      "y": 322,
+      "width": 326,
+      "height": 312,
+      "name": "04 · Rhythm card",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "cornerRadius": 30,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0000005C",
+            "offset": [
+              0,
+              18
+            ],
+            "radius": 44,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 52,
+      "y": 340,
+      "width": 30,
+      "height": 30,
+      "name": "04 · Bell bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A33"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 60,
+      "y": 348,
+      "width": 14,
+      "height": 14,
+      "name": "04 · Bell",
+      "path": "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0",
+      "props": {
+        "fill": "none",
+        "stroke": "#A96948",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "DAGLIG PÅMINNELSE",
+      "x": 90,
+      "y": 347,
+      "parent": 6,
+      "name": "04 · Card eyebrow",
+      "width": 174,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 9.2,
+        "lineHeight": 14,
+        "letterSpacing": 1.1,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 268,
+      "y": 344,
+      "width": 40,
+      "height": 22,
+      "name": "04 · Toggle track",
+      "select": false,
+      "props": {
+        "fill": "#8EDCDA",
+        "cornerRadius": 11
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 288,
+      "y": 346,
+      "width": 18,
+      "height": 18,
+      "name": "04 · Toggle knob",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFC",
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B122033",
+            "offset": [
+              0,
+              1
+            ],
+            "radius": 3,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "När vill du landa?",
+      "x": 52,
+      "y": 378,
+      "parent": 6,
+      "name": "04 · Card title",
+      "width": 280,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Medium",
+        "fontSize": 19,
+        "lineHeight": 25,
+        "letterSpacing": -0.2,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 52,
+      "y": 414,
+      "width": 286,
+      "height": 50,
+      "name": "04 · Option 1",
+      "select": false,
+      "props": {
+        "fill": "#F6F2EA",
+        "cornerRadius": 14
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 62,
+      "y": 425,
+      "width": 28,
+      "height": 28,
+      "name": "04 · Option 1 icon bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A33"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 68,
+      "y": 431,
+      "width": 16,
+      "height": 16,
+      "name": "04 · Option 1 icon",
+      "path": "M17 18a5 5 0 0 0-10 0 M12 2v4 M4.22 10.22l1.42 1.42 M1 18h22 M3 22h18",
+      "props": {
+        "fill": "none",
+        "stroke": "#A96948",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Morgon",
+      "x": 102,
+      "y": 429,
+      "parent": 6,
+      "name": "04 · Option 1 label",
+      "width": 110,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 12.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "07:00",
+      "x": 220,
+      "y": 429,
+      "parent": 6,
+      "name": "04 · Option 1 time",
+      "width": 46,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "right",
+        "textAutoResize": "height",
+        "opacity": 0.65
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 278,
+      "y": 431,
+      "width": 15,
+      "height": 15,
+      "name": "04 · Option 1 radio",
+      "select": false,
+      "props": {
+        "fill": "none",
+        "stroke": "#0B122033",
+        "strokeWeight": 1.2,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 52,
+      "y": 472,
+      "width": 286,
+      "height": 50,
+      "name": "04 · Option 2",
+      "select": false,
+      "props": {
+        "fill": "#F6F2EA",
+        "cornerRadius": 14
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 62,
+      "y": 483,
+      "width": 28,
+      "height": 28,
+      "name": "04 · Option 2 icon bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A33"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 68,
+      "y": 489,
+      "width": 16,
+      "height": 16,
+      "name": "04 · Option 2 icon",
+      "path": "M12 2v2 M12 20v2 M4.93 4.93l1.41 1.41 M17.66 17.66l1.41 1.41 M2 12h2 M20 12h2 M4.93 19.07l1.41-1.41 M17.66 6.34l1.41-1.41 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z",
+      "props": {
+        "fill": "none",
+        "stroke": "#A96948",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Middag",
+      "x": 102,
+      "y": 487,
+      "parent": 6,
+      "name": "04 · Option 2 label",
+      "width": 110,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 12.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "12:30",
+      "x": 220,
+      "y": 487,
+      "parent": 6,
+      "name": "04 · Option 2 time",
+      "width": 46,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "right",
+        "textAutoResize": "height",
+        "opacity": 0.65
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 278,
+      "y": 489,
+      "width": 15,
+      "height": 15,
+      "name": "04 · Option 2 radio",
+      "select": false,
+      "props": {
+        "fill": "none",
+        "stroke": "#0B122033",
+        "strokeWeight": 1.2,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 52,
+      "y": 530,
+      "width": 286,
+      "height": 50,
+      "name": "04 · Option 3",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "cornerRadius": 14
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 62,
+      "y": 541,
+      "width": 28,
+      "height": 28,
+      "name": "04 · Option 3 icon bg",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF14"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 68,
+      "y": 547,
+      "width": 16,
+      "height": 16,
+      "name": "04 · Option 3 icon",
+      "path": "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
+      "props": {
+        "fill": "none",
+        "stroke": "#FFC79A",
+        "strokeWeight": 1.6,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Kväll",
+      "x": 102,
+      "y": 545,
+      "parent": 6,
+      "name": "04 · Option 3 label",
+      "width": 110,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 12.5,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "21:00",
+      "x": 220,
+      "y": 545,
+      "parent": 6,
+      "name": "04 · Option 3 time",
+      "width": 46,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 11,
+        "lineHeight": 18,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "right",
+        "textAutoResize": "height",
+        "opacity": 0.7
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 274,
+      "y": 544,
+      "width": 22,
+      "height": 22,
+      "name": "04 · Option 3 check bg",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 279,
+      "y": 549,
+      "width": 12,
+      "height": 12,
+      "name": "04 · Option 3 check",
+      "path": "M2.5 6.5L5 9l4.5-5",
+      "props": {
+        "fill": "none",
+        "stroke": "#0B1220",
+        "strokeWeight": 1.8,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Du kan ändra det när som helst.",
+      "x": 52,
+      "y": 596,
+      "parent": 6,
+      "name": "04 · Card note",
+      "width": 286,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.75
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 164.5,
+      "y": 678,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 1",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF",
+        "cornerRadius": 3,
+        "opacity": 0.22
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 177.5,
+      "y": 678,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 2",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF",
+        "cornerRadius": 3,
+        "opacity": 0.22
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 190.5,
+      "y": 678,
+      "width": 6,
+      "height": 6,
+      "name": "Pager dot 3",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF",
+        "cornerRadius": 3,
+        "opacity": 0.22
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 203.5,
+      "y": 678,
+      "width": 22,
+      "height": 6,
+      "name": "Pager dot 4",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "cornerRadius": 3,
+        "opacity": 1
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 32,
+      "y": 708,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 04 · pill",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "cornerRadius": 29,
+        "effects": [
+          {
+            "type": "dropShadow",
+            "color": "#0B122024",
+            "offset": [
+              0,
+              16
+            ],
+            "radius": 36,
+            "spread": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Börja min resa",
+      "x": 58,
+      "y": 726,
+      "parent": 6,
+      "name": "CTA 04 · label",
+      "width": 226,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 15,
+        "lineHeight": 22,
+        "letterSpacing": 0,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": 6,
+      "x": 310,
+      "y": 719,
+      "width": 36,
+      "height": 36,
+      "name": "CTA 04 · arrow bg",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF5C"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "vector",
+      "parent": 6,
+      "x": 319,
+      "y": 728,
+      "width": 18,
+      "height": 18,
+      "name": "CTA 04 · arrow",
+      "path": "M4 9h10 M10 4l5 5-5 5",
+      "props": {
+        "fill": "none",
+        "stroke": "#0B1220",
+        "strokeWeight": 1.8,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": 6,
+      "x": 32,
+      "y": 708,
+      "width": 326,
+      "height": 58,
+      "name": "CTA 04",
+      "select": false,
+      "props": {
+        "fill": "#FFFFFF01",
+        "cornerRadius": 0
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Jag har redan ett konto",
+      "x": 32,
+      "y": 784,
+      "parent": 6,
+      "name": "CTAlink 04 · Logga in",
+      "width": 326,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 13.5,
+        "lineHeight": 20,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height",
+        "opacity": 0.62
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Dina uppgifter stannar hos dig.",
+      "x": 32,
+      "y": 814,
+      "parent": 6,
+      "name": "04 · Trust note",
+      "width": 326,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#FFFFFC",
+        "textAlign": "center",
+        "textAutoResize": "height",
+        "opacity": 0.32
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "KOINO  ·  ONBOARDING",
+      "x": 0,
+      "y": -198,
+      "parent": null,
+      "name": "Board · wordmark",
+      "width": 400,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 18,
+        "letterSpacing": 2.6,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Onboarding",
+      "x": 0,
+      "y": -172,
+      "parent": null,
+      "name": "Board · title",
+      "width": 900,
+      "props": {
+        "fontFamily": "Montserrat",
+        "fontStyle": "Light",
+        "fontSize": 54,
+        "lineHeight": 62,
+        "letterSpacing": -1.8,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "En stilla start för en app som ger plats för tro, bön och gemenskap.",
+      "x": 0,
+      "y": -92,
+      "parent": null,
+      "name": "Board · subtitle",
+      "width": 820,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 15,
+        "lineHeight": 23,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "4 skärmar  ·  390 × 844  ·  iOS & Android  ·  v1.0",
+      "x": 0,
+      "y": -58,
+      "parent": null,
+      "name": "Board · meta",
+      "width": 820,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Medium",
+        "fontSize": 10,
+        "lineHeight": 16,
+        "letterSpacing": 0.6,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.65
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1568,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Warm canvas",
+      "select": false,
+      "props": {
+        "fill": "#FAF8F4",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1592,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Deep navy",
+      "select": false,
+      "props": {
+        "fill": "#0B1220",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1616,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Persika",
+      "select": false,
+      "props": {
+        "fill": "#FFC79A",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1640,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Blush",
+      "select": false,
+      "props": {
+        "fill": "#F3ACC8",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1664,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Lavender",
+      "select": false,
+      "props": {
+        "fill": "#C8BCE7",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "ellipse",
+      "parent": null,
+      "x": 1688,
+      "y": -112,
+      "width": 16,
+      "height": 16,
+      "name": "Palette · Cyan",
+      "select": false,
+      "props": {
+        "fill": "#8EDCDA",
+        "stroke": "#E9E4DC",
+        "strokeWeight": 1,
+        "strokeAlign": "inside"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "KOINO PALETT",
+      "x": 1568,
+      "y": -132,
+      "parent": null,
+      "name": "Palette · caption",
+      "width": 160,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 9,
+        "lineHeight": 13,
+        "letterSpacing": 1.2,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.7
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "node.create",
+    "params": {
+      "type": "rectangle",
+      "parent": null,
+      "x": 0,
+      "y": 870,
+      "width": 1704,
+      "height": 1,
+      "name": "Board · rule",
+      "select": false,
+      "props": {
+        "fill": "#DED8CE"
+      }
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "01 · Välkommen",
+      "x": 0,
+      "y": 890,
+      "parent": null,
+      "name": "Caption 1 · title",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0.2,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ett första andetag.",
+      "x": 0,
+      "y": 908,
+      "parent": null,
+      "name": "Caption 1 · sub",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.8
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "02 · Bibeln",
+      "x": 438,
+      "y": 890,
+      "parent": null,
+      "name": "Caption 2 · title",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0.2,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Ord för varje dag.",
+      "x": 438,
+      "y": 908,
+      "parent": null,
+      "name": "Caption 2 · sub",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.8
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "03 · Gemenskap",
+      "x": 876,
+      "y": 890,
+      "parent": null,
+      "name": "Caption 3 · title",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0.2,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "Tro växer tillsammans.",
+      "x": 876,
+      "y": 908,
+      "parent": null,
+      "name": "Caption 3 · sub",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.8
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "04 · Din rytm",
+      "x": 1314,
+      "y": 890,
+      "parent": null,
+      "name": "Caption 4 · title",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "SemiBold",
+        "fontSize": 11,
+        "lineHeight": 16,
+        "letterSpacing": 0.2,
+        "fill": "#0B1220",
+        "textAlign": "left",
+        "textAutoResize": "height"
+      },
+      "select": false
+    }
+  },
+  {
+    "command": "text.create",
+    "params": {
+      "text": "En stund som blir din.",
+      "x": 1314,
+      "y": 908,
+      "parent": null,
+      "name": "Caption 4 · sub",
+      "width": 390,
+      "props": {
+        "fontFamily": "Inter",
+        "fontStyle": "Regular",
+        "fontSize": 10.5,
+        "lineHeight": 15,
+        "letterSpacing": 0,
+        "fill": "#6F6B64",
+        "textAlign": "left",
+        "textAutoResize": "height",
+        "opacity": 0.8
+      },
+      "select": false
+    }
+  }
+]

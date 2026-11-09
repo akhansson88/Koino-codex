@@ -1,32 +1,50 @@
 import { tabBarHeight } from "@/ui/navigation-layout";
 import { KoinoTabHeader } from "@/ui/tab-header";
 import { Feather } from "@expo/vector-icons";
-import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
-import { PlatformPressable } from "@react-navigation/elements";
+import type { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AnimatedDockBackground, AnimatedDockTabBar, DockTabButton } from "@/ui/animated-dock-tab-bar";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, platformShadow, typography } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
+import { useReducedMotion } from "@/ui/use-reduced-motion";
+
+const sceneStyleInterpolator: NonNullable<BottomTabNavigationOptions["sceneStyleInterpolator"]> = ({ current }) => ({
+  sceneStyle: {
+    opacity: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }),
+    transform: [{
+      translateX: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [-12, 0, 12] }),
+    }],
+  },
+});
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
+  const reducedMotion = useReducedMotion();
 
   return (
     <Tabs
       // Android can detach the nested Community stack during a push and leave
       // its content blank until the tab is reselected. Keep the tab host attached.
       detachInactiveScreens={Platform.OS !== "android"}
+      tabBar={(props) => <AnimatedDockTabBar {...props} reducedMotion={reducedMotion} />}
       screenOptions={{
+        animation: reducedMotion ? "none" : "fade",
+        sceneStyleInterpolator: reducedMotion ? undefined : sceneStyleInterpolator,
+        transitionSpec: reducedMotion ? undefined : {
+          animation: "timing",
+          config: { duration: 220 },
+        },
         header: () => <KoinoTabHeader />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.ink,
         tabBarInactiveTintColor: colors.muted,
-        tabBarActiveBackgroundColor: `${colors.accentWarm}80`,
-        tabBarBackground: () => <TabBarDockBackground bottomInset={insets.bottom} />,
+        tabBarActiveBackgroundColor: "transparent",
+        tabBarBackground: () => <AnimatedDockBackground />,
         tabBarButton: (props) => <DockTabButton {...props} />,
         tabBarLabelPosition: "below-icon",
         tabBarStyle: {
@@ -106,56 +124,8 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-function DockTabButton({ style, ...props }: BottomTabBarButtonProps) {
-  return (
-    <PlatformPressable
-      {...props}
-      android_ripple={{ borderless: false, color: colors.line }}
-      pressOpacity={0.72}
-      style={[style, styles.button]}
-    />
-  );
-}
-
-function TabBarDockBackground({ bottomInset }: { bottomInset: number }) {
-  return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cream }]}>
-      <View
-        style={[styles.dock, { bottom: Math.max(bottomInset, 8) }]}
-      />
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
-  dock: {
-    ...StyleSheet.absoluteFillObject,
-    left: 12,
-    right: 12,
-    backgroundColor: colors.paper,
-    borderColor: colors.line,
-    borderCurve: "continuous",
-    borderRadius: 24,
-    borderWidth: 1,
-    ...platformShadow({
-      boxShadow: "0 4px 14px rgba(11, 18, 32, 0.06)",
-      elevation: 2,
-      offset: { width: 0, height: 4 },
-      opacity: 0.06,
-      radius: 14,
-    }),
-  },
-  button: {
-    borderCurve: "continuous",
-    borderRadius: 18,
-    gap: 4,
-    justifyContent: "center",
-    minHeight: 48,
-    minWidth: 0,
-    overflow: "hidden",
-    paddingHorizontal: 0,
-    paddingVertical: 6,
-  },
   label: {
     fontSize: 11,
     lineHeight: 15,

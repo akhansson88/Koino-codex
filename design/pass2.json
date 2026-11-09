@@ -1,0 +1,5 @@
+[
+  {"command":"node.create","params":{"type":"rectangle","x":40,"y":40,"width":310,"height":160,"parent":2,"name":"Gradient Card","props":{"cornerRadius":28,"fills":[{"type":"linearGradient","stops":["#FFC79A","#F3ACC8","#C8BCE7"],"from":[0,0],"to":[1,1]}],"effects":[{"type":"dropShadow","color":"#0B12202E","offset":[0,18],"radius":36,"spread":0}]}}},
+  {"command":"text.create","params":{"text":"Ett stilla rum","x":40,"y":230,"parent":2,"width":310,"props":{"fontFamily":"Montserrat","fontStyle":"Light","fontSize":38,"lineHeight":44,"letterSpacing":-0.5,"fill":"#0B1220"}}},
+  {"command":"text.create","params":{"text":"Bibel, bön och gemenskap.","x":40,"y":288,"parent":2,"width":310,"props":{"fontFamily":"Inter","fontStyle":"Regular","fontSize":16,"lineHeight":24,"fill":"#6F6B64"}}}
+]

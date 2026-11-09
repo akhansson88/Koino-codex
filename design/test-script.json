@@ -1,0 +1,10 @@
+[
+  {"command":"frame.presets","params":{}},
+  {"command":"text.fonts","params":{"family":"Montserrat"}},
+  {"command":"text.fonts","params":{"family":"Inter"}},
+  {"command":"file.new","params":{}},
+  {"command":"frame.create","params":{"width":390,"height":844,"name":"Test","x":0,"y":0,"props":{"fill":"#FAF8F4","clip":true}}},
+  {"command":"node.create","params":{"type":"rectangle","x":40,"y":40,"width":310,"height":160,"parent":"Test","name":"Gradient Card","props":{"cornerRadius":28,"fills":[{"type":"linearGradient","stops":["#FFC79A","#F3ACC8","#C8BCE7"],"from":[0,0],"to":[1,1]}],"effects":[{"type":"dropShadow","color":"#0B1220","opacity":0.18,"offsetX":0,"offsetY":16,"radius":32,"spread":0}]}}},
+  {"command":"text.create","params":{"text":"Ett stilla rum","x":40,"y":230,"parent":"Test","width":310,"props":{"fontFamily":"Montserrat","fontStyle":"Light","fontSize":38,"lineHeight":44,"letterSpacing":-0.5,"fill":"#0B1220"}}},
+  {"command":"text.create","params":{"text":"Bibel, bön och gemenskap.","x":40,"y":288,"parent":"Test","width":310,"props":{"fontFamily":"Inter","fontStyle":"Regular","fontSize":16,"lineHeight":24,"fill":"#6F6B64"}}}
+]

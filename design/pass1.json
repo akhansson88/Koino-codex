@@ -1,0 +1,7 @@
+[
+  {"command":"frame.presets","params":{}},
+  {"command":"text.fonts","params":{"family":"Montserrat"}},
+  {"command":"text.fonts","params":{"family":"Inter"}},
+  {"command":"file.new","params":{}},
+  {"command":"frame.create","params":{"width":390,"height":844,"name":"Test","x":0,"y":0,"props":{"fill":"#FAF8F4","clip":true}}}
+]

@@ -1,0 +1,161 @@
+[
+  {
+    "command": "proto.flow.add",
+    "params": {
+      "start": 3,
+      "name": "Onboarding"
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 26,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 4
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "left",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 76,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 5
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "left",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 127,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 6
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "left",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 35,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 3
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "right",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 87,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 4
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "right",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 143,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 5
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "right",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 38,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 6
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "left",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  },
+  {
+    "command": "proto.interaction.add",
+    "params": {
+      "id": 90,
+      "trigger": {
+        "type": "onClick"
+      },
+      "action": {
+        "type": "navigate",
+        "dest": 6
+      },
+      "transition": {
+        "type": "slideIn",
+        "direction": "left",
+        "durationMs": 360,
+        "easing": "easeInOut"
+      }
+    }
+  }
+]
