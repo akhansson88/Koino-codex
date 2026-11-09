@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet, useWindowDimensions, type StyleProp, type TextStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { router } from "expo-router";
 import { auth } from "@/state/store/firebase";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors } from "@/ui/theme";
+import { colors, themes, typography } from "@/ui/theme";
 import { useKoino } from "@/state/koino-store";
 import { encodeAt } from "@/state/encryption/database";
 import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
@@ -30,8 +31,65 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.white, padding: 18, borderRadius: 12, gap: 12 },
   error: { color: "#A42323", fontSize: 15, lineHeight: 22 },
 });
-function Button({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled: Boolean(disabled) }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.5 }]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
+function Button({ label, onPress, disabled, labelStyle = styles.buttonText, allowFontScaling }: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  labelStyle?: StyleProp<TextStyle>;
+  allowFontScaling?: boolean;
+}) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled: Boolean(disabled) }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.5 }]}><Text allowFontScaling={allowFontScaling} style={labelStyle}>{label}</Text></Pressable>;
+}
+
+function RecoveryKeySetup({ recoveryKey, confirmation, onConfirmation, onConfirm, onSignOut, busy, error }: {
+  recoveryKey: string;
+  confirmation: string;
+  onConfirmation: (value: string) => void;
+  onConfirm: () => void;
+  onSignOut: () => void;
+  busy: boolean;
+  error: string;
+}) {
+  const w = useWords();
+  const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const ios = Platform.OS === "ios";
+  // Apply the live iOS preference to this screen's layout as well as its text.
+  // Disable native multiplication here so that the preference is applied once.
+  const scale = ios ? fontScale : 1;
+  const scaled = (style: TextStyle & { fontSize: number; lineHeight: number }) => ({
+    ...style,
+    fontSize: style.fontSize * scale,
+    lineHeight: style.lineHeight * scale,
+  });
+  const light = themes.light;
+  const body = [scaled(typography.body), { color: light.ink }];
+  const buttonLabel: StyleProp<TextStyle> = [scaled(typography.button), { alignSelf: "stretch", color: light.white, textAlign: "center" }];
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
+      automaticallyAdjustKeyboardInsets={ios}
+      contentInsetAdjustmentBehavior="never"
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={{ alignSelf: "center", width: "100%", maxWidth: 430, gap: 18 }}>
+        <Text accessibilityRole="header" allowFontScaling={!ios} style={[scaled(typography.screenTitle), { color: light.ink }]}>
+          {w("Protect your KOINO account", "Skydda ditt KOINO-konto")}
+        </Text>
+        <Text allowFontScaling={!ios} style={body}>{w("Your personal and community content will be encrypted before upload. Save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
+        <View style={styles.card}>
+          <Text selectable allowFontScaling={!ios} style={body}>{recoveryKey}</Text>
+        </View>
+        <Text allowFontScaling={!ios} style={[scaled(typography.label), { color: light.ink }]}>{w("Enter the last six characters to confirm you saved the code.", "Skriv de sista sex tecknen för att bekräfta att du sparat koden.")}</Text>
+        <TextInput accessibilityLabel={w("Recovery code confirmation", "Bekräftelse av återställningskod")} allowFontScaling={!ios} autoCapitalize="none" autoCorrect={false} value={confirmation} onChangeText={onConfirmation} style={[styles.input, body, { minHeight: 52 }]} />
+        <Button label={w("Enable encryption", "Aktivera kryptering")} labelStyle={buttonLabel} allowFontScaling={!ios} disabled={busy || confirmation !== recoveryKey.slice(-6)} onPress={onConfirm} />
+        {error ? <Text accessibilityRole="alert" allowFontScaling={!ios} style={[scaled(typography.body), { color: light.danger }]}>{error}</Text> : null}
+        <Button label={w("Sign out", "Logga ut")} labelStyle={buttonLabel} allowFontScaling={!ios} disabled={busy} onPress={onSignOut} />
+      </View>
+    </ScrollView>
+  );
 }
 
 type ActiveOnboarding = {
@@ -186,20 +244,22 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
     <ActivityIndicator accessibilityLabel={w("Opening KOINO", "Öppnar KOINO")} color={colors.ink} />
   </View>;
+  if (phase === "setup" && draft) return <RecoveryKeySetup
+    recoveryKey={draft.recoveryKey}
+    confirmation={savedCode}
+    onConfirmation={setSavedCode}
+    busy={busy}
+    error={error}
+    onConfirm={() => void work(async (isCurrent) => {
+      if (!isCurrent()) return;
+      await confirmAccount(draft);
+      if (!isCurrent()) return;
+      setDraft(undefined); setSavedCode(""); await finish();
+    })}
+    onSignOut={() => void work(async () => { await signOut(auth); })}
+  />;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.title}>{phase === "migrating" ? w("Encrypting your history", "Krypterar din historik") : w("Protect your KOINO account", "Skydda ditt KOINO-konto")}</Text>
-    {phase === "setup" && draft ? <>
-      <Text style={styles.body}>{w("Your personal and community content will be encrypted before upload. Save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
-      <View style={styles.card}><Text selectable style={styles.body}>{draft.recoveryKey}</Text></View>
-      <Text style={styles.body}>{w("Enter the last six characters to confirm you saved the code.", "Skriv de sista sex tecknen för att bekräfta att du sparat koden.")}</Text>
-      <TextInput accessibilityLabel={w("Recovery code confirmation", "Bekräftelse av återställningskod")} autoCapitalize="none" autoCorrect={false} value={savedCode} onChangeText={setSavedCode} style={styles.input} />
-      <Button label={w("Enable encryption", "Aktivera kryptering")} disabled={busy || savedCode !== draft.recoveryKey.slice(-6)} onPress={() => void work(async (isCurrent) => {
-        if (!isCurrent()) return;
-        await confirmAccount(draft);
-        if (!isCurrent()) return;
-        setDraft(undefined); setSavedCode(""); await finish();
-      })} />
-    </> : null}
     {phase === "recovery" && user ? <>
       <Text style={styles.body}>{w("Unlock with your recovery code, or approve this device from an existing device under Encryption & devices. Resetting your login password does not recover encrypted history.", "Lås upp med återställningskoden, eller godkänn enheten från en befintlig enhet under Kryptering och enheter. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
       <TextInput accessibilityLabel={w("Recovery code", "Återställningskod")} secureTextEntry autoCapitalize="none" autoCorrect={false} value={code} onChangeText={setCode} style={styles.input} />

@@ -21,12 +21,17 @@ const fixture = globalThis.__onboardingRouting = {
   legacyProfiles: new Set(),
   legacyProfileGates: new Map(),
   storeListeners: new Set(),
+  dimensionListeners: new Set(),
+  os: "ios",
+  windowDimensions: { width: 320, height: 568, fontScale: 1, scale: 3 },
+  recoveryKey: `aB0-_${"x".repeat(32)}Ab-_9Z`,
   state: { authReady: true, theme: "light" },
   storage: new Map(),
   readGates: new Map(),
   writeGates: new Map(),
   encryption: new Map(),
   confirmationGates: new Map(),
+  confirmationErrors: new Map(),
   createdCommunities: new Map(),
   migrated: new Set(),
   migrations: [],
@@ -52,11 +57,19 @@ function deferred() {
 
 const mocks = {
   "react-native": `
-    export const Platform = { OS: "ios", select: values => values.ios ?? values.default };
+    import { useSyncExternalStore } from "react";
+    const h = globalThis.__onboardingRouting;
+    function subscribe(listener) {
+      h.dimensionListeners.add(listener);
+      return () => h.dimensionListeners.delete(listener);
+    }
+    export const useWindowDimensions = () => useSyncExternalStore(subscribe, () => h.windowDimensions);
+    export const Platform = { get OS() { return h.os; }, select: values => values[h.os] ?? values.default };
     export const View = "View", Text = "Text", Pressable = "Pressable", ScrollView = "ScrollView";
     export const TextInput = "TextInput", ActivityIndicator = "ActivityIndicator";
     export const StyleSheet = { create: styles => styles };
   `,
+  "react-native-safe-area-context": "export const useSafeAreaInsets = () => ({ top: 44, bottom: 34, left: 0, right: 0 });",
   "expo-router": `
     import React, { useEffect, useLayoutEffect, useReducer, useRef } from "react";
     const h = globalThis.__onboardingRouting;
@@ -209,10 +222,11 @@ const mocks = {
     }
     export async function draftAccount(uid) {
       const key = "e2ee.draft." + uid;
-      if (!h.storage.has(key)) h.storage.set(key, JSON.stringify({ uid, recoveryKey: "fixture-recovery-123456" }));
+      if (!h.storage.has(key)) h.storage.set(key, JSON.stringify({ uid, recoveryKey: h.recoveryKey }));
       return JSON.parse(h.storage.get(key));
     }
     export async function confirmAccount({ uid }) {
+      if (h.confirmationErrors.has(uid)) throw h.confirmationErrors.get(uid);
       const generation = h.generation;
       h.encryption.set(uid, "ready");
       await h.confirmationGates.get(uid)?.promise;
@@ -301,9 +315,93 @@ try {
   };
   const confirmEncryption = async () => {
     const input = tree.root.findAllByType("TextInput").find(node => node.props.accessibilityLabel === "Recovery code confirmation");
-    await act(() => input.props.onChangeText("123456"));
+    await act(() => input.props.onChangeText(fixture.recoveryKey.slice(-6)));
     await act(async () => press("Enable encryption").props.onPress());
   };
+
+  const setFontScale = fontScale => act(() => {
+    fixture.windowDimensions = { ...fixture.windowDimensions, fontScale };
+    fixture.dimensionListeners.forEach(listener => listener());
+  });
+  const flattenStyle = style => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
+  for (const [os, language, title, confirmationLabel, action] of [
+    ["ios", "en", "Protect your KOINO account", "Recovery code confirmation", "Enable encryption"],
+    ["ios", "sv", "Skydda ditt KOINO-konto", "Bekräftelse av återställningskod", "Aktivera kryptering"],
+    ["android", "en", "Protect your KOINO account", "Recovery code confirmation", "Enable encryption"],
+  ]) {
+    fixture.os = os;
+    fixture.storage.set("koino.language", language);
+    const uid = `recovery-layout-${os}-${language}`;
+    publish(uid);
+    await mount();
+    const scroll = tree.root.findByType("ScrollView");
+    assert.equal(scroll.props.automaticallyAdjustKeyboardInsets, os === "ios", "Native keyboard insets apply only on iOS");
+    assert.equal(scroll.props.contentInsetAdjustmentBehavior, "never");
+    assert.equal(scroll.props.keyboardShouldPersistTaps, "handled");
+    const insets = flattenStyle(scroll.props.contentContainerStyle);
+    assert.equal(insets.paddingTop, 44 + 24);
+    assert.equal(insets.paddingBottom, 34 + 24);
+    const column = scroll.findAllByType("View").find(node => flattenStyle(node.props.style).maxWidth === 430);
+    assert.ok(column, "The layout needs a bounded content column");
+
+    const content = () => {
+      const headings = column.findAllByType("Text").filter(node => node.props.accessibilityRole === "header");
+      assert.equal(headings.length, 1);
+      assert.equal(headings[0].props.children, title);
+      const selectable = column.findAllByType("Text").filter(node => node.props.selectable);
+      assert.ok(selectable.length === 1 && selectable[0].props.children === fixture.recoveryKey, "Copy exposes exactly the full unchanged synthetic recovery key");
+      const key = selectable[0];
+      for (let node = key; node && node !== scroll; node = node.parent) {
+        const style = flattenStyle(node.props.style);
+        assert.ok(style.height === undefined && style.maxHeight === undefined && style.overflow !== "hidden", "The recovery key can grow vertically at large text sizes");
+      }
+      const input = column.findByType("TextInput");
+      assert.equal(input.props.accessibilityLabel, confirmationLabel);
+      assert.equal(input.props.autoCapitalize, "none");
+      assert.equal(input.props.autoCorrect, false);
+      assert.ok(!["number-pad", "numeric", "decimal-pad", "phone-pad"].includes(input.props.keyboardType));
+      const texts = [...column.findAllByType("Text"), input];
+      for (const node of texts) {
+        assert.equal(node.props.allowFontScaling, os !== "ios", "Only iOS overrides native font scaling in this screen");
+        assert.ok(node.props.maxFontSizeMultiplier === undefined || node.props.maxFontSizeMultiplier === 0);
+        assert.ok(!node.props.adjustsFontSizeToFit && !node.props.numberOfLines, "Labels and key remain untruncated");
+      }
+      return texts.map(node => flattenStyle(node.props.style));
+    };
+    const baseline = content();
+    const largeScale = 3.571;
+    await setFontScale(largeScale);
+    assert.equal(tree.root.findByType("ScrollView"), scroll, "A scale update keeps the mounted recovery form");
+    const scaled = content();
+    assert.equal(scaled.length, baseline.length);
+    const expectedScale = os === "ios" ? largeScale : 1;
+    for (const [index, style] of baseline.entries()) {
+      for (const property of ["fontSize", "lineHeight"]) {
+        assert.ok(style[property] > 0 && Math.abs(scaled[index][property] - style[property] * expectedScale) <= 1,
+          `Recovery text applies the expected ${os} ${property} scaling`);
+      }
+    }
+    const input = column.findByType("TextInput");
+    const suffix = fixture.recoveryKey.slice(-6);
+    assert.equal(press(action).props.disabled, true);
+    await act(() => input.props.onChangeText(suffix.toLowerCase()));
+    assert.equal(press(action).props.disabled, true, "Confirmation is case sensitive");
+    await act(() => input.props.onChangeText(suffix));
+    assert.equal(press(action).props.disabled, false, "Exactly the final six characters enable confirmation");
+    if (os === "ios" && language === "en") {
+      fixture.confirmationErrors.set(uid, new Error("Confirmation fixture failed"));
+      await act(async () => press(action).props.onPress());
+      const alert = column.findAllByType("Text").find(node => node.props.accessibilityRole === "alert");
+      assert.equal(alert?.props.children, "Confirmation fixture failed");
+      assert.equal(alert.props.allowFontScaling, false);
+      assert.equal(press(action).props.disabled, false, "A failed confirmation can retry with the same suffix");
+    }
+    assert.ok(!shown("StoreProvider") && !shown("Route"));
+    await setFontScale(1);
+    await unmount();
+  }
+  fixture.os = "ios";
+  fixture.storage.delete("koino.language");
 
   for (const uid of ["existing", "other"]) {
     fixture.encryption.set(uid, "ready");
@@ -321,7 +419,7 @@ try {
   assert.ok(!shown("Route"), "Encryption confirmation precedes onboarding routing");
   assert.ok(!shown("Notifications"));
   const code = tree.root.findAllByType("TextInput").find((input) => input.props.accessibilityLabel === "Recovery code confirmation");
-  await act(() => code.props.onChangeText("123456"));
+  await act(() => code.props.onChangeText(fixture.recoveryKey.slice(-6)));
   await act(async () => press("Enable encryption").props.onPress());
   assert.deepEqual(fixture.migrations, [{ uid: "new", signupName: "New Member" }]);
   assert.equal(route(), "index");

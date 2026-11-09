@@ -42,8 +42,9 @@ const mocks = {
     export const Platform = { get OS() { return globalThis.__identityInteractions.os; }, select: values => values[globalThis.__identityInteractions.os] ?? values.default };
     export const View="View",Text="Text",Pressable="Pressable",ScrollView="ScrollView",TextInput="TextInput",ActivityIndicator="ActivityIndicator";
     export const StyleSheet={create:values=>values};
-    export const useWindowDimensions=()=>({height:844,width:390});
+    export const useWindowDimensions=()=>({height:844,width:390,fontScale:1,scale:3});
   `,
+  "react-native-safe-area-context": 'export const useSafeAreaInsets=()=>({top:44,bottom:34,left:0,right:0});',
   "@expo/vector-icons": 'export const Feather="Feather";',
   "expo-router": `
     import React,{useLayoutEffect,useReducer,useSyncExternalStore} from "react";
