@@ -46,7 +46,7 @@ export async function readOnboardingProgress(uid: string): Promise<OnboardingPro
       return { phase: "guide", journey: progress.journey };
     }
   } catch {
-    // Only an absent marker identifies an account outside this onboarding flow.
+    // Malformed progress must not be treated as an absent marker.
   }
   throw new Error("Onboarding progress could not be read.");
 }

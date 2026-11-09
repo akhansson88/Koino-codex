@@ -16,12 +16,17 @@ const markerKey = (uid) => `e2ee.onboarding.v1.demo-koino.${uid}`;
 const fixture = globalThis.__onboardingRouting = {
   auth,
   authListeners: new Set(),
+  beforeAuthListeners: new Set(),
+  accounts: new Map(),
+  legacyProfiles: new Set(),
+  legacyProfileGates: new Map(),
   storeListeners: new Set(),
   state: { authReady: true, theme: "light" },
   storage: new Map(),
   readGates: new Map(),
   writeGates: new Map(),
   encryption: new Map(),
+  confirmationGates: new Map(),
   createdCommunities: new Map(),
   migrated: new Set(),
   migrations: [],
@@ -31,8 +36,8 @@ const fixture = globalThis.__onboardingRouting = {
 };
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-function publish(uid) {
-  auth.currentUser = uid ? { uid } : null;
+function publish(uid, email) {
+  auth.currentUser = uid ? { uid, email } : null;
   fixture.state = { authReady: true, currentUserId: uid, theme: "light" };
   fixture.authListeners.forEach((listener) => listener(auth.currentUser));
   fixture.storeListeners.forEach((listener) => listener());
@@ -131,12 +136,38 @@ const mocks = {
   `,
   "@/state/store/firebase": "export const auth = globalThis.__onboardingRouting.auth;",
   "@/state/store/profile-operations": `
-    export const hasOnboardingCommunity = async (uid, groupId) => globalThis.__onboardingRouting.createdCommunities.get(uid) === groupId;
+    const h = globalThis.__onboardingRouting;
+    export const hasOnboardingCommunity = async (uid, groupId) => h.createdCommunities.get(uid) === groupId;
+    export async function hasLegacyOnboardingProfile(uid) {
+      await h.legacyProfileGates.get(uid)?.promise;
+      return h.legacyProfiles.has(uid);
+    }
   `,
   "@firebase/auth": `
-    export const beforeAuthStateChanged = () => () => {};
-    export const createUserWithEmailAndPassword = async () => {};
-    export const signInWithEmailAndPassword = async () => {};
+    const h = globalThis.__onboardingRouting;
+    export function beforeAuthStateChanged(auth, listener) {
+      if (auth !== h.auth) throw new Error("Unexpected auth instance");
+      h.beforeAuthListeners.add(listener);
+      return () => h.beforeAuthListeners.delete(listener);
+    }
+    async function publishUser(user) {
+      for (const listener of h.beforeAuthListeners) await listener(user);
+      h.persistedUser = user;
+      h.publish(user.uid, user.email);
+      return { user };
+    }
+    export async function createUserWithEmailAndPassword(_auth, email, password) {
+      if (h.accounts.has(email)) throw new Error("Duplicate fixture account");
+      const user = { uid: "interrupted-registration", email };
+      h.accounts.set(email, { user, password });
+      if (h.interruptSignup) throw new Error("Auth interrupted after server commit");
+      return publishUser(user);
+    }
+    export async function signInWithEmailAndPassword(_auth, email, password) {
+      const account = h.accounts.get(email);
+      if (!account || account.password !== password) throw new Error("Unknown fixture account");
+      return publishUser(account.user);
+    }
   `,
   "firebase/auth": `
     const h = globalThis.__onboardingRouting;
@@ -153,7 +184,8 @@ const mocks = {
     const subscribe = listener => { h.storeListeners.add(listener); return () => h.storeListeners.delete(listener); };
     const snapshot = () => h.state;
     const dispatch = async ({ type }) => { if (type === "signOut") h.publish(); };
-    export const KoinoProvider = ({ children }) => children;
+    const StoreProvider = "StoreProvider";
+    export const KoinoProvider = ({ children }) => <StoreProvider>{children}</StoreProvider>;
     export const useKoinoFields = () => useSyncExternalStore(subscribe, snapshot, snapshot);
     export const useKoinoActions = () => ({ dispatch });
     export const useKoino = () => ({ state: useKoinoFields(), dispatch });
@@ -175,8 +207,19 @@ const mocks = {
       if (phase === "ready") h.sessionUid = uid;
       return phase;
     }
-    export const draftAccount = async uid => ({ uid, recoveryKey: "fixture-recovery-123456" });
-    export async function confirmAccount({ uid }) { h.encryption.set(uid, "ready"); await unlockExisting(uid); }
+    export async function draftAccount(uid) {
+      const key = "e2ee.draft." + uid;
+      if (!h.storage.has(key)) h.storage.set(key, JSON.stringify({ uid, recoveryKey: "fixture-recovery-123456" }));
+      return JSON.parse(h.storage.get(key));
+    }
+    export async function confirmAccount({ uid }) {
+      const generation = h.generation;
+      h.encryption.set(uid, "ready");
+      await h.confirmationGates.get(uid)?.promise;
+      if (h.generation !== generation || h.auth.currentUser?.uid !== uid) return;
+      await unlockExisting(uid);
+      h.storage.delete("e2ee.draft." + uid);
+    }
     export async function recoverAccount(uid) { await h.recover?.(uid); }
     export function listenRaw(_path, listener) {
       listener({ signingPublicKey: identity.signingPublicKey, devices: { "fixture-device": { active: true } } });
@@ -221,7 +264,7 @@ let tree;
 try {
   const outfile = path.join(directory, "routing.cjs");
   await build({
-    stdin: { contents: 'export { default as RootLayout } from "./app/_layout"; export { default as Index } from "./app/index";', resolveDir: projectRoot, loader: "tsx" },
+    stdin: { contents: 'export { default as RootLayout } from "./app/_layout"; export { default as Index } from "./app/index"; export { registerForOnboarding, signInToKoino } from "./state/onboarding-progress";', resolveDir: projectRoot, loader: "tsx" },
     outfile, bundle: true, format: "cjs", platform: "node", jsx: "automatic",
     tsconfig: path.join(projectRoot, "tsconfig.json"),
     plugins: [{ name: "onboarding-route-boundaries", setup(builder) {
@@ -232,11 +275,11 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "tsx", resolveDir: projectRoot }));
     } }],
   });
-  const { RootLayout, Index } = require(outfile);
-  fixture.renderRoute = (name) => name === "index" ? React.createElement(Index) : React.createElement("Screen", { name, uid: auth.currentUser?.uid });
+  let app = require(outfile);
+  fixture.renderRoute = (name) => name === "index" ? React.createElement(app.Index) : React.createElement("Screen", { name, uid: auth.currentUser?.uid });
   const mount = async (initialRoute) => {
     fixture.initialRoute = initialRoute;
-    await act(async () => { tree = create(React.createElement(RootLayout)); });
+    await act(async () => { tree = create(React.createElement(app.RootLayout)); });
   };
   const unmount = async () => {
     await act(() => tree.unmount());
@@ -249,6 +292,18 @@ try {
   const stored = (uid) => JSON.parse(fixture.storage.get(markerKey(uid)));
   const changeAccount = (uid) => act(async () => publish(uid));
   const navigate = (type, name) => act(() => { fixture.navigate(type, name); });
+  const restart = async (initialRoute) => {
+    await unmount();
+    delete require.cache[outfile];
+    app = require(outfile);
+    publish(fixture.persistedUser?.uid, fixture.persistedUser?.email);
+    await mount(initialRoute);
+  };
+  const confirmEncryption = async () => {
+    const input = tree.root.findAllByType("TextInput").find(node => node.props.accessibilityLabel === "Recovery code confirmation");
+    await act(() => input.props.onChangeText("123456"));
+    await act(async () => press("Enable encryption").props.onPress());
+  };
 
   for (const uid of ["existing", "other"]) {
     fixture.encryption.set(uid, "ready");
@@ -261,6 +316,7 @@ try {
   assert.ok(shown("Notifications"));
 
   save("new", { phase: "journey", signupName: "New Member" });
+  fixture.legacyProfiles.add("new");
   await changeAccount("new");
   assert.ok(!shown("Route"), "Encryption confirmation precedes onboarding routing");
   assert.ok(!shown("Notifications"));
@@ -385,7 +441,84 @@ try {
   await act(async () => recovery.reject(new Error("Stale recovery error")));
   assert.ok(!shown("Route") && press("Recover content"));
   assert.ok(!tree.root.findAllByType("Text").some((node) => node.props.children === "Stale recovery error"));
-  console.log("Onboarding routing passed: existing deep link, encryption setup, pending route protection, password reset, write failure and retry, restart, completion, and stale sessions.");
+
+  const signupEmail = "interrupted-registration@example.test";
+  const password = "fixture-passphrase";
+  await changeAccount();
+  fixture.interruptSignup = true;
+  await act(async () => assert.rejects(app.registerForOnboarding(signupEmail, password, "New Member"), /Auth interrupted after server commit/));
+  const { uid } = fixture.accounts.get(signupEmail).user;
+  assert.equal(auth.currentUser, null);
+  assert.equal(fixture.persistedUser, undefined);
+  assert.equal(fixture.beforeAuthListeners.size, 0);
+  assert.ok(!fixture.storage.has(markerKey(uid)), "The server can commit before the app receives a UID to mark");
+
+  await restart();
+  assert.ok(shown("Login"), "The interrupted signup did not leave a persisted Auth user");
+  const failedMarkerWrite = deferred();
+  fixture.writeGates.set(markerKey(uid), failedMarkerWrite);
+  await act(async () => app.signInToKoino(signupEmail, password));
+  assert.ok(!press("Enable encryption") && !shown("StoreProvider") && !shown("Route"));
+  await act(async () => failedMarkerWrite.reject(new Error("Progress write failed")));
+  assert.ok(!fixture.storage.has(markerKey(uid)) && !fixture.storage.has(`e2ee.draft.${uid}`));
+  assert.ok(!shown("StoreProvider") && !shown("Route"), "A failed marker repair must keep content and routes locked");
+  fixture.writeGates.delete(markerKey(uid));
+  await act(async () => press("Retry").props.onPress());
+  assert.ok(press("Enable encryption") && !shown("StoreProvider") && !shown("Route"));
+  const recoveredMarker = fixture.storage.get(markerKey(uid));
+  const savedDraft = fixture.storage.get(`e2ee.draft.${uid}`);
+  assert.ok(savedDraft, "The encryption draft is persisted before confirmation");
+  await restart("me/history");
+  assert.ok(press("Enable encryption") && !shown("StoreProvider") && !shown("Route"));
+  assert.equal(fixture.storage.get(markerKey(uid)), recoveredMarker);
+  assert.equal(fixture.storage.get(`e2ee.draft.${uid}`), savedDraft, "Restart resumes the same encryption draft");
+  const confirmation = deferred();
+  fixture.confirmationGates.set(uid, confirmation);
+  await confirmEncryption();
+  assert.equal(fixture.encryption.get(uid), "ready", "The remote encrypted account already committed");
+  assert.ok(!shown("StoreProvider") && !shown("Route"), "The app is still waiting for local encryption readiness");
+  await restart("me/history");
+  await act(async () => confirmation.resolve());
+  fixture.confirmationGates.delete(uid);
+  assert.equal(route(), "index", "Completing encryption after an interrupted new registration must open Journey before Home");
+  assert.ok(shown("Journey") && !shown("Notifications"));
+  assert.deepEqual(JSON.parse(recoveredMarker), { phase: "journey" }, "Recovery must persist progress before encryption confirmation");
+  await restart("me/history");
+  assert.equal(route(), "index");
+  assert.ok(shown("Journey") && !shown("Notifications"));
+  await act(async () => tree.root.findByType("Journey").props.choose("private"));
+  assert.equal(route(), "index");
+  assert.ok(shown("Guide") && !shown("Notifications"));
+  await act(async () => tree.root.findByType("Guide").props.complete());
+  assert.equal(route(), "(tabs)");
+  assert.deepEqual(stored(uid), { phase: "complete" });
+
+  const legacy = { uid: "legacy-before-encryption", email: "legacy@example.test" };
+  fixture.legacyProfiles.add(legacy.uid);
+  fixture.accounts.set(legacy.email, { user: legacy, password });
+  const legacyLookup = deferred();
+  fixture.legacyProfileGates.set(legacy.uid, legacyLookup);
+  await changeAccount();
+  await act(async () => app.signInToKoino(legacy.email, password));
+  assert.ok(!press("Enable encryption") && !shown("StoreProvider") && !shown("Route"));
+  await act(async () => legacyLookup.reject(new Error("Profile lookup failed")));
+  assert.ok(tree.root.findAllByType("Text").some(node => node.props.accessibilityRole === "alert" && node.props.children === "Profile lookup failed"));
+  assert.ok(!fixture.storage.has(markerKey(legacy.uid)), "A failed profile lookup must not classify a user as new");
+  fixture.legacyProfileGates.delete(legacy.uid);
+  await act(async () => press("Retry").props.onPress());
+  assert.ok(press("Enable encryption") && !shown("StoreProvider") && !shown("Route"));
+  await confirmEncryption();
+  assert.equal(route(), "(tabs)", "A returning account with a pre-encryption profile skips first-use Journey");
+  assert.ok(!shown("Journey") && !fixture.storage.has(markerKey(legacy.uid)));
+  const staleLookup = deferred();
+  fixture.legacyProfileGates.set("pending-profile-lookup", staleLookup);
+  await changeAccount("pending-profile-lookup");
+  assert.ok(!shown("StoreProvider") && !shown("Route"));
+  await changeAccount("other");
+  await act(async () => staleLookup.resolve());
+  assert.equal(tree.root.findByType("Screen").props.uid, "other");
+  assert.ok(!fixture.storage.has(markerKey("pending-profile-lookup")) && !fixture.storage.has(markerKey("other")), "A stale lookup cannot write onboarding progress after account replacement");
+  console.log("Onboarding routing passed: interrupted remote registration, encryption gates, cold restart, legacy exclusion, completion, and stale sessions.");
 } finally {
   if (tree) await act(() => tree.unmount());
   delete globalThis.__onboardingRouting;

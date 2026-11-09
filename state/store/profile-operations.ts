@@ -1,5 +1,6 @@
 import * as FirebaseAuth from "@firebase/auth";
 import type { User as FirebaseUser } from "@firebase/auth";
+import { get as getRaw, ref as rawRef } from "firebase/database";
 import { get, ref, update } from "@/state/encryption/database";
 import { normalizeTheme } from "@/ui/theme";
 import { Group, Membership } from "@/state/types";
@@ -8,6 +9,10 @@ import { auth, database } from "@/state/store/firebase";
 import { type Profile } from "@/state/store/types";
 import { createEncryptedGroup, groupJoinRequest, sessionGeneration } from "@/state/encryption/session";
 import { encodeAt } from "@/state/encryption/database";
+
+export async function hasLegacyOnboardingProfile(userId: string): Promise<boolean> {
+  return (await getRaw(rawRef(database, `profiles/${userId}/id`))).val() === userId;
+}
 
 export async function ensureProfile(user: FirebaseUser, name?: string) {
   const timestamp = now();

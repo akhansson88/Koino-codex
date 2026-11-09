@@ -11,7 +11,7 @@ import { crypto, session, sessionGeneration, identityRotationInProgress, lockSes
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
-import { hasOnboardingCommunity } from "@/state/store/profile-operations";
+import { hasLegacyOnboardingProfile, hasOnboardingCommunity } from "@/state/store/profile-operations";
 import { OnboardingProgressContext } from "@/ui/onboarding-progress";
 import { confirmAction } from "@/ui/confirm";
 
@@ -58,6 +58,21 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   function setOnboarding(value: ActiveOnboarding | undefined) {
     activeOnboarding.current = value;
     setOnboardingState(value);
+  }
+  async function showSetup(uid: string, isCurrent: () => boolean) {
+    const saved = await readOnboardingProgress(uid);
+    if (!isCurrent()) return;
+    if (!saved) {
+      // Auth can create an account before the UID marker is written. Only this
+      // setup path lacks an encrypted identity; older users may have a legacy profile.
+      const legacyProfile = await hasLegacyOnboardingProfile(uid);
+      if (!isCurrent()) return;
+      if (!legacyProfile) await writeOnboardingProgress(uid, { phase: "journey" });
+      if (!isCurrent()) return;
+    }
+    const nextDraft = await draftAccount(uid);
+    if (!isCurrent()) return;
+    setDraft(nextDraft); setPhase("setup");
   }
   async function finish() {
     const uid = session().uid, token = sessionGeneration();
@@ -122,11 +137,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       setPhase("loading");
       void unlockExisting(next.uid).then(async (result) => {
         if (!isCurrent()) return;
-        if (result === "setup") {
-          const nextDraft = await draftAccount(next.uid);
-          if (!isCurrent()) return;
-          setDraft(nextDraft); setPhase("setup");
-        }
+        if (result === "setup") await showSetup(next.uid, isCurrent);
         else if (result === "recovery") setPhase("recovery");
         else await finish();
       }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
@@ -219,10 +230,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       if (!isCurrent()) return;
       if (result === "ready") await finish();
       else if (result === "recovery") setPhase("recovery");
-      else {
-        const nextDraft = await draftAccount(user.uid);
-        if (isCurrent()) { setDraft(nextDraft); setPhase("setup"); }
-      }
+      else await showSetup(user.uid, isCurrent);
     })} /> : null}
     {user ? <Button label={w("Sign out", "Logga ut")} disabled={busy} onPress={() => void work(async () => { await signOut(auth); })} /> : null}
   </ScrollView>;
