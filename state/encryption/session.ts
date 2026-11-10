@@ -2,6 +2,7 @@ import sodium from "react-native-libsodium";
 import { get, ref, onValue } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { auth, database, functions } from "@/state/store/firebase";
+import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
 import storage from "./local-storage";
 import { createCrypto, type Identity, type EncryptedRecord } from "./crypto";
 
@@ -56,9 +57,10 @@ function saveVault() {
 async function writeVault() {
   const state = session();
   await storage.setItem(vaultPath(state.uid), JSON.stringify(state.vault));
+  if (session() !== state) throw new Error("Account changed while saving encrypted keys.");
   const recovery = crypto.encrypt(state.vault, `recovery/${state.uid}`, "recovery:1", state.vault.recoveryKey, state.vault.identity);
   const grants = Object.fromEntries(Object.entries(state.accounts[state.uid].devices).filter(([, device]) => device.active).map(([id, device]) => [id, crypto.seal(state.vault, device.publicKey)]));
-  await invoke("backup", { recovery, grants });
+  await invoke("backup", { recovery, grants }, state.device);
 }
 export async function account(uid: string) {
   const state = session();
@@ -262,19 +264,81 @@ export async function createEncryptedGroup(groupId: string, data: () => unknown)
   const state = session();
   const keys = { "1": crypto.randomKey() };
   const group = signedGroup({ id: groupId, ownerId: state.uid, epoch: 1, revision: 1, status: "ready", members: { [state.uid]: publicIdentity(state.vault.identity) }, grants: { [state.uid]: crypto.seal({ id: groupId, keys }, state.vault.identity.publicKey) }, signers: [state.vault.identity.signingPublicKey, state.device.identity.signingPublicKey] });
+  const vaultGroup = { keys, ownerKey: group.signer, revision: 1, trustedSigners: group.signers };
+  const previousGroup = state.groups[groupId];
+  const previousKeys = state.vault.groups[groupId];
+  // Encoding needs the new keys synchronously. A retry must never replace
+  // the committed keys for this ID while its callable is pending.
   state.groups[groupId] = group;
-  state.vault.groups[groupId] = { keys, ownerKey: group.signer, revision: 1, trustedSigners: group.signers };
-  await invoke("createGroup", { group, records: data() });
+  state.vault.groups[groupId] = vaultGroup;
+  let records: unknown;
+  try {
+    records = data();
+  } finally {
+    if (previousGroup) state.groups[groupId] = previousGroup;
+    else delete state.groups[groupId];
+    if (previousKeys) state.vault.groups[groupId] = previousKeys;
+    else delete state.vault.groups[groupId];
+  }
+  await invoke("createGroup", { group, records }, state.device);
+  if (session() !== state) throw new Error("The account changed while creating a community.");
+  if ((state.groups[groupId]?.revision ?? 0) < group.revision) {
+    state.groups[groupId] = group;
+    state.vault.groups[groupId] = vaultGroup;
+  }
   await saveVault();
 }
 export async function publishGroup(group: GroupState, records?: unknown) {
   await invoke("groupChange", { group, records: records ?? {} });
   await loadGroup(group.id);
 }
-export async function groupJoinRequest(code: string, name: string) {
+export async function groupJoinRequest(code: string, name: string): Promise<JoinRequestReceipt> {
   const state = session();
   const invite = await invoke<{ groupId: string; owner: PublicIdentity }>("resolveInvite", { code });
-  await invoke("requestJoin", { code, identity: publicIdentity(state.vault.identity), name: crypto.seal({ name }, invite.owner.publicKey) });
+  if (session() !== state) throw new Error("The account changed while joining a community.");
+  const result = await invoke<Partial<JoinRequestReceipt>>("requestJoin", {
+    code,
+    expectedGroupId: invite.groupId,
+    expectedOwnerSigningPublicKey: invite.owner.signingPublicKey,
+    identity: publicIdentity(state.vault.identity),
+    name: crypto.seal({ name }, invite.owner.publicKey),
+  }, state.device);
+  if (session() !== state) throw new Error("The account changed while joining a community.");
+  if (result?.groupId === invite.groupId && (result.status === "pending" || result.status === "approved" || result.status === "rejected")) {
+    return { groupId: invite.groupId, status: result.status };
+  }
+  // An older callable acknowledges without a receipt. Read this account's
+  // existing request and membership paths to verify the outcome.
+  if (result && Object.keys(result).length === 0) {
+    const [request, membership] = await Promise.all([
+      get(ref(database, `e2eeJoinRequests/${invite.groupId}/${state.uid}`)),
+      get(ref(database, `encryptedData/userGroups/${state.uid}/${invite.groupId}`)),
+    ]);
+    if (session() !== state) throw new Error("The account changed while joining a community.");
+    if (membership.exists()) return { groupId: invite.groupId, status: "approved" };
+    if (request.exists()) return { groupId: invite.groupId, status: "pending" };
+  }
+  throw new Error("The community access request could not be confirmed.");
+}
+
+export async function listCommunityJoinRequests(userId: string) {
+  const state = session();
+  if (state.uid !== userId) throw new Error("The account changed while opening community requests.");
+  const result = await invoke<{ requests: CommunityJoinRequest[] }>("listJoinRequests", {}, state.device);
+  if (session() !== state) throw new Error("The account changed while opening community requests.");
+  if (!Array.isArray(result?.requests)) throw new Error("Community requests could not be read.");
+  return result.requests;
+}
+
+export function communityJoinFingerprint(userId: string) {
+  if (current?.uid !== userId || auth.currentUser?.uid !== userId) return undefined;
+  return crypto.fingerprint(current.vault.identity.signingPublicKey);
+}
+
+export async function rejectGroupJoinRequest(groupId: string, userId: string) {
+  const state = session();
+  await invoke("rejectJoin", { groupId, userId }, state.device);
+  if (session() !== state) throw new Error("The account changed while reviewing community requests.");
 }
 export async function approveGroupMember(groupId: string, uid: string, fingerprint: string, records: (name: string) => unknown) {
   const state = session();

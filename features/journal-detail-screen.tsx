@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { isCheckInJournalEntry } from "@/state/check-ins";
-import { EntryVisibility, journalEntryTypeFor, visibility } from "@/state/product";
+import { journalEntryTypeFor, visibility } from "@/state/product";
+import type { KoinoContextValue } from "@/state/store/types";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
 import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
@@ -29,16 +30,24 @@ export function JournalDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const routeId = routeParam(id);
   const { state, dispatch } = useKoino();
+  return <JournalDetailContent key={JSON.stringify([state.currentUserId, routeId])} state={state} dispatch={dispatch} routeId={routeId} />;
+}
+
+function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextValue, "state" | "dispatch"> & { routeId?: string }) {
   const { language, t } = useAppTranslation();
-  const [composerVisible, setComposerVisible] = useState(false);
+  const [draft, setDraft] = useState<symbol>();
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [entryMenuVisible, setEntryMenuVisible] = useState(false);
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
-  const [entryVisibility, setEntryVisibility] = useState<EntryVisibility>(visibility.private);
   const [journalType, setJournalType] = useState<JournalEntryType>("reflection");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [verses, setVerses] = useState<BibleVerse[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const draftRef = useRef<symbol | undefined>(undefined);
+  const pending = useRef(false);
   const detailScrollRef = useRef<ScrollView>(null);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const entry = useMemo<DetailEntry | undefined>(() => {
@@ -74,6 +83,7 @@ export function JournalDetailScreen() {
   useEffect(() => {
     detailScrollRef.current?.scrollTo({ animated: false, y: 0 });
   }, [routeId]);
+  useLayoutEffect(() => () => { draftRef.current = undefined; }, []);
 
   if (!entry) {
     return (
@@ -94,30 +104,53 @@ export function JournalDetailScreen() {
   const sharedCopy = journalEntryHasSharedCopy(currentEntry);
 
   function openEditor() {
+    if (!state.currentUserId || pending.current) return;
     setJournalType(storedType);
     setEntryKind(currentEntry.entryKind ?? (storedType === "prayer" ? "prayer_request" : storedType === "answered_prayer" ? "praise" : storedType === "scripture_note" ? "scripture" : "reflection"));
-    setEntryVisibility(currentEntry.sharedPostId ? visibility.room : visibility.private);
     setTitle(currentEntry.title ?? "");
     setBody(currentEntry.body);
     setVerses(normalizeBibleVerses(currentEntry.verse, currentEntry.verses));
-    setComposerVisible(true);
+    setSaved(false);
+    setSaveFailed(false);
+    const nextDraft = Symbol();
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+  }
+
+  function closeEditor() {
+    draftRef.current = undefined;
+    setDraft(undefined);
   }
 
   async function submitEdit() {
-    if (!body.trim()) return;
-    await dispatch({
-      type: "updateJournalEntry",
-      id: currentEntry.id,
-      body,
-      entryKind,
-      journalType,
-      title,
-      verse: primaryBibleVerse(verses),
-      verses,
-      ...(audienceLocked ? { heartMood: currentEntry.heartMood } : {}),
-      sharedPostId: audienceLocked ? currentEntry.sharedPostId : entryVisibility === visibility.room ? currentEntry.sharedPostId : undefined,
-    });
-    setComposerVisible(false);
+    const userId = state.currentUserId;
+    if (!userId || !draft || draftRef.current !== draft || pending.current || !body.trim()) return;
+    pending.current = true;
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      await dispatch({
+        type: "updateJournalEntry",
+        id: currentEntry.id,
+        body,
+        entryKind,
+        journalType,
+        title,
+        verse: primaryBibleVerse(verses),
+        verses,
+        ...(audienceLocked ? { heartMood: currentEntry.heartMood } : {}),
+        sharedPostId: currentEntry.sharedPostId,
+        journalScope: { userId },
+      });
+      if (draftRef.current !== draft) return;
+      closeEditor();
+      setSaved(true);
+    } catch {
+      if (draftRef.current === draft) setSaveFailed(true);
+    } finally {
+      pending.current = false;
+      setSaving(false);
+    }
   }
 
   function confirmDelete() {
@@ -228,11 +261,13 @@ export function JournalDetailScreen() {
           {t("common.edit")}
         </SecondaryButton>
       )}
+      {saved ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="polite">{t("me.journey.composer.editSaved")}</BodyText> : null}
       <SharedComposer
-        visible={composerVisible}
+        visible={Boolean(draft)}
         context="journal"
         kind={entryKind}
-        entryVisibility={entryVisibility}
+        entryVisibility={sharedCopy ? visibility.room : visibility.private}
+        communityAudienceAvailable={false}
         title={title}
         body={body}
         verses={verses}
@@ -242,14 +277,14 @@ export function JournalDetailScreen() {
           setEntryKind(kind);
           if (!audienceLocked) setJournalType(journalEntryTypeFor({ entryKind: kind, source: currentEntry.source }));
         }}
-        onVisibility={setEntryVisibility}
+        submission={saving ? { status: "pending", inFlight: true } : saveFailed ? { status: "failure", inFlight: false } : undefined}
+        submissionFeedback={saving ? "me.journey.composer.saving" : saveFailed ? "me.journey.composer.saveFailed" : undefined}
+        onVisibility={() => undefined}
         onTitle={setTitle}
         onBody={setBody}
         onVerses={setVerses}
-        onClose={() => setComposerVisible(false)}
+        onClose={() => { if (draft && draftRef.current === draft && !pending.current) closeEditor(); }}
         onSubmit={submitEdit}
-        roomName={group?.name}
-        roomImage={group?.image}
       />
       <BottomSheet
         title={t(isSharedCheckIn ? "community.card.deleteCheckInTitle" : "me.journey.detail.deleteTitle")}

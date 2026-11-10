@@ -84,15 +84,16 @@ for (const sharedPostId of [undefined, "existing-post"]) {
   const writes = [];
   const context = {
     firebaseUser: { uid: "reader" }, database: {}, ref: (_db, path) => path,
+    journalScope: { userId: "reader" }, journalAccountIsCurrent: () => true,
     now: () => "2026-10-22", actionVerses: () => [],
-    action: { id: "journal", body: "Edited", journalType: "heart_checkin", heartMood: "hopeful", sharedPostId },
+    action: { id: "journal", body: "Edited", journalType: "heart_checkin", heartMood: "hopeful", sharedPostId: "stale-link" },
     update: async (path, value) => writes.push([path, value]),
     setJournalEntries: fn => { entries = fn(entries); }, olderJournalEntriesRef: { current: [original] },
   };
   await runCase("updateJournalEntry", context);
   assert.equal(writes.length, 1);
   assert.equal(writes[0][0], "journalEntries/reader/journal");
-  assert.equal(writes[0][1].sharedPostId, sharedPostId ?? null);
+  assert.equal(Object.hasOwn(writes[0][1], "sharedPostId"), false, "A scoped edit must preserve the stored link");
   assert.equal(entries[0].sharedPostId, sharedPostId);
   assert.equal(entries[0].heartMood, "hopeful");
   assert.equal(entries[0].isPrivate, original.isPrivate);

@@ -1,5 +1,5 @@
 import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
@@ -29,6 +29,7 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import type { TranslationKey } from "@/ui/localization";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import {
   communityActionLabel,
@@ -42,7 +43,7 @@ import { CommunityCardAction, CommunityCheckInMood, CommunityContentTypeLabel } 
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { SharedComposer } from "@/ui/shared-composer";
+import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-composer";
 import { colors, platformShadow, radius, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
@@ -82,6 +83,34 @@ export function FeedDetailScreen() {
   const [reflectionTitle, setReflectionTitle] = useState("");
   const [reflectionBody, setReflectionBody] = useState("");
   const [reflectionVerses, setReflectionVerses] = useState<BibleVerse[]>([]);
+  const [reflectionSubmission, setReflectionSubmission] = useState<CommunityComposerSubmission>();
+  const [reflectionError, setReflectionError] = useState<TranslationKey>();
+  const reflectionOwner = JSON.stringify([state.currentUserId, state.currentGroupId, routeTargetType, routeId]);
+  const reflectionScopeRef = useRef<{ owner: string; groupId?: string; inFlight?: boolean } | undefined>(undefined);
+  const reflectionScope = reflectionScopeRef.current;
+  const shareGroupId = state.journalShareGroupId === state.currentGroupId ? state.journalShareGroupId : undefined;
+  const liveReflectionRef = useRef({ owner: reflectionOwner, shareGroupId });
+  liveReflectionRef.current = { owner: reflectionOwner, shareGroupId };
+  useLayoutEffect(() => {
+    if (reflectionScopeRef.current && reflectionScopeRef.current.owner !== reflectionOwner) {
+      reflectionScopeRef.current = undefined;
+      setReflectionComposerVisible(false);
+      setEditingPost(false);
+      setReflectionTitle("");
+      setReflectionBody("");
+      setReflectionVerses([]);
+      setReflectionSubmission(undefined);
+      setReflectionError(undefined);
+    }
+  }, [reflectionOwner]);
+  useLayoutEffect(() => () => { reflectionScopeRef.current = undefined; }, []);
+  useLayoutEffect(() => {
+    const scope = reflectionScopeRef.current;
+    if (!scope?.groupId || scope.groupId === shareGroupId || scope.inFlight) return;
+    scope.groupId = undefined;
+    setReflectionVisibility(visibility.private);
+    setReflectionError("me.journey.composer.communityChanged");
+  }, [shareGroupId, reflectionSubmission?.inFlight]);
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
   const item = useMemo<FeedItem | undefined>(() => {
@@ -256,9 +285,36 @@ export function FeedDetailScreen() {
     }).catch(() => undefined);
   }
 
+  function beginReflectionSession() {
+    if (liveReflectionRef.current.owner !== reflectionOwner || !state.currentUserId || reflectionScopeRef.current?.inFlight) return false;
+    reflectionScopeRef.current = { owner: reflectionOwner };
+    setReflectionSubmission(undefined);
+    setReflectionError(undefined);
+    return true;
+  }
+
+  function reflectionIsCurrent() {
+    return Boolean(reflectionScope && reflectionScopeRef.current === reflectionScope && reflectionScope.owner === liveReflectionRef.current.owner);
+  }
+
+  function changeReflectionDraft(change: () => void) {
+    if (reflectionIsCurrent() && !reflectionScope?.inFlight) change();
+  }
+
+  function changeReflectionVisibility(value: EntryVisibility) {
+    changeReflectionDraft(() => {
+      if (!reflectionScope || (value === visibility.room && (!shareGroupId || shareGroupId !== liveReflectionRef.current.shareGroupId))) return;
+      reflectionScope.groupId = value === visibility.room ? shareGroupId : undefined;
+      setReflectionVisibility(value);
+      setReflectionError(undefined);
+      setReflectionSubmission(undefined);
+    });
+  }
+
   function openScriptureReflection() {
-    if (!item) return;
+    if (!item || !beginReflectionSession()) return;
     const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
+    setEditingPost(false);
     setReflectionKind("reflection");
     setReflectionVisibility(visibility.private);
     setReflectionTitle(attachedVerses[0]?.reference ?? "");
@@ -268,11 +324,19 @@ export function FeedDetailScreen() {
   }
 
   function closeScriptureReflection() {
+    if (!reflectionIsCurrent() || reflectionScope?.inFlight) return;
+    reflectionScopeRef.current = undefined;
     setReflectionComposerVisible(false);
     setEditingPost(false);
+    setReflectionSubmission(undefined);
+    setReflectionError(undefined);
+    setReflectionTitle("");
+    setReflectionBody("");
+    setReflectionVerses([]);
   }
 
   async function submitScriptureReflection() {
+    if (!reflectionIsCurrent() || !reflectionScope || reflectionScope.inFlight) return;
     const currentItem = item;
     if (editingPost && currentItem?.type === "post") {
       const titleFreeKind = reflectionKind === "reflection" || reflectionKind === "praise" || reflectionKind === "scripture";
@@ -288,25 +352,41 @@ export function FeedDetailScreen() {
       closeScriptureReflection();
       return;
     }
-    if (!reflectionBody.trim()) return;
-    await dispatch({
-      type: "createJournalEntry",
-      entryKind: reflectionKind,
-      title: reflectionTitle,
-      body: reflectionBody,
-      verse: primaryBibleVerse(reflectionVerses),
-      verses: reflectionVerses,
-      shareWithGroup: reflectionVisibility === visibility.room,
-    });
-    setReflectionComposerVisible(false);
-    setReflectionTitle("");
-    setReflectionBody("");
-    setReflectionVerses([]);
+    const userId = state.currentUserId;
+    const shareWithGroup = reflectionVisibility === visibility.room;
+    const groupId = reflectionScope.groupId;
+    if (!userId || !reflectionBody.trim() || shareWithGroup !== Boolean(groupId)
+      || (groupId && groupId !== liveReflectionRef.current.shareGroupId)) return;
+    reflectionScope.inFlight = true;
+    setReflectionSubmission({ status: "pending", inFlight: true });
+    setReflectionError(undefined);
+    try {
+      await dispatch({
+        type: "createJournalEntry",
+        entryKind: reflectionKind,
+        title: reflectionTitle,
+        body: reflectionBody,
+        verse: primaryBibleVerse(reflectionVerses),
+        verses: reflectionVerses,
+        shareWithGroup,
+        journalScope: { userId, ...(groupId ? { groupId } : {}) },
+      });
+    } catch {
+      if (reflectionIsCurrent()) {
+        setReflectionSubmission({ status: "failure", inFlight: false });
+        setReflectionError(shareWithGroup ? "me.journey.composer.shareUnconfirmed" : "me.journey.composer.saveFailed");
+      }
+      return;
+    } finally {
+      reflectionScope.inFlight = false;
+    }
+    if (!reflectionIsCurrent()) return;
+    closeScriptureReflection();
   }
 
   function openPostEditor() {
     const currentItem = item;
-    if (!currentItem || currentItem.type !== "post" || !ownsItem) return;
+    if (!currentItem || currentItem.type !== "post" || !ownsItem || !beginReflectionSession()) return;
     setOwnerMenuVisible(false);
     setEditingPost(true);
     setReflectionKind(normalizeEntryKind(currentItem.kind));
@@ -679,7 +759,7 @@ export function FeedDetailScreen() {
         </Pressable>
       </Modal>
       <SharedComposer
-        visible={reflectionComposerVisible}
+        visible={reflectionComposerVisible && reflectionIsCurrent()}
         context={editingPost ? "room" : "journal"}
         editing={editingPost}
         kind={reflectionKind}
@@ -687,11 +767,14 @@ export function FeedDetailScreen() {
         title={reflectionTitle}
         body={reflectionBody}
         verses={reflectionVerses}
-        onKind={setReflectionKind}
-        onVisibility={setReflectionVisibility}
-        onTitle={setReflectionTitle}
-        onBody={setReflectionBody}
-        onVerses={setReflectionVerses}
+        submission={reflectionSubmission}
+        submissionFeedback={reflectionSubmission?.inFlight ? "me.journey.composer.saving" : reflectionError}
+        communityAudienceAvailable={Boolean(shareGroupId)}
+        onKind={(value) => changeReflectionDraft(() => setReflectionKind(value))}
+        onVisibility={changeReflectionVisibility}
+        onTitle={(value) => changeReflectionDraft(() => setReflectionTitle(value))}
+        onBody={(value) => changeReflectionDraft(() => setReflectionBody(value))}
+        onVerses={(value) => changeReflectionDraft(() => setReflectionVerses(value))}
         onClose={closeScriptureReflection}
         onSubmit={submitScriptureReflection}
         roomName={group?.name}

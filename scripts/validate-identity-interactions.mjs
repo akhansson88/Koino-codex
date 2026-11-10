@@ -41,8 +41,9 @@ const mocks = {
     export const Platform = { get OS() { return globalThis.__identityInteractions.os; }, select: values => values[globalThis.__identityInteractions.os] ?? values.default };
     export const View="View",Text="Text",Pressable="Pressable",ScrollView="ScrollView",TextInput="TextInput",ActivityIndicator="ActivityIndicator";
     export const StyleSheet={create:values=>values};
-    export const useWindowDimensions=()=>({height:844,width:390});
+    export const useWindowDimensions=()=>({height:844,width:390,fontScale:1,scale:3});
   `,
+  "react-native-safe-area-context": 'export const useSafeAreaInsets=()=>({top:44,bottom:34,left:0,right:0});',
   "@expo/vector-icons": 'export const Feather="Feather";',
   "expo-router": `
     import React,{useLayoutEffect,useReducer,useSyncExternalStore} from "react";
@@ -105,6 +106,8 @@ const mocks = {
   "@/features/bible-audio/provider": 'export const BibleAudioProvider=({children})=>children;',
   "@/features/bible-database-provider": 'export const BibleDatabaseProvider=({children})=>children;',
   "@/features/onboarding-screen": 'export const OnboardingScreen="Login";',
+  "@/features/onboarding-journey": 'export const OnboardingJourney="OnboardingJourney";',
+  "@/features/onboarding-guide": 'export const OnboardingGuide="OnboardingGuide";',
   "@/features/startup-performance": '',
   "@/ui/notification-runtime": 'export const NotificationRuntime=()=>null;',
   "@/ui/emulator-badge": 'export const EmulatorBadge=()=>null;',
@@ -129,13 +132,14 @@ const mocks = {
   `,
   "firebase/auth": 'export const onAuthStateChanged=()=>()=>{},signOut=async()=>{};',
   "@/state/encryption/database": 'export const encodeAt=(_path,value)=>value;',
+  "@/state/store/profile-operations": 'export const hasOnboardingCommunity=async()=>false,hasLegacyOnboardingProfile=async()=>false;',
   "@/state/encryption/session": `
     const h=globalThis.__identityInteractions;
     export const crypto={fingerprint:()=>"fixture fingerprint",randomKey:()=>"fixture"};
     export const session=()=>({vault:{identity:{signingPublicKey:"fixture-public-key"}},device:{id:"fixture-device"}});
     export const listenRaw=(path,listener)=>{h.activeRawListeners.add(path);listener(null);return()=>h.activeRawListeners.delete(path);};
     export const sessionGeneration=()=>1,identityRotationInProgress=()=>false,lockSession=()=>{};
-    export const unlockExisting=async()=>"setup",draftAccount=async()=>({}),confirmAccount=async()=>{},recoverAccount=async()=>{},requestDeviceApproval=async()=>{},approveDevice=async()=>{},approveGroupMember=async()=>{},rotateGroup=async()=>{},draftRevocation=async()=>({}),revokeDevice=async()=>{};
+    export const unlockExisting=async()=>"setup",draftAccount=async()=>({}),confirmAccount=async()=>{},recoverAccount=async()=>{},requestDeviceApproval=async()=>{},approveDevice=async()=>{},approveGroupMember=async()=>{},rejectGroupJoinRequest=async()=>{},rotateGroup=async()=>{},draftRevocation=async()=>({}),revokeDevice=async()=>{};
   `,
   "@/state/encryption/migration": 'export const personalMigrationComplete=async()=>true,migratePersonal=async()=>{},migrateOwnedGroups=async()=>{};',
   "@/state/supabase-storage": 'export const clearEncryptedImages=()=>{};',

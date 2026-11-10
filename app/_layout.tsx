@@ -23,6 +23,7 @@ import { NotificationRuntime } from "@/ui/notification-runtime";
 import { EmulatorBadge } from "@/ui/emulator-badge";
 import { colors } from "@/ui/theme";
 import { EncryptionBoundary } from "@/ui/encryption";
+import { useOnboardingProgress } from "@/ui/onboarding-progress";
 
 const enableNativeBackGesture = Platform.OS === "ios";
 
@@ -49,6 +50,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const reducedMotion = useReducedMotion();
+  const onboarding = useOnboardingProgress();
   const { authReady, currentUserId } = useKoinoFields(["authReady", "currentUserId"]);
   // The encryption boundary has resolved Firebase before mounting this stack.
   const userId = authReady ? currentUserId : auth.currentUser?.uid;
@@ -58,7 +60,7 @@ function RootNavigator() {
 
   return (
     <>
-      <NotificationRuntime />
+      {!onboarding.pending ? <NotificationRuntime /> : null}
       <StatusBar style="dark" backgroundColor={colors.cream} />
       <Stack
         // Leave only index for one commit so every previous route is removed,
@@ -82,7 +84,7 @@ function RootNavigator() {
           <Stack.Screen name="_sitemap" />
           <Stack.Screen name="+not-found" />
         </Stack.Protected>
-        <Stack.Protected guard={Boolean(userId) && !pruningPreviousSession}>
+        <Stack.Protected guard={Boolean(userId) && !pruningPreviousSession && !onboarding.pending}>
           <Stack.Screen
             name="identity"
             options={{
