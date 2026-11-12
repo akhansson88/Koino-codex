@@ -3,15 +3,24 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import type { Group } from "@/state/types";
 import { BodyText, SecondaryButton } from "@/ui/app-components";
-import { useKoinoActions } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors } from "@/ui/theme";
+import type { JoinRequestReceipt } from "@/state/community-join-requests";
+import type { TranslationKey } from "@/ui/localization";
+
+const resultCopy: Record<JoinRequestReceipt["status"], TranslationKey> = {
+  pending: "community.encryption.requested",
+  approved: "community.rooms.requestApproved",
+  rejected: "community.rooms.requestRejected",
+};
 
 export function CommunityEncryptionNotice({ group }: { group: Group }) {
   const { t } = useAppTranslation();
   const { dispatch } = useKoinoActions();
-  const [busy, setBusy] = useState(false), [requested, setRequested] = useState(false), [error, setError] = useState("");
-  useEffect(() => { setRequested(false); setError(""); }, [group.id]);
+  const { currentUserId } = useKoinoFields(["currentUserId"]);
+  const [busy, setBusy] = useState(false), [status, setStatus] = useState<JoinRequestReceipt["status"]>(), [error, setError] = useState("");
+  useEffect(() => { setStatus(undefined); setError(""); }, [currentUserId, group.id]);
   const owner = group.migrationOwnerName || t("community.encryption.owner");
   return <View style={{ gap: 10 }}>
     <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
@@ -22,10 +31,13 @@ export function CommunityEncryptionNotice({ group }: { group: Group }) {
     </View>
     <BodyText muted>{t(group.migrationAwaitingApproval ? "community.encryption.approvalBody" : "community.encryption.setupBody", { owner })}</BodyText>
     <BodyText>{t("community.encryption.membershipSaved")}</BodyText>
-    {group.migrationAwaitingApproval && group.inviteCode ? <SecondaryButton disabled={busy || requested} onPress={() => {
+    {group.migrationAwaitingApproval && group.inviteCode ? <SecondaryButton disabled={busy || Boolean(status) || !currentUserId} onPress={() => {
       setBusy(true); setError("");
-      void dispatch({ type: "joinGroup", inviteCode: group.inviteCode }).then(() => setRequested(true)).catch((problem: Error) => setError(problem.message)).finally(() => setBusy(false));
-    }}>{t(requested ? "community.encryption.requested" : "community.encryption.requestAccess")}</SecondaryButton> : null}
+      void dispatch({
+        type: "joinGroup", inviteCode: group.inviteCode, expectedUserId: currentUserId,
+        report: ({ status: next }) => setStatus(next),
+      }).catch(() => setError(t("onboarding.journey.joinFailed"))).finally(() => setBusy(false));
+    }}>{t(status ? resultCopy[status] : "community.encryption.requestAccess")}</SecondaryButton> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text> : null}
   </View>;
 }

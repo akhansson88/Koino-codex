@@ -53,6 +53,7 @@ const baseConfig = {
     ["expo-sqlite", { enableFTS: true, useSQLCipher: true, withSQLiteVecExtension: true }],
     "expo-secure-store",
     ["react-native-libsodium", {}],
+    "./plugins/with-ios-app-switcher-privacy.cjs",
     "./plugins/with-variant-android-scheme.cjs",
     "./plugins/with-fresh-embedded-updates.cjs",
   ],

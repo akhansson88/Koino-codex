@@ -20,8 +20,8 @@ export async function shareRoomInvite(room: Group, t: TranslationFunction) {
     return t("community.rooms.inviteCopied");
   }
 
-  await Share.share({ message: invitation, title: t("community.rooms.joinNamed", { name: room.name }) });
-  return t("community.rooms.inviteReady");
+  const { action } = await Share.share({ message: invitation, title: t("community.rooms.joinNamed", { name: room.name }) });
+  return Platform.OS === "ios" && action === Share.sharedAction ? t("community.rooms.inviteShared") : "";
 }
 
 export async function selectedImageSize(asset: ImagePicker.ImagePickerAsset) {

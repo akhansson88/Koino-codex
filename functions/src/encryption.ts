@@ -55,6 +55,22 @@ const decode = (value: string) => sodium.from_base64(value, sodium.base64_varian
 function publicKey(value: unknown) { if (typeof value !== "string") return invalid(); try { if (decode(value).length !== 32) return invalid(); } catch { return invalid(); } return value; }
 function verify(value: unknown, signature: unknown, key: string) { try { return typeof signature === "string" && sodium.crypto_sign_verify_detached(decode(signature), canonical(value), decode(key)); } catch { return false; } }
 const same = (left: unknown, right: unknown) => canonical(left) === canonical(right);
+type JoinStatus = "pending" | "approved" | "rejected";
+type JoinRequestStatus = { status: JoinStatus; inviteHint?: string; updatedAt: number };
+const safeInviteHint = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{2}$/.test(value) ? value : undefined;
+function saveJoinStatus(root: Obj, uid: string, groupId: string, status: JoinStatus, updatedAt: number, hint?: string) {
+  const previous = root.e2eeJoinRequestStatuses?.[uid]?.[groupId] as JoinRequestStatus | undefined;
+  const inviteHint = hint ?? safeInviteHint(previous?.inviteHint);
+  if (previous?.status === status && previous.inviteHint === inviteHint) return false;
+  root.e2eeJoinRequestStatuses = {
+    ...root.e2eeJoinRequestStatuses,
+    [uid]: {
+      ...root.e2eeJoinRequestStatuses?.[uid],
+      [groupId]: { status, ...(inviteHint ? { inviteHint } : {}), updatedAt },
+    },
+  };
+  return true;
+}
 function envelope(value: any) {
   if (!value || value.v !== 1 || typeof value.ciphertext !== "string" || value.ciphertext.length > 4_000_000 || typeof value.nonce !== "string" || typeof value.signature !== "string" || typeof value.keyId !== "string") invalid();
   publicKey(value.signer);
@@ -122,7 +138,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
   if (policy?.encryptedGroupsOnly && (payload.operation === "stageLegacyMembers" || ["beginMigration", "finishMigration"].includes(payload.operation) && String(data.scope).startsWith("group:") || payload.operation === "readLegacyArchive" && data.kind === "group" || payload.operation === "legacyImage" && data.bucket === "room-images")) {
     throw new HttpsError("failed-precondition", "Legacy communities have been retired. Use an encrypted community.");
   }
-  if (policy?.sharedWritesFrozen && ["removeCommunityContent", "createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
+  if (policy?.sharedWritesFrozen && ["removeCommunityContent", "createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "rejectJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
     throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
   }
   const firstOperations = ["setup", "recover", "requestDevice"];
@@ -132,7 +148,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
   }
   // Requests are signed with random IDs and a bounded lifetime. A transaction
   // prevents replay of destructive operations while preserving retries safely.
-  if (payload.operation !== "removeCommunityContent") {
+  if (payload.operation !== "removeCommunityContent" && payload.operation !== "listJoinRequests") {
     const replay = await db().ref(`e2eeRequests/${uid}/${payload.requestId}`).transaction((value) => value ? undefined : payload.timestamp);
     if (!replay.committed) throw new HttpsError("already-exists", "This request was already processed. Reload its result.");
   }
@@ -291,28 +307,97 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
       return { groupId: invite.groupId, owner: group.members[group.ownerId] };
     }
     case "requestJoin": {
-      const invite = (await db().ref(`encryptedData/inviteCodes/${id(data.code)}`).get()).val();
-      if (!invite) throw new HttpsError("not-found", "No community uses that invite code.");
+      const code = id(data.code), updatedAt = Date.now();
       if (!same(data.identity, { publicKey: account!.publicKey, signingPublicKey: account!.signingPublicKey }) || typeof data.name !== "string" || data.name.length > 4096) invalid();
-      const group = (await db().ref(`e2eeGroups/${invite.groupId}`).get()).val();
-      if (same(group?.members?.[uid], data.identity) && !(await db().ref(`e2eeDepartures/${invite.groupId}/${uid}`).get()).exists()) {
-        await db().ref().update({ [`e2eePendingGroups/${uid}/${invite.groupId}`]: null, [`e2eeJoinRequests/${invite.groupId}/${uid}`]: null });
-        return {};
-      }
-      await db().ref(`e2eeJoinRequests/${invite.groupId}/${uid}`).set({ ...data.identity, name: data.name });
-      return {};
+      let receipt: { groupId: string; status: JoinStatus } | undefined;
+      const result = await rootTransaction((root: Obj | null) => {
+        if (!root || !same(root.e2eeAccounts?.[uid], account)) return;
+        if (root.e2eePolicy?.sharedWritesFrozen) throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
+        const invites = root.encryptedData?.inviteCodes;
+        if (!invites || !Object.hasOwn(invites, code)) throw new HttpsError("not-found", "No community uses that invite code.");
+        const groupId = id(invites[code]?.groupId);
+        const group = root.e2eeGroups?.[groupId];
+        const ownerSigningPublicKey = group?.members?.[group.ownerId]?.signingPublicKey;
+        if (!ownerSigningPublicKey) throw new HttpsError("not-found", "No community uses that invite code.");
+        if ((data.expectedGroupId !== undefined && data.expectedGroupId !== groupId)
+          || (data.expectedOwnerSigningPublicKey !== undefined && data.expectedOwnerSigningPublicKey !== ownerSigningPublicKey)) {
+          throw new HttpsError("aborted", "The community invitation changed. Try again.");
+        }
+        const hint = code.length >= 5 ? code.slice(-2) : undefined;
+        const pending = root.e2eeJoinRequests?.[groupId]?.[uid];
+        const legacy = root.e2eePendingGroups?.[uid]?.[groupId];
+        if (same(group.members?.[uid], data.identity) && !root.e2eeDepartures?.[groupId]?.[uid]) {
+          receipt = { groupId, status: "approved" };
+          const changed = saveJoinStatus(root, uid, groupId, "approved", updatedAt, hint);
+          if (!pending && !legacy && !changed) return ROOT_UNCHANGED;
+          delete root.e2eeJoinRequests?.[groupId]?.[uid];
+          delete root.e2eePendingGroups?.[uid]?.[groupId];
+          return root;
+        }
+        if (root.e2eeJoinRequestStatuses?.[uid]?.[groupId]?.status === "rejected") {
+          receipt = { groupId, status: "rejected" };
+          return ROOT_UNCHANGED;
+        }
+        receipt = { groupId, status: "pending" };
+        const indexed = saveJoinStatus(root, uid, groupId, "pending", updatedAt, hint);
+        if (pending?.publicKey === data.identity.publicKey && pending.signingPublicKey === data.identity.signingPublicKey
+          && typeof pending.name === "string" && (pending.ownerSigningPublicKey === ownerSigningPublicKey
+            || (!pending.ownerSigningPublicKey && data.expectedOwnerSigningPublicKey === undefined))) {
+          return indexed ? root : ROOT_UNCHANGED;
+        }
+        root.e2eeJoinRequests = {
+          ...root.e2eeJoinRequests,
+          [groupId]: { ...root.e2eeJoinRequests?.[groupId], [uid]: { ...data.identity, name: data.name, ownerSigningPublicKey } },
+        };
+        return root;
+      });
+      if (!result.committed || !receipt) throw new HttpsError("aborted", "The account changed. Try again.");
+      return receipt;
+    }
+    case "listJoinRequests": {
+      const index = (await db().ref(`e2eeJoinRequestStatuses/${uid}`).get()).val() as Record<string, JoinRequestStatus> | null;
+      const requests = await Promise.all(Object.entries(index ?? {}).map(async ([groupId, record]) => {
+        const inviteHint = safeInviteHint(record.inviteHint);
+        // Deletion removes all requests for the community. Keep the applicant's
+        // receipt, but only show it as pending while the community exists.
+        const closed = record.status === "pending" && !(await db().ref(`e2eeGroups/${groupId}/ownerId`).get()).exists();
+        return { groupId, status: closed ? "closed" : record.status, ...(inviteHint ? { inviteHint } : {}), updatedAt: record.updatedAt };
+      }));
+      return { requests: requests.sort((left, right) => right.updatedAt - left.updatedAt || left.groupId.localeCompare(right.groupId)) };
+    }
+    case "rejectJoin": {
+      const groupId = id(data.groupId), userId = id(data.userId), updatedAt = Date.now();
+      await requireGroup(groupId, uid, true);
+      const expected = (await db().ref(`e2eeJoinRequests/${groupId}/${userId}`).get()).val();
+      const result = await rootTransaction((root: Obj | null) => {
+        const group = root?.e2eeGroups?.[groupId];
+        if (!root || !same(root.e2eeAccounts?.[uid], account) || group?.ownerId !== uid || !group.members?.[uid] || root.e2eeDepartures?.[groupId]?.[uid]) return denied();
+        if (root.e2eePolicy?.sharedWritesFrozen) throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
+        if (group.members[userId] && !root.e2eeDepartures?.[groupId]?.[userId]) throw new HttpsError("failed-precondition", "Manage existing members from the member list.");
+        const pending = root.e2eeJoinRequests?.[groupId]?.[userId];
+        if (!pending && root.e2eeJoinRequestStatuses?.[userId]?.[groupId]?.status === "rejected") return ROOT_UNCHANGED;
+        if (!pending) throw new HttpsError("not-found", "This access request is no longer available.");
+        if (!same(pending, expected)) return;
+        delete root.e2eeJoinRequests[groupId][userId];
+        delete root.e2eePendingGroups?.[userId]?.[groupId];
+        saveJoinStatus(root, userId, groupId, "rejected", updatedAt);
+        return root;
+      });
+      if (!result.committed) throw new HttpsError("aborted", "The access request changed. Reload and try again.");
+      return { groupId, status: "rejected" };
     }
     case "groupChange": {
       const previous = await requireGroup(data.group.id, uid, true);
       const group = validGroup(data.group, uid, account!, previous);
       const added = Object.keys(group.members).filter((member) => !previous.members[member]);
       const changedMembers = Object.keys(group.members).filter((member) => previous.members[member] && !same(group.members[member], previous.members[member]));
+      const approvedRequests = new Map<string, Obj>();
+      const updatedAt = Date.now();
       if (added.length > 1) invalid("Approve one member at a time.");
       for (const member of added) {
         const pending = (await db().ref(`e2eeJoinRequests/${group.id}/${member}`).get()).val();
         if (!pending || pending.publicKey !== group.members[member].publicKey || pending.signingPublicKey !== group.members[member].signingPublicKey || data.records?.membership?.userId !== member || data.records.membership.groupId !== group.id || data.records.membership.role !== "member" || data.records.userMembership?.userId !== member || data.records.userMembership?.groupId !== group.id || data.records.userMembership?.role !== "member") denied();
-      }
-      for (const member of added) {
+        approvedRequests.set(member, pending);
         const signer = account!.devices[payload.deviceId].signingPublicKey, keyId = `group:${group.id}:${group.epoch}`;
         const metadata = ["id", "userId", "groupId", "role", "createdAt"];
         encryptedRecord(`groupMembers/${group.id}/${member}`, data.records.membership, metadata, signer, keyId);
@@ -324,10 +409,22 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
         if (member !== uid) {
           const pending = (await db().ref(`e2eeJoinRequests/${group.id}/${member}`).get()).val();
           if (!pending || pending.publicKey !== group.members[member].publicKey || pending.signingPublicKey !== group.members[member].signingPublicKey) denied();
+          approvedRequests.set(member, pending);
         }
       }
       const result = await rootTransaction((root: Obj | null) => {
-        if (!root || !same(root.e2eeAccounts?.[uid], account) || !same(root.e2eeGroups?.[group.id], previous)) return;
+        if (!root || !same(root.e2eeAccounts?.[uid], account) || !same(root.e2eeGroups?.[group.id], previous) || root.e2eeDepartures?.[group.id]?.[uid]) return;
+        for (const member of Object.keys(root.e2eeDepartures?.[group.id] ?? {})) {
+          if (group.members[member] && root.e2eeJoinRequestStatuses?.[member]?.[group.id]?.status === "rejected") return;
+        }
+        for (const [member, pending] of approvedRequests) {
+          const applicant = root.e2eeAccounts?.[member];
+          const status = root.e2eeJoinRequestStatuses?.[member]?.[group.id]?.status;
+          if (!same(root.e2eeJoinRequests?.[group.id]?.[member], pending) || status === "rejected"
+            || (pending.ownerSigningPublicKey && pending.ownerSigningPublicKey !== previous.members[uid]?.signingPublicKey)
+            || applicant?.publicKey !== pending.publicKey || applicant?.signingPublicKey !== pending.signingPublicKey) return;
+          if (added.includes(member) || status === "pending") saveJoinStatus(root, member, group.id, "approved", updatedAt);
+        }
         root.e2eeGroups[group.id] = group;
         if (root.e2eeGroupLocks?.[group.id] && group.epoch !== previous.epoch + 1) return;
         delete root.e2eeGroupLocks?.[group.id];

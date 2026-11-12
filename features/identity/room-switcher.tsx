@@ -1,6 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { CommunityJoinForm, useCommunityJoinForm } from "@/features/community/join-form";
+import { CommunityJoinRequests } from "@/features/community/join-requests";
 import { useKoino } from "@/state/koino-store";
 import type { Group, Id } from "@/state/types";
 import { BodyText, BottomSheet, PrimaryButton, RoomImage, SecondaryButton, TextInputField } from "@/ui/app-components";
@@ -12,80 +14,70 @@ import { roomMemberCount } from "@/features/identity/room-helpers";
 export function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible: boolean }) {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
-  const [joinInviteCode, setJoinInviteCode] = useState("");
+  const joinForm = useCommunityJoinForm(state.currentUserId, visible);
   const [newGroupName, setNewGroupName] = useState("");
-  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
-  const canJoin = joinInviteCode.trim().length >= 3;
   const canCreate = newGroupName.trim().length > 0;
 
-  async function handleJoinRoom() {
-    if (!canJoin) return;
-    await dispatch({ type: "joinGroup", inviteCode: joinInviteCode });
-    setJoinInviteCode("");
-    setMessage(t("community.rooms.joined"));
+  function closeSheet() {
+    setError("");
     onClose();
   }
 
   async function handleCreateRoom() {
-    if (!canCreate) return;
-    await dispatch({ type: "createGroup", name: newGroupName });
-    setNewGroupName("");
-    setMessage(t("community.rooms.created"));
-    onClose();
+    if (!canCreate || joinForm.busy) return;
+    setError("");
+    try {
+      await dispatch({ type: "createGroup", name: newGroupName });
+      setNewGroupName("");
+      closeSheet();
+    } catch (problem) {
+      setError(communitySystemError(problem instanceof Error ? problem.message : "", t));
+    }
   }
 
   async function handleSwitchRoom(roomId: Id) {
-    await dispatch({ type: "switchGroup", id: roomId });
-    setMessage(t("community.rooms.switched"));
-    onClose();
+    if (joinForm.busy) return;
+    try {
+      await dispatch({ type: "switchGroup", id: roomId });
+      closeSheet();
+    } catch (problem) {
+      setError(communitySystemError(problem instanceof Error ? problem.message : "", t));
+    }
   }
 
   return (
-    <BottomSheet title={t("community.rooms.joinOrCreate")} visible={visible} onClose={onClose}>
-      <View style={{ gap: 10 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.other")}</Text>
-        <View style={{ gap: 8 }}>
-          {otherRooms.length === 0 ? (
-            <BodyText muted>{t("community.rooms.noOther")}</BodyText>
-          ) : (
-            otherRooms.map((room) => (
-              <Pressable accessibilityRole="button" key={room.id} onPress={() => handleSwitchRoom(room.id)}>
-                <RoomMiniRow room={room} memberCount={roomMemberCount(state.groupMemberCounts, room.id)} />
-              </Pressable>
-            ))
-          )}
+    <BottomSheet title={t("community.rooms.joinOrCreate")} visible={visible} onClose={closeSheet} dismissible={!joinForm.busy}>
+      {!joinForm.receipt ? (
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.other")}</Text>
+          <View style={{ gap: 8 }}>
+            {otherRooms.length === 0 ? (
+              <BodyText muted>{t("community.rooms.noOther")}</BodyText>
+            ) : (
+              otherRooms.map((room) => (
+                <Pressable accessibilityRole="button" disabled={joinForm.busy} key={room.id} onPress={() => handleSwitchRoom(room.id)}>
+                  <RoomMiniRow room={room} memberCount={roomMemberCount(state.groupMemberCounts, room.id)} />
+                </Pressable>
+              ))
+            )}
+          </View>
         </View>
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.enterCode")}</Text>
-        <TextInputField
-          autoCapitalize="characters"
-          autoCorrect={false}
-          value={joinInviteCode}
-          onChangeText={(value) => setJoinInviteCode(value.toUpperCase())}
-          onSubmitEditing={handleJoinRoom}
-          placeholder={t("community.rooms.code")}
-          returnKeyType="join"
-        />
-        <PrimaryButton disabled={!canJoin} icon="log-in" onPress={handleJoinRoom}>
-          {t("community.rooms.joinByCode")}
-        </PrimaryButton>
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.createNew")}</Text>
-        <TextInputField value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
-        <SecondaryButton disabled={!canCreate} icon="plus" onPress={handleCreateRoom}>
-          {t("community.rooms.createAction")}
-        </SecondaryButton>
-      </View>
-      {message || state.authError ? (
-        <Text style={{ color: state.authError ? colors.danger : colors.muted, fontSize: 13, fontWeight: "800" }}>
-          {state.authError ? communitySystemError(state.authError, t) : message}
-        </Text>
       ) : null}
+      <CommunityJoinForm form={joinForm} />
+      <CommunityJoinRequests userId={state.currentUserId} active={visible && !joinForm.receipt} />
+      {!joinForm.receipt ? (
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.createNew")}</Text>
+          <TextInputField editable={!joinForm.busy} value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
+          <SecondaryButton disabled={!canCreate || joinForm.busy} icon="plus" onPress={handleCreateRoom}>
+            {t("community.rooms.createAction")}
+          </SecondaryButton>
+        </View>
+      ) : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13, fontWeight: "800" }}>{error}</Text> : null}
+      <SecondaryButton disabled={joinForm.busy} onPress={closeSheet}>{t(joinForm.receipt ? "common.done" : "common.cancel")}</SecondaryButton>
     </BottomSheet>
   );
 }

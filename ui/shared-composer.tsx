@@ -8,6 +8,7 @@ import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
+import type { TranslationKey } from "@/ui/localization";
 import { tabContentClearance } from "@/ui/navigation-layout";
 import { colors, typography } from "@/ui/theme";
 
@@ -172,6 +173,7 @@ export function SharedComposer({
   audienceLocked = false,
   bibleIntent,
   body,
+  communityAudienceAvailable = true,
   context,
   editing = false,
   entryVisibility,
@@ -187,6 +189,7 @@ export function SharedComposer({
   roomImage,
   roomName,
   submission,
+  submissionFeedback,
   title,
   verses,
   visible,
@@ -194,6 +197,7 @@ export function SharedComposer({
   audienceLocked?: boolean;
   bibleIntent?: BibleComposerIntent;
   body: string;
+  communityAudienceAvailable?: boolean;
   context: "journal" | "today" | "room";
   editing?: boolean;
   entryVisibility: EntryVisibility;
@@ -209,6 +213,7 @@ export function SharedComposer({
   roomImage?: GroupImage;
   roomName?: string;
   submission?: CommunityComposerSubmission;
+  submissionFeedback?: TranslationKey;
   title: string;
   verses: BibleVerse[];
   visible: boolean;
@@ -218,22 +223,23 @@ export function SharedComposer({
   const [attemptedKind, setAttemptedKind] = useState<EntryKind | undefined>(undefined);
   const lastAnnouncement = useRef<string | undefined>(undefined);
   const locked = Boolean(submission && (submission.inFlight || submission.status === "pending" || submission.status === "unknown"));
-  const feedbackKey = submission?.status === "unknown"
+  const feedbackKey = submissionFeedback ?? (submission?.status === "unknown"
     ? submission.inFlight ? "community.composer.submission.waiting" : "community.composer.submission.unknown"
     : submission?.inFlight ? "community.composer.submission.pending"
-      : submission?.status === "failure" ? "community.composer.submission.failure" : undefined;
+      : submission?.status === "failure" ? "community.composer.submission.failure" : undefined);
   const bibleOrigin = Boolean(bibleIntent);
   const isCommunityShare = context === "room";
   // Do not briefly display or announce a new type's error while the reset
   // effect is clearing a previous Community validation attempt.
   const submissionAttempted = attemptedKind !== undefined && (!isCommunityShare || attemptedKind === kind);
-  const showVisibility = context !== "room" && !audienceLocked;
+  const showVisibility = context !== "room" && !audienceLocked && communityAudienceAvailable;
   const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
   const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
   const scriptureRequired = isCommunityShare && kind === "scripture";
   const roomAvailable = Boolean(roomName);
   const hasRequiredContent = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
-  const canSubmit = hasRequiredContent && (!isCommunityShare || roomAvailable);
+  const audienceAvailable = editing || entryVisibility !== visibility.room || communityAudienceAvailable;
+  const canSubmit = hasRequiredContent && audienceAvailable && (!isCommunityShare || roomAvailable);
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
@@ -249,7 +255,7 @@ export function SharedComposer({
   const validationKey = submissionAttempted && !canSubmit
     ? scriptureRequired ? "community.composer.validation.scriptureRequired" : "community.composer.validation.bodyRequired"
     : undefined;
-  const announcementKey = visible && isCommunityShare ? validationKey ?? feedbackKey : undefined;
+  const announcementKey = visible ? isCommunityShare ? validationKey ?? feedbackKey : submissionFeedback : undefined;
   const bodyLabelKey = kind === "prayer_request" ? "community.composer.share.field.prayer"
     : kind === "praise" ? "community.composer.share.field.praise"
       : kind === "scripture" ? "community.composer.share.field.note" : "community.composer.share.field.reflection";
@@ -460,6 +466,8 @@ export function SharedComposer({
           </SectionHeading>
           {audienceLocked ? (
             <Text style={[typography.caption, { color: colors.muted }]}>{t("community.composer.checkInAudienceFixed")}</Text>
+          ) : context === "journal" && editing && !communityAudienceAvailable ? (
+            <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.composer.editAudienceFixed")}</Text>
           ) : null}
           {showVisibility ? (
             <FilterChips
@@ -498,6 +506,8 @@ export function SharedComposer({
                 {t("community.composer.journal.privateOnly")}
               </Text>
             </View>
+          ) : context === "journal" && editing && !communityAudienceAvailable ? (
+            <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.preview.sharedCopy")}</Text>
           ) : (
             <Pressable
               accessibilityRole="button"

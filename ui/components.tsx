@@ -132,7 +132,10 @@ export function Field(props: TextInputProps) {
   );
 }
 
-export function PasswordField(props: TextInputProps) {
+export function PasswordField({ showPasswordLabel, hidePasswordLabel, ...props }: TextInputProps & {
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
+}) {
   const [isVisible, setIsVisible] = useState(false);
   const fieldLabel = props.accessibilityLabel ?? props.placeholder ?? "password";
 
@@ -145,7 +148,9 @@ export function PasswordField(props: TextInputProps) {
       />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${isVisible ? "Hide" : "Show"} ${fieldLabel.toLowerCase()}`}
+        accessibilityLabel={(isVisible ? hidePasswordLabel : showPasswordLabel) ?? `${isVisible ? "Hide" : "Show"} ${fieldLabel.toLowerCase()}`}
+        accessibilityState={{ disabled: props.editable === false }}
+        disabled={props.editable === false}
         onPress={() => setIsVisible((visible) => !visible)}
         style={({ pressed }) => ({
           position: "absolute",

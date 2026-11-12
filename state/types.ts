@@ -339,6 +339,7 @@ export type KoinoState = {
   userGroupsReady: boolean;
   currentUserId?: Id;
   currentGroupId?: Id;
+  journalShareGroupId?: Id;
   authEmail?: string;
   authError?: string;
   communityFeedError?: string;

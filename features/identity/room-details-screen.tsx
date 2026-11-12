@@ -1,6 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Platform, Text, View } from "react-native";
 import { useKoino } from "@/state/koino-store";
 import type { Membership } from "@/state/types";
@@ -22,6 +22,11 @@ export function RoomDetailsScreen() {
   const [activeSheet, setActiveSheet] = useState<RoomSheet>();
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
+  const inviteRevision = useRef(0);
+  useLayoutEffect(() => {
+    setInviteMessage("");
+    return () => { inviteRevision.current++; };
+  }, [state.currentGroupId, state.currentUserId]);
   const [roomMessage, setRoomMessage] = useState("");
   const [roomImageCropSource, setRoomImageCropSource] = useState<RoomImageCropSource>();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
@@ -35,11 +40,20 @@ export function RoomDetailsScreen() {
 
   async function handleInvite() {
     if (!group) return;
+    const revision = ++inviteRevision.current;
+    setInviteMessage("");
     try {
-      setInviteMessage(await shareRoomInvite(group, t));
+      const message = await shareRoomInvite(group, t);
+      if (revision === inviteRevision.current) setInviteMessage(message);
     } catch {
-      setInviteMessage(t("community.rooms.inviteFallback"));
+      if (revision === inviteRevision.current) setInviteMessage(t("community.rooms.inviteFallback"));
     }
+  }
+
+  function openSwitcher() {
+    inviteRevision.current++;
+    setInviteMessage("");
+    setSwitcherVisible(true);
   }
 
   async function handleRenameRoom() {
@@ -250,14 +264,14 @@ export function RoomDetailsScreen() {
               </SettingsSection>
             )}
 
-            <JoinSwitchCard onBrowse={() => setSwitcherVisible(true)} />
+            <JoinSwitchCard onBrowse={openSwitcher} />
           </>
         ) : (
           <>
             <Card>
               <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
               <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
-              <PrimaryButton icon="plus" onPress={() => setSwitcherVisible(true)}>
+              <PrimaryButton icon="plus" onPress={openSwitcher}>
                 {t("community.rooms.joinOrCreate")}
               </PrimaryButton>
             </Card>

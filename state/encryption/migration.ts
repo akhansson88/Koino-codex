@@ -101,7 +101,7 @@ async function copy(path: string, source: unknown, progress: MigrationProgress):
   if (parts[0] === "profiles" && (source as any).image?.path) await deleteUserAvatar((source as any).image.path);
   await deleteSource(path, source);
 }
-export async function migratePersonal(progress: MigrationProgress) {
+export async function migratePersonal(progress: MigrationProgress, signupName?: string) {
   const state = session();
   const ensureCurrent = migrationGuard();
   const complete = await personalMigrationComplete();
@@ -123,7 +123,8 @@ export async function migratePersonal(progress: MigrationProgress) {
   const existing = (await Raw.get(Raw.ref(database, `encryptedData/profiles/${state.uid}`))).exists();
   ensureCurrent();
   if (!existing) {
-    const name = await storage.getItem(`e2ee.signup-name.${state.uid}`);
+    const name = signupName ?? await storage.getItem(`e2ee.signup-name.${state.uid}`);
+    ensureCurrent();
     await set(ref(database, `profiles/${state.uid}`), { id: state.uid, name: name?.trim() || auth.currentUser?.displayName || "KOINO member", theme: "light", createdAt: new Date().toISOString() });
   }
   if (auth.currentUser?.displayName) await updateProfile(auth.currentUser, { displayName: null });
