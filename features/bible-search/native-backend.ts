@@ -1,6 +1,7 @@
 import { createScriptureSearchBackend, type ScriptureSearchBackend } from "./retrieval";
 import { normalizeSwedishForSearch } from "../../scripts/hybrid-search/lexical.mjs";
 import { embedQuery } from "./semantic-runtime";
+import { validateBibleQuery } from "./query-validity";
 import { E5_MODEL_REVISION } from "./embedding-core.mjs";
 
 let pendingBackend: Promise<ScriptureSearchBackend> | undefined;
@@ -38,6 +39,10 @@ async function openBackend() {
       stemSwedish: normalizeSwedishForSearch,
       vectorType,
       semanticMinSimilarity: Number(metadata.get("semantic_min_similarity") ?? 0.72),
+      semanticOnlyMinSimilarity: Number(metadata.get("semantic_only_min_similarity") ?? 0.84),
+      semanticRelativeFloor: Number(metadata.get("semantic_relative_floor") ?? 0.78),
+      semanticRelativeMargin: Number(metadata.get("semantic_relative_margin") ?? 0.05),
+      validateQuery: (query, vector, support) => validateBibleQuery(query, vector, support),
     });
   } catch (error) {
     await connection.closeAsync();

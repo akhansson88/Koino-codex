@@ -33,6 +33,11 @@ def main() -> None:
         if output.exists() and expected and fingerprint(output) == expected and not args.record_lock:
             print(f"Cached {entry['path']}", flush=True)
             continue
+        if entry.get("localOnly") and not args.record_lock:
+            raise ValueError(
+                f"Local-only source {entry['path']} is missing or stale; "
+                "run the fine-tuning export and scripts/finetune/apply_model.mjs"
+            )
         if not expected and not args.record_lock:
             raise ValueError(f"Unpinned source {entry['path']}; review and record its lock explicitly")
         output.parent.mkdir(parents=True, exist_ok=True)

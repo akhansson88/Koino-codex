@@ -14,6 +14,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const ASSETS = path.join(ROOT,"assets/bible/search");
 const CACHE = path.join(ASSETS,".cache");
 const outputPath = path.join(ASSETS,"koino-search-v1.db");
+const semanticMinSimilarity=Number(process.env.SEMANTIC_MIN_SIMILARITY??0.72);
+const semanticOnlyMinSimilarity=Number(process.env.SEMANTIC_ONLY_MIN_SIMILARITY??0.84);
+const semanticRelativeFloor=Number(process.env.SEMANTIC_RELATIVE_FLOOR??0.78);
+const semanticRelativeMargin=Number(process.env.SEMANTIC_RELATIVE_MARGIN??0.05);
 const temporaryPath = `${outputPath}.tmp`;
 const extension = process.env.SQLITE_VEC_EXTENSION ?? path.join(ROOT,"scripts/hybrid-search/.deps/sqlite_vec",process.platform==="win32"?"vec0.dll":process.platform==="darwin"?"vec0.dylib":"vec0.so");
 const readJson = (name) => JSON.parse(readFileSync(path.join(CACHE,name),"utf8"));
@@ -213,7 +217,7 @@ for(const document of documents)insertVector.run(BigInt(document.id),cacheGet.ge
 for(const topic of topics)insertTopicVector.run(BigInt(topic.id),cacheGet.get(topic.embeddingKey).vector);
 database.exec("COMMIT;DROP TABLE gate_float;DROP TABLE gate_int8;");
 const pipelineSources=["prepare.py","tokenize.py","versification.py","lexical.mjs","build.mjs","recall-queries.json","recall-gold.json"].map((file)=>[file,fileHash(path.join(ROOT,"scripts/hybrid-search",file))]);
-const metadata={schema_version:"1",model_revision:E5_MODEL_REVISION,dimensions:String(E5_DIMENSIONS),max_tokens:"512",maximum_document_tokens:String(documents.reduce((maximum,document)=>Math.max(maximum,document.tokens),0)),vector_type:vectorType,semantic_min_similarity:"0.72",embedding_revision:embeddingRevision,reader_sha256:prepared.readerSha256,mapping_revision:prepared.mappingRevision,document_count:String(documents.length),topic_count:String(topics.length),correspondence_count:String(correspondenceCount),build_fingerprint:hash(JSON.stringify({sources,prepared,embeddingRevision,pipelineSources,labelsHash:fileHash(path.join(ASSETS,"narrative-labels.json"))}))};
+const metadata={schema_version:"1",model_revision:E5_MODEL_REVISION,dimensions:String(E5_DIMENSIONS),max_tokens:"512",maximum_document_tokens:String(documents.reduce((maximum,document)=>Math.max(maximum,document.tokens),0)),vector_type:vectorType,semantic_min_similarity:String(semanticMinSimilarity),semantic_only_min_similarity:String(semanticOnlyMinSimilarity),semantic_relative_floor:String(semanticRelativeFloor),semantic_relative_margin:String(semanticRelativeMargin),embedding_revision:embeddingRevision,reader_sha256:prepared.readerSha256,mapping_revision:prepared.mappingRevision,document_count:String(documents.length),topic_count:String(topics.length),correspondence_count:String(correspondenceCount),build_fingerprint:hash(JSON.stringify({sources,prepared,embeddingRevision,pipelineSources,labelsHash:fileHash(path.join(ASSETS,"narrative-labels.json"))}))};
 const insertMeta=database.prepare("INSERT INTO meta VALUES(?,?)");
 for(const [key,value]of Object.entries(metadata))insertMeta.run(key,value);
 database.exec("INSERT INTO documents_en(documents_en)VALUES('optimize');INSERT INTO documents_sv(documents_sv)VALUES('optimize');ANALYZE;VACUUM;");
@@ -223,6 +227,6 @@ cache.close();
 await encoder.dispose();
 renameSync(temporaryPath,outputPath);
 function descriptor(file){const absolute=path.join(ASSETS,file);return {file,bytes:statSync(absolute).size,sha256:fileHash(absolute),md5:fileHash(absolute,"md5")};}
-const manifest={schemaVersion:1,databaseSha256:fileHash(outputPath),modelRevision:E5_MODEL_REVISION,dimensions:E5_DIMENSIONS,vectorType,semanticMinSimilarity:0.72,model:{revision:E5_MODEL_REVISION,dimensions:E5_DIMENSIONS,maxTokens:512},assets:{model:descriptor(path.basename(modelPath)),tokenizer:descriptor(path.basename(tokenizerPath)),tokenizerConfig:descriptor(path.basename(tokenizerConfigPath)),database:descriptor(path.basename(outputPath))},counts:{documents:documents.length,topics:topics.length,verses:prepared.verseCount,correspondences:correspondenceCount},buildFingerprint:metadata.build_fingerprint,readerSha256:prepared.readerSha256,mappingRevision:prepared.mappingRevision};
+const manifest={schemaVersion:1,databaseSha256:fileHash(outputPath),modelRevision:E5_MODEL_REVISION,dimensions:E5_DIMENSIONS,vectorType,semanticMinSimilarity,semanticOnlyMinSimilarity,semanticRelativeFloor,semanticRelativeMargin,model:{revision:E5_MODEL_REVISION,dimensions:E5_DIMENSIONS,maxTokens:512},assets:{model:descriptor(path.basename(modelPath)),tokenizer:descriptor(path.basename(tokenizerPath)),tokenizerConfig:descriptor(path.basename(tokenizerConfigPath)),database:descriptor(path.basename(outputPath))},counts:{documents:documents.length,topics:topics.length,verses:prepared.verseCount,correspondences:correspondenceCount},buildFingerprint:metadata.build_fingerprint,readerSha256:prepared.readerSha256,mappingRevision:prepared.mappingRevision};
 writeFileSync(path.join(ASSETS,"search-manifest.json"),`${JSON.stringify(manifest,null,2)}\n`);
 log(`Built ${outputPath} (${manifest.assets.database.bytes.toLocaleString()} bytes)`);

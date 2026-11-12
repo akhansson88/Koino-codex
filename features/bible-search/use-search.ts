@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createScriptureSearchPageSession, normalizeScriptureQuery, type ScriptureSearchPageSession, type ScriptureSearchResponse } from "@/features/bible-search";
+import { createScriptureSearchPageSession, normalizeScriptureQuery, type SearchEngine, type ScriptureSearchPageSession, type ScriptureSearchResponse, type TestamentFilter } from "@/features/bible-search";
 import type { BibleVersionId } from "@/features/bible-versions";
 import { biblePassagesFromRanges } from "@/features/bible-kjv";
 import type { AppLanguage } from "@/ui/localization";
 import { prepareSemanticRuntime } from "./semantic-runtime";
+import { searchStudy, type StudyEntry } from "./study";
 
 const emptyResponse: ScriptureSearchResponse = { results: [], mode: "lexical", semanticState: "loading" };
 let searchSessionCounter = 0;
@@ -18,17 +19,22 @@ const MAX_CACHED_PAGES = 7;
 type ExcerptCache = { key: string; registered: number; clock: number; stamps: Map<number, number>; visible: Set<number>; running: Set<number> };
 
 /** Keep both search surfaces consistent, and cancel obsolete model or database work. */
-export function useScriptureSearch({ language, limit, query, versionId, visible, retainOnHide = false, scopeKey = "" }: {
+export function useScriptureSearch({ language, limit, query, versionId, visible, currentBook, retainOnHide = false, scopeKey = "" }: {
   language: AppLanguage;
   limit: number;
   query: string;
   versionId: BibleVersionId;
   visible: boolean;
+  currentBook?: string;
   retainOnHide?: boolean;
   scopeKey?: string;
 }) {
   const normalizedQuery = normalizeScriptureQuery(query);
   const [retry, setRetry] = useState(0);
+  const [engine, setEngine] = useState<SearchEngine>("smart");
+  const [testament, setTestament] = useState<TestamentFilter>("all");
+  const [bookOnly, setBookOnly] = useState(false);
+  const [studyResults, setStudyResults] = useState<StudyEntry[]>([]);
   const [state, setState] = useState<SearchState>();
   const request = useRef(0);
   const retainedKey = useRef<string | undefined>(undefined);
@@ -36,8 +42,9 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
   const cancelRequest = useRef<(() => void) | undefined>(undefined);
   const pageSession = useRef<{ key: string; value: ScriptureSearchPageSession } | undefined>(undefined);
   const pageRequest = useRef<{ key: string; controller: AbortController } | undefined>(undefined);
-  const scrollKey = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit]);
-  const key = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit, retry]);
+  const bookScope = bookOnly ? currentBook : undefined;
+  const scrollKey = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit, engine, testament, bookScope]);
+  const key = JSON.stringify([scopeKey, language, versionId, normalizedQuery, limit, engine, testament, bookScope, retry]);
   const sessionId = useMemo(() => `search-session-${searchSessionSeed}-${++searchSessionCounter}`, [key]);
   const excerptCache = useRef<ExcerptCache | undefined>(undefined);
   if (!excerptCache.current || excerptCache.current.key !== key) excerptCache.current = { key, registered: 0, clock: 0, stamps: new Map(), visible: new Set([0]), running: new Set() };
@@ -88,7 +95,7 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
     suspended.current = false;
     retainedKey.current = key;
     pageSession.current?.value.dispose();
-    const session = createScriptureSearchPageSession({ language, limit, query: normalizedQuery, versionId });
+    const session = createScriptureSearchPageSession({ language, limit, query: normalizedQuery, versionId, engine, testament: testament === "all" ? undefined : testament, book: bookScope });
     pageSession.current = { key, value: session };
     const controller = new AbortController();
     setState({ key, response: emptyResponse, loading: true, error: false, hasMore: false, loadingMore: false, moreError: false });
@@ -116,7 +123,21 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
       cancel();
       if (cancelRequest.current === cancel) cancelRequest.current = undefined;
     };
-  }, [eligible, key, language, limit, normalizedQuery, versionId, visible, retainOnHide, suspend]);
+  }, [bookScope, currentBook, eligible, engine, key, language, limit, normalizedQuery, testament, versionId, visible, retainOnHide, suspend]);
+
+  useEffect(() => {
+    if (!eligible || !visible || engine !== "smart") {
+      setStudyResults([]);
+      return;
+    }
+    let active = true;
+    void searchStudy(normalizedQuery, 3).then((rows) => {
+      if (active) setStudyResults(rows);
+    }).catch(() => {
+      if (active) setStudyResults([]);
+    });
+    return () => { active = false; };
+  }, [eligible, engine, key, normalizedQuery, visible]);
 
   const current = state?.key === key ? state : undefined;
   const currentRef = useRef(current);
@@ -226,6 +247,7 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
 
   return {
     response: current?.response ?? emptyResponse,
+    studyResults,
     loading: eligible && visible && (current?.loading ?? true),
     error: current?.error ?? false,
     interrupted: current?.interrupted ?? false,
@@ -239,6 +261,13 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
     scrollKey,
     sessionId,
     eligible,
+    engine,
+    setEngine,
+    testament,
+    setTestament,
+    currentBook,
+    bookOnly,
+    setBookOnly,
     retry: () => setRetry((value) => value + 1),
     suspend,
   };
@@ -247,10 +276,11 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
 export type ScriptureSearchScrollState = { offset: number; restore: boolean; index?: number; contentHeight?: number };
 
 /** Lives above the native modal so dismissing it cannot discard a search. */
-export function useScriptureSearchSession({ language, versionId, visible, scopeKey = "", limit = 20 }: {
+export function useScriptureSearchSession({ language, versionId, visible, currentBook, scopeKey = "", limit = 20 }: {
   language: AppLanguage;
   versionId: BibleVersionId;
   visible: boolean;
+  currentBook?: string;
   scopeKey?: string;
   limit?: number;
 }) {
@@ -258,7 +288,7 @@ export function useScriptureSearchSession({ language, versionId, visible, scopeK
   const query = input.scopeKey === scopeKey ? input.query : "";
   const setQuery = useCallback((value: string) => setInput({ scopeKey, query: value }), [scopeKey]);
   useEffect(() => { setInput({ scopeKey, query: "" }); }, [scopeKey]);
-  const search = useScriptureSearch({ language, versionId, visible, query, limit, scopeKey, retainOnHide: true });
+  const search = useScriptureSearch({ language, versionId, visible, currentBook, query, limit, scopeKey, retainOnHide: true });
   const scroll = useMemo<ScriptureSearchScrollState>(() => ({ offset: 0, restore: false }), [search.scrollKey]);
   const wasVisible = useRef(visible);
   useEffect(() => {

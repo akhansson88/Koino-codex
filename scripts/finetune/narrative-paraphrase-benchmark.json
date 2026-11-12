@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "locked": true,
+  "createdAt": "2026-11-11",
+  "description": "Independent bilingual narrative paraphrase benchmark. Gold is a whole passage/section span, so any verse in the story section counts as relevant. Do not train on these queries or reference spans.",
+  "queries": [
+    {
+      "id": "tower-of-babel",
+      "story": "The Tower of Babel",
+      "en": "Why did people suddenly start speaking different languages?",
+      "sv": "Varför började människor plötsligt tala olika språk?",
+      "references": [[1, 11, 1, 9]]
+    },
+    {
+      "id": "joseph-sold",
+      "story": "Joseph Sold into Egypt",
+      "en": "A young man is sold by his brothers and taken to Egypt",
+      "sv": "En ung man säljs av sina bröder och förs till Egypten",
+      "references": [[1, 37, 12, 30]]
+    },
+    {
+      "id": "moses-birth",
+      "story": "The Birth and Adoption of Moses",
+      "en": "A baby is hidden in a basket among the reeds",
+      "sv": "Ett barn göms i en korg bland vassen",
+      "references": [[2, 2, 1, 10]]
+    },
+    {
+      "id": "burning-bush",
+      "story": "Moses at the Burning Bush",
+      "en": "A shepherd sees a bush burning without being consumed",
+      "sv": "En herde ser en buske brinna utan att förtäras",
+      "references": [[2, 3, 1, 22]]
+    },
+    {
+      "id": "red-sea",
+      "story": "Parting the Red Sea",
+      "en": "The sea opens so a people can escape slavery",
+      "sv": "Havet öppnar sig så att ett folk kan fly från slaveriet",
+      "references": [[2, 14, 15, 31]]
+    },
+    {
+      "id": "gideon-fleece",
+      "story": "Gideon's Fleece",
+      "en": "A man asks for a sign with dew on a fleece",
+      "sv": "En man ber om ett tecken med dagg på en ullfilt",
+      "references": [[7, 6, 36, 40]]
+    },
+    {
+      "id": "samson-delilah",
+      "story": "Samson and Delilah",
+      "en": "A strong man loses his strength after his hair is cut",
+      "sv": "En stark man förlorar sin kraft när hans hår klipps",
+      "references": [[7, 16, 4, 22]]
+    },
+    {
+      "id": "naaman-healed",
+      "story": "Naaman Cured of Leprosy",
+      "en": "A commander is healed of leprosy after washing in a river",
+      "sv": "En befälhavare blir botad från spetälska efter att ha tvättat sig i en flod",
+      "references": [[12, 5, 1, 14]]
+    },
+    {
+      "id": "josiah-covenant",
+      "story": "Josiah Renews the Covenant",
+      "en": "A young king renews the covenant after a lost scroll is found",
+      "sv": "En ung kung förnyar förbundet efter att en förlorad skriftrulle hittats",
+      "references": [[12, 23, 1, 3]]
+    },
+    {
+      "id": "esther-pleads",
+      "story": "Esther Pleads for Her People",
+      "en": "A queen risks her life to plead for her people",
+      "sv": "En drottning riskerar sitt liv för att be för sitt folk",
+      "references": [[17, 5, 1, 8]]
+    },
+    {
+      "id": "nehemiah-wall",
+      "story": "Nehemiah Sent to Jerusalem",
+      "en": "A cupbearer asks a king to let him rebuild a ruined wall",
+      "sv": "En munskänk ber en kung att få bygga upp en raserad mur",
+      "references": [[16, 2, 1, 9]]
+    },
+    {
+      "id": "jonah-fish",
+      "story": "Jonah Flees from the LORD",
+      "en": "A prophet is swallowed by a great fish after fleeing his mission",
+      "sv": "En profet slukas av en stor fisk efter att ha flytt från sitt uppdrag",
+      "references": [[32, 1, 1, 17]]
+    },
+    {
+      "id": "baptism-jesus",
+      "story": "The Baptism of Jesus",
+      "en": "A voice from heaven calls a man the beloved Son",
+      "sv": "En röst från himlen kallar en man den älskade Sonen",
+      "references": [[40, 3, 13, 17], [42, 3, 21, 22]]
+    },
+    {
+      "id": "temptation-jesus",
+      "story": "The Temptation of Jesus",
+      "en": "The devil offers a man all the kingdoms of the world",
+      "sv": "Djävulen erbjuder en man alla världens riken",
+      "references": [[40, 4, 1, 11], [42, 4, 1, 13]]
+    },
+    {
+      "id": "wedding-cana",
+      "story": "The Wedding at Cana",
+      "en": "Water is turned into wine at a wedding feast",
+      "sv": "Vatten förvandlas till vin vid ett bröllop",
+      "references": [[43, 2, 1, 11]]
+    },
+    {
+      "id": "feeding-four-thousand",
+      "story": "The Feeding of the Four Thousand",
+      "en": "A crowd is fed with a few loaves and fish in a remote place",
+      "sv": "En folkmassa får mat av några bröd och fiskar på en öde plats",
+      "references": [[41, 8, 1, 10], [40, 15, 29, 39]]
+    },
+    {
+      "id": "canaanite-woman",
+      "story": "The Faith of the Canaanite Woman",
+      "en": "A foreign woman persists until her daughter is healed",
+      "sv": "En utländsk kvinna ger inte upp förrän hennes dotter blir botad",
+      "references": [[40, 15, 21, 28]]
+    },
+    {
+      "id": "talents",
+      "story": "The Parable of the Talents",
+      "en": "Servants are entrusted with money and called to account",
+      "sv": "Tjänare får pengar att förvalta och kallas till räkenskap",
+      "references": [[40, 25, 14, 30]]
+    },
+    {
+      "id": "ten-virgins",
+      "story": "The Parable of the Ten Virgins",
+      "en": "Five bridesmaids run out of oil while waiting for the bridegroom",
+      "sv": "Fem brudtärnor får slut på olja medan de väntar på brudgummen",
+      "references": [[40, 25, 1, 13]]
+    },
+    {
+      "id": "last-supper",
+      "story": "The Last Supper",
+      "en": "Jesus gives bread and wine to his disciples before his death",
+      "sv": "Jesus ger bröd och vin till sina lärjungar före sin död",
+      "references": [[42, 22, 14, 23]]
+    },
+    {
+      "id": "gethsemane",
+      "story": "Jesus Prays at Gethsemane",
+      "en": "Jesus prays in a garden while his disciples fall asleep",
+      "sv": "Jesus ber i en trädgård medan hans lärjungar somnar",
+      "references": [[40, 26, 36, 46], [41, 14, 32, 42]]
+    },
+    {
+      "id": "peter-denies",
+      "story": "Peter Denies Jesus",
+      "en": "A disciple denies knowing Jesus three times before the rooster crows",
+      "sv": "En lärjunge förnekar att han känner Jesus tre gånger innan tuppen gal",
+      "references": [[42, 22, 54, 62]]
+    },
+    {
+      "id": "road-emmaus",
+      "story": "The Road to Emmaus",
+      "en": "Two travellers recognize Jesus when he breaks bread",
+      "sv": "Två vandrare känner igen Jesus när han bryter brödet",
+      "references": [[42, 24, 13, 35]]
+    },
+    {
+      "id": "great-commission",
+      "story": "The Great Commission",
+      "en": "Jesus sends his followers to make disciples of all nations",
+      "sv": "Jesus sänder sina efterföljare att göra alla folk till lärjungar",
+      "references": [[41, 16, 14, 18]]
+    },
+    {
+      "id": "ascension",
+      "story": "The Ascension",
+      "en": "Jesus is taken up into heaven while his disciples watch",
+      "sv": "Jesus tas upp till himlen medan hans lärjungar ser på",
+      "references": [[44, 1, 6, 11]]
+    },
+    {
+      "id": "stephen-stoned",
+      "story": "The Stoning of Stephen",
+      "en": "A deacon is stoned while praying for his attackers",
+      "sv": "En diakon stenas medan han ber för sina angripare",
+      "references": [[44, 7, 54, 60]]
+    },
+    {
+      "id": "lydia-baptized",
+      "story": "Lydia's Conversion in Philippi",
+      "en": "A seller of purple cloth is baptized with her household",
+      "sv": "En försäljare av purpurtyg döps med sitt hushåll",
+      "references": [[44, 16, 11, 15]]
+    },
+    {
+      "id": "shipwreck",
+      "story": "The Shipwreck",
+      "en": "A prisoner survives a shipwreck on an island",
+      "sv": "En fånge överlever ett skeppsbrott på en ö",
+      "references": [[44, 27, 27, 44]]
+    },
+    {
+      "id": "saul-conversion",
+      "story": "The Conversion of Saul",
+      "en": "A persecutor is blinded by a light and hears Jesus",
+      "sv": "En förföljare förblindas av ett ljus och hör Jesus",
+      "references": [[44, 9, 1, 19]]
+    },
+    {
+      "id": "paul-rome",
+      "story": "Paul Preaches at Rome",
+      "en": "Paul preaches in Rome while under house arrest",
+      "sv": "Paulus predikar i Rom under husarrest",
+      "references": [[44, 28, 16, 24]]
+    }
+  ]
+}

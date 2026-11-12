@@ -11,6 +11,22 @@ Topical data snapshot: generated 2026-10-12, downloaded 2026-10-18 from https://
 
 Changes by Koino: positive vote filtering, conversion of votes to logarithmic ranking weights, translation-specific reference mapping, retention of the 24 strongest outgoing cross-reference neighbors, compilation into a local SQLite index and topic-name embeddings. Scripture text is obtained from the app's own translations; ESV quotations are not redistributed from the topical website.
 
+## Easton's Bible Dictionary study pack
+
+Source dictionary: Easton's Bible Dictionary, Matthew George Easton, 1897. The source text is in the public domain.
+Structured dataset: https://github.com/neuu-org/bible-dictionary-dataset , commit `b8e82aa7ca847f4d97fb432cd965e398a111333c`.
+Dataset license: Creative Commons Attribution 4.0 International, https://creativecommons.org/licenses/by/4.0/ , Copyright (c) 2026 NEUU.
+
+Changes by Koino: the dictionary entries are normalized, deduplicated and compiled into an offline SQLite FTS5 study index. Koino does not add or rewrite definitions. The shipped `assets/bible/study/study-manifest.json` records the source commit, entry count and database checksum.
+
+## Matthew Henry Bible Commentary
+
+Source: Matthew Henry's Bible Commentary, via the Free Use Bible API at https://bible.helloao.org/api/c/matthew-henry . The underlying commentary (Matthew Henry, 1662-1714) is in the public domain.
+Structured JSON: AO Lab / HelloAO Bible API. License: Creative Commons Public Domain Mark 1.0, https://creativecommons.org/publicdomain/mark/1.0/ .
+Snapshot: 2026-11-10; 1,167 chapters and 5,280 passage/chapter comments. The API's commentary checksum is `dd7ed69db2c66469328b6b397f352ad9b8de7b693e33fd848ef2cfb57a97f967`; Koino's normalized snapshot fingerprint is recorded in `assets/bible/study/study-manifest.json`.
+
+Changes by Koino: passage text is normalized, chapter introductions are retained as separate study entries, and the comments are compiled into the same offline SQLite FTS5 study index as the dictionary. Koino does not rewrite the commentary.
+
 ## Berean Standard Bible section headings
 
 Source: https://berean.bible/downloads.htm and https://bereanbible.com/bsb_usfm.zip .

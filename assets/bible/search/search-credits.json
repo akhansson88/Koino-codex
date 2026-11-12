@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceFingerprint": "d970aa60a8d0837b2f584be7004809fd547551994e933612e37807a23f4f8528",
+  "sourceFingerprint": "c24f4f205672c9e73c86a726de7d5112c2d168246a1ee3ca611014afaa08ca53",
   "sections": [
     {
       "id": "source-0",
@@ -14,21 +14,31 @@
     },
     {
       "id": "source-2",
+      "title": "Easton's Bible Dictionary study pack",
+      "body": "Source dictionary: Easton's Bible Dictionary, Matthew George Easton, 1897. The source text is in the public domain.\nStructured dataset: https://github.com/neuu-org/bible-dictionary-dataset , commit b8e82aa7ca847f4d97fb432cd965e398a111333c.\nDataset license: Creative Commons Attribution 4.0 International, https://creativecommons.org/licenses/by/4.0/ , Copyright (c) 2026 NEUU.\n\nChanges by Koino: the dictionary entries are normalized, deduplicated and compiled into an offline SQLite FTS5 study index. Koino does not add or rewrite definitions. The shipped assets/bible/study/study-manifest.json records the source commit, entry count and database checksum."
+    },
+    {
+      "id": "source-3",
+      "title": "Matthew Henry Bible Commentary",
+      "body": "Source: Matthew Henry's Bible Commentary, via the Free Use Bible API at https://bible.helloao.org/api/c/matthew-henry . The underlying commentary (Matthew Henry, 1662-1714) is in the public domain.\nStructured JSON: AO Lab / HelloAO Bible API. License: Creative Commons Public Domain Mark 1.0, https://creativecommons.org/publicdomain/mark/1.0/ .\nSnapshot: 2026-11-10; 1,167 chapters and 5,280 passage/chapter comments. The API's commentary checksum is dd7ed69db2c66469328b6b397f352ad9b8de7b693e33fd848ef2cfb57a97f967; Koino's normalized snapshot fingerprint is recorded in assets/bible/study/study-manifest.json.\n\nChanges by Koino: passage text is normalized, chapter introductions are retained as separate study entries, and the comments are compiled into the same offline SQLite FTS5 study index as the dictionary. Koino does not rewrite the commentary."
+    },
+    {
+      "id": "source-4",
       "title": "Berean Standard Bible section headings",
       "body": "Source: https://berean.bible/downloads.htm and https://bereanbible.com/bsb_usfm.zip .\nTerms: https://berean.bible/terms.htm . The Berean Bible text was dedicated to the public domain on April 30, 2023. All uses and adaptations are freely permitted.\n\nThe Holy Bible, Berean Standard Bible, BSB is produced in cooperation with Bible Hub, Discovery Bible, OpenBible.com, and the Berean Bible Translation Committee. Koino uses section headings and coordinates as English search metadata for its KJV text. It does not add the BSB as a Bible translation."
     },
     {
-      "id": "source-3",
+      "id": "source-5",
       "title": "Multilingual E5-small",
       "body": "Model: https://huggingface.co/intfloat/multilingual-e5-small .\nTechnical report: https://arxiv.org/abs/2402.05672 .\nAuthors: Liang Wang, Nan Yang, Xiaolong Huang, Linjun Yang, Rangan Majumder, Furu Wei.\nThe upstream model declares the MIT license. Converted generic ONNX assets: https://huggingface.co/Xenova/multilingual-e5-small , revision 761b726dd34fb83930e26aab4e9ac3899aa1fa78. Complete file checksums and upstream revision are recorded in scripts/hybrid-search/sources.lock.json.\n\nThe MIT License (MIT)\n\nCopyright (c) Microsoft Corporation\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
     },
     {
-      "id": "source-4",
+      "id": "source-6",
       "title": "Swedish Snowball stemmer",
       "body": "Official generated JavaScript source from https://snowballstem.org/ , downloaded 2026-10-18. The generated source and base runtime are vendored in scripts/hybrid-search/vendor/, with exact upstream SHA-256 hashes in sources.lock.json. The complete BSD-3-Clause notice accompanies those files in vendor/LICENSE.txt and must accompany binary distributions.\n\nSnowball generated Swedish stemmer and base runtime.\nSource: https://snowballstem.org/ (retrieved 2026-10-18; source checksums in ../sources.lock.json)\nExcept where explicitly noted, all the software given out on the Snowball site is covered by the 3-clause BSD License:\n\nCopyright (c) 2001, Dr Martin Porter,\nCopyright (c) 2002, Richard Boulton.\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:\n1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.\n2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.\n3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
     },
     {
-      "id": "source-5",
+      "id": "source-7",
       "title": "Koino narrative metadata and versification mapping",
       "body": "Koino-authored descriptive labels are recorded with Scripture references in narrative-labels.json. They annotate corpus content rather than overriding results for specific queries. The custom KJV/Reformationsbibeln mapping is pinned to the actual packaged text hashes; unsupported mappings are omitted. Sixty-six native Swedish Psalm title verses remain independently searchable without an English verse counterpart. The absent Swedish 2 Chronicles 2:18 is never replaced with a neighboring verse."
     },

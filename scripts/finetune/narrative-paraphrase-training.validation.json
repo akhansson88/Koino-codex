@@ -1,0 +1,12 @@
+{
+  "stories": 54,
+  "queries": 108,
+  "overlapsBenchmark": 0,
+  "overlapsFixedGold": 0,
+  "failures": [],
+  "examples": {
+    "benchmarkOverlap": [],
+    "fixedGoldOverlap": []
+  },
+  "passed": true
+}

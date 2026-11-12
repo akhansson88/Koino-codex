@@ -1,0 +1,2264 @@
+{
+  "source": "scripts/hybrid-search/query-prototypes-source.json",
+  "counts": {
+    "positive": 316,
+    "negative": 132
+  },
+  "chosen": {
+    "threshold": 0.0875,
+    "falseNegatives": 214,
+    "falsePositives": 0
+  },
+  "scoreRange": {
+    "positive": {
+      "min": 0.007663263238329332,
+      "max": 0.16039509360037574
+    },
+    "negative": {
+      "min": -0.028232641772145683,
+      "max": 0.08736427421422044
+    }
+  },
+  "scores": [
+    {
+      "text": "anxiety",
+      "label": "positive",
+      "score": 0.11205657393695556
+    },
+    {
+      "text": "grief",
+      "label": "positive",
+      "score": 0.12126440484018608
+    },
+    {
+      "text": "forgiveness",
+      "label": "positive",
+      "score": 0.12129637555327588
+    },
+    {
+      "text": "loneliness",
+      "label": "positive",
+      "score": 0.10298692297959078
+    },
+    {
+      "text": "hope",
+      "label": "positive",
+      "score": 0.0986896734656757
+    },
+    {
+      "text": "faith",
+      "label": "positive",
+      "score": 0.11201556858091999
+    },
+    {
+      "text": "grace",
+      "label": "positive",
+      "score": 0.09739734976608538
+    },
+    {
+      "text": "love",
+      "label": "positive",
+      "score": 0.09596390608301941
+    },
+    {
+      "text": "peace",
+      "label": "positive",
+      "score": 0.10099939261401791
+    },
+    {
+      "text": "prayer",
+      "label": "positive",
+      "score": 0.10763224690718809
+    },
+    {
+      "text": "worship",
+      "label": "positive",
+      "score": 0.10799105584024193
+    },
+    {
+      "text": "salvation",
+      "label": "positive",
+      "score": 0.09169895565971653
+    },
+    {
+      "text": "sin",
+      "label": "positive",
+      "score": 0.08724674911789132
+    },
+    {
+      "text": "temptation",
+      "label": "positive",
+      "score": 0.07973487082481201
+    },
+    {
+      "text": "suffering",
+      "label": "positive",
+      "score": 0.08921439290256783
+    },
+    {
+      "text": "healing",
+      "label": "positive",
+      "score": 0.07895098930557665
+    },
+    {
+      "text": "marriage",
+      "label": "positive",
+      "score": 0.08403060359148684
+    },
+    {
+      "text": "parenting",
+      "label": "positive",
+      "score": 0.06601338977880855
+    },
+    {
+      "text": "money",
+      "label": "positive",
+      "score": 0.0743186122482361
+    },
+    {
+      "text": "work",
+      "label": "positive",
+      "score": 0.06254799669082889
+    },
+    {
+      "text": "rest",
+      "label": "positive",
+      "score": 0.07113206869981203
+    },
+    {
+      "text": "fear",
+      "label": "positive",
+      "score": 0.09887838073179267
+    },
+    {
+      "text": "anger",
+      "label": "positive",
+      "score": 0.11080137191531025
+    },
+    {
+      "text": "depression",
+      "label": "positive",
+      "score": 0.07970242703332708
+    },
+    {
+      "text": "addiction",
+      "label": "positive",
+      "score": 0.08628421595877
+    },
+    {
+      "text": "purity",
+      "label": "positive",
+      "score": 0.09278110761080205
+    },
+    {
+      "text": "humility",
+      "label": "positive",
+      "score": 0.09027132787051795
+    },
+    {
+      "text": "wisdom",
+      "label": "positive",
+      "score": 0.07433131525504566
+    },
+    {
+      "text": "patience",
+      "label": "positive",
+      "score": 0.07132782866549281
+    },
+    {
+      "text": "kindness",
+      "label": "positive",
+      "score": 0.09605338723641177
+    },
+    {
+      "text": "generosity",
+      "label": "positive",
+      "score": 0.11106160701384604
+    },
+    {
+      "text": "justice",
+      "label": "positive",
+      "score": 0.08347235849984946
+    },
+    {
+      "text": "mercy",
+      "label": "positive",
+      "score": 0.09374817072573072
+    },
+    {
+      "text": "purpose",
+      "label": "positive",
+      "score": 0.0727311233336525
+    },
+    {
+      "text": "identity",
+      "label": "positive",
+      "score": 0.08677716073048836
+    },
+    {
+      "text": "community",
+      "label": "positive",
+      "score": 0.08914336420061952
+    },
+    {
+      "text": "discipleship",
+      "label": "positive",
+      "score": 0.0718861409881677
+    },
+    {
+      "text": "evangelism",
+      "label": "positive",
+      "score": 0.11291153500091067
+    },
+    {
+      "text": "resurrection",
+      "label": "positive",
+      "score": 0.08135618322678506
+    },
+    {
+      "text": "heaven",
+      "label": "positive",
+      "score": 0.09627388020890593
+    },
+    {
+      "text": "hell",
+      "label": "positive",
+      "score": 0.09750664376252527
+    },
+    {
+      "text": "creation",
+      "label": "positive",
+      "score": 0.07041912706546438
+    },
+    {
+      "text": "trinity",
+      "label": "positive",
+      "score": 0.07690121934763183
+    },
+    {
+      "text": "holy spirit",
+      "label": "positive",
+      "score": 0.0874579123536755
+    },
+    {
+      "text": "jesus",
+      "label": "positive",
+      "score": 0.12869691183589005
+    },
+    {
+      "text": "god",
+      "label": "positive",
+      "score": 0.09977517315957485
+    },
+    {
+      "text": "bible",
+      "label": "positive",
+      "score": 0.09571872907500367
+    },
+    {
+      "text": "scripture",
+      "label": "positive",
+      "score": 0.07816268745348087
+    },
+    {
+      "text": "fasting",
+      "label": "positive",
+      "score": 0.015589892637502434
+    },
+    {
+      "text": "baptism",
+      "label": "positive",
+      "score": 0.08264728013464939
+    },
+    {
+      "text": "communion",
+      "label": "positive",
+      "score": 0.08073851247852559
+    },
+    {
+      "text": "church",
+      "label": "positive",
+      "score": 0.10500399803369664
+    },
+    {
+      "text": "gratitude",
+      "label": "positive",
+      "score": 0.07761303572744971
+    },
+    {
+      "text": "contentment",
+      "label": "positive",
+      "score": 0.06988195919061602
+    },
+    {
+      "text": "self-control",
+      "label": "positive",
+      "score": 0.05454887584643053
+    },
+    {
+      "text": "courage",
+      "label": "positive",
+      "score": 0.09381203077909295
+    },
+    {
+      "text": "trust",
+      "label": "positive",
+      "score": 0.07795583981892928
+    },
+    {
+      "text": "obedience",
+      "label": "positive",
+      "score": 0.056768514005519966
+    },
+    {
+      "text": "repentance",
+      "label": "positive",
+      "score": 0.0867300826662305
+    },
+    {
+      "text": "sanctification",
+      "label": "positive",
+      "score": 0.06703222834594647
+    },
+    {
+      "text": "holiness",
+      "label": "positive",
+      "score": 0.09071378662742535
+    },
+    {
+      "text": "redemption",
+      "label": "positive",
+      "score": 0.076798755200856
+    },
+    {
+      "text": "covenant",
+      "label": "positive",
+      "score": 0.06047136231136674
+    },
+    {
+      "text": "prophecy",
+      "label": "positive",
+      "score": 0.08550736629039879
+    },
+    {
+      "text": "doubt",
+      "label": "positive",
+      "score": 0.09317927873768084
+    },
+    {
+      "text": "shame",
+      "label": "positive",
+      "score": 0.0742253222447512
+    },
+    {
+      "text": "guilt",
+      "label": "positive",
+      "score": 0.07839669553224715
+    },
+    {
+      "text": "forgiveness of sins",
+      "label": "positive",
+      "score": 0.11170662221143468
+    },
+    {
+      "text": "second coming",
+      "label": "positive",
+      "score": 0.048606324751992336
+    },
+    {
+      "text": "end times",
+      "label": "positive",
+      "score": 0.028432049059070374
+    },
+    {
+      "text": "spiritual warfare",
+      "label": "positive",
+      "score": 0.071947315698914
+    },
+    {
+      "text": "fruit of the spirit",
+      "label": "positive",
+      "score": 0.06732607081038655
+    },
+    {
+      "text": "beatitudes",
+      "label": "positive",
+      "score": 0.04973537441336218
+    },
+    {
+      "text": "lords prayer",
+      "label": "positive",
+      "score": 0.09843884794444313
+    },
+    {
+      "text": "ten commandments",
+      "label": "positive",
+      "score": 0.0410378767800319
+    },
+    {
+      "text": "prodigal son",
+      "label": "positive",
+      "score": 0.052907543014207525
+    },
+    {
+      "text": "good samaritan",
+      "label": "positive",
+      "score": 0.049768318702361425
+    },
+    {
+      "text": "lost sheep",
+      "label": "positive",
+      "score": 0.058406885571474
+    },
+    {
+      "text": "mental health",
+      "label": "positive",
+      "score": 0.06629665418226538
+    },
+    {
+      "text": "depression and anxiety",
+      "label": "positive",
+      "score": 0.09063163220960146
+    },
+    {
+      "text": "grief and loss",
+      "label": "positive",
+      "score": 0.10470319444627307
+    },
+    {
+      "text": "divorce",
+      "label": "positive",
+      "score": 0.07525667963080196
+    },
+    {
+      "text": "singleness",
+      "label": "positive",
+      "score": 0.08622436968925873
+    },
+    {
+      "text": "sexuality",
+      "label": "positive",
+      "score": 0.10136719757026247
+    },
+    {
+      "text": "pornography",
+      "label": "positive",
+      "score": 0.06979551580406174
+    },
+    {
+      "text": "alcoholism",
+      "label": "positive",
+      "score": 0.07578604120469612
+    },
+    {
+      "text": "drug addiction",
+      "label": "positive",
+      "score": 0.07158831043979508
+    },
+    {
+      "text": "gambling",
+      "label": "positive",
+      "score": 0.03960792784805056
+    },
+    {
+      "text": "debt",
+      "label": "positive",
+      "score": 0.05201468348886118
+    },
+    {
+      "text": "poverty",
+      "label": "positive",
+      "score": 0.06603923026457581
+    },
+    {
+      "text": "stewardship",
+      "label": "positive",
+      "score": 0.04880453027660148
+    },
+    {
+      "text": "tithing",
+      "label": "positive",
+      "score": 0.07199306361306623
+    },
+    {
+      "text": "giving",
+      "label": "positive",
+      "score": 0.08484786847511283
+    },
+    {
+      "text": "wealth",
+      "label": "positive",
+      "score": 0.07206349650280819
+    },
+    {
+      "text": "materialism",
+      "label": "positive",
+      "score": 0.05876536529639498
+    },
+    {
+      "text": "business ethics",
+      "label": "positive",
+      "score": 0.007663263238329332
+    },
+    {
+      "text": "burnout",
+      "label": "positive",
+      "score": 0.04942790169145472
+    },
+    {
+      "text": "sabbath",
+      "label": "positive",
+      "score": 0.10498998898910394
+    },
+    {
+      "text": "sleep",
+      "label": "positive",
+      "score": 0.06314527738730535
+    },
+    {
+      "text": "health",
+      "label": "positive",
+      "score": 0.06653946693843837
+    },
+    {
+      "text": "sickness",
+      "label": "positive",
+      "score": 0.054352857578044866
+    },
+    {
+      "text": "disability",
+      "label": "positive",
+      "score": 0.05908762963273828
+    },
+    {
+      "text": "chronic pain",
+      "label": "positive",
+      "score": 0.025142894515505332
+    },
+    {
+      "text": "death and dying",
+      "label": "positive",
+      "score": 0.07010000738666644
+    },
+    {
+      "text": "funeral",
+      "label": "positive",
+      "score": 0.09275805176619656
+    },
+    {
+      "text": "angels",
+      "label": "positive",
+      "score": 0.07230923684831692
+    },
+    {
+      "text": "demons",
+      "label": "positive",
+      "score": 0.09775755443058776
+    },
+    {
+      "text": "satan",
+      "label": "positive",
+      "score": 0.07953864842201541
+    },
+    {
+      "text": "spiritual gifts",
+      "label": "positive",
+      "score": 0.06647979127884474
+    },
+    {
+      "text": "tongues",
+      "label": "positive",
+      "score": 0.03399451410321719
+    },
+    {
+      "text": "healing miracles",
+      "label": "positive",
+      "score": 0.0604888052638346
+    },
+    {
+      "text": "prayer for healing",
+      "label": "positive",
+      "score": 0.09861371466220292
+    },
+    {
+      "text": "intercession",
+      "label": "positive",
+      "score": 0.03785890689971205
+    },
+    {
+      "text": "bible study",
+      "label": "positive",
+      "score": 0.08591222871386528
+    },
+    {
+      "text": "reading the bible",
+      "label": "positive",
+      "score": 0.07324435874534341
+    },
+    {
+      "text": "how to pray",
+      "label": "positive",
+      "score": 0.07197067862036277
+    },
+    {
+      "text": "how to forgive",
+      "label": "positive",
+      "score": 0.0857054868353504
+    },
+    {
+      "text": "how to find peace",
+      "label": "positive",
+      "score": 0.057384814096180015
+    },
+    {
+      "text": "how to overcome anxiety",
+      "label": "positive",
+      "score": 0.026631225242122025
+    },
+    {
+      "text": "how to deal with grief",
+      "label": "positive",
+      "score": 0.08171943807581872
+    },
+    {
+      "text": "how to handle money",
+      "label": "positive",
+      "score": 0.02851325779212832
+    },
+    {
+      "text": "how to be a good parent",
+      "label": "positive",
+      "score": 0.02534885173615753
+    },
+    {
+      "text": "how to love your neighbor",
+      "label": "positive",
+      "score": 0.008753010177151133
+    },
+    {
+      "text": "how to share your faith",
+      "label": "positive",
+      "score": 0.04901181911602892
+    },
+    {
+      "text": "how to grow in faith",
+      "label": "positive",
+      "score": 0.028201419692757024
+    },
+    {
+      "text": "how to hear god",
+      "label": "positive",
+      "score": 0.06008970150508275
+    },
+    {
+      "text": "how to know gods will",
+      "label": "positive",
+      "score": 0.0591494640341379
+    },
+    {
+      "text": "how to deal with anger",
+      "label": "positive",
+      "score": 0.061329134607917224
+    },
+    {
+      "text": "how to overcome temptation",
+      "label": "positive",
+      "score": 0.029809408942001236
+    },
+    {
+      "text": "how to deal with loneliness",
+      "label": "positive",
+      "score": 0.05298506930021141
+    },
+    {
+      "text": "how to find purpose",
+      "label": "positive",
+      "score": 0.04241207083899101
+    },
+    {
+      "text": "how to deal with suffering",
+      "label": "positive",
+      "score": 0.05579731985020753
+    },
+    {
+      "text": "how to forgive someone who hurt you",
+      "label": "positive",
+      "score": 0.083502804302924
+    },
+    {
+      "text": "how to handle money biblically",
+      "label": "positive",
+      "score": 0.04824004429454598
+    },
+    {
+      "text": "how to find hope",
+      "label": "positive",
+      "score": 0.07113239023989149
+    },
+    {
+      "text": "how to cope with loss",
+      "label": "positive",
+      "score": 0.023666773910603234
+    },
+    {
+      "text": "what does the bible say about anxiety",
+      "label": "positive",
+      "score": 0.10606202278955412
+    },
+    {
+      "text": "what does the bible say about money",
+      "label": "positive",
+      "score": 0.09463176449350374
+    },
+    {
+      "text": "what does the bible say about marriage",
+      "label": "positive",
+      "score": 0.14114827274047492
+    },
+    {
+      "text": "what does the bible say about forgiveness",
+      "label": "positive",
+      "score": 0.15072410749401832
+    },
+    {
+      "text": "what does the bible say about grief",
+      "label": "positive",
+      "score": 0.16039509360037574
+    },
+    {
+      "text": "what does the bible say about love",
+      "label": "positive",
+      "score": 0.13289824871441613
+    },
+    {
+      "text": "who is jesus",
+      "label": "positive",
+      "score": 0.14767173161230307
+    },
+    {
+      "text": "why does god allow suffering",
+      "label": "positive",
+      "score": 0.07943111871572184
+    },
+    {
+      "text": "what is grace",
+      "label": "positive",
+      "score": 0.0854772985820651
+    },
+    {
+      "text": "what is faith",
+      "label": "positive",
+      "score": 0.10206027549179153
+    },
+    {
+      "text": "what is the gospel",
+      "label": "positive",
+      "score": 0.08820824156016249
+    },
+    {
+      "text": "what happens after death",
+      "label": "positive",
+      "score": 0.06602818873958383
+    },
+    {
+      "text": "how should i pray",
+      "label": "positive",
+      "score": 0.0652679270947687
+    },
+    {
+      "text": "i feel lonely",
+      "label": "positive",
+      "score": 0.10037062742259273
+    },
+    {
+      "text": "i feel hopeless",
+      "label": "positive",
+      "score": 0.0922022234862715
+    },
+    {
+      "text": "i am anxious",
+      "label": "positive",
+      "score": 0.0861417385834683
+    },
+    {
+      "text": "i am grieving",
+      "label": "positive",
+      "score": 0.10080085357848001
+    },
+    {
+      "text": "i need forgiveness",
+      "label": "positive",
+      "score": 0.12000565239837835
+    },
+    {
+      "text": "i am struggling with sin",
+      "label": "positive",
+      "score": 0.08214674752036044
+    },
+    {
+      "text": "i want to know god",
+      "label": "positive",
+      "score": 0.08665692584792617
+    },
+    {
+      "text": "i need peace",
+      "label": "positive",
+      "score": 0.10627894961072737
+    },
+    {
+      "text": "help me forgive",
+      "label": "positive",
+      "score": 0.12235741605563999
+    },
+    {
+      "text": "help me with my anger",
+      "label": "positive",
+      "score": 0.08376785862171476
+    },
+    {
+      "text": "help me overcome addiction",
+      "label": "positive",
+      "score": 0.0342497746242485
+    },
+    {
+      "text": "help me deal with grief",
+      "label": "positive",
+      "score": 0.09480583263924303
+    },
+    {
+      "text": "help me find hope",
+      "label": "positive",
+      "score": 0.089325253109242
+    },
+    {
+      "text": "god cares for those who are grieving",
+      "label": "positive",
+      "score": 0.11120948977013811
+    },
+    {
+      "text": "money cannot satisfy the heart",
+      "label": "positive",
+      "score": 0.0377879006897347
+    },
+    {
+      "text": "forgive someone who has wronged me",
+      "label": "positive",
+      "score": 0.12317667106672803
+    },
+    {
+      "text": "who worshipped jesus",
+      "label": "positive",
+      "score": 0.14204653404437495
+    },
+    {
+      "text": "peace of mind",
+      "label": "positive",
+      "score": 0.09118415156900306
+    },
+    {
+      "text": "angst",
+      "label": "positive",
+      "score": 0.11895054931660098
+    },
+    {
+      "text": "sorg",
+      "label": "positive",
+      "score": 0.06564361185720946
+    },
+    {
+      "text": "förlåtelse",
+      "label": "positive",
+      "score": 0.1446416406891814
+    },
+    {
+      "text": "ensamhet",
+      "label": "positive",
+      "score": 0.09021406742797577
+    },
+    {
+      "text": "hopp",
+      "label": "positive",
+      "score": 0.08321017355746485
+    },
+    {
+      "text": "tro",
+      "label": "positive",
+      "score": 0.08247767264964956
+    },
+    {
+      "text": "nåd",
+      "label": "positive",
+      "score": 0.09312769777693719
+    },
+    {
+      "text": "kärlek",
+      "label": "positive",
+      "score": 0.09104741169293262
+    },
+    {
+      "text": "frid",
+      "label": "positive",
+      "score": 0.08435872169123448
+    },
+    {
+      "text": "bön",
+      "label": "positive",
+      "score": 0.09767709742324282
+    },
+    {
+      "text": "tillbedjan",
+      "label": "positive",
+      "score": 0.044905094566055515
+    },
+    {
+      "text": "frälsning",
+      "label": "positive",
+      "score": 0.058343312892497834
+    },
+    {
+      "text": "synd",
+      "label": "positive",
+      "score": 0.08404461023903531
+    },
+    {
+      "text": "frestelse",
+      "label": "positive",
+      "score": 0.07434745233508722
+    },
+    {
+      "text": "lidande",
+      "label": "positive",
+      "score": 0.09053860820608317
+    },
+    {
+      "text": "helande",
+      "label": "positive",
+      "score": 0.09713291859210194
+    },
+    {
+      "text": "äktenskap",
+      "label": "positive",
+      "score": 0.08968003536752944
+    },
+    {
+      "text": "föräldraskap",
+      "label": "positive",
+      "score": 0.07633974640199104
+    },
+    {
+      "text": "pengar",
+      "label": "positive",
+      "score": 0.06969578205189186
+    },
+    {
+      "text": "arbete",
+      "label": "positive",
+      "score": 0.04996247838712409
+    },
+    {
+      "text": "vila",
+      "label": "positive",
+      "score": 0.06115701273692142
+    },
+    {
+      "text": "rädsla",
+      "label": "positive",
+      "score": 0.05446001289667779
+    },
+    {
+      "text": "ilska",
+      "label": "positive",
+      "score": 0.08302391814978993
+    },
+    {
+      "text": "beroende",
+      "label": "positive",
+      "score": 0.06827823549896994
+    },
+    {
+      "text": "renhet",
+      "label": "positive",
+      "score": 0.06576083728548254
+    },
+    {
+      "text": "ödmjukhet",
+      "label": "positive",
+      "score": 0.08278225148553897
+    },
+    {
+      "text": "vishet",
+      "label": "positive",
+      "score": 0.07673388857520891
+    },
+    {
+      "text": "tålamod",
+      "label": "positive",
+      "score": 0.056415611292021994
+    },
+    {
+      "text": "vänlighet",
+      "label": "positive",
+      "score": 0.07936190370884333
+    },
+    {
+      "text": "generositet",
+      "label": "positive",
+      "score": 0.11469245327502597
+    },
+    {
+      "text": "rättvisa",
+      "label": "positive",
+      "score": 0.04780250549413745
+    },
+    {
+      "text": "barmhärtighet",
+      "label": "positive",
+      "score": 0.05152371240969733
+    },
+    {
+      "text": "mening",
+      "label": "positive",
+      "score": 0.07330398828641738
+    },
+    {
+      "text": "identitet",
+      "label": "positive",
+      "score": 0.08190236138599649
+    },
+    {
+      "text": "gemenskap",
+      "label": "positive",
+      "score": 0.09823364129264966
+    },
+    {
+      "text": "lärjungaskap",
+      "label": "positive",
+      "score": 0.04979463263872297
+    },
+    {
+      "text": "evangelisation",
+      "label": "positive",
+      "score": 0.10908108499766456
+    },
+    {
+      "text": "uppståndelse",
+      "label": "positive",
+      "score": 0.06656278234262503
+    },
+    {
+      "text": "himmel",
+      "label": "positive",
+      "score": 0.08398134900178189
+    },
+    {
+      "text": "helvete",
+      "label": "positive",
+      "score": 0.09993065882106744
+    },
+    {
+      "text": "skapelsen",
+      "label": "positive",
+      "score": 0.07502355518890147
+    },
+    {
+      "text": "den helige ande",
+      "label": "positive",
+      "score": 0.04614225967824148
+    },
+    {
+      "text": "gud",
+      "label": "positive",
+      "score": 0.09084895749513322
+    },
+    {
+      "text": "bibeln",
+      "label": "positive",
+      "score": 0.09224014070078868
+    },
+    {
+      "text": "fasta",
+      "label": "positive",
+      "score": 0.044248277352892273
+    },
+    {
+      "text": "dop",
+      "label": "positive",
+      "score": 0.04979359743709055
+    },
+    {
+      "text": "nattvard",
+      "label": "positive",
+      "score": 0.03623479886888881
+    },
+    {
+      "text": "kyrkan",
+      "label": "positive",
+      "score": 0.09422817915279347
+    },
+    {
+      "text": "tacksamhet",
+      "label": "positive",
+      "score": 0.05972430969451559
+    },
+    {
+      "text": "förnöjsamhet",
+      "label": "positive",
+      "score": 0.06962303005740966
+    },
+    {
+      "text": "självkontroll",
+      "label": "positive",
+      "score": 0.05450106484692119
+    },
+    {
+      "text": "mod",
+      "label": "positive",
+      "score": 0.053502458129014996
+    },
+    {
+      "text": "tillit",
+      "label": "positive",
+      "score": 0.05190115310809362
+    },
+    {
+      "text": "lydnad",
+      "label": "positive",
+      "score": 0.08961754919797771
+    },
+    {
+      "text": "omvändelse",
+      "label": "positive",
+      "score": 0.052374856402152004
+    },
+    {
+      "text": "helgelse",
+      "label": "positive",
+      "score": 0.11041274139209034
+    },
+    {
+      "text": "helighet",
+      "label": "positive",
+      "score": 0.10918437653361113
+    },
+    {
+      "text": "återlösning",
+      "label": "positive",
+      "score": 0.0483833079187288
+    },
+    {
+      "text": "förbund",
+      "label": "positive",
+      "score": 0.06222734781508443
+    },
+    {
+      "text": "profetia",
+      "label": "positive",
+      "score": 0.07932513366520433
+    },
+    {
+      "text": "tvivel",
+      "label": "positive",
+      "score": 0.05342787203954713
+    },
+    {
+      "text": "skam",
+      "label": "positive",
+      "score": 0.0695822081663987
+    },
+    {
+      "text": "skuld",
+      "label": "positive",
+      "score": 0.07980523205117462
+    },
+    {
+      "text": "syndernas förlåtelse",
+      "label": "positive",
+      "score": 0.1304957611987394
+    },
+    {
+      "text": "jesu återkomst",
+      "label": "positive",
+      "score": 0.08143373366232332
+    },
+    {
+      "text": "andlig kamp",
+      "label": "positive",
+      "score": 0.058875825467950005
+    },
+    {
+      "text": "andens frukt",
+      "label": "positive",
+      "score": 0.025512179193601492
+    },
+    {
+      "text": "saligprisningarna",
+      "label": "positive",
+      "score": 0.04756203500962186
+    },
+    {
+      "text": "herrens bön",
+      "label": "positive",
+      "score": 0.08248291618891745
+    },
+    {
+      "text": "tio budorden",
+      "label": "positive",
+      "score": 0.03269452037752796
+    },
+    {
+      "text": "den förlorade sonen",
+      "label": "positive",
+      "score": 0.07902252664487219
+    },
+    {
+      "text": "den barmhärtige samariern",
+      "label": "positive",
+      "score": 0.05453737320400209
+    },
+    {
+      "text": "det förlorade fåret",
+      "label": "positive",
+      "score": 0.0731601459415987
+    },
+    {
+      "text": "psykisk ohälsa",
+      "label": "positive",
+      "score": 0.08128665763680443
+    },
+    {
+      "text": "depression och ångest",
+      "label": "positive",
+      "score": 0.09549713185413
+    },
+    {
+      "text": "sorg och förlust",
+      "label": "positive",
+      "score": 0.08842095449172649
+    },
+    {
+      "text": "skilsmässa",
+      "label": "positive",
+      "score": 0.056466096332489446
+    },
+    {
+      "text": "singelskap",
+      "label": "positive",
+      "score": 0.07418696296553917
+    },
+    {
+      "text": "sexualitet",
+      "label": "positive",
+      "score": 0.0980916719874051
+    },
+    {
+      "text": "pornografi",
+      "label": "positive",
+      "score": 0.07955231558741371
+    },
+    {
+      "text": "alkoholism",
+      "label": "positive",
+      "score": 0.07660126126026323
+    },
+    {
+      "text": "droger",
+      "label": "positive",
+      "score": 0.047853062536796
+    },
+    {
+      "text": "spelberoende",
+      "label": "positive",
+      "score": 0.05520984261282724
+    },
+    {
+      "text": "fattigdom",
+      "label": "positive",
+      "score": 0.06533304893397895
+    },
+    {
+      "text": "förvaltarskap",
+      "label": "positive",
+      "score": 0.06251432777837762
+    },
+    {
+      "text": "tionde",
+      "label": "positive",
+      "score": 0.05291597894639288
+    },
+    {
+      "text": "rikedom",
+      "label": "positive",
+      "score": 0.06837323317437738
+    },
+    {
+      "text": "utbrändhet",
+      "label": "positive",
+      "score": 0.06413197315929597
+    },
+    {
+      "text": "sabbat",
+      "label": "positive",
+      "score": 0.09899283804350323
+    },
+    {
+      "text": "sömn",
+      "label": "positive",
+      "score": 0.04489408657416205
+    },
+    {
+      "text": "hälsa",
+      "label": "positive",
+      "score": 0.07980329493170879
+    },
+    {
+      "text": "sjukdom",
+      "label": "positive",
+      "score": 0.07982093784191324
+    },
+    {
+      "text": "funktionsnedsättning",
+      "label": "positive",
+      "score": 0.056111522356028454
+    },
+    {
+      "text": "kronisk smärta",
+      "label": "positive",
+      "score": 0.06154736444317688
+    },
+    {
+      "text": "död och döende",
+      "label": "positive",
+      "score": 0.07963396594662053
+    },
+    {
+      "text": "begravning",
+      "label": "positive",
+      "score": 0.06496682343852611
+    },
+    {
+      "text": "änglar",
+      "label": "positive",
+      "score": 0.055928080794718005
+    },
+    {
+      "text": "demoner",
+      "label": "positive",
+      "score": 0.0997134153206114
+    },
+    {
+      "text": "andliga gåvor",
+      "label": "positive",
+      "score": 0.032658396954769575
+    },
+    {
+      "text": "tungotal",
+      "label": "positive",
+      "score": 0.0358429569713975
+    },
+    {
+      "text": "förbön",
+      "label": "positive",
+      "score": 0.07635989953131328
+    },
+    {
+      "text": "fasta och bön",
+      "label": "positive",
+      "score": 0.05321268898745213
+    },
+    {
+      "text": "bibelstudium",
+      "label": "positive",
+      "score": 0.10027249766352886
+    },
+    {
+      "text": "läsa bibeln",
+      "label": "positive",
+      "score": 0.06504628040526861
+    },
+    {
+      "text": "hur ber jag",
+      "label": "positive",
+      "score": 0.008437455985214615
+    },
+    {
+      "text": "hur förlåter jag",
+      "label": "positive",
+      "score": 0.09000003858270667
+    },
+    {
+      "text": "hur hittar jag frid",
+      "label": "positive",
+      "score": 0.03649625731594952
+    },
+    {
+      "text": "hur övervinner jag ångest",
+      "label": "positive",
+      "score": 0.04980348854145955
+    },
+    {
+      "text": "hur hanterar jag sorg",
+      "label": "positive",
+      "score": 0.05150571254378544
+    },
+    {
+      "text": "hur hanterar jag pengar",
+      "label": "positive",
+      "score": 0.03000093329313669
+    },
+    {
+      "text": "hur är jag en bra förälder",
+      "label": "positive",
+      "score": 0.03954890569640279
+    },
+    {
+      "text": "hur älskar jag min nästa",
+      "label": "positive",
+      "score": 0.03446540952315169
+    },
+    {
+      "text": "hur delar jag min tro",
+      "label": "positive",
+      "score": 0.0356019658272676
+    },
+    {
+      "text": "hur växer jag i tro",
+      "label": "positive",
+      "score": 0.05332336119395775
+    },
+    {
+      "text": "hur hör jag gud",
+      "label": "positive",
+      "score": 0.07239929133863443
+    },
+    {
+      "text": "hur vet jag guds vilja",
+      "label": "positive",
+      "score": 0.05730195521138359
+    },
+    {
+      "text": "hur hanterar jag ilska",
+      "label": "positive",
+      "score": 0.05148272285327149
+    },
+    {
+      "text": "hur övervinner jag frestelse",
+      "label": "positive",
+      "score": 0.05263078972374158
+    },
+    {
+      "text": "hur hanterar jag ensamhet",
+      "label": "positive",
+      "score": 0.058537392578272174
+    },
+    {
+      "text": "hur hittar jag mening",
+      "label": "positive",
+      "score": 0.03719848207457199
+    },
+    {
+      "text": "hur hanterar jag lidande",
+      "label": "positive",
+      "score": 0.04802894545796199
+    },
+    {
+      "text": "hur förlåter jag någon som sårat mig",
+      "label": "positive",
+      "score": 0.11205794519453027
+    },
+    {
+      "text": "vad säger bibeln om ångest",
+      "label": "positive",
+      "score": 0.12121339675754639
+    },
+    {
+      "text": "vad säger bibeln om pengar",
+      "label": "positive",
+      "score": 0.09601337772201735
+    },
+    {
+      "text": "vad säger bibeln om äktenskap",
+      "label": "positive",
+      "score": 0.13588584012872695
+    },
+    {
+      "text": "vad säger bibeln om förlåtelse",
+      "label": "positive",
+      "score": 0.150325671848221
+    },
+    {
+      "text": "vem är jesus",
+      "label": "positive",
+      "score": 0.14018298922248795
+    },
+    {
+      "text": "varför tillåter gud lidande",
+      "label": "positive",
+      "score": 0.07581801487456041
+    },
+    {
+      "text": "vad är nåd",
+      "label": "positive",
+      "score": 0.09053578272738838
+    },
+    {
+      "text": "vad är tro",
+      "label": "positive",
+      "score": 0.09181562733482873
+    },
+    {
+      "text": "vad är evangeliet",
+      "label": "positive",
+      "score": 0.10220646169570213
+    },
+    {
+      "text": "vad händer efter döden",
+      "label": "positive",
+      "score": 0.06379981684966018
+    },
+    {
+      "text": "hur ska jag be",
+      "label": "positive",
+      "score": 0.008856803287204618
+    },
+    {
+      "text": "jag känner mig ensam",
+      "label": "positive",
+      "score": 0.09017065282973236
+    },
+    {
+      "text": "jag känner mig hopplös",
+      "label": "positive",
+      "score": 0.09052068905408639
+    },
+    {
+      "text": "jag är orolig",
+      "label": "positive",
+      "score": 0.07437523911052157
+    },
+    {
+      "text": "jag sörjer",
+      "label": "positive",
+      "score": 0.051486407025853054
+    },
+    {
+      "text": "jag behöver förlåtelse",
+      "label": "positive",
+      "score": 0.10322041475303445
+    },
+    {
+      "text": "jag kämpar med synd",
+      "label": "positive",
+      "score": 0.07368997483608031
+    },
+    {
+      "text": "jag vill lära känna gud",
+      "label": "positive",
+      "score": 0.0657166504309088
+    },
+    {
+      "text": "jag behöver frid",
+      "label": "positive",
+      "score": 0.06862016818026795
+    },
+    {
+      "text": "hjälp mig förlåta",
+      "label": "positive",
+      "score": 0.09920790273479818
+    },
+    {
+      "text": "hjälp mig med min ilska",
+      "label": "positive",
+      "score": 0.058787719594629806
+    },
+    {
+      "text": "hjälp mig övervinna beroende",
+      "label": "positive",
+      "score": 0.04045411396131815
+    },
+    {
+      "text": "osjälvisk generositet",
+      "label": "positive",
+      "score": 0.08383700159058238
+    },
+    {
+      "text": "hopplöshet",
+      "label": "positive",
+      "score": 0.09958142248329793
+    },
+    {
+      "text": "sinnesro",
+      "label": "positive",
+      "score": 0.058479497070869746
+    },
+    {
+      "text": "människovärde",
+      "label": "positive",
+      "score": 0.03074234809432952
+    },
+    {
+      "text": "medkänsla",
+      "label": "positive",
+      "score": 0.07136972483557091
+    },
+    {
+      "text": "best pizza recipe",
+      "label": "negative",
+      "score": 0.05874642649833506
+    },
+    {
+      "text": "how to bake a cake",
+      "label": "negative",
+      "score": 0.05978377864113771
+    },
+    {
+      "text": "how to cook rice",
+      "label": "negative",
+      "score": 0.03226114454558371
+    },
+    {
+      "text": "how to make sourdough bread",
+      "label": "negative",
+      "score": 0.05707900881708472
+    },
+    {
+      "text": "how to make coffee",
+      "label": "negative",
+      "score": 0.05266913821810926
+    },
+    {
+      "text": "best restaurants near me",
+      "label": "negative",
+      "score": 0.019185264726257922
+    },
+    {
+      "text": "how to lose weight fast",
+      "label": "negative",
+      "score": 0.036099745489677204
+    },
+    {
+      "text": "how to lose belly fat",
+      "label": "negative",
+      "score": 0.06229892973803852
+    },
+    {
+      "text": "how to build muscle",
+      "label": "negative",
+      "score": 0.03067444054754076
+    },
+    {
+      "text": "how to treat a cold",
+      "label": "negative",
+      "score": 0.02381861596516921
+    },
+    {
+      "text": "how to lower blood pressure",
+      "label": "negative",
+      "score": 0.03407314450441279
+    },
+    {
+      "text": "how to cure a headache",
+      "label": "negative",
+      "score": 0.015786707104873954
+    },
+    {
+      "text": "how to sleep better",
+      "label": "negative",
+      "score": 0.012582370227329442
+    },
+    {
+      "text": "best workout routine",
+      "label": "negative",
+      "score": 0.04684428428515697
+    },
+    {
+      "text": "how to train for a marathon",
+      "label": "negative",
+      "score": 0.060559853912259154
+    },
+    {
+      "text": "how to fix a flat tire",
+      "label": "negative",
+      "score": 0.07544744491396882
+    },
+    {
+      "text": "how to change a tire",
+      "label": "negative",
+      "score": 0.08736427421422044
+    },
+    {
+      "text": "how to repair a car engine",
+      "label": "negative",
+      "score": 0.06328260617576409
+    },
+    {
+      "text": "how to change oil",
+      "label": "negative",
+      "score": 0.05402242041203631
+    },
+    {
+      "text": "how to fix a leaky faucet",
+      "label": "negative",
+      "score": 0.051963787861868393
+    },
+    {
+      "text": "how to clean a dishwasher",
+      "label": "negative",
+      "score": 0.07803861549848723
+    },
+    {
+      "text": "how to get rid of ants",
+      "label": "negative",
+      "score": 0.030931896276448323
+    },
+    {
+      "text": "how to install windows",
+      "label": "negative",
+      "score": 0.05068779543324453
+    },
+    {
+      "text": "how to fix a computer",
+      "label": "negative",
+      "score": 0.04646954782185775
+    },
+    {
+      "text": "how to use excel",
+      "label": "negative",
+      "score": 0.04066304942261301
+    },
+    {
+      "text": "how to code in javascript",
+      "label": "negative",
+      "score": 0.04542657456316357
+    },
+    {
+      "text": "python async tutorial",
+      "label": "negative",
+      "score": -0.00945750236910503
+    },
+    {
+      "text": "how to build a website",
+      "label": "negative",
+      "score": 0.04247285513618393
+    },
+    {
+      "text": "how to learn spanish",
+      "label": "negative",
+      "score": 0.06473515193689372
+    },
+    {
+      "text": "how to write a resume",
+      "label": "negative",
+      "score": 0.047810511318205684
+    },
+    {
+      "text": "how to pass an exam",
+      "label": "negative",
+      "score": 0.049117475710375724
+    },
+    {
+      "text": "how to get a job",
+      "label": "negative",
+      "score": 0.04885124208155445
+    },
+    {
+      "text": "how to start a business",
+      "label": "negative",
+      "score": 0.029928536114035564
+    },
+    {
+      "text": "how to invest in bitcoin",
+      "label": "negative",
+      "score": 0.062280045330967426
+    },
+    {
+      "text": "how to invest in real estate",
+      "label": "negative",
+      "score": 0.06313236511204767
+    },
+    {
+      "text": "stock market today",
+      "label": "negative",
+      "score": 0.019755387546998793
+    },
+    {
+      "text": "cryptocurrency prices",
+      "label": "negative",
+      "score": 0.003163704297132086
+    },
+    {
+      "text": "how to get a mortgage",
+      "label": "negative",
+      "score": 0.04744060565988806
+    },
+    {
+      "text": "how to save money for a car",
+      "label": "negative",
+      "score": 0.0309502614106848
+    },
+    {
+      "text": "how to buy a house",
+      "label": "negative",
+      "score": 0.0687789674276047
+    },
+    {
+      "text": "how to sell on ebay",
+      "label": "negative",
+      "score": 0.03305445316026501
+    },
+    {
+      "text": "how to write a cover letter",
+      "label": "negative",
+      "score": 0.02696704099260716
+    },
+    {
+      "text": "how to book a flight",
+      "label": "negative",
+      "score": 0.055022717099953544
+    },
+    {
+      "text": "how to renew a passport",
+      "label": "negative",
+      "score": 0.06559366418990908
+    },
+    {
+      "text": "weather in stockholm tomorrow",
+      "label": "negative",
+      "score": 0.02407198087739637
+    },
+    {
+      "text": "who won the world cup",
+      "label": "negative",
+      "score": 0.006305614602877596
+    },
+    {
+      "text": "football scores",
+      "label": "negative",
+      "score": -0.028232641772145683
+    },
+    {
+      "text": "basketball game tonight",
+      "label": "negative",
+      "score": -0.017329551935744925
+    },
+    {
+      "text": "best movies on netflix",
+      "label": "negative",
+      "score": 0.06049920108467077
+    },
+    {
+      "text": "best tv series",
+      "label": "negative",
+      "score": 0.0314208970479779
+    },
+    {
+      "text": "how to play guitar",
+      "label": "negative",
+      "score": 0.04315355036435853
+    },
+    {
+      "text": "how to learn piano",
+      "label": "negative",
+      "score": 0.03586952989500802
+    },
+    {
+      "text": "how to draw a face",
+      "label": "negative",
+      "score": 0.021997268585717378
+    },
+    {
+      "text": "how to take a screenshot",
+      "label": "negative",
+      "score": 0.02795097485507303
+    },
+    {
+      "text": "how to reset a password",
+      "label": "negative",
+      "score": 0.041041980747433926
+    },
+    {
+      "text": "how to delete an account",
+      "label": "negative",
+      "score": 0.012814416349822166
+    },
+    {
+      "text": "how to fix a phone screen",
+      "label": "negative",
+      "score": 0.05637035808700497
+    },
+    {
+      "text": "how to buy a phone",
+      "label": "negative",
+      "score": 0.05622706606026706
+    },
+    {
+      "text": "best phone deals",
+      "label": "negative",
+      "score": 0.046645718786391344
+    },
+    {
+      "text": "how to plan a wedding",
+      "label": "negative",
+      "score": 0.0006447339750011993
+    },
+    {
+      "text": "how to decorate a room",
+      "label": "negative",
+      "score": 0.045793370757500895
+    },
+    {
+      "text": "how to grow tomatoes",
+      "label": "negative",
+      "score": 0.018901332445641628
+    },
+    {
+      "text": "how to train a dog",
+      "label": "negative",
+      "score": 0.054251656402652504
+    },
+    {
+      "text": "how to get rid of a cold",
+      "label": "negative",
+      "score": 0.047407477813245835
+    },
+    {
+      "text": "how to make pizza dough",
+      "label": "negative",
+      "score": 0.07218742582751914
+    },
+    {
+      "text": "how to make a cake from scratch",
+      "label": "negative",
+      "score": 0.07872717932372675
+    },
+    {
+      "text": "how to grill steak",
+      "label": "negative",
+      "score": 0.04320343007176153
+    },
+    {
+      "text": "how to make sushi",
+      "label": "negative",
+      "score": 0.04963623051028743
+    },
+    {
+      "text": "how to brew beer",
+      "label": "negative",
+      "score": 0.02192951339793725
+    },
+    {
+      "text": "how to mix a cocktail",
+      "label": "negative",
+      "score": 0.05455730824342386
+    },
+    {
+      "text": "how to make soap",
+      "label": "negative",
+      "score": 0.0555242512803813
+    },
+    {
+      "text": "how to knit a scarf",
+      "label": "negative",
+      "score": 0.03536552548271632
+    },
+    {
+      "text": "how to tie a tie",
+      "label": "negative",
+      "score": 0.015221917177252187
+    },
+    {
+      "text": "how to parallel park",
+      "label": "negative",
+      "score": 0.024877915212518253
+    },
+    {
+      "text": "how to jump start a car",
+      "label": "negative",
+      "score": 0.06402087477029261
+    },
+    {
+      "text": "how to check tire pressure",
+      "label": "negative",
+      "score": 0.0568905116689955
+    },
+    {
+      "text": "how to change a headlight",
+      "label": "negative",
+      "score": 0.06319411463127023
+    },
+    {
+      "text": "how to paint a wall",
+      "label": "negative",
+      "score": 0.05042012674499918
+    },
+    {
+      "text": "how to fix a broken chair",
+      "label": "negative",
+      "score": 0.049193600129973314
+    },
+    {
+      "text": "how to assemble furniture",
+      "label": "negative",
+      "score": 0.05169204502432301
+    },
+    {
+      "text": "how to clean a carpet",
+      "label": "negative",
+      "score": 0.06685116906502353
+    },
+    {
+      "text": "how to remove stains",
+      "label": "negative",
+      "score": 0.04454056161912323
+    },
+    {
+      "text": "how to do laundry",
+      "label": "negative",
+      "score": 0.02663415910502398
+    },
+    {
+      "text": "how to iron a shirt",
+      "label": "negative",
+      "score": 0.040813729919031094
+    },
+    {
+      "text": "how to fold a fitted sheet",
+      "label": "negative",
+      "score": 0.037524468839272074
+    },
+    {
+      "text": "how to organize a closet",
+      "label": "negative",
+      "score": 0.05356108635678869
+    },
+    {
+      "text": "how to pack a suitcase",
+      "label": "negative",
+      "score": 0.03460974500876546
+    },
+    {
+      "text": "how to apply for a visa",
+      "label": "negative",
+      "score": 0.05002415664814186
+    },
+    {
+      "text": "how to find a rental apartment",
+      "label": "negative",
+      "score": 0.034614358052730054
+    },
+    {
+      "text": "how to negotiate a salary",
+      "label": "negative",
+      "score": 0.03638065336198826
+    },
+    {
+      "text": "how to ask for a raise",
+      "label": "negative",
+      "score": 0.020343282186484735
+    },
+    {
+      "text": "how to quit smoking",
+      "label": "negative",
+      "score": 0.029629987246099
+    },
+    {
+      "text": "how to stop procrastinating",
+      "label": "negative",
+      "score": 0.005922597340469293
+    },
+    {
+      "text": "how to be more productive",
+      "label": "negative",
+      "score": 0.027551452237667973
+    },
+    {
+      "text": "how to focus better",
+      "label": "negative",
+      "score": 0.00998210726857629
+    },
+    {
+      "text": "how to memorize faster",
+      "label": "negative",
+      "score": 0.034272976124747556
+    },
+    {
+      "text": "how to speed read",
+      "label": "negative",
+      "score": 0.023760230194509124
+    },
+    {
+      "text": "how to learn to swim",
+      "label": "negative",
+      "score": 0.03727928471193831
+    },
+    {
+      "text": "how to ride a bike",
+      "label": "negative",
+      "score": 0.04291712654312052
+    },
+    {
+      "text": "how to drive a car",
+      "label": "negative",
+      "score": 0.05296827967897799
+    },
+    {
+      "text": "how to pass a driving test",
+      "label": "negative",
+      "score": 0.0744081371599451
+    },
+    {
+      "text": "recept på glutenfri chokladkaka",
+      "label": "negative",
+      "score": 0.007658533300507808
+    },
+    {
+      "text": "hur bakar jag en kaka",
+      "label": "negative",
+      "score": 0.026025780353005845
+    },
+    {
+      "text": "hur lagar jag mat",
+      "label": "negative",
+      "score": 0.00046716775722932535
+    },
+    {
+      "text": "bästa pizzan i stan",
+      "label": "negative",
+      "score": 0.015534340842502603
+    },
+    {
+      "text": "hur går jag ner i vikt",
+      "label": "negative",
+      "score": 0.01232465990726983
+    },
+    {
+      "text": "hur byter jag däck",
+      "label": "negative",
+      "score": 0.003146102665318007
+    },
+    {
+      "text": "hur lagar jag en bil",
+      "label": "negative",
+      "score": 0.019418581874843133
+    },
+    {
+      "text": "hur tränar jag för ett maraton",
+      "label": "negative",
+      "score": 0.043363915162086486
+    },
+    {
+      "text": "hur köper jag en bostad",
+      "label": "negative",
+      "score": 0.03483447498604253
+    },
+    {
+      "text": "hur investerar jag i bitcoin",
+      "label": "negative",
+      "score": 0.04195273995963489
+    },
+    {
+      "text": "aktier idag",
+      "label": "negative",
+      "score": 0.006541927174722795
+    },
+    {
+      "text": "vem vann världscupen",
+      "label": "negative",
+      "score": -0.001618363322262617
+    },
+    {
+      "text": "väder i stockholm imorgon",
+      "label": "negative",
+      "score": 0.025902633422587362
+    },
+    {
+      "text": "bästa filmen på netflix",
+      "label": "negative",
+      "score": 0.02313820727015825
+    },
+    {
+      "text": "hur spelar jag gitarr",
+      "label": "negative",
+      "score": 0.022498672846280265
+    },
+    {
+      "text": "hur lär jag mig spanska",
+      "label": "negative",
+      "score": 0.020116922669039417
+    },
+    {
+      "text": "hur skriver jag ett cv",
+      "label": "negative",
+      "score": 0.034511605156777314
+    },
+    {
+      "text": "hur får jag jobb",
+      "label": "negative",
+      "score": 0.015913339646941305
+    },
+    {
+      "text": "hur startar jag ett företag",
+      "label": "negative",
+      "score": 0.045024945816871664
+    },
+    {
+      "text": "hur ansöker jag om pass",
+      "label": "negative",
+      "score": 0.010228681963923902
+    },
+    {
+      "text": "hur bokar jag en flygresa",
+      "label": "negative",
+      "score": 0.028772140770573884
+    },
+    {
+      "text": "hur renoverar jag ett kök",
+      "label": "negative",
+      "score": 0.031145750863532107
+    },
+    {
+      "text": "hur målar jag en vägg",
+      "label": "negative",
+      "score": 0.03288507127059359
+    },
+    {
+      "text": "hur tvättar jag kläder",
+      "label": "negative",
+      "score": 0.04679918039286979
+    },
+    {
+      "text": "hur städar jag hemma",
+      "label": "negative",
+      "score": 0.024452028246326307
+    },
+    {
+      "text": "hur odlar jag tomater",
+      "label": "negative",
+      "score": 0.031346535807698195
+    },
+    {
+      "text": "hur tränar jag en hund",
+      "label": "negative",
+      "score": 0.027873206734703837
+    },
+    {
+      "text": "hur lagar jag en trasig telefon",
+      "label": "negative",
+      "score": 0.016494337802930525
+    },
+    {
+      "text": "hur installerar jag windows",
+      "label": "negative",
+      "score": 0.032106002309901904
+    },
+    {
+      "text": "hur använder jag excel",
+      "label": "negative",
+      "score": 0.03658783675893584
+    },
+    {
+      "text": "hur programmerar jag i javascript",
+      "label": "negative",
+      "score": 0.033288064249634375
+    }
+  ]
+}

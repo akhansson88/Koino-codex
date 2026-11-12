@@ -32,7 +32,7 @@ try {
   const outfile = path.join(temporary, "search.mjs");
   await build({
     bundle: true, format: "esm", platform: "node", outfile, logLevel: "silent",
-    stdin: { contents: 'export * from "./features/bible-search.ts"; export * from "./features/bible-search/retrieval.ts"; export {setBibleDatabaseForTesting} from "./features/bible-database.ts";', resolveDir: root },
+    stdin: { contents: 'export * from "./features/bible-search.ts"; export * from "./features/bible-search/retrieval.ts"; export * from "./features/bible-search/query-validity.ts"; export {setBibleDatabaseForTesting} from "./features/bible-database.ts";', resolveDir: root },
     plugins: [{ name: "native-boundary", setup(builder) {
       builder.onResolve({ filter: /bible-search\/native-backend$/ }, () => ({ path: "koino-native-search-not-installed-in-node", external: true }));
     } }],
@@ -42,7 +42,13 @@ try {
   api.setBibleDatabaseForTesting(adapt(reader));
   encoder = await createTextEncoder({ runtime: ort, modelPath: path.join(assets, "multilingual-e5-small-int8.onnx"), tokenizerJson: JSON.parse(await readFile(path.join(assets, "multilingual-e5-small.tokenizer"), "utf8")), tokenizerConfig: JSON.parse(await readFile(path.join(assets, "multilingual-e5-small-config.tokenizer"), "utf8")) });
   const cache = new Map();
-  const backend = api.createScriptureSearchBackend({ connection: adapt(search), vectorType: manifest.vectorType, stemSwedish: normalizeSwedishForSearch, embedQuery: async (text) => {
+  const searchMeta = new Map(search.prepare("SELECT key,value FROM meta").all().map(({ key, value }) => [key, value]));
+  const backend = api.createScriptureSearchBackend({ connection: adapt(search), vectorType: manifest.vectorType,
+    semanticMinSimilarity: Number(searchMeta.get("semantic_min_similarity") ?? 0.72),
+    semanticOnlyMinSimilarity: Number(searchMeta.get("semantic_only_min_similarity") ?? 0.84),
+    semanticRelativeFloor: Number(searchMeta.get("semantic_relative_floor") ?? 0.78),
+    semanticRelativeMargin: Number(searchMeta.get("semantic_relative_margin") ?? 0.05),
+    stemSwedish: normalizeSwedishForSearch, validateQuery: (query, vector, support) => api.validateBibleQuery(query, vector, support), embedQuery: async (text) => {
     if (!cache.has(text)) cache.set(text, encoder.embed(text, "query"));
     return cache.get(text);
   } });
@@ -59,7 +65,11 @@ try {
   ];
   const failures = [];
   const times = [];
+  const oldTestament = new Set(api.testamentBooks({ testament: "old" }));
+  const newTestament = new Set(api.testamentBooks({ testament: "new" }));
+  let scenarioCount = 0;
   for (const [english, swedish, ...targets] of cases) for (const query of [english, swedish]) for (const versionId of ["kjv", "reformationsbibeln2026"]) for (const language of ["en", "sv"]) {
+    scenarioCount++;
     const began = performance.now();
     let partial;
     const response = await api.searchScripture({ query, versionId, language, limit: 20, onPartialResults: (next) => { partial = next; } });
@@ -78,6 +88,7 @@ try {
   // Held-out wording is deliberately different from the document's examples.
   for (const [query, expected] of [["Balaams animal rebuked him", "Numbers"], ["Bileams djur tillrättavisade honom", "Numbers"], ["Elisha retrieves the borrowed tool from water", "2 Kings"], ["Elisa räddar det lånade verktyget ur vattnet", "2 Kings"]]) {
     for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+      scenarioCount++;
       const response = await api.searchScripture({ query, versionId, language: "en", limit: 20 });
       if (!response.results.slice(0,5).some((item) => item.verse.book === expected)) failures.push({ query, versionId, top: response.results.slice(0,5).map((item) => item.verse.reference) });
     }
@@ -86,20 +97,76 @@ try {
   // They must still retrieve useful Scripture through actual model inference.
   for (const [query, book, chapter, verse] of [["hopplöshet", "Romans", 8, 24], ["osjälvisk generositet", "Proverbs", 22, 9]]) {
     for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+      scenarioCount++;
       assert.equal((await backend.lexical(query, versionId === "kjv" ? 1 : 2, 20)).length, 0, `${query}: fixture must exercise semantic-only retrieval`);
       const response = await api.searchScripture({ query, versionId, language: "en", limit: 20 });
       assert.equal(response.mode, "hybrid");
       assert.ok(response.results.slice(0,5).some((item) => item.verse.book === book && item.verse.chapter === chapter && item.verse.startVerse <= verse && item.verse.endVerse >= verse), `${query}: a useful semantic-only passage must survive abstention`);
     }
   }
+  // Natural-language questions are the primary product path. Every one of
+  // these must surface at least one directly relevant passage in the top five.
+  const questionCases = [
+    ["what does the bible say about anxiety", ["Philippians",4,6,7], ["1 Peter",5,6,7], ["John",14,27,27], ["2 Timothy",1,7,7], ["Psalms",55,22,22]],
+    ["how do I deal with grief", ["Psalms",31,7,10], ["John",16,17,22], ["Lamentations",3,31,32], ["Job",6,2,2], ["1 Peter",2,19,19]],
+    ["God cares for those who are grieving", ["1 Peter",2,19,19], ["Revelation",21,4,4], ["Psalms",147,3,3], ["Psalms",34,18,18], ["Matthew",5,4,4]],
+    ["who worshipped Jesus", ["Matthew",28,17,17], ["John",9,38,38], ["Matthew",14,33,33], ["Hebrews",1,6,6]],
+    ["money cannot satisfy the heart", ["Proverbs",17,16,16], ["Proverbs",15,13,13], ["Proverbs",15,27,30], ["Proverbs",18,2,2], ["1 Timothy",1,5,5]],
+    ["vad säger bibeln om ångest", ["Psalms",25,17,17], ["Philippians",4,6,7], ["1 Peter",5,7,7]],
+    ["hur hanterar jag sorg", ["Psalms",31,7,10], ["John",16,17,22], ["Lamentations",3,31,32]],
+    ["vem tillbad Jesus", ["Matthew",28,17,17], ["John",9,38,38], ["Matthew",14,33,33]],
+    ["Gud bryr sig om dem som sörjer", ["1 Peter",2,19,19], ["Revelation",21,4,4], ["Psalms",147,3,3], ["Matthew",5,4,4]],
+    ["pengar kan inte tillfredsställa hjärtat", ["Proverbs",17,16,16], ["Proverbs",15,13,13], ["Proverbs",18,2,2]],
+  ];
+  for (const [query, ...targets] of questionCases) for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+    scenarioCount++;
+    const began = performance.now();
+    const response = await api.searchScripture({ query, versionId, language: "en", limit: 20 });
+    times.push(performance.now() - began);
+    assert.equal(response.mode, "hybrid", `${query}: semantic search must execute`);
+    const top = response.results.slice(0, 5).map((item) => item.verse);
+    if (!targets.some(([book, chapter, first, last]) => top.some((v) => v.book === book && v.chapter === chapter && v.startVerse <= last && v.endVerse >= first))) {
+      failures.push({ query, versionId, top: top.map((v) => v.reference) });
+    }
+  }
+
   // High background similarity alone is not evidence that unrelated text occurs
-  // in Scripture. These have no text hits and must not receive arbitrary verses.
-  for (const query of ["zxqwvbnm9876", "quantum battery warranty", "recept på glutenfri chokladkaka"]) {
+  // in Scripture. These fall into general cooking, technology, finance, health,
+  // travel, sports and repair domains and must not receive arbitrary verses.
+  const negativeQueries = [
+    "zxqwvbnm9876", "quantum battery warranty", "recept på glutenfri chokladkaka",
+    "best pizza recipe", "who won the world cup", "how to invest in bitcoin",
+    "python async tutorial", "weather in stockholm tomorrow", "how to fix a flat tire",
+    "how to bake a cake", "how to get rich", "how to treat a cold",
+    "how to lose weight fast", "how to book a flight", "bästa pizzan i stan",
+    "vem vann världscupen", "väder i stockholm imorgon", "hur byter jag däck",
+    "how to make a birthday cake", "how to fix a washing machine", "how to invest in gold",
+    "how to run faster", "best coffee shops in town", "how to learn french",
+    "how to replace a battery", "how to sell a car",
+  ];
+  for (const query of negativeQueries) {
     for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+      scenarioCount++;
+      const began = performance.now();
       const response = await api.searchScripture({ query, versionId, language: "en", limit: 20 });
+      times.push(performance.now() - began);
       assert.equal(response.mode, "hybrid");
       assert.equal(response.results.length, 0, `${query}: unrelated input must not produce semantic-only false matches`);
     }
+  }
+  for (const [testament, query, books] of [["old", "God", oldTestament], ["new", "Jesus", newTestament]]) {
+    for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+      scenarioCount++;
+      const response = await api.searchScripture({ query, versionId, testament, language: "en", limit: 20 });
+      assert.ok(response.results.length > 0, `${testament}: scoped search must return results`);
+      assert.ok(response.results.every((item) => books.has(item.verse.book)), `${testament}: every result must stay inside the selected testament`);
+    }
+  }
+  for (const versionId of ["kjv", "reformationsbibeln2026"]) {
+    scenarioCount++;
+    const response = await api.searchScripture({ query: "God", versionId, book: "Psalms", language: "en", limit: 20 });
+    assert.ok(response.results.length > 0, "book scope: search must return results");
+    assert.ok(response.results.every((item) => item.verse.book === "Psalms"), "book scope: every result must stay inside Psalms");
   }
   for (const query of ['"grace" OR (', "grace - mercy", "nådens gåvor", '[]()+*:"']) await api.searchScripture({ query, versionId: "reformationsbibeln2026", language: "en", limit: 5 });
   const previewOptions = { query: "grace", versionId: "kjv", language: "en", limit: 20 };
@@ -120,7 +187,7 @@ try {
   const fallback = await api.searchScripture({ query: "God loved world", versionId: "kjv", language: "en" });
   assert.equal(fallback.semanticState, "unavailable"); assert.ok(fallback.results.length);
   times.sort((a,b) => a-b);
-  console.log(JSON.stringify({ scenarios: 64, vectorType: manifest.vectorType, desktopP95ms: Math.round(times[Math.floor(times.length*.95)]), failures }, null, 2));
+  console.log(JSON.stringify({ scenarios: scenarioCount, vectorType: manifest.vectorType, desktopP95ms: Math.round(times[Math.floor(times.length*.95)]), failures }, null, 2));
   assert.equal(failures.length, 0, "Bilingual top-five retrieval regressions");
   console.log("Hybrid search validation passed.");
 } finally {

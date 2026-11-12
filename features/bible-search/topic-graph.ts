@@ -14,7 +14,7 @@ function abortIfNeeded(signal?: AbortSignal) {
  */
 export async function expandTopicGraphCandidates({
   connection, topicDocuments, hasTopicMatch, contentTerms, translationId, queryVector,
-  vectorType = "int8", semanticMinSimilarity = 0.72, signal, maxNeighbors = 48,
+  vectorType = "int8", semanticMinSimilarity = 0.72, signal, maxNeighbors = 48, books,
 }: {
   connection: SearchConnection;
   topicDocuments: SearchDocument[];
@@ -27,6 +27,8 @@ export async function expandTopicGraphCandidates({
   signal?: AbortSignal;
   /** null removes the preview's cap when enumerating the complete search. */
   maxNeighbors?: number | null;
+  /** Optional Old/New Testament book scope. */
+  books?: readonly string[];
 }): Promise<SearchDocument[]> {
   abortIfNeeded(signal);
   if (!hasTopicMatch || contentTerms.length < 1 || contentTerms.length > 3) return [...topicDocuments];
@@ -51,11 +53,12 @@ export async function expandTopicGraphCandidates({
        JOIN documents d ON d.id = neighbors.target_document_id
        JOIN vec_documents v ON v.id = d.id
       WHERE d.translation_id = ? AND d.kind = 'verse'
+        ${books?.length ? `AND d.book IN (${books.map(() => "?").join(",")})` : ""}
         ${sqlExcluded.length ? `AND d.id NOT IN (${sqlExcluded.map(() => "?").join(",")})` : ""}
         AND query_similarity >= ?
       ORDER BY neighbors.graph_weight DESC, d.canonical_order, d.id
       ${maxNeighbors === null ? "" : `LIMIT ${Math.max(0, Math.floor(maxNeighbors))}`}`,
-    ...seeds, bytes, translationId, ...sqlExcluded, semanticMinSimilarity,
+    ...seeds, bytes, translationId, ...(books ?? []), ...sqlExcluded, semanticMinSimilarity,
   );
   abortIfNeeded(signal);
   const seen = new Set(topicDocuments.map((doc) => doc.id));

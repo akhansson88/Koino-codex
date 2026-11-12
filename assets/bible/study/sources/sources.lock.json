@@ -1,0 +1,133 @@
+{
+  "source": "neuu-org/bible-dictionary-dataset",
+  "commit": "b8e82aa7ca847f4d97fb432cd965e398a111333c",
+  "dictionary": "Easton's Bible Dictionary (1897)",
+  "license": "CC BY 4.0; source text public domain",
+  "files": [
+    {
+      "file": "a.json",
+      "sha256": "8c838b7604c0ce6ab9cd319ee196fb664e5da5ca3f570308f2f74f1297dce154",
+      "bytes": 557441
+    },
+    {
+      "file": "b.json",
+      "sha256": "e0494ac9f50e77dd8b7a4a9f867c7b0e5bd10defc865e2a649436da2ffcf5d2a",
+      "bytes": 383873
+    },
+    {
+      "file": "c.json",
+      "sha256": "b68833dab89751d5be3faf48007f117af1ba1b6fc9eabcff2b7b99b7165c7c84",
+      "bytes": 472972
+    },
+    {
+      "file": "d.json",
+      "sha256": "aad8571e25c1dde1ee894373f24a4a78d2cd8d4f4b524bdaf559905fc236c10f",
+      "bytes": 247882
+    },
+    {
+      "file": "e.json",
+      "sha256": "a5245cd770c136986930121e1801a31fed253c9f73ebc40b59576e707152fc8d",
+      "bytes": 306221
+    },
+    {
+      "file": "f.json",
+      "sha256": "31dc8bb4cabff7c9179f3cda91c01c22a442e17fa9a1ef6ddaf6db6864f1a5b1",
+      "bytes": 187605
+    },
+    {
+      "file": "g.json",
+      "sha256": "66dbd26b4cbdc4a52370a0a1f34057dff6865f3ba18853969f2dc4192eb894e4",
+      "bytes": 256563
+    },
+    {
+      "file": "h.json",
+      "sha256": "44f5a93a73da85640f5a21bc10ae883f2957395125197d7ac74f8769a61f0a29",
+      "bytes": 362311
+    },
+    {
+      "file": "i.json",
+      "sha256": "1df2e939661cade465d028a91f7ab7baa3e3b39a4f771b84ae919e94cc17f85d",
+      "bytes": 99787
+    },
+    {
+      "file": "j.json",
+      "sha256": "e75a190aa4477771e02f03756a3106825dca0ad6e96fc2c787e072d4f176add3",
+      "bytes": 368376
+    },
+    {
+      "file": "k.json",
+      "sha256": "1e2bb7039bbb98abd415c5e84ba97d36345d8ccc67736e16f570e7dfcf94ecaf",
+      "bytes": 93540
+    },
+    {
+      "file": "l.json",
+      "sha256": "34d1bd87fd913b9a2151552941e7ae4145e769f81058e836e271164232943cf3",
+      "bytes": 183583
+    },
+    {
+      "file": "m.json",
+      "sha256": "019003b40d7b79e480e95082d4f8fe98f2d0ecde2a9d64442751183d94e93178",
+      "bytes": 404158
+    },
+    {
+      "file": "n.json",
+      "sha256": "a270240e163643e995766f61db23eeebd4a610683b06a9dc8e9e0d67be952112",
+      "bytes": 156798
+    },
+    {
+      "file": "o.json",
+      "sha256": "c6965e9fa23e7c837959f15fbc862530a45a8c004afea0d0889c243b7ec71806",
+      "bytes": 81285
+    },
+    {
+      "file": "p.json",
+      "sha256": "66ac3340e5c95d41c75f75a16092cbe067c6596840ab893bee419fc9fc31941c",
+      "bytes": 373052
+    },
+    {
+      "file": "q.json",
+      "sha256": "5e7cc94712ee1c3aacbb3665ac34f9b386b807b44fe365326a96715728c78060",
+      "bytes": 12720
+    },
+    {
+      "file": "r.json",
+      "sha256": "4b3a8d593bbe7869f4124b5e23f9bfabca7d877262aa7dcc826f1f815d1a1177",
+      "bytes": 174702
+    },
+    {
+      "file": "s.json",
+      "sha256": "a6bba6315bf9f0336cb0fd262de8bbd0b9d9e31451bfbebe57d5c1237b759763",
+      "bytes": 500436
+    },
+    {
+      "file": "t.json",
+      "sha256": "5004c239df6e6f365cc87280ccecdb9727d50c093d0db9dbdd73ffaa635e52f6",
+      "bytes": 253173
+    },
+    {
+      "file": "u.json",
+      "sha256": "3b5a7a3f6a0eece81a69220d3b63d0aebea9e2b3990152be797bef9b01f1486e",
+      "bytes": 27829
+    },
+    {
+      "file": "v.json",
+      "sha256": "99c8bb186914a0fc6ece7f04836bca02b8c261ce0aaf321467917b138b4f37d6",
+      "bytes": 30675
+    },
+    {
+      "file": "w.json",
+      "sha256": "358850bdc0ed6874b53d514768b4eeef4cd89a4521852208e0aad02851596273",
+      "bytes": 113376
+    },
+    {
+      "file": "y.json",
+      "sha256": "326187c93d050796b13ed9a24853a3981f0353d5aa05b50e91f257efbb1071bd",
+      "bytes": 6581
+    },
+    {
+      "file": "z.json",
+      "sha256": "1369b744801ce6ca957f2a542f8f747ba0966616f2fb682a7264a0a47c08f50d",
+      "bytes": 113890
+    }
+  ]
+}

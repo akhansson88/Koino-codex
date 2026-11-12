@@ -1,0 +1,8 @@
+Easton's Bible Dictionary (Matthew George Easton, 1897) is public domain.
+
+Structured dataset:
+https://github.com/neuu-org/bible-dictionary-dataset
+Commit: b8e82aa7ca847f4d97fb432cd965e398a111333c
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+Copyright (c) 2026 NEUU
+https://creativecommons.org/licenses/by/4.0/legalcode

@@ -38,6 +38,7 @@ async function bundle(file, mocks = {}) {
 
 const { useScriptureSearch, useScriptureSearchSession } = await bundle("features/bible-search/use-search.ts", {
   "./semantic-runtime": `export const prepareSemanticRuntime=async()=>{globalThis.__scriptureSearchUI.prepares++;};`,
+  "./study": `export const searchStudy=async()=>[];`,
   "@/features/bible-kjv": `export const biblePassagesFromRanges=async(ranges)=>{globalThis.__scriptureSearchUI.hydrations=(globalThis.__scriptureSearchUI.hydrations||0)+1; if(globalThis.__scriptureSearchUI.failHydration) throw new Error('reader unavailable'); return ranges.map(range=>({verse:{...range,reference:range.book+' '+range.chapter+':'+range.startVerse,text:'Restored text',translation:'Reformationsbibeln 2026'},verses:[{verse:range.startVerse,text:'Restored text'}]}));};`,
   "@/features/bible-search": `export const normalizeScriptureQuery=value=>value.trim(); export function createScriptureSearchPageSession(options) {return { firstPage(signal,onPartialResults) {return new Promise((resolve,reject)=>{globalThis.__scriptureSearchUI.calls.push({options:{...options,signal,onPartialResults},resolve:value=>resolve({hasMore:false,...value}),reject});});}, nextPage(signal){return new Promise((resolve,reject)=>globalThis.__scriptureSearchUI.pageCalls.push({signal,resolve,reject}));},suspend(){},dispose(){} };}`,
 });
@@ -127,6 +128,7 @@ try {
   const { ScriptureSearchContent } = await bundle("features/bible-search/search-content.tsx", {
     "react-native": `import React from "react";
       export const ActivityIndicator="ActivityIndicator",Pressable="Pressable",ScrollView="ScrollView",Text="Text",TextInput="TextInput",View="View";
+      export const Keyboard={dismiss(){}};
       export const FlatList=React.forwardRef((props,ref)=>{
         const previous=React.useRef(props.data);
         React.useLayoutEffect(()=>{
@@ -141,8 +143,8 @@ try {
       });`,
     "react-native-safe-area-context": `export const useSafeAreaInsets=()=>({bottom:0,top:0});`,
     "@expo/vector-icons": `export const Feather="Feather";`,
-    "@/features/bible-search": `export {displayBibleReference} from "@/features/bible-book-names";`,
-    "./use-search": `export const useScriptureSearch=(options)=>globalThis.__scriptureSearchUI.useRealSearch ? globalThis.__scriptureSearchUI.useRealSearch(options) : ({response:globalThis.__scriptureSearchUI.response,loading:false,error:false,eligible:true,retry:()=>{},loadMore:()=>{globalThis.__scriptureSearchUI.loads=(globalThis.__scriptureSearchUI.loads||0)+1;},retryMore:()=>{globalThis.__scriptureSearchUI.retries=(globalThis.__scriptureSearchUI.retries||0)+1;},...globalThis.__scriptureSearchUI.searchOverrides});`,
+    "@/features/bible-search": `export {displayBibleBookName,displayBibleReference} from "@/features/bible-book-names";`,
+    "./use-search": `export const useScriptureSearch=(options)=>globalThis.__scriptureSearchUI.useRealSearch ? globalThis.__scriptureSearchUI.useRealSearch(options) : ({response:globalThis.__scriptureSearchUI.response,studyResults:[],loading:false,error:false,eligible:true,engine:"smart",setEngine:()=>{},testament:"all",setTestament:()=>{},currentBook:undefined,bookOnly:false,setBookOnly:()=>{},retry:()=>{},loadMore:()=>{globalThis.__scriptureSearchUI.loads=(globalThis.__scriptureSearchUI.loads||0)+1;},retryMore:()=>{globalThis.__scriptureSearchUI.retries=(globalThis.__scriptureSearchUI.retries||0)+1;},...globalThis.__scriptureSearchUI.searchOverrides});`,
     "@/features/bible-audio/provider": `export const useBibleAudio=()=>globalThis.__scriptureSearchUI.audio;`,
     "@/features/bible-audio/topic-controls": `export const TopicPassageAudioControl="TopicPassageAudioControl",TopicPlaybackPanel="TopicPlaybackPanel";`,
     "@/ui/app-language": `import {translateMessage} from "@/ui/localization"; export const useAppTranslation=()=>({language:globalThis.__scriptureSearchUI.language,t:(key,values)=>translateMessage(globalThis.__scriptureSearchUI.language,key,values)});`,

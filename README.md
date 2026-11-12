@@ -176,6 +176,21 @@ either packaged translation. The reader and Scripture attachment picker share
 the same engine, and every displayed quotation comes from the selected local
 Bible text.
 
+**Smart** mode routes each query before retrieval: references and quoted phrases
+stay exact; short keywords keep the BM25 recovery stages; natural-language
+questions strip question/filler words, use only strong near/and evidence, and
+consult the 6,752-topic index. Swedish pastoral terms receive a small English
+semantic expansion. A bundled query-validity classifier rejects general-domain
+requests (recipes, finance, technology, health, travel, sports and repairs)
+before semantic retrieval. **Precise** mode is an explicit exact-word search and
+never loads the inference runtime. Results are fused with weighted reciprocal
+rank fusion, then near-duplicate verse hits from the same sermon section are
+grouped into one passage card. Old/New Testament and “this book” scope are
+applied consistently to lexical, topic, semantic and paged queries. The search
+box offers local topic completion from the same 6,752-topic index, and question
+queries receive a cited extractive synopsis: every line is a direct quotation
+from the top passages.
+
 The model, tokenizer and complete search database are bundled with the native
 app. Large `.onnx` and search `.db` assets use Git LFS; run `git lfs pull` after
 cloning. Search requires runtime `2.1.0` or newer and a fresh native build with
@@ -189,8 +204,56 @@ npm run bible:search:build
 npm run validate:hybrid-search
 npm run validate:bible-search-ui
 npm run test:bible-search-pagination
-node --test scripts/embedding-core.test.mjs
+node --test scripts/embedding-core.test.mjs scripts/search-query-validity.test.mjs scripts/search-engine.test.mjs scripts/search-scope.test.mjs scripts/search-synopsis.test.mjs scripts/search-suggestions.test.mjs
 ```
+
+The query-validity prototypes are separate from the corpus index. Rebuild them
+after changing the curated question list (the build also reports classifier
+precision/recall):
+
+```sh
+npm run bible:search:prototypes
+npm run bible:search:suggestions
+```
+
+## Offline study pack
+
+Search also ships a separate offline study index built from Easton's Bible
+Dictionary (1897) and Matthew Henry's Bible Commentary (1662-1714). Both
+underlying texts are public domain. The dictionary's structured dataset is by
+NEUU under CC BY 4.0; the commentary JSON is from the Free Use Bible API at
+bible.helloao.org under the Creative Commons Public Domain Mark 1.0. Koino
+normalizes the entries and compiles them into
+`assets/bible/study/koino-study-v1.db` with SQLite FTS5: 3,962 dictionary
+entries and 5,280 commentary/chapter comments. Exact title matches are ranked
+first, then BM25 matches across text and scripture references. Results keep at
+least one dictionary and one commentary card when both exist, and cards can be
+expanded in place. Source commits, snapshot date, checksums and entry counts are
+recorded in `assets/bible/study/study-manifest.json`.
+
+Rebuild the study pack when the pinned sources change:
+
+```sh
+npm run bible:study:fetch
+npm run bible:study:build
+node --test scripts/study-search.test.mjs
+```
+
+## Fine-tuned Bible embeddings (development)
+
+The offline embedding model can be fine-tuned on synthetic topic questions with
+BM25 hard negatives. The pipeline lives in `scripts/finetune/` and emits a new
+int8 ONNX encoder; `apply_model.mjs` updates the runtime model revision/hash,
+then the normal search build re-embeds every verse, passage and window and
+regenerates the manifest and quantization report. See
+`scripts/finetune/README.md` for the environment, dataset, training, export,
+held-out evaluation gates, rebuild steps and the current run status. This is a
+build-time workflow; the device only runs an accepted model and index. Five
+fine-tuned candidates have been evaluated and rejected, and fine-tuning is
+paused before the MVP pilot. The shipped search assets remain the pinned
+upstream E5 export until a future candidate passes the locked narrative,
+full-index and app-level zero-regression gates. See the decision and
+current-status sections in `scripts/finetune/README.md`.
 
 The build verifies pinned source hashes, generates translation-specific passage
 documents, and caches embeddings under `assets/bible/search/.cache` so interrupted

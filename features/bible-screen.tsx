@@ -203,7 +203,7 @@ export function BibleScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchReturn, setSearchReturn] = useState<{ userId?: string }>();
   const canReturnToSearch = !!searchReturn && searchReturn.userId === state.currentUserId;
-  const searchSession = useScriptureSearchSession({ language, versionId: bibleVersionId, visible: searchVisible, scopeKey: state.currentUserId });
+  const searchSession = useScriptureSearchSession({ language, versionId: bibleVersionId, visible: searchVisible, currentBook: position.book, scopeKey: state.currentUserId });
   const browseAfterSearchDismiss = useRef(false);
   useEffect(() => {
     setSearchVisible(false);

@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-11-11",
+  "description": "Natural narrative paraphrase training seeds. Gold is the whole passage section; every verse in the span is a valid answer. Disjoint from the locked benchmark.",
+  "stories": [
+    {
+      "id": "fall",
+      "en": "A serpent persuades a woman to eat forbidden fruit",
+      "sv": "En orm övertalar en kvinna att äta förbjuden frukt",
+      "references": [[1, 3, 1, 24]]
+    },
+    {
+      "id": "cain-abel",
+      "en": "Two brothers bring offerings, and one kills the other",
+      "sv": "Två bröder bär fram offer, och den ene dödar den andre",
+      "references": [[1, 4, 1, 16]]
+    },
+    {
+      "id": "noah-flood",
+      "en": "A man builds a boat to save his family from a flood",
+      "sv": "En man bygger en båt för att rädda sin familj undan en flod",
+      "references": [[1, 6, 9, 22], [1, 7, 1, 24], [1, 8, 1, 22]]
+    },
+    {
+      "id": "abraham-call",
+      "en": "A man leaves his homeland because God promises him a new land",
+      "sv": "En man lämnar sitt hemland därför att Gud lovar honom ett nytt land",
+      "references": [[1, 12, 1, 9]]
+    },
+    {
+      "id": "abraham-isaac",
+      "en": "A father is asked to sacrifice his only son",
+      "sv": "En far uppmanas att offra sin enda son",
+      "references": [[1, 22, 1, 19]]
+    },
+    {
+      "id": "jacob-wrestles",
+      "en": "A man wrestles with God until daybreak",
+      "sv": "En man brottas med Gud till gryningen",
+      "references": [[1, 32, 22, 32]]
+    },
+    {
+      "id": "joseph-dreams",
+      "en": "A prisoner explains a king's dream about cows and grain",
+      "sv": "En fånge förklarar en kungs dröm om kor och säd",
+      "references": [[1, 41, 1, 36]]
+    },
+    {
+      "id": "passover",
+      "en": "A lamb's blood marks the doors so death passes by",
+      "sv": "Ett lams blod märker dörrarna så att döden går förbi",
+      "references": [[2, 12, 1, 28]]
+    },
+    {
+      "id": "ten-commandments",
+      "en": "God gives a people ten commands on a mountain",
+      "sv": "Gud ger ett folk tio bud på ett berg",
+      "references": [[2, 20, 1, 17]]
+    },
+    {
+      "id": "golden-calf",
+      "en": "The people worship a golden statue while Moses is away",
+      "sv": "Folket tillber en gyllene staty medan Mose är borta",
+      "references": [[2, 32, 1, 35]]
+    },
+    {
+      "id": "rahab-spies",
+      "en": "A woman hides two spies on her roof",
+      "sv": "En kvinna gömmer två spejare på sitt tak",
+      "references": [[6, 2, 1, 24]]
+    },
+    {
+      "id": "deborah-barak",
+      "en": "A prophetess and a general defeat an enemy army",
+      "sv": "En profetissa och en general besegrar en fiendearmé",
+      "references": [[7, 4, 1, 24]]
+    },
+    {
+      "id": "saul-king",
+      "en": "A man is anointed king after searching for lost donkeys",
+      "sv": "En man smörjs till kung efter att ha letat efter försvunna åsnor",
+      "references": [[9, 10, 1, 27]]
+    },
+    {
+      "id": "david-spares-saul",
+      "en": "A king refuses to kill his enemy in a cave",
+      "sv": "En kung vägrar döda sin fiende i en grotta",
+      "references": [[9, 24, 1, 22]]
+    },
+    {
+      "id": "solomon-wisdom",
+      "en": "A new king asks God for wisdom instead of riches",
+      "sv": "En ny kung ber Gud om vishet i stället för rikedom",
+      "references": [[11, 3, 1, 15]]
+    },
+    {
+      "id": "queen-sheba",
+      "en": "A queen travels far to test a king's wisdom",
+      "sv": "En drottning reser långt för att pröva en kungs vishet",
+      "references": [[11, 10, 1, 13]]
+    },
+    {
+      "id": "widows-oil",
+      "en": "A widow's small jar of oil does not run out",
+      "sv": "En änkas lilla kruka med olja tar inte slut",
+      "references": [[12, 4, 1, 7]]
+    },
+    {
+      "id": "job-suffering",
+      "en": "A righteous man loses everything and still trusts God",
+      "sv": "En rättfärdig man förlorar allt och litar ändå på Gud",
+      "references": [[18, 1, 1, 22], [18, 2, 1, 13]]
+    },
+    {
+      "id": "rich-man-lazarus",
+      "en": "A poor man suffers while a rich man ignores him",
+      "sv": "En fattig man lider medan en rik man ignorerar honom",
+      "references": [[42, 16, 19, 31]]
+    },
+    {
+      "id": "pharisee-tax-collector",
+      "en": "A proud religious man and a humble tax collector pray",
+      "sv": "En stolt religiös man och en ödmjuk tullindrivare ber",
+      "references": [[42, 18, 9, 14]]
+    },
+    {
+      "id": "zacchaeus",
+      "en": "A short tax collector climbs a tree to see Jesus",
+      "sv": "En kort tullindrivare klättrar upp i ett träd för att se Jesus",
+      "references": [[42, 19, 1, 10]]
+    },
+    {
+      "id": "foot-washing",
+      "en": "Jesus kneels to wash his disciples' feet",
+      "sv": "Jesus knäböjer för att tvätta sina lärjungars fötter",
+      "references": [[43, 13, 1, 17]]
+    },
+    {
+      "id": "thomas-believes",
+      "en": "A disciple refuses to believe until he touches Jesus' wounds",
+      "sv": "En lärjunge vägrar tro förrän han rör vid Jesu sår",
+      "references": [[43, 20, 24, 29]]
+    },
+    {
+      "id": "paul-athens",
+      "en": "Paul argues with philosophers in Athens about the unknown god",
+      "sv": "Paulus diskuterar med filosofer i Aten om den okända guden",
+      "references": [[44, 17, 16, 34]]
+    },
+    {
+      "id": "paul-agrippa",
+      "en": "Paul defends his faith before a king",
+      "sv": "Paulus försvarar sin tro inför en kung",
+      "references": [[44, 26, 1, 32]]
+    },
+    {
+      "id": "garden-eden",
+      "en": "A man and a woman live in a garden and are told not to eat from one tree",
+      "sv": "En man och en kvinna bor i en trädgård och får inte äta från ett träd",
+      "references": [[1, 2, 4, 25]]
+    },
+    {
+      "id": "sodom-gomorrah",
+      "en": "Two cities are destroyed after their cruelty is exposed",
+      "sv": "Två städer förstörs efter att deras grymhet avslöjats",
+      "references": [[1, 19, 1, 29]]
+    },
+    {
+      "id": "joseph-dreams-young",
+      "en": "A young man dreams that his family will bow before him",
+      "sv": "En ung man drömmer att hans familj ska böja sig för honom",
+      "references": [[1, 37, 1, 11]]
+    },
+    {
+      "id": "plague-blood",
+      "en": "A river turns to blood so a king will let the people go",
+      "sv": "En flod förvandlas till blod så att en kung ska släppa folket",
+      "references": [[2, 7, 14, 25]]
+    },
+    {
+      "id": "water-rock",
+      "en": "Water comes out of a rock when a leader strikes it",
+      "sv": "Vatten kommer ur en klippa när en ledare slår på den",
+      "references": [[2, 17, 1, 7]]
+    },
+    {
+      "id": "spies-canaan",
+      "en": "Twelve men explore a new land and report giant enemies",
+      "sv": "Tolv män utforskar ett nytt land och rapporterar om jättelika fiender",
+      "references": [[4, 13, 1, 33]]
+    },
+    {
+      "id": "jordan-crossing",
+      "en": "A river stops flowing so the people can cross on dry ground",
+      "sv": "En flod slutar flöda så att folket kan gå över på torr mark",
+      "references": [[6, 3, 1, 17]]
+    },
+    {
+      "id": "sun-stands-still",
+      "en": "The sun stays still while an army wins a battle",
+      "sv": "Solen står stilla medan en armé vinner en strid",
+      "references": [[6, 10, 1, 15]]
+    },
+    {
+      "id": "gideon-three-hundred",
+      "en": "A small army with torches and trumpets defeats a larger one",
+      "sv": "En liten armé med facklor och trumpeter besegrar en större",
+      "references": [[7, 7, 1, 25]]
+    },
+    {
+      "id": "jephthah-vow",
+      "en": "A man promises God a sacrifice and later mourns his daughter",
+      "sv": "En man lovar Gud ett offer och sörjer senare sin dotter",
+      "references": [[7, 11, 29, 40]]
+    },
+    {
+      "id": "ruth-boaz",
+      "en": "A foreign widow gathers grain in a field and meets the owner",
+      "sv": "En utländsk änka samlar säd på ett fält och möter ägaren",
+      "references": [[8, 2, 1, 23]]
+    },
+    {
+      "id": "hannah-prayer",
+      "en": "A barren woman prays for a son and promises to give him to God",
+      "sv": "En ofruktsam kvinna ber om en son och lovar att ge honom till Gud",
+      "references": [[9, 1, 1, 20]]
+    },
+    {
+      "id": "david-jonathan",
+      "en": "Two friends make a covenant and protect each other",
+      "sv": "Två vänner sluter ett förbund och skyddar varandra",
+      "references": [[9, 18, 1, 4]]
+    },
+    {
+      "id": "nathan-david",
+      "en": "A prophet tells a king a story about a stolen lamb",
+      "sv": "En profet berättar en historia för en kung om ett stulet lamm",
+      "references": [[10, 12, 1, 25]]
+    },
+    {
+      "id": "solomon-temple",
+      "en": "A king builds a magnificent house for God",
+      "sv": "En kung bygger ett praktfullt hus åt Gud",
+      "references": [[11, 6, 1, 38]]
+    },
+    {
+      "id": "elijah-horeb",
+      "en": "A prophet hides in a cave and hears God in a gentle whisper",
+      "sv": "En profet gömmer sig i en grotta och hör Gud i en stilla viskning",
+      "references": [[11, 19, 1, 18]]
+    },
+    {
+      "id": "hezekiah-prayer",
+      "en": "A king spreads a threatening letter before God and prays",
+      "sv": "En kung lägger ett hotfullt brev framför Gud och ber",
+      "references": [[12, 19, 14, 37]]
+    },
+    {
+      "id": "ezra-reads-law",
+      "en": "A scribe reads the law aloud to a gathered people",
+      "sv": "En skriftlärd läser lagen högt för ett samlat folk",
+      "references": [[16, 8, 1, 12]]
+    },
+    {
+      "id": "isaiah-vision",
+      "en": "A prophet sees God's glory and his lips are touched with fire",
+      "sv": "En profet ser Guds härlighet och hans läppar rörs vid av eld",
+      "references": [[23, 6, 1, 13]]
+    },
+    {
+      "id": "jeremiah-call",
+      "en": "God calls a young man to speak before he has grown up",
+      "sv": "Gud kallar en ung man att tala innan han har vuxit upp",
+      "references": [[24, 1, 4, 19]]
+    },
+    {
+      "id": "daniel-beasts",
+      "en": "A prophet sees four beasts rise from the sea",
+      "sv": "En profet ser fyra odjur stiga upp ur havet",
+      "references": [[27, 7, 1, 28]]
+    },
+    {
+      "id": "boy-jesus-temple",
+      "en": "A boy stays behind in the temple and amazes the teachers",
+      "sv": "En pojke stannar kvar i templet och förvånar lärarna",
+      "references": [[42, 2, 41, 52]]
+    },
+    {
+      "id": "sermon-plain",
+      "en": "Jesus teaches blessings and woes on a level place",
+      "sv": "Jesus undervisar om välsignelser och ve på en slätt",
+      "references": [[42, 6, 20, 26]]
+    },
+    {
+      "id": "widows-son-nain",
+      "en": "A funeral procession stops when Jesus raises a widow's son",
+      "sv": "En begravningsprocession stannar när Jesus uppväcker en änkasson",
+      "references": [[42, 7, 11, 17]]
+    },
+    {
+      "id": "mary-martha",
+      "en": "Two sisters welcome Jesus, and one sits at his feet",
+      "sv": "Två systrar tar emot Jesus, och en sitter vid hans fötter",
+      "references": [[42, 10, 38, 42]]
+    },
+    {
+      "id": "persistent-widow",
+      "en": "A widow keeps asking a judge for justice until he acts",
+      "sv": "En änka fortsätter be en domare om rättvisa tills han agerar",
+      "references": [[42, 18, 1, 8]]
+    },
+    {
+      "id": "jesus-children",
+      "en": "People bring children to Jesus and he blesses them",
+      "sv": "Människor för barn till Jesus och han välsignar dem",
+      "references": [[42, 18, 15, 17]]
+    },
+    {
+      "id": "crucifixion",
+      "en": "Jesus is nailed to a cross between two criminals",
+      "sv": "Jesus korsfästs mellan två brottslingar",
+      "references": [[42, 23, 26, 49]]
+    },
+    {
+      "id": "resurrection-morning",
+      "en": "Women find an empty tomb and hear that Jesus is risen",
+      "sv": "Kvinnor finner en tom grav och hör att Jesus har uppstått",
+      "references": [[42, 24, 1, 12]]
+    }
+  ]
+}

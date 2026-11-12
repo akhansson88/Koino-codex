@@ -1,10 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, View, type ViewToken } from "react-native";
+import { ActivityIndicator, FlatList, Keyboard, Pressable, Text, View, type ViewToken } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bibleVersionFor, type BibleVersionId } from "@/features/bible-versions";
-import { displayBibleReference, type ScriptureSearchResult } from "@/features/bible-search";
+import { displayBibleBookName, displayBibleReference, type ScriptureSearchResult } from "@/features/bible-search";
 import { useScriptureSearch, type ScriptureSearchScrollState, type ScriptureSearchSession } from "./use-search";
+import { buildSearchSynopsis } from "./synopsis";
+import { suggestTopics } from "./topic-suggestions";
 import { SearchSourceCredits } from "./search-credits";
 import { useBibleAudio } from "@/features/bible-audio/provider";
 import { TopicPassageAudioControl, TopicPlaybackPanel } from "@/features/bible-audio/topic-controls";
@@ -101,6 +103,16 @@ function ScriptureSearchView({
   const audio = useBibleAudio();
   const insets = useSafeAreaInsets();
   const results = search.response.results;
+  const studyResults = !search.loading && !search.error && results.length > 0 ? (search.studyResults ?? []) : [];
+  const [inputFocused, setInputFocused] = useState(false);
+  const [expandedStudy, setExpandedStudy] = useState<number | undefined>(undefined);
+  const synopsis = useMemo(() => buildSearchSynopsis(results, query), [query, results]);
+  const suggestions = useMemo(() => inputFocused ? suggestTopics(query, 5) : [], [inputFocused, query]);
+  const chooseSuggestion = (suggestion: string) => {
+    setQuery(suggestion);
+    setInputFocused(false);
+    Keyboard.dismiss();
+  };
   const version = bibleVersionFor(bibleVersionId);
   const scroll = useRef<FlatList<ScriptureSearchResult>>(null);
   const rowHeights = useRef<Record<string, number>>({});
@@ -224,7 +236,8 @@ function ScriptureSearchView({
       <View style={{ alignItems: "center", backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, flexDirection: "row", gap: 10, paddingHorizontal: 14 }}>
         <Feather name="search" color={palette.muted} size={18} />
         <SheetTextInput accessibilityLabel={t("bible.search.placeholder")} autoCapitalize="sentences" autoCorrect={false}
-          maxLength={500} onChangeText={setQuery} placeholder={t("bible.search.placeholder")} placeholderTextColor={palette.muted}
+          maxLength={500} onChangeText={setQuery} onBlur={() => setInputFocused(false)} onFocus={() => setInputFocused(true)}
+          placeholder={t("bible.search.placeholder")} placeholderTextColor={palette.muted}
           returnKeyType="search" style={{ flex: 1, minHeight: 52, color: palette.text, fontSize: 15 }} value={query} />
         {query ? <Pressable accessibilityLabel={t("shared.scripturePicker.clearSearch")} accessibilityRole="button" onPress={() => setQuery("")} style={{ minHeight: 44, minWidth: 36, alignItems: "center", justifyContent: "center" }}>
           <Feather name="x" color={palette.muted} size={18} />
@@ -233,6 +246,51 @@ function ScriptureSearchView({
       {onBrowse ? <Pressable accessibilityRole="button" onPress={onBrowse} style={{ minHeight: 40, justifyContent: "center" }}>
         <Text style={{ color: palette.accent, fontWeight: "700" }}>{t("bible.search.browse")}</Text>
       </Pressable> : null}
+      <View accessibilityLabel={t("bible.search.engine.label")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {(["smart", "precise"] as const).map((engine) => {
+          const active = search.engine === engine;
+          return <Pressable key={engine} accessibilityRole="button" accessibilityState={{ selected: active }}
+            accessibilityLabel={t(`bible.search.engine.${engine}Hint`)}
+            onPress={() => search.setEngine(engine)}
+            style={{ minHeight: 38, flexDirection: "row", alignItems: "center", gap: 6, borderColor: active ? palette.accent : palette.line,
+              borderWidth: active ? 2 : 1, borderRadius: radius.lg, backgroundColor: active ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
+            <Feather name={engine === "smart" ? "zap" : "search"} size={14} color={active ? palette.accent : palette.muted} />
+            <Text style={{ color: active ? palette.accent : palette.text, fontSize: 13, fontWeight: "700" }}>{t(`bible.search.engine.${engine}`)}</Text>
+          </Pressable>;
+        })}
+        <Text style={{ flex: 1, color: palette.muted, fontSize: 12, lineHeight: 17 }}>{t(search.engine === "smart" ? "bible.search.engine.smartHint" : "bible.search.engine.preciseHint")}</Text>
+      </View>
+      <View accessibilityLabel={t("bible.search.testament.label")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+        {(["all", "old", "new"] as const).map((testament) => {
+          const active = !search.bookOnly && search.testament === testament;
+          return <Pressable key={testament} accessibilityRole="button" accessibilityState={{ selected: active }}
+            onPress={() => { search.setBookOnly(false); search.setTestament(testament); }}
+            style={{ minHeight: 34, justifyContent: "center", borderColor: active ? palette.accent : palette.line, borderWidth: active ? 2 : 1,
+              borderRadius: 18, backgroundColor: active ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
+            <Text style={{ color: active ? palette.accent : palette.text, fontSize: 12, fontWeight: "700" }}>{t(`bible.search.testament.${testament}`)}</Text>
+          </Pressable>;
+        })}
+        {search.currentBook ? <Pressable accessibilityRole="button" accessibilityState={{ selected: search.bookOnly }}
+          onPress={() => { if (!search.bookOnly) search.setTestament("all"); search.setBookOnly(!search.bookOnly); }}
+          style={{ minHeight: 34, justifyContent: "center", borderColor: search.bookOnly ? palette.accent : palette.line, borderWidth: search.bookOnly ? 2 : 1,
+            borderRadius: 18, backgroundColor: search.bookOnly ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
+          <Text style={{ color: search.bookOnly ? palette.accent : palette.text, fontSize: 12, fontWeight: "700" }}>
+            {t("bible.search.bookOnly", { book: displayBibleBookName(search.currentBook, language, bibleVersionId) })}
+          </Text>
+        </Pressable> : null}
+      </View>
+      {suggestions.length ? <View style={{ gap: 7 }}>
+        <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>{t("bible.search.suggestions")}</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+          {suggestions.map((suggestion) => <Pressable key={suggestion} accessibilityRole="button" accessibilityLabel={suggestion}
+            onPressIn={() => chooseSuggestion(suggestion)} onPress={() => chooseSuggestion(suggestion)}
+            style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 5, borderColor: palette.line, borderWidth: 1,
+              borderRadius: 20, backgroundColor: palette.surface, paddingHorizontal: 11 }}>
+            <Feather name="hash" size={12} color={palette.muted} />
+            <Text style={{ color: palette.text, fontSize: 13 }}>{suggestion}</Text>
+          </Pressable>)}
+        </View>
+      </View> : null}
     </View> : null}
     {/* Fresh searches stay at the top while ranking settles; preserve a position only after scrolling or restoring. */}
     <FlatList key={search.scrollKey} ref={scroll} data={query.trim() ? results : []} keyExtractor={(item) => item.id}
@@ -287,10 +345,36 @@ function ScriptureSearchView({
           <Text style={{ color: palette.muted }}>{t("shared.scripturePicker.searchError")}</Text>
           <Pressable accessibilityRole="button" onPress={search.retry} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("bible.search.retry")}</Text></Pressable>
         </View> : null}
+        {studyResults.length && !search.error ? <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, padding: 16, gap: 12 }}>
+          <Text style={{ color: palette.text, fontSize: 17, fontWeight: "800" }}>{t("bible.search.study.title")}</Text>
+          {studyResults.map((entry) => <View key={entry.id} style={{ gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ backgroundColor: palette.peach, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ color: palette.accent, fontSize: 10, fontWeight: "800", textTransform: "uppercase" }}>{t(entry.kind === "dictionary" ? "bible.search.study.dictionary" : "bible.search.study.commentary")}</Text>
+              </View>
+              <Text style={{ flex: 1, color: palette.text, fontSize: 16, fontWeight: "800" }}>{entry.title}</Text>
+            </View>
+            <Text selectable style={{ color: palette.text, fontSize: 14, lineHeight: 21 }}>{expandedStudy === entry.id ? entry.text : entry.snippet}</Text>
+            {entry.refs.length && !(entry.kind === "commentary" && entry.refs.length === 1 && entry.refs[0] === entry.title) ? <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16 }}>{entry.refs.slice(0, 5).join(" · ")}{entry.refs.length > 5 ? "…" : ""}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: expandedStudy === entry.id }}
+              onPress={() => setExpandedStudy((value) => value === entry.id ? undefined : entry.id)} style={{ minHeight: 36, justifyContent: "center" }}>
+              <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "700" }}>{t(expandedStudy === entry.id ? "bible.search.study.less" : "bible.search.study.read")}</Text>
+            </Pressable>
+          </View>)}
+        </View> : null}
         {!search.eligible ? <Text style={{ color: palette.muted }}>{t("bible.search.minimum")}</Text> : null}
-        {!search.loading && !search.interrupted && search.eligible && !search.error && results.length === 0 ? <View accessibilityLiveRegion="polite" style={{ paddingVertical: 24, gap: 8 }}>
+        {!search.loading && !search.interrupted && search.eligible && !search.error && results.length === 0 && studyResults.length === 0 ? <View accessibilityLiveRegion="polite" style={{ paddingVertical: 24, gap: 8 }}>
           <Text style={{ color: palette.text, fontSize: 17, fontWeight: "800" }}>{t("bible.search.emptyTitle")}</Text>
           <Text style={{ color: palette.muted, fontSize: 14, lineHeight: 22 }}>{t("bible.search.emptyBody")}</Text>
+        </View> : null}
+        {synopsis && !search.loading && !search.interrupted && !search.error ? <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, padding: 16, gap: 10 }}>
+          <Text style={{ color: palette.text, fontSize: 17, fontWeight: "800" }}>{t("bible.search.synopsis.title")}</Text>
+          <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 19 }}>{t("bible.search.synopsis.intro")}</Text>
+          {synopsis.points.map((point) => <View key={point.reference} style={{ gap: 3 }}>
+            <Text selectable style={{ color: palette.text, fontSize: 15, lineHeight: 23 }}>“{point.text}”</Text>
+            <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "700" }}>{displayBibleReference(point.reference, language, bibleVersionId)}</Text>
+          </View>)}
+          <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16 }}>{t("bible.search.synopsis.note")}</Text>
         </View> : null}
       </>}
       <SearchSourceCredits palette={palette} />

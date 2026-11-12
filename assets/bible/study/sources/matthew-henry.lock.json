@@ -1,0 +1,14 @@
+{
+  "source": {
+    "commentary": "matthew-henry",
+    "name": "Matthew Henry Bible Commentary",
+    "website": "https://en.wikipedia.org/wiki/Matthew_Henry",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "sourceSha256": "dd7ed69db2c66469328b6b397f352ad9b8de7b693e33fd848ef2cfb57a97f967",
+    "api": "https://bible.helloao.org/api/c/matthew-henry",
+    "snapshotDate": "2026-11-10"
+  },
+  "chapters": 1167,
+  "entries": 5280,
+  "sha256": "52a79f9d18b8e5e6437a8863a02fa3be183a2c43604428c76ccb9ec66870ac4e"
+}

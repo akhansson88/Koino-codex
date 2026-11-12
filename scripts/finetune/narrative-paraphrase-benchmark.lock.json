@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "scripts/finetune/narrative-paraphrase-benchmark.json",
+  "sha256": "60732615a27ca8218e2f3bd632c12cef605410151d1cfa4a29a05730ae39a325",
+  "createdAt": "2026-11-11",
+  "queryCount": 30,
+  "languageCount": 60,
+  "referenceCount": 34,
+  "overlapWithFixedGold": 0,
+  "validation": "passed",
+  "failures": [],
+  "note": "Do not train on these queries or reference spans. Gold is the whole passage section, so any verse in the span is correct."
+}

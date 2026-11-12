@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "databaseSha256": "fb54e871f67916186f727402df9abec172a9779824d0cec9f71e7721bd6a8afa",
+  "bytes": 58691584,
+  "entries": 9242,
+  "dictionaryEntries": 3962,
+  "commentaryEntries": 5280,
+  "replacementCharacters": 0,
+  "source": {
+    "repository": "https://github.com/neuu-org/bible-dictionary-dataset",
+    "commit": "b8e82aa7ca847f4d97fb432cd965e398a111333c",
+    "dictionary": "Easton's Bible Dictionary (1897)",
+    "license": "CC BY 4.0; source text public domain"
+  },
+  "commentary": {
+    "api": "https://bible.helloao.org/api/c/matthew-henry",
+    "name": "Matthew Henry Bible Commentary",
+    "license": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "snapshotDate": "2026-11-10",
+    "sourceSha256": "dd7ed69db2c66469328b6b397f352ad9b8de7b693e33fd848ef2cfb57a97f967",
+    "fingerprint": "52a79f9d18b8e5e6437a8863a02fa3be183a2c43604428c76ccb9ec66870ac4e"
+  }
+}

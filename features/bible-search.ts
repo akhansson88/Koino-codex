@@ -33,11 +33,17 @@ export type ScriptureSearchResponse = {
   semanticState: "loading" | "ready" | "unavailable";
 };
 
+export type SearchEngine = "smart" | "precise";
+export type TestamentFilter = "all" | "old" | "new";
+
 export type SearchScriptureOptions = {
   language: AppLanguage;
   limit?: number;
   query: string;
   versionId: BibleVersionId;
+  engine?: SearchEngine;
+  testament?: Exclude<TestamentFilter, "all">;
+  book?: string;
   signal?: AbortSignal;
   onPartialResults?: (response: ScriptureSearchResponse) => void;
   /** Internal preview used by the paged session; quotations are still hydrated one page at a time. */
@@ -228,7 +234,7 @@ export function biblePositionFromSearchQuery(query: string, language: AppLanguag
   return { book: book.name, chapter, verse: 1 };
 }
 
-export async function searchScripture({ language, limit = 20, query, versionId, signal, onPartialResults, onRankedPreview }: SearchScriptureOptions): Promise<ScriptureSearchResponse> {
+export async function searchScripture({ language, limit = 20, query, versionId, engine = "smart", testament, book, signal, onPartialResults, onRankedPreview }: SearchScriptureOptions): Promise<ScriptureSearchResponse> {
   abortIfNeeded(signal);
   const normalizedQuery = normalizeScriptureQuery(query);
   const empty: ScriptureSearchResponse = { results: [], mode: "lexical", semanticState: "ready" };
@@ -287,14 +293,18 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
   }
   abortIfNeeded(signal);
   const translationId = versionId === "reformationsbibeln2026" ? 2 : 1;
-  const lexical = await backend.lexical(normalizedQuery, translationId, boundedLimit);
+  const scope = testament || book ? { testament, book } : undefined;
+  const lexical = await backend.lexical(normalizedQuery, translationId, boundedLimit, { mode: engine === "precise" ? "keyword" : undefined, scope });
   abortIfNeeded(signal);
   onRankedPreview?.(collapseSearchRanges(lexical, 100));
+  if (engine === "precise") {
+    return { results: await resolveResults(lexical), mode: "lexical", semanticState: "ready" };
+  }
   const partial: ScriptureSearchResponse = { results: await resolveResults(lexical), mode: "lexical", semanticState: "loading" };
   abortIfNeeded(signal);
   onPartialResults?.(partial);
   try {
-    const results = await backend.hybrid(normalizedQuery, translationId, lexical, onRankedPreview ? 100 : boundedLimit, signal);
+    const results = await backend.hybrid(normalizedQuery, translationId, lexical, onRankedPreview ? 100 : boundedLimit, signal, scope);
     abortIfNeeded(signal);
     onRankedPreview?.(results);
     // Preserve the original first-page grouping: resolving all 100 preview
@@ -312,7 +322,7 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
  * The visible prefix stays stable. The complete ranking contains compact search
  * metadata; the reader database is consulted only for a requested page.
  */
-export function createScriptureSearchPageSession({ language, query, versionId, limit = 20 }: Pick<SearchScriptureOptions, "language" | "query" | "versionId" | "limit">): ScriptureSearchPageSession {
+export function createScriptureSearchPageSession({ language, query, versionId, limit = 20, engine = "smart", testament, book }: Pick<SearchScriptureOptions, "language" | "query" | "versionId" | "limit" | "engine" | "testament" | "book">): ScriptureSearchPageSession {
   const normalizedQuery = normalizeScriptureQuery(query);
   const pageSize = Number.isFinite(limit) && limit > 0 ? Math.max(1, Math.floor(limit)) : 20;
   const seen = new Set<string>();
@@ -340,7 +350,11 @@ export function createScriptureSearchPageSession({ language, query, versionId, l
     if (ranked || indexPromise || indexError || !backend.all) return;
     const controller = new AbortController();
     indexController = controller;
-    const task = backend.all(normalizedQuery, versionId === "reformationsbibeln2026" ? 2 : 1, response.semanticState === "ready" && response.mode === "hybrid", controller.signal)
+    const task = backend.all(normalizedQuery, versionId === "reformationsbibeln2026" ? 2 : 1, response.semanticState === "ready" && response.mode === "hybrid", controller.signal, {
+      relativeSemanticCutoff: true,
+      mode: engine === "precise" ? "keyword" : undefined,
+      scope: testament || book ? { testament, book } : undefined,
+    })
       .then((value) => compactSearchIndex(value, controller.signal))
       .then((value) => { if (!controller.signal.aborted && !disposed) ranked = value; })
       .catch((error) => { if (!controller.signal.aborted && !disposed) indexError = error; throw error; })
@@ -449,7 +463,7 @@ export function createScriptureSearchPageSession({ language, query, versionId, l
     async firstPage(signal, onPartialResults) {
       const requestGeneration = generation;
       check(signal, requestGeneration);
-      const first = await searchScripture({ language, query: normalizedQuery, versionId, limit: pageSize, signal, onPartialResults, onRankedPreview: (value) => { preview = value; } });
+      const first = await searchScripture({ language, query: normalizedQuery, versionId, limit: pageSize, engine, testament, book, signal, onPartialResults, onRankedPreview: (value) => { preview = value; } });
       check(signal, requestGeneration);
       response = first;
       initialized = true;
