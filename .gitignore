@@ -46,3 +46,6 @@ __pycache__/
 
 # Disposable isolated admission tests; may contain dummy account key fixtures.
 .codex/koino-admission-validation/
+
+# Local Firebase exports - may contain test data
+/firebase-export-*/
