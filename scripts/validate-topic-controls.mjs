@@ -37,7 +37,7 @@ const mocked = {
   "@expo/vector-icons": `export const Feather='Feather';`,
   "./provider": `export const useBibleAudio=()=>globalThis.__topicControls.audio;`,
   "@/features/bible-audio/provider": `export const useBibleAudio=()=>globalThis.__topicControls.audio;`,
-  "@/state/store/firebase": `export const emulatorMode=false;`,
+  "@/state/store/firebase": `export const emulatorMode=false,developmentMode=false;`,
   "@/ui/app-language": `import {translateMessage} from '@/ui/localization'; export const useAppTranslation=()=>({language:globalThis.__topicControls.language,t:(key,values)=>translateMessage(globalThis.__topicControls.language,key,values)});`,
   "@/features/use-bible-book-language": `export const useBibleBookLanguage=()=>'en';`,
   "@/features/bible-kjv": `export {kjvBooks} from '@/features/bible-canon'; export const searchBibleText=async()=>[],bibleVerseFromReference=reference=>globalThis.__topicControls.verses[reference];`,

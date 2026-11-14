@@ -31,6 +31,7 @@ async function metroRunning() {
   } catch { return false; }
 }
 async function main() {
+  if (mode !== 'logs') require('../../state/store/firebase-development-config.cjs').requireStagingFirebaseConfig();
   if (!fs.existsSync(configPath)) throw new Error('Missing .codex/tailscale-android.local.json; see README Tailscale setup.');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const installed = 'C:\\Program Files\\Tailscale\\tailscale.exe';

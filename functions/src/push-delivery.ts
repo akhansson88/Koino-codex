@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { Database } from "firebase-admin/database";
 import { logger } from "firebase-functions";
-import { emulatorTestConfiguration } from "./emulator-safety";
+import { productionExternalServicesEnabled } from "./production-external-services";
 
 const EXPO_SEND_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -107,7 +107,7 @@ export async function sendExpoPush(
   message: ExpoPushMessage,
   fetchImpl: typeof fetch = fetch,
 ) {
-  if (emulatorTestConfiguration()) return { accepted: 0, devices: 0 };
+  if (!productionExternalServicesEnabled(database.app?.options)) return { accepted: 0, devices: 0 };
   if (message.data.groupId && sourceId.startsWith("comment:")) {
     const groupId = String(message.data.groupId), replyId = sourceId.slice("comment:".length);
     if ((await database.ref(`moderationTombstones/${groupId}/reply/${replyId}`).get()).exists()) return { accepted: 0, devices: 0 };
@@ -163,7 +163,7 @@ export async function sendExpoPush(
 }
 
 export async function processExpoReceipts(database: Database, fetchImpl: typeof fetch = fetch) {
-  if (emulatorTestConfiguration()) return { processed: 0 };
+  if (!productionExternalServicesEnabled(database.app?.options)) return { processed: 0 };
   const snapshot = await database.ref("pendingExpoPushReceipts").limitToFirst(EXPO_BATCH_SIZE).get();
   const pending = (snapshot.val() ?? {}) as Record<string, PendingReceipt>;
   const receiptIds = Object.keys(pending);

@@ -1,4 +1,11 @@
 const { emulatorConfig } = require("./state/store/firebase-emulator-config.cjs");
+const {
+  developmentRuntimeVersion,
+  developmentIosId,
+  developmentAndroidId,
+  developmentScheme,
+  requireStagingFirebaseConfig,
+} = require("./state/store/firebase-development-config.cjs");
 
 const baseConfig = {
   name: "KOINO",
@@ -76,18 +83,24 @@ const baseConfig = {
 const variant = process.env.APP_VARIANT || "production";
 const isDevelopment = variant === "development";
 const emulator = emulatorConfig({ variant, host: process.env.EXPO_PUBLIC_KOINO_EMULATOR_HOST });
+const staging = isDevelopment ? requireStagingFirebaseConfig() : undefined;
 
 module.exports = {
   ...baseConfig,
   name: emulator ? "KOINO Emulator" : isDevelopment ? "KOINO Dev" : baseConfig.name,
-  scheme: emulator ? "koino-emulator" : isDevelopment ? "koino-dev" : baseConfig.scheme,
-  runtimeVersion: emulator ? "2.1.0-emulator" : baseConfig.runtimeVersion,
-  updates: emulator ? { enabled: false } : baseConfig.updates,
-  extra: { ...baseConfig.extra, koinoVariant: variant, ...(emulator ? { koinoEmulator: emulator } : {}) },
+  scheme: emulator ? "koino-emulator" : isDevelopment ? developmentScheme : baseConfig.scheme,
+  runtimeVersion: emulator ? "2.1.0-emulator" : isDevelopment ? developmentRuntimeVersion : baseConfig.runtimeVersion,
+  updates: emulator || isDevelopment ? { enabled: false } : baseConfig.updates,
+  extra: {
+    ...baseConfig.extra,
+    koinoVariant: variant,
+    ...(emulator ? { koinoEmulator: emulator } : {}),
+    ...(staging ? { koinoFirebase: staging } : {}),
+  },
   plugins: [...baseConfig.plugins, ...(emulator ? ["./plugins/with-emulator-local-network.cjs"] : [])],
   ios: {
     ...baseConfig.ios,
-    bundleIdentifier: emulator ? "com.akhansson.koino.emulator" : isDevelopment ? "com.akhansson.koino.dev" : baseConfig.ios.bundleIdentifier,
+    bundleIdentifier: emulator ? "com.akhansson.koino.emulator" : isDevelopment ? developmentIosId : baseConfig.ios.bundleIdentifier,
     infoPlist: emulator ? {
       ...baseConfig.ios.infoPlist,
       NSLocalNetworkUsageDescription: "KOINO Emulator connects only to your local Firebase test environment. / KOINO Emulator ansluter till din lokala Firebase-testmiljö.",
@@ -95,11 +108,18 @@ module.exports = {
         NSAllowsLocalNetworking: true,
         NSExceptionDomains: { [emulator.host]: { NSExceptionAllowsInsecureHTTPLoads: true, NSIncludesSubdomains: false } },
       },
+    } : isDevelopment ? {
+      ...baseConfig.ios.infoPlist,
+      NSLocalNetworkUsageDescription: "KOINO Dev connects to Metro on your local network.",
+      NSAppTransportSecurity: {
+        ...baseConfig.ios.infoPlist.NSAppTransportSecurity,
+        NSAllowsLocalNetworking: true,
+      },
     } : baseConfig.ios.infoPlist,
   },
   android: {
     ...baseConfig.android,
-    package: emulator ? "com.akhansson.koinomvp.emulator" : isDevelopment ? "com.akhansson.koinomvp.dev" : baseConfig.android.package,
-    googleServicesFile: emulator ? undefined : isDevelopment ? "./google-services.dev.json" : baseConfig.android.googleServicesFile,
+    package: emulator ? "com.akhansson.koinomvp.emulator" : isDevelopment ? developmentAndroidId : baseConfig.android.package,
+    googleServicesFile: emulator || isDevelopment ? undefined : baseConfig.android.googleServicesFile,
   },
 };

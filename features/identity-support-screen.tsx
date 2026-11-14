@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, Text, useWindowDimensions, View } from "react-native";
 import { SupportKoinoCard } from "@/features/donation-flow-screen";
 import { useKoino } from "@/state/koino-store";
-import { emulatorMode } from "@/state/store/firebase";
+import { developmentMode, emulatorMode } from "@/state/store/firebase";
 import {
   AppHeader,
   AppScreen,
@@ -81,8 +81,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleChooseAvatar() {
-    if (emulatorMode) {
-      setAvatarMessage(t("identity.avatar.emulatorUnavailable"));
+    if (emulatorMode || developmentMode) {
+      setAvatarMessage(t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable"));
       return;
     }
     setAvatarMessage("");
@@ -117,7 +117,9 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSaveAvatar(localUri: string) {
-    if (emulatorMode) throw new Error(t("identity.avatar.emulatorUnavailable"));
+    if (emulatorMode || developmentMode) {
+      throw new Error(t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable"));
+    }
     await dispatch({ type: "uploadUserAvatar", localUri });
     setAvatarCropSource(undefined);
     setAvatarMessage(t("identity.avatar.updated"));
@@ -140,8 +142,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSendPasswordReset() {
-    if (emulatorMode) {
-      setSecurityMessage(t("identity.security.emulatorUnavailable"));
+    if (emulatorMode || developmentMode) {
+      setSecurityMessage(t(developmentMode ? "onboarding.account.resetUnavailableDev" : "identity.security.emulatorUnavailable"));
       return;
     }
     if (!state.authEmail) {
@@ -257,16 +259,18 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <SecondaryButton disabled={emulatorMode} icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
+          <SecondaryButton disabled={emulatorMode || developmentMode} icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
             {t(user?.image ? "identity.profile.changeImage" : "identity.profile.chooseImage")}
           </SecondaryButton>
           {user?.image ? (
-            <SecondaryButton icon="trash-2" onPress={handleDeleteAvatar} style={{ flex: 1 }} tone="danger">
+            <SecondaryButton disabled={developmentMode} icon="trash-2" onPress={handleDeleteAvatar} style={{ flex: 1 }} tone="danger">
               {t("common.delete")}
             </SecondaryButton>
           ) : null}
         </View>
-        {emulatorMode ? <BodyText muted>{t("identity.avatar.emulatorUnavailable")}</BodyText> : null}
+        {emulatorMode || developmentMode ? (
+          <BodyText muted>{t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable")}</BodyText>
+        ) : null}
         {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{avatarMessage}</Text> : null}
       </BottomSheet>
 
@@ -322,8 +326,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       />
 
       <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onShow={() => traceIdentity("security.presented")} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>{t(emulatorMode ? "identity.security.emulatorUnavailable" : "identity.security.body")}</BodyText>
-        <PrimaryButton disabled={emulatorMode} icon="mail" onPress={handleSendPasswordReset}>
+        <BodyText muted>{t(developmentMode ? "onboarding.account.resetUnavailableDev" : emulatorMode ? "identity.security.emulatorUnavailable" : "identity.security.body")}</BodyText>
+        <PrimaryButton disabled={emulatorMode || developmentMode} icon="mail" onPress={handleSendPasswordReset}>
           {t("identity.security.sendReset")}
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}

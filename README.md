@@ -19,7 +19,61 @@ Within these folders, import sibling implementations directly instead of going
 through their public entry point to avoid circular dependencies. Keep Bible
 reader dependencies out of Home's eager imports (`npm run validate:startup`).
 
-## Local Android development build
+## KOINO Dev
+
+KOINO Dev is blocked until a reviewed staging configuration is set in
+`state/store/firebase-staging.json`. Keep existing Dev installs closed until
+cutover has been approved and verified. Payments, password reset links, image
+storage, push, topic votes, external links and previews are disabled in Dev.
+
+### Local iOS development build
+
+After the staging configuration is approved, use a Mac with Node.js 20.19.4 or
+later, the locked npm dependencies, CocoaPods, and full Xcode 16.1 or later.
+Select full Xcode as the active developer directory. Xcode must support the connected iPhone's iOS
+version and provide `xcrun devicectl`. Pair and unlock the iPhone, enable
+Developer Mode, and put it on a network that can reach the Mac over IPv4.
+The iPhone must run iOS 17 or later.
+
+Generate the iOS project in a checkout dedicated to Dev, with no existing
+`ios/` directory. This preserves other generated projects and local data.
+
+```sh
+npm ci
+APP_VARIANT=development npx expo prebuild --platform ios
+```
+
+Set up local development signing in the generated Xcode workspace for
+`com.akhansson.koino.dev`, with an installed certificate and a provisioning
+profile that includes the iPhone. Find the phone's hardware UDID in Xcode
+Devices and Simulators and set it as `IPHONE_UDID` in your shell. The launcher
+uses your existing provisioning profile.
+
+```sh
+npm run ios:dev:verify
+npm run ios:dev -- --device "$IPHONE_UDID" --build-only
+```
+
+Build-only verifies the generated project, effective Xcode settings, and the
+resulting app. It prints the retained `.app` path for inspection and exits
+before starting Metro or installing anything. Once that passes, run:
+
+```sh
+npm run ios:dev -- --device "$IPHONE_UDID"
+```
+
+This performs a fresh local build and installs it only after verifying the
+artifact and the new Dev Metro instance. The launcher prints the Metro URL.
+Open **KOINO Dev** on the selected phone, allow Local Network access, and enter
+that URL in the Dev Client.
+Keep the terminal open for Fast Refresh. If verification reports a stale
+project, use a clean Dev checkout and regenerate it there.
+
+### Local Android development build
+
+Use `npm run android:dev` from a clean checkout. The launcher refuses stale
+native Google Services or Expo Updates configuration and verifies the APK
+before installation.
 
 The Android development build is a separate app named **KOINO Dev** with the
 package ID `com.akhansson.koinomvp.dev`. It can stay installed alongside the
@@ -124,9 +178,8 @@ Scan the QR code with Expo Go on Android, or with the iPhone camera and open it
 in Expo Go. For devices on the same local network, `npm run start:lan` is also
 available.
 
-Remote push notifications on Android require a development, preview, or
-production build. Expo Go does not support Android remote notifications for
-this SDK, so use the local KOINO Dev build when testing the notification flow.
+Remote push notifications on Android require a native build with push
+enabled. Use the existing production push test workflow below.
 
 Push setup is device- and backend-dependent. Before testing, deploy the Realtime
 Database rules and Functions, confirm the EAS project has an Android FCM V1 key

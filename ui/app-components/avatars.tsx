@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
+import { developmentMode } from "@/state/store/firebase";
 import type { GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
@@ -51,7 +52,7 @@ export function Avatar({
         width: size,
       }}
     >
-      {image?.url && !failed ? (
+      {!developmentMode && image?.url && !failed ? (
         <Image
           accessibilityIgnoresInvertColors
           onError={() => setFailed(true)}
@@ -74,7 +75,7 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
     setFailed(false);
   }, [image?.url]);
 
-  if (image?.url && !failed) {
+  if (!developmentMode && image?.url && !failed) {
     return (
       <View
         style={{

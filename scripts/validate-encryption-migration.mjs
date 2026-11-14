@@ -14,7 +14,7 @@ const plugin = { name: 'migration-fixture', setup(builder) {
   builder.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents:
     path === 'firebase/database' ? `const f=globalThis.migrationFixture; export const ref=(_db,path)=>({path}); export const get=async({path})=>{f.reads.push(path); if(f.pauseReads)await f.pauseReads; const value=f.values[path]??null; return {val:()=>value,exists:()=>value!==null};}; export const onValue=({path},cb,error)=>f.subscribe(path,cb,error);` :
     path === 'firebase/auth' ? 'export const updateProfile=async()=>{};' :
-    path === '@/state/store/firebase' ? 'export const auth=globalThis.migrationFixture.auth,database={};' :
+    path === '@/state/store/firebase' ? 'export const auth=globalThis.migrationFixture.auth,database={},developmentMode=false;' :
     path === './local-storage' ? 'export default globalThis.migrationFixture.storage;' :
     path === './session' ? `const f=globalThis.migrationFixture; export const session=()=>f.state,sessionGeneration=()=>f.generation; export const crypto={canonical:JSON.stringify}; export const encryptedOperation=async(operation,data)=>{f.operations.push(operation); if(operation==='readLegacyArchive')return {source:null}; if(operation==='finishMigration'&&f.failFinish)throw Error('interrupted'); return {};}; export const createEncryptedGroup=async()=>{},groupJoinRequest=async()=>{},loadGroup=async()=>{};` :
     path === './database' ? 'export const encodeAt=(_p,v)=>v,decodeAt=(_p,v)=>v,physicalPath=(p)=>p,ref=(_db,path)=>({path}); export const set=async({path},value)=>{globalThis.migrationFixture.writes.push(path);};' :

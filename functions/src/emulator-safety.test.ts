@@ -8,6 +8,7 @@ import type { Database } from "firebase-admin/database";
 import { assertEmulatorOperationAllowed, assertExternalStorageAllowed, emulatorTestConfiguration, guardedEmulatorFetch, installEmulatorNetworkGuards, loopbackSocketArguments, requireEmulatorTestConfiguration, withEmulatorAdmissionDiagnostics } from "./emulator-safety";
 import { buildPrayerPushMessage } from "./notification-messages";
 import { processExpoReceipts, sendExpoPush } from "./push-delivery";
+import { productionExternalServicesEnabled } from "./production-external-services";
 
 const isolated = {
   KOINO_EMULATOR_TEST_MODE: "1", FUNCTIONS_EMULATOR: "true", GCLOUD_PROJECT: "demo-koino", GOOGLE_CLOUD_PROJECT: "demo-koino",
@@ -97,6 +98,148 @@ test("emulator push and receipt delivery do nothing before database or external 
     assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), unexpectedFetch), { accepted: 0, devices: 0 });
     assert.deepEqual(await processExpoReceipts(database, unexpectedFetch), { processed: 0 });
   });
+});
+
+const production = {
+  projectId: "koino-codex",
+  databaseURL: "https://koino-codex-default-rtdb.europe-west1.firebasedatabase.app",
+};
+const staging = {
+  projectId: "koino-staging-fixture",
+  databaseURL: "https://koino-staging-fixture-default-rtdb.europe-west1.firebasedatabase.app",
+};
+const cloud = { GCLOUD_PROJECT: production.projectId, FIREBASE_CONFIG: JSON.stringify(production) };
+const externalServiceEnvKeys = [
+  "GCLOUD_PROJECT", "GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "FIREBASE_CONFIG",
+  "KOINO_EMULATOR_TEST_MODE", "FUNCTIONS_EMULATOR", "FIREBASE_AUTH_EMULATOR_HOST", "FIREBASE_DATABASE_EMULATOR_HOST",
+];
+
+test("external Functions services require matching production Firebase and platform identity", () => {
+  assert.equal(productionExternalServicesEnabled(production, cloud), true);
+  assert.equal(productionExternalServicesEnabled({ ...production, databaseURL: production.databaseURL + "/" }, {
+    ...cloud, GOOGLE_CLOUD_PROJECT: production.projectId, GCP_PROJECT: production.projectId,
+  }), true);
+  for (const [options, env] of [
+    [undefined, cloud],
+    [production, {}],
+    [staging, { GCLOUD_PROJECT: staging.projectId }],
+    [staging, cloud],
+    [production, { GCLOUD_PROJECT: staging.projectId }],
+    [{ ...production, databaseURL: staging.databaseURL }, cloud],
+    [{ ...production, databaseURL: production.databaseURL + "?ns=" + staging.projectId }, cloud],
+    [production, { ...cloud, GOOGLE_CLOUD_PROJECT: staging.projectId }],
+    [production, { ...cloud, GCP_PROJECT: staging.projectId }],
+    [production, { ...cloud, FUNCTIONS_EMULATOR: "true" }],
+    [production, { ...cloud, FIREBASE_DATABASE_EMULATOR_HOST: "127.0.0.1:9001" }],
+    [production, { ...cloud, FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099" }],
+  ] as const) assert.equal(productionExternalServicesEnabled(options, env), false);
+  assert.equal(productionExternalServicesEnabled(production, isolated), false);
+});
+
+test("push and receipt delivery skip every token/database and transport call outside production", async () => {
+  const before = Object.fromEntries(externalServiceEnvKeys.map(key => [key, process.env[key]]));
+  try {
+    for (const key of externalServiceEnvKeys) delete process.env[key];
+    const unexpectedFetch: typeof fetch = async () => { throw new Error("Must not contact Expo."); };
+    for (const [options, projectId] of [
+      [staging, staging.projectId],
+      [production, staging.projectId],
+      [staging, production.projectId],
+      [production, undefined],
+      [undefined, production.projectId],
+    ] as const) {
+      if (projectId === undefined) delete process.env.GCLOUD_PROJECT;
+      else process.env.GCLOUD_PROJECT = projectId;
+      const database = {
+        app: { options },
+        ref() { throw new Error("Must not read tokens, diagnostics or receipts."); },
+      } as unknown as Database;
+      assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), unexpectedFetch), { accepted: 0, devices: 0 });
+      assert.deepEqual(await processExpoReceipts(database, unexpectedFetch), { processed: 0 });
+    }
+  } finally {
+    for (const key of externalServiceEnvKeys) if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key];
+  }
+});
+
+test("production push and receipt delivery still reach the mocked Expo transport", async () => {
+  const before = Object.fromEntries(externalServiceEnvKeys.map(key => [key, process.env[key]]));
+  try {
+    for (const key of externalServiceEnvKeys) delete process.env[key];
+    Object.assign(process.env, cloud);
+    const receipts = new Map<string, unknown>();
+    const database = {
+      app: { options: production },
+      ref(path: string) {
+        if (path === "encryptedData/pushTokens/member") {
+          return { get: async () => ({ val: () => ({ phone: { token: "fixture-token" } }) }) };
+        }
+        if (path === "pendingExpoPushReceipts") {
+          return { limitToFirst: () => ({ get: async () => ({ val: () => Object.fromEntries(receipts) }) }) };
+        }
+        assert.equal(path, "pendingExpoPushReceipts/fixture-ticket");
+        return {
+          set: async (value: unknown) => { receipts.set("fixture-ticket", value); },
+          remove: async () => { receipts.delete("fixture-ticket"); },
+        };
+      },
+    } as unknown as Database;
+    const calls: string[] = [];
+    const mockedFetch: typeof fetch = async (url, request) => {
+      const destination = String(url);
+      calls.push(destination);
+      const body = JSON.parse(String(request?.body));
+      if (destination.endsWith("/send")) {
+        assert.equal(body[0].to, "fixture-token");
+        return Response.json({ data: [{ status: "ok", id: "fixture-ticket" }] });
+      }
+      assert.deepEqual(body, { ids: ["fixture-ticket"] });
+      return Response.json({ data: { "fixture-ticket": { status: "ok" } } });
+    };
+    assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), mockedFetch), { accepted: 1, devices: 1 });
+    assert.equal(receipts.size, 1);
+    assert.deepEqual(await processExpoReceipts(database, mockedFetch), { processed: 1 });
+    assert.equal(receipts.size, 0);
+    assert.deepEqual(calls, [
+      "https://exp.host/--/api/v2/push/send",
+      "https://exp.host/--/api/v2/push/getReceipts",
+    ]);
+  } finally {
+    for (const key of externalServiceEnvKeys) if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key];
+  }
+});
+
+test("staging image callables fail before database or storage transport and bind no production secret", () => {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of [...externalServiceEnvKeys, ...credentialNames]) delete env[key];
+  const entry = require.resolve("./encryption");
+  const database = require.resolve("firebase-admin/database");
+  const source = `
+    const assert = require("node:assert/strict");
+    require(${JSON.stringify(database)}).getDatabase = () => { throw new Error("Must not contact Firebase."); };
+    globalThis.fetch = async () => { throw new Error("Must not contact Supabase."); };
+    const { encryptedAccount } = require(${JSON.stringify(entry)});
+    const secrets = encryptedAccount.__endpoint.secretEnvironmentVariables ?? [];
+    if (process.argv[1] === "production") {
+      assert.deepEqual(secrets.map(secret => secret.key), ["KOINO_SUPABASE_SERVICE_KEY"]);
+    } else {
+      assert.deepEqual(secrets, []);
+      (async () => {
+        for (const operation of ["imageUpload", "imageDownload", "imageDelete", "legacyImage"]) {
+          await assert.rejects(
+            encryptedAccount.run({ auth: { uid: "tester" }, data: { operation, requestId: "fixture", timestamp: Date.now() } }),
+            error => error.code === "failed-precondition" && /External image storage is disabled/.test(error.message),
+          );
+        }
+      })().catch(error => { console.error(error); process.exitCode = 1; });
+    }
+  `;
+  for (const [options, projectId] of [[staging, staging.projectId], [production, staging.projectId], [production, production.projectId]] as const) {
+    execFileSync(process.execPath, ["-e", source, projectId === production.projectId ? "production" : "blocked"], {
+      env: { ...env, FIREBASE_CONFIG: JSON.stringify(options), GCLOUD_PROJECT: projectId },
+      stdio: "pipe",
+    });
+  }
 });
 
 test("prepared emulator entry has no payments, schedules, storage secret or ADC requirement", () => {

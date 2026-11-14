@@ -112,6 +112,11 @@ try {
     process.env.APP_VARIANT = variant;
     process.env.EXPO_PUBLIC_KOINO_EMULATOR_HOST = "192.168.0.17";
     delete require.cache[appConfigPath];
+    // The Dev config is also checked with an approved fixture in validate-emulator-client.mjs.
+    if (variant === "development" && require("../state/store/firebase-staging.json") === null) {
+      assert.throws(() => require(appConfigPath), /requires a reviewed Firebase staging configuration/);
+      continue;
+    }
     const config = require(appConfigPath);
     const matching = config.plugins.filter(entry => (Array.isArray(entry) ? entry[0] : entry) === pluginPath);
     assert.equal(matching.length, 1, `Register the iOS privacy plugin once in ${variant}`);

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Feather } from "@expo/vector-icons";
 import { Image, Pressable, Text, View } from "react-native";
 
+import { developmentMode } from "@/state/store/firebase";
 import { firstUrl } from "@/ui/link-utils";
 import { useAppTranslation } from "@/ui/app-language";
 import { useOpenExternalLink } from "@/ui/in-app-browser";
@@ -239,7 +240,7 @@ export function LinkPreview({
 }) {
   const { t } = useAppTranslation();
   const openExternalLink = useOpenExternalLink();
-  const sourceUrl = useMemo(() => firstUrl(text), [text]);
+  const sourceUrl = useMemo(() => developmentMode ? "" : firstUrl(text), [text]);
   const [result, setResult] = useState<CachedLinkPreview>(() => fallbackPreview("", null));
   const [imageFailed, setImageFailed] = useState(false);
   const [presentedPreviewUrl, setPresentedPreviewUrl] = useState("");
@@ -388,7 +389,7 @@ export function LinkPreviewContent({
   }) => ReactNode;
   text?: string;
 }) {
-  const sourceUrl = useMemo(() => firstUrl(text), [text]);
+  const sourceUrl = useMemo(() => developmentMode ? "" : firstUrl(text), [text]);
   const [reportedState, setReportedState] = useState<LinkPreviewState>({ provenance: "fallback", sourceUrl: "" });
   const handlePreviewStateChange = useCallback((nextState: LinkPreviewState) => {
     setReportedState((currentState) =>

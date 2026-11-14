@@ -2,9 +2,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { firebaseResourceNames, verifyDevelopmentAndroidSource } = require('./android-development-config.cjs');
+const { requireStagingFirebaseConfig } = require('../../state/store/firebase-development-config.cjs');
 
 const root = path.resolve(__dirname, '../..');
 const android = path.join(root, 'android');
+const appDirectory = path.join(android, 'app');
 const expectedId = 'com.akhansson.koinomvp.dev';
 const env = {
   ...process.env,
@@ -41,7 +44,8 @@ function sdkPath() {
 }
 
 function verifyGeneratedProject() {
-  const gradle = fs.readFileSync(path.join(android, 'app/build.gradle'), 'utf8');
+  const gradle = fs.readFileSync(path.join(appDirectory, 'build.gradle'), 'utf8');
+  verifyDevelopmentAndroidSource(android);
   for (const key of ['namespace', 'applicationId']) {
     const value = gradle.match(new RegExp(`^\\s*${key}\\s*(?:=\\s*)?["']([^"']+)["']`, 'm'))?.[1];
     if (value !== expectedId) throw new Error(`Refusing installation: Android ${key} is ${value}, expected ${expectedId}.`);
@@ -72,9 +76,24 @@ function verifyApk(sdk) {
   const aapt = versions.map(value => path.join(sdk, 'build-tools', value, process.platform === 'win32' ? 'aapt.exe' : 'aapt'))
     .find(value => fs.existsSync(value));
   if (!aapt) throw new Error('Android SDK build tools must include aapt to verify the APK before installation.');
-  const actualId = run(aapt, ['dump', 'badging', apk], { capture: true }).match(/^package: name='([^']+)'/m)?.[1];
+  const badging = run(aapt, ['dump', '--include-meta-data', 'badging', apk], { capture: true });
+  const actualId = badging.match(/^package: name='([^']+)'/m)?.[1];
   if (actualId !== expectedId) throw new Error(`Refusing installation: APK package is ${actualId}, expected ${expectedId}.`);
-  console.log(`Verified generated project, output metadata, and APK package: ${expectedId}`);
+
+  const updatesEnabled = Array.from(badging.matchAll(/^meta-data: name='expo\.modules\.updates\.ENABLED' (.*)$/gm));
+  if (updatesEnabled.length !== 1 || updatesEnabled[0][1] !== "value='0'" ||
+      /^meta-data: name='expo\.modules\.updates\.EXPO_UPDATE_URL'/m.test(badging)) {
+    throw new Error('Refusing installation: the Dev APK must disable Expo Updates and have no update URL.');
+  }
+
+  // Google Services outputs Android strings that Firebase can load before JS starts.
+  const resourceTable = run(aapt, ['dump', 'resources', apk], { capture: true, maxBuffer: 32 * 1024 * 1024 });
+  const stringNames = Array.from(resourceTable.matchAll(/^\s+spec resource 0x[0-9a-f]+ [\w.]+:string\/([\w.]+):/gm), match => match[1]);
+  if (!stringNames.includes('app_name')) throw new Error('Refusing installation: could not verify the Dev APK resource table.');
+  const firebaseResource = stringNames.find(name => firebaseResourceNames.has(name));
+  if (firebaseResource) throw new Error('Refusing installation: the Dev APK contains native Firebase resource ' + firebaseResource + '.');
+
+  console.log('Verified Android Dev package ' + expectedId + ', disabled Expo Updates, and no native Firebase configuration.');
   return apk;
 }
 
@@ -85,12 +104,15 @@ function main() {
   if (args.length && !verifyOnly && !serialArgument) {
     throw new Error('Usage: npm run android:dev -- [--device <adb-serial> | --verify-only]');
   }
+  requireStagingFirebaseConfig();
   if (verifyOnly) {
     verifyGeneratedProject();
     verifyApk(sdkPath());
     return;
   }
 
+  // Expo prebuild does not remove a prior variant's Google Services file or plugin.
+  verifyDevelopmentAndroidSource(android);
   const expo = require.resolve('expo/bin/cli');
   run(process.execPath, [expo, 'prebuild', '--platform', 'android', '--no-install']);
   verifyGeneratedProject();

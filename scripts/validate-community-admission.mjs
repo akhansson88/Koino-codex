@@ -116,7 +116,7 @@ async function client(label, credentials, createAccount, withClientModules = tru
   const boundary = `const fixture=globalThis.__koinoAdmissionClients.get(${JSON.stringify(label)});`;
   const mocks = {
     "react-native-libsodium": `${boundary}export default fixture.sodium;`,
-    "@/state/store/firebase": `${boundary}export const auth=fixture.auth,database=fixture.database,functions=fixture.functions;`,
+    "@/state/store/firebase": `${boundary}export const auth=fixture.auth,database=fixture.database,functions=fixture.functions,developmentMode=false;`,
     "./local-storage": `${boundary}export default fixture.storage;`,
     "@/state/supabase-storage": "export const resolveEncryptedImages=async value=>value;",
     "react-native": 'export const Platform={OS:"ios",select:values=>values.ios??values.default};',

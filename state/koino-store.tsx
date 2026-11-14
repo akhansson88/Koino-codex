@@ -69,7 +69,7 @@ import {
   User,
 } from "@/state/types";
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
-import { auth, database, emulatorMode } from "@/state/store/firebase";
+import { auth, database, developmentMode, emulatorMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import { announceJoinRequestChange } from "@/state/community-join-requests";
 import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
@@ -1344,6 +1344,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "requestPasswordReset": {
               if (emulatorMode) throw new Error("Password reset email is disabled in KOINO Emulator. / E-post för lösenordsåterställning är avstängd i KOINO Emulator.");
+              if (developmentMode) throw new Error("Password reset email is disabled in KOINO Dev. / E-post för lösenordsåterställning är avstängd i KOINO Dev.");
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
 
@@ -1354,6 +1355,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "confirmPasswordReset":
+              if (developmentMode) throw new Error("Password reset links are disabled in KOINO Dev.");
               if (!action.oobCode.trim()) throw new Error("Open the reset link from your email again.");
               if (action.newPassword.length < 6) throw new Error("Use a password with at least 6 characters.");
               await FirebaseAuth.confirmPasswordReset(auth, action.oobCode, action.newPassword);
@@ -1449,6 +1451,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await update(ref(database, `groups/${action.id}`), { name: action.name.trim(), updatedAt: now() });
               return;
             case "uploadGroupImage": {
+              if (developmentMode) throw new Error("Image storage is disabled in KOINO Dev.");
               if (!firebaseUser) return;
               const groupSnapshot = await get(ref(database, `groups/${action.id}`));
               const groupToUpdate = groupSnapshot.val() as Group | null;
@@ -1485,6 +1488,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "deleteGroupImage": {
+              if (developmentMode) throw new Error("Image storage is disabled in KOINO Dev.");
               if (!firebaseUser) return;
               const groupSnapshot = await get(ref(database, `groups/${action.id}`));
               const groupToUpdate = groupSnapshot.val() as Group | null;
@@ -1497,6 +1501,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "uploadUserAvatar": {
+              if (developmentMode) throw new Error("Image storage is disabled in KOINO Dev.");
               if (!firebaseUser) return;
               const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
               const profileToUpdate = profileSnapshot.val() as Profile | null;
@@ -1527,6 +1532,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "deleteUserAvatar": {
+              if (developmentMode) throw new Error("Image storage is disabled in KOINO Dev.");
               if (!firebaseUser) return;
               const profileSnapshot = await get(ref(database, `profiles/${firebaseUser.uid}`));
               const profileToUpdate = profileSnapshot.val() as Profile | null;
@@ -2604,7 +2610,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "registerPushToken": {
-              if (!firebaseUser || !action.token.trim()) return;
+              if (developmentMode || !firebaseUser || !action.token.trim()) return;
               const tokenKey = action.token.replace(/[.#$\[\]\/]/g, "_");
               await set(ref(database, `pushTokens/${firebaseUser.uid}/${tokenKey}`), {
                 token: action.token,

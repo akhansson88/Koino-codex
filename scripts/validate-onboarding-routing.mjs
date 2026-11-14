@@ -147,7 +147,7 @@ const mocks = {
       return <Guide userId={userId} journey={journey} complete={() => complete(userId)} />;
     }
   `,
-  "@/state/store/firebase": "export const auth = globalThis.__onboardingRouting.auth;",
+  "@/state/store/firebase": "export const auth = globalThis.__onboardingRouting.auth, developmentMode = false;",
   "@/state/store/profile-operations": `
     const h = globalThis.__onboardingRouting;
     export const hasOnboardingCommunity = async (uid, groupId) => h.createdCommunities.get(uid) === groupId;

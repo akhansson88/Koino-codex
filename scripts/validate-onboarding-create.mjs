@@ -51,7 +51,7 @@ const mocks = {
       return { data: {} };
     };
   `,
-  "@/state/store/firebase": "export const { auth } = globalThis.__onboardingCreate; export const database = {}, functions = {};",
+  "@/state/store/firebase": "export const { auth } = globalThis.__onboardingCreate; export const database = {}, functions = {}, developmentMode = false;",
   "@/state/store/helpers": `
     export const now = () => "2026-11-06T09:00:00Z";
     export const inviteCode = () => "INVITE";

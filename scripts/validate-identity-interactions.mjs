@@ -117,7 +117,7 @@ const mocks = {
     export const requestMediaLibraryPermissionsAsync=async()=>{const h=globalThis.__identityInteractions;h.permissionCalls++;return{granted:h.permissionGranted};};
     export const launchImageLibraryAsync=async()=>{const h=globalThis.__identityInteractions;h.pickerCalls++;return h.pickerResult;};
   `,
-  "@/state/store/firebase": 'export const auth={get currentUser(){const uid=globalThis.__identityInteractions.sdkUid;return uid?{uid}:null;}};export let emulatorMode=false;export const setEmulatorMode=value=>{emulatorMode=value;};',
+  "@/state/store/firebase": 'export const auth={get currentUser(){const uid=globalThis.__identityInteractions.sdkUid;return uid?{uid}:null;}};export let emulatorMode=false;export const developmentMode=false;export const setEmulatorMode=value=>{emulatorMode=value;};',
   "@/state/koino-store": `
     import {useSyncExternalStore} from "react";
     const h=globalThis.__identityInteractions;

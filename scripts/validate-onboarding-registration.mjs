@@ -69,7 +69,7 @@ const mocks = {
     export const createUserWithEmailAndPassword = globalThis.__onboardingRegistration.createAccount;
     export const signInWithEmailAndPassword = globalThis.__onboardingRegistration.signIn;
   `,
-  "@/state/store/firebase": "export const auth = globalThis.__onboardingRegistration.auth;",
+  "@/state/store/firebase": "export const auth = globalThis.__onboardingRegistration.auth, developmentMode = false;",
   "@/state/encryption/local-storage": "export default globalThis.__onboardingRegistration.storage;",
 };
 

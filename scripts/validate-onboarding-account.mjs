@@ -35,7 +35,7 @@ const mocks = {
     const dispatch = async action => { harness.actions.push(action); await harness.handleAction?.(action); };
     export const useKoinoActions = () => ({ dispatch });
   `,
-  "@/state/store/firebase": "export let emulatorMode = false; export const setEmulatorMode = value => { emulatorMode = value; };",
+  "@/state/store/firebase": "export let emulatorMode = false; export const developmentMode = false; export const setEmulatorMode = value => { emulatorMode = value; };",
   "@/ui/koino-logo": 'export const KoinoLogo = "KoinoLogo";',
   "@/ui/brand-wave-motif": 'export const BrandWaveMotif = "BrandWaveMotif";',
   "@/ui/app-components": `

@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
-import { emulatorMode } from "@/state/store/firebase";
-import * as Notifications from "expo-notifications";
+import { developmentMode, emulatorMode } from "@/state/store/firebase";
+import type { NotificationResponse } from "expo-notifications";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
@@ -9,7 +9,11 @@ import { useKoinoActions, useKoinoSelector } from "@/state/koino-store";
 import { setNotificationRegistrationState, useNotificationRegistrationRetryVersion } from "@/ui/notification-registration";
 import { navigateThenMarkRead } from "@/ui/notification-navigation";
 
-Notifications.setNotificationHandler({
+// Importing expo-notifications can retry a persisted Expo push registration.
+const Notifications: typeof import("expo-notifications") | undefined =
+  developmentMode ? undefined : require("expo-notifications");
+
+Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
     shouldSetBadge: true,
@@ -44,13 +48,13 @@ export function NotificationRuntime() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (emulatorMode || Platform.OS === "web") return;
+    if (!Notifications || emulatorMode || Platform.OS === "web") return;
     const unreadCount = activityNotifications.filter((item) => !item.readAt).length;
     void Notifications.setBadgeCountAsync(unreadCount).catch(() => undefined);
   }, [activityNotifications]);
 
   useEffect(() => {
-    if (emulatorMode || Platform.OS === "web") return;
+    if (!Notifications || emulatorMode || Platform.OS === "web") return;
     if (!currentUserId) {
       setNotificationRegistrationState({ status: "idle" });
       return;
@@ -127,9 +131,9 @@ export function NotificationRuntime() {
   }, [retryVersion, currentUserId]);
 
   useEffect(() => {
-    if (emulatorMode || !currentUserId || Platform.OS === "web") return;
+    if (!Notifications || emulatorMode || !currentUserId || Platform.OS === "web") return;
 
-    const openResponse = (response: Notifications.NotificationResponse | null) => {
+    const openResponse = (response: NotificationResponse | null) => {
       if (!response || handledResponseId.current === response.notification.request.identifier) return;
       handledResponseId.current = response.notification.request.identifier;
       const data = response.notification.request.content.data as NotificationData;

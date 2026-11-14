@@ -1,7 +1,7 @@
 import sodium from "react-native-libsodium";
 import { get, ref, onValue } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
-import { auth, database, functions } from "@/state/store/firebase";
+import { auth, database, developmentMode, functions } from "@/state/store/firebase";
 import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
 import storage from "./local-storage";
 import { createCrypto, type Identity, type EncryptedRecord } from "./crypto";
@@ -37,6 +37,9 @@ const devicePath = (uid: string) => `e2ee.device.${uid}`;
 export const publicIdentity = (identity: PublicIdentity): PublicIdentity => ({ publicKey: identity.publicKey, signingPublicKey: identity.signingPublicKey });
 
 async function invoke<T>(operation: string, data: unknown, device?: Device) {
+  if (developmentMode && ["legacyImage", "imageUpload", "imageDownload", "imageDelete"].includes(operation)) {
+    throw new Error("Image storage is disabled in KOINO Dev.");
+  }
   const signingDevice = device ?? current?.device;
   const payload = { operation, data, deviceId: signingDevice?.id ?? null, requestId: crypto.randomKey(), timestamp: Date.now() };
   const signature = signingDevice ? crypto.signature(payload, signingDevice.identity.signingPrivateKey) : null;

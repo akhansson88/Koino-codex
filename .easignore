@@ -38,6 +38,7 @@ __pycache__/
 
 # Keep local screenshots and diagnostics out of cloud build uploads
 .codex/
+/firebase-export-*/
 
 # Local phone diagnostics are not build inputs.
 /screen_*.png

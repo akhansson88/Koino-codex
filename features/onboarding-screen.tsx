@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { markStartupMilestone } from "@/features/startup-performance";
 import { useKoinoActions } from "@/state/koino-store";
-import { emulatorMode } from "@/state/store/firebase";
+import { developmentMode, emulatorMode } from "@/state/store/firebase";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
@@ -114,8 +114,8 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
       setError("onboarding.account.resetEmail");
       return;
     }
-    if (resetting && emulatorMode) {
-      setError("onboarding.account.resetUnavailable");
+    if (resetting && (emulatorMode || developmentMode)) {
+      setError(developmentMode ? "onboarding.account.resetUnavailableDev" : "onboarding.account.resetUnavailable");
       return;
     }
 

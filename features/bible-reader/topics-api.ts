@@ -1,4 +1,4 @@
-import { emulatorMode } from "@/state/store/firebase";
+import { developmentMode, emulatorMode } from "@/state/store/firebase";
 import bibleTopicIndexData from "@/assets/bible/topics-index.json";
 import { searchBibleText, type BibleVersionId } from "@/features/bible-kjv";
 import type { TranslationFunction } from "@/ui/localization";
@@ -123,6 +123,7 @@ export async function searchBibleTopicText(topic: string, bibleVersionId: BibleV
 
 export async function submitBibleTopicVote(topic: string, voteId: string, value: BibleTopicVoteValue) {
   if (emulatorMode) throw new Error("Topic voting is unavailable in KOINO Emulator. / Ämnesröstning är inte tillgänglig i KOINO Emulator.");
+  if (developmentMode) throw new Error("Topic voting is unavailable in KOINO Dev. / Ämnesröstning är inte tillgänglig i KOINO Dev.");
   const slug = bibleTopicKey(topic);
   const sourceUrl = bibleTopicSourceUrl(topic);
   const topicResponse = await fetch(sourceUrl, { headers: { Accept: "text/html,application/xhtml+xml" } });

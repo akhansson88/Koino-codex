@@ -6,15 +6,23 @@ import { defineSecret } from "firebase-functions/params";
 import { getDatabase } from "firebase-admin/database";
 import { adminApp } from "./firebase-admin";
 import { storageHeadersFor } from "./storage-auth";
+import { productionExternalServicesEnabled } from "./production-external-services";
 import { assertEmulatorOperationAllowed, assertExternalStorageAllowed, emulatorTestConfiguration, withEmulatorAdmissionDiagnostics } from "./emulator-safety";
 
-const storageKey = emulatorTestConfiguration() ? undefined : defineSecret("KOINO_SUPABASE_SERVICE_KEY");
+const storageKey = productionExternalServicesEnabled(adminApp.options) ? defineSecret("KOINO_SUPABASE_SERVICE_KEY") : undefined;
 const storageUrl = "https://prumjueusdyqnwwovpen.supabase.co";
 const retiredPersonalCollections = ["privateBiblePlans", "privateBiblePlanProgress", "pendingNotificationBundles", "pushDeliveryDiagnostics"];
 const retiredGroupCollections = ["groupBiblePlans", "groupBiblePlanProgress", "commentReactions"];
-function storageHeaders() {
+function requireExternalStorageKey() {
   assertExternalStorageAllowed();
-  try { return storageHeadersFor(storageKey!.value()); }
+  if (!storageKey || !productionExternalServicesEnabled(adminApp.options)) {
+    throw new HttpsError("failed-precondition", "External image storage is disabled outside KOINO production.");
+  }
+  return storageKey;
+}
+function storageHeaders() {
+  const key = requireExternalStorageKey();
+  try { return storageHeadersFor(key.value()); }
   catch { throw new HttpsError("failed-precondition", "Configure a Supabase backend secret key or the project's legacy service_role credential."); }
 }
 const db = () => getDatabase(adminApp);
@@ -129,6 +137,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
   if (!payload || typeof payload.operation !== "string" || !Number.isFinite(payload.timestamp) || Math.abs(Date.now() - payload.timestamp) > 120_000) invalid();
   id(payload.requestId);
   assertEmulatorOperationAllowed(payload.operation);
+  if (["imageUpload", "imageDownload", "imageDelete", "legacyImage"].includes(payload.operation)) requireExternalStorageKey();
   const accountRef = db().ref(`e2eeAccounts/${uid}`);
   const account = (await accountRef.get()).val() as Obj | null;
   const { signature, ...signed } = payload;
@@ -562,7 +571,6 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
       const objects = (await db().ref(`e2eeImageObjects/room-images/${groupId}`).get()).val() ?? {};
       const paths = Object.values(objects);
       if (paths.length) {
-        assertExternalStorageAllowed();
         const response = await fetch(`${storageUrl}/storage/v1/object/room-images`, { method: "DELETE", headers: { ...storageHeaders(), "content-type": "application/json" }, body: JSON.stringify({ prefixes: paths }) });
         if (!response.ok) throw new HttpsError("unavailable", "Community images could not be removed. Retry deletion.");
       }
