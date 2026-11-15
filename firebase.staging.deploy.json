@@ -1,0 +1,19 @@
+{
+  "database": [
+    {
+      "instance": "koino-staging-default-rtdb",
+      "rules": "firebase.rules.json",
+      "predeploy": "node scripts/prepare-staging-functions.cjs --check-target"
+    }
+  ],
+  "functions": [
+    {
+      "source": ".codex/koino-staging-functions",
+      "codebase": "koino-staging",
+      "runtime": "nodejs22",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": ["node_modules"],
+      "predeploy": "node scripts/prepare-staging-functions.cjs"
+    }
+  ]
+}

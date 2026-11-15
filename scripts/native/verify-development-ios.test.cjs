@@ -20,14 +20,7 @@ const safeUrlTypes = [
 ];
 const mainIosId = 'com.akhansson.koino';
 const embeddedConfigPath = 'EXConstants.bundle/app.config';
-const stagingConfig = {
-  projectId: 'koino-staging-fixture',
-  appId: '1:1234567890:web:1234567890abcdef',
-  apiKey: 'AIza' + 'Z'.repeat(35),
-  authDomain: 'koino-staging-fixture.firebaseapp.com',
-  databaseURL: 'https://koino-staging-fixture-default-rtdb.europe-west1.firebasedatabase.app',
-  functionsRegion: 'europe-west1',
-};
+const stagingConfig = require('../../state/store/firebase-staging.json');
 const templateFiles = [
   'ios/HelloWorld.xcodeproj/project.pbxproj',
   'ios/HelloWorld/Supporting/Expo.plist',

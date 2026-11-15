@@ -1,1 +1,8 @@
-null
+{
+  "projectId": "koino-staging",
+  "appId": "1:449587720664:web:3106e8239e899e193882ad",
+  "apiKey": "AIzaSyCEXLygFuzYAKbykMJ_9mdkuIaSNcr08Ak",
+  "authDomain": "koino-staging.firebaseapp.com",
+  "databaseURL": "https://koino-staging-default-rtdb.europe-west1.firebasedatabase.app",
+  "functionsRegion": "europe-west1"
+}

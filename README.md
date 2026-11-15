@@ -93,8 +93,8 @@ npm run android:dev
 
 Every run reconciles the native Android project with the development variant,
 compiles for the connected device, and checks the generated package ID and the
-actual APK package before installation. It then installs that verified APK,
-configures USB port forwarding, and starts Metro. If multiple devices are
+actual APK package. It verifies a fresh staging-only Metro session before
+installing that APK, forwarding USB, and opening KOINO Dev. If multiple devices are
 connected, select one with `npm run android:dev -- --device <adb-serial>`.
 Setting `APP_VARIANT` alone does not update an already generated native project.
 For normal JavaScript or TypeScript changes after installation, only
@@ -132,9 +132,9 @@ npm run start:tailscale
 npm run android:tailscale:logs
 ```
 
-The first command reconnects and opens **KOINO Dev** if Metro is already running.
-The second also starts Metro when needed. The third reads phone logs. Existing
-Metro sessions on port 8081 are reused. For screenshots, shell commands, native
+The first command reconnects and opens **KOINO Dev** when Metro is serving this
+checkout's verified staging configuration. The second also starts Metro when
+needed. The third reads phone logs. For screenshots, shell commands, native
 installation, or other debugging, use `adb -s <address:port>` with the endpoint
 printed by the reconnect command; USB and wireless may both appear in the device
 list, so always select the device explicitly. Rebuild native changes with

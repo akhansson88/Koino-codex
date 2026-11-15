@@ -1,5 +1,6 @@
-import { emulatorEndpoints, compiledFunctionsDirectory } from "./firebase-emulator-guard.mjs";
+import { emulatorEndpoints } from "./firebase-emulator-guard.mjs";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { initializeApp, deleteApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
@@ -11,16 +12,18 @@ const { initializeApp: initializeAdmin, deleteApp: deleteAdmin } = require("fire
 const { getDatabase: adminDatabase } = require("firebase-admin/database");
 const admin = initializeAdmin({ projectId, databaseURL: `https://${namespace}.firebaseio.com` }, "encryption-tests");
 const apps = [];
-async function client(label) {
+async function client(label, authenticated = true) {
   const app = initializeApp({ apiKey: "fake-api-key", projectId, databaseURL: `https://${namespace}.firebaseio.com` }, label); apps.push(app);
   const auth = getAuth(app); connectAuthEmulator(auth, emulatorEndpoints.authURL, { disableWarnings: true });
   const database = getDatabase(app); connectDatabaseEmulator(database, emulatorEndpoints.host, emulatorEndpoints.databasePort);
+  if (!authenticated) return { database };
   const { user } = await createUserWithEmailAndPassword(auth, `${label}@example.test`, "test-password-123");
   return { uid: user.uid, database, identity: crypto.identity() };
 }
 const denied = (action) => assert.rejects(action, /permission_denied|Permission denied/i);
 try {
-  const owner = await client("encrypted-owner"), member = await client("encrypted-member"), outsider = await client("encrypted-outsider");
+  // Match the staging test identities with fresh local UIDs and an emulator-only password.
+  const owner = await client("koino-dev-a"), member = await client("koino-dev-b"), outsider = await client("encrypted-outsider");
   const key = crypto.randomKey();
   await adminDatabase(admin).ref().set({
     e2eeAccounts: Object.fromEntries([owner, member, outsider].map((user) => [user.uid, { personalEpoch: 1 }])),
@@ -144,6 +147,30 @@ try {
   await update(ref(owner.database,notificationPath),{readAt:'2026-10-17'});
   // Personal content remains writable after the community cutover.
   await update(ref(owner.database,journalPath),{body});
+
+  const stagingPolicy = JSON.parse(readFileSync(new URL("../firebase.staging.e2ee-policy.json", import.meta.url), "utf8"));
+  assert.deepEqual(stagingPolicy, { encryptedGroupsOnly: true, historyGeneration: 1, sharedWritesFrozen: false });
+  await adminDatabase(admin).ref("e2eePolicy").set(stagingPolicy);
+  const anonymous = await client("staging-anonymous", false);
+  await denied(() => get(ref(anonymous.database, "e2eePolicy")));
+  await denied(() => get(ref(anonymous.database, journalPath)));
+  await denied(() => set(ref(anonymous.database, journalPath), null));
+  const memberJournalPath = `encryptedData/journalEntries/${member.uid}/staging-entry`;
+  const memberBody = crypto.encrypt("Second tester journal", `journalEntries/${member.uid}/staging-entry/body`, `user:${member.uid}:1`, crypto.randomKey(), member.identity);
+  await set(ref(member.database, memberJournalPath), { id: "staging-entry", userId: member.uid, body: memberBody });
+  for (const [tester, ownPath, ownBody, otherPath] of [
+    [owner, journalPath, body, memberJournalPath],
+    [member, memberJournalPath, memberBody, journalPath],
+  ]) {
+    assert.equal((await get(ref(tester.database, ownPath))).child("body/ciphertext").val(), ownBody.ciphertext);
+    assert.deepEqual((await get(ref(tester.database, "e2eePolicy"))).val(), stagingPolicy);
+    await denied(() => set(ref(tester.database, "e2eePolicy/encryptedGroupsOnly"), false));
+    await denied(() => get(ref(tester.database)));
+    await denied(() => set(ref(tester.database), null));
+    await denied(() => get(ref(tester.database, otherPath)));
+    await denied(() => set(ref(tester.database, otherPath), null));
+  }
+  console.log("Staging rules passed: the exact policy seed is client read-only, anonymous and root access are denied, and both synthetic users can access only their own private journal.");
   console.log("Encryption emulator checks passed: private/group access, plaintext rejection, authorized migration, metadata ownership, pagination, key versions, departure locks, and revocation.");
 } finally { apps.forEach((app) => goOffline(getDatabase(app))); await Promise.all(apps.map(deleteApp)); await deleteAdmin(admin); }
 process.exit(0);

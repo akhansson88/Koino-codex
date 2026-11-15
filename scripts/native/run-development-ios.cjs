@@ -115,7 +115,7 @@ async function verifyMetro(child, port, lanHost, root, hasStopped) {
       const response = await fetch('http://127.0.0.1:' + port + '/?platform=ios', {
         headers: { accept: 'application/json', 'expo-platform': 'ios' },
         redirect: 'error',
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(60_000),
       });
       if (!response.ok) throw new Error('Dev Metro manifest request failed (HTTP ' + response.status + ').');
       const manifest = await response.json();
@@ -143,9 +143,11 @@ async function installWithMetro(udid, artifact, root, options) {
   if (!lan) throw new Error('Connect the Mac and iPhone to a reachable local IPv4 network.');
   const port = await availablePort();
   const env = {
-    ...options.env, CI: '1', EXPO_OFFLINE: '1', EXPO_NO_DOTENV: '1',
+    ...options.env, EXPO_OFFLINE: '1', EXPO_NO_DOTENV: '1',
     EXPO_PACKAGER_PROXY_URL: '', REACT_NATIVE_PACKAGER_HOSTNAME: lan.address,
   };
+  // Expo disables Metro watching and Fast Refresh when CI is set.
+  delete env.CI;
   const child = spawn(process.execPath, [
     require.resolve('expo/bin/cli'), 'start', '--dev-client', '--lan', '--scheme', developmentScheme, '--port', String(port),
   ], { ...options, env, stdio: 'inherit' });

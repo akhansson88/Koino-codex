@@ -46,21 +46,12 @@ assert.throws(() => emulatorConfig({ variant: "emulator-typo", host }), /Unknown
 const developmentConfigSource = readFileSync(new URL("../state/store/firebase-development-config.cjs", import.meta.url), "utf8");
 const productionFirebase = require("../state/store/firebase-production.json");
 const productionAndroidFirebase = require("../google-services.json");
-const stagingFixture = {
-  projectId: "koino-staging-fixture",
-  apiKey: "AIza" + "S".repeat(35),
-  appId: "1:123456789012:web:0123456789abcdef012345",
-  authDomain: "koino-staging-fixture.firebaseapp.com",
-  databaseURL: "https://koino-staging-fixture-default-rtdb.europe-west1.firebasedatabase.app",
-  functionsRegion: "europe-west1",
-};
+const stagingFixture = require("../state/store/firebase-staging.json");
 const { functionsRegion, ...stagingOptions } = stagingFixture;
 function loadDevelopmentConfig(staging) {
   const module = { exports: {} };
   vm.runInNewContext(developmentConfigSource, { module, URL, require: name => {
     if (name === "./firebase-staging.json") return staging;
-    if (name === "./firebase-production.json") return productionFirebase;
-    if (name === "../../google-services.json") return productionAndroidFirebase;
     throw new Error(name);
   } });
   return module.exports;
@@ -93,6 +84,16 @@ for (const [label, invalid] of Object.entries({
   missingProject: { ...stagingFixture, projectId: undefined },
   missingKey: { ...stagingFixture, apiKey: undefined },
   malformedKey: { ...stagingFixture, apiKey: "bad" },
+  unapprovedKey: { ...stagingFixture, apiKey: "AIza" + "S".repeat(35) },
+  unapprovedWebApp: { ...stagingFixture, appId: "1:449587720664:web:0123456789abcdef012345" },
+  otherProject: {
+    ...stagingFixture,
+    projectId: "koino-staging-fixture",
+    appId: "1:123456789012:web:0123456789abcdef012345",
+    apiKey: "AIza" + "S".repeat(35),
+    authDomain: "koino-staging-fixture.firebaseapp.com",
+    databaseURL: "https://koino-staging-fixture-default-rtdb.europe-west1.firebasedatabase.app",
+  },
   productionProject: { ...stagingFixture, projectId: productionFirebase.projectId },
   productionWebKey: { ...stagingFixture, apiKey: productionFirebase.apiKey },
   productionAndroidKey: { ...stagingFixture, apiKey: productionAndroidKey },

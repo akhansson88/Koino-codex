@@ -3,15 +3,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { firebaseResourceNames, verifyDevelopmentAndroidSource } = require('./android-development-config.cjs');
-const { requireStagingFirebaseConfig } = require('../../state/store/firebase-development-config.cjs');
+const { metroPort, openAndroidDevArgs, verifyAndroidMetro, withAndroidMetro } = require('./android-development-metro.cjs');
+const { developmentAndroidId: expectedId, requireStagingFirebaseConfig } = require('../../state/store/firebase-development-config.cjs');
 
-const root = path.resolve(__dirname, '../..');
+const root = fs.realpathSync(path.resolve(__dirname, '../..'));
 const android = path.join(root, 'android');
 const appDirectory = path.join(android, 'app');
-const expectedId = 'com.akhansson.koinomvp.dev';
 const env = {
   ...process.env,
   APP_VARIANT: 'development',
+  EXPO_NO_DOTENV: '1',
   REACT_NATIVE_PACKAGER_HOSTNAME: '127.0.0.1',
 };
 
@@ -97,11 +98,13 @@ function verifyApk(sdk) {
   return apk;
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
+  const metroOnly = args[0] === '--metro-only';
+  if (metroOnly) args.shift();
   const verifyOnly = args.length === 1 && args[0] === '--verify-only';
   const serialArgument = args.length === 2 && args[0] === '--device' ? args[1] : null;
-  if (args.length && !verifyOnly && !serialArgument) {
+  if ((metroOnly && verifyOnly) || (args.length && !verifyOnly && !serialArgument)) {
     throw new Error('Usage: npm run android:dev -- [--device <adb-serial> | --verify-only]');
   }
   requireStagingFirebaseConfig();
@@ -111,38 +114,54 @@ function main() {
     return;
   }
 
-  // Expo prebuild does not remove a prior variant's Google Services file or plugin.
-  verifyDevelopmentAndroidSource(android);
-  const expo = require.resolve('expo/bin/cli');
-  run(process.execPath, [expo, 'prebuild', '--platform', 'android', '--no-install']);
-  verifyGeneratedProject();
-  refreshVariantAutolinking();
-  const sdk = sdkPath();
-  const adb = path.join(sdk, 'platform-tools', process.platform === 'win32' ? 'adb.exe' : 'adb');
+  let sdk;
+  if (!metroOnly) {
+    // Expo prebuild does not remove a prior variant's Google Services file or plugin.
+    verifyDevelopmentAndroidSource(android);
+    sdk = sdkPath();
+    run(process.execPath, [require.resolve('expo/bin/cli'), 'prebuild', '--platform', 'android', '--no-install']);
+    verifyGeneratedProject();
+    refreshVariantAutolinking();
+  }
+  const adbName = process.platform === 'win32' ? 'adb.exe' : 'adb';
+  const adbPath = sdk || process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+  const adb = adbPath ? path.join(adbPath, 'platform-tools', adbName) : adbName;
   const devices = run(adb, ['devices'], { capture: true }).split(/\r?\n/)
     .map(line => line.match(/^(\S+)\s+device$/)?.[1]).filter(Boolean);
   const serial = serialArgument || (devices.length === 1 ? devices[0] : null);
   if (!serial || !devices.includes(serial)) {
     throw new Error('Connect one authorized Android device, or select it with --device <adb-serial>.');
   }
-  const supported = new Set(['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']);
-  const abi = run(adb, ['-s', serial, 'shell', 'getprop', 'ro.product.cpu.abi'], { capture: true }).trim();
-  if (!supported.has(abi)) throw new Error(`Unsupported Android device architecture: ${abi}`);
-  const gradleArgs = [':app:assembleDebug', `-PreactNativeArchitectures=${abi}`, '--max-workers=2', '--console=plain'];
-  if (process.platform === 'win32') {
-    // Only fixed arguments and an allowlisted ABI enter this Windows batch command.
-    run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `gradlew.bat ${gradleArgs.join(' ')}`], { cwd: android });
-  } else {
-    run(path.join(android, 'gradlew'), gradleArgs, { cwd: android });
+  let apk;
+  const androidUser = process.env.EXPO_ADB_USER || '0';
+  if (!metroOnly) {
+    if (!/^(?:\d+|current)$/.test(androidUser)) throw new Error('Select one Android profile using EXPO_ADB_USER.');
+    const supported = new Set(['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']);
+    const abi = run(adb, ['-s', serial, 'shell', 'getprop', 'ro.product.cpu.abi'], { capture: true }).trim();
+    if (!supported.has(abi)) throw new Error(`Unsupported Android device architecture: ${abi}`);
+    const gradleArgs = [':app:assembleDebug', `-PreactNativeArchitectures=${abi}`, '--max-workers=2', '--console=plain'];
+    if (process.platform === 'win32') {
+      // Only fixed arguments and an allowlisted ABI enter this Windows batch command.
+      run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `gradlew.bat ${gradleArgs.join(' ')}`], { cwd: android });
+    } else {
+      run(path.join(android, 'gradlew'), gradleArgs, { cwd: android });
+    }
+    apk = verifyApk(sdk);
   }
-  const apk = verifyApk(sdk);
-  run(adb, ['-s', serial, 'reverse', 'tcp:8081', 'tcp:8081']);
-  run(process.execPath, [expo, 'run:android', '--binary', apk, '--app-id', expectedId, '--device', serial]);
+
+  await withAndroidMetro(root, { ...env, ANDROID_SERIAL: serial }, async () => {
+    if (apk) {
+      run(adb, ['-s', serial, 'install', '-r', '-d', '--user', androidUser, apk]);
+      // An APK install can take time. Verify the server again before launching.
+      await verifyAndroidMetro(root);
+    }
+    const port = `tcp:${metroPort}`;
+    run(adb, ['-s', serial, 'reverse', port, port]);
+    if (apk) run(adb, openAndroidDevArgs(serial, androidUser));
+  });
 }
 
-try {
-  main();
-} catch (error) {
+main().catch(error => {
   console.error(error.message);
   process.exitCode = 1;
-}
+});

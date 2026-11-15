@@ -56,7 +56,7 @@ async function launch({
   };
   const processState = {
     argv: ['node', filename, ...args],
-    env: { APP_VARIANT: 'production', EXPO_PACKAGER_PROXY_URL: 'https://stale.example.test' },
+    env: { APP_VARIANT: 'production', CI: '1', EXPO_PACKAGER_PROXY_URL: 'https://stale.example.test' },
     execPath: '/usr/bin/node',
     platform,
     cwd: () => root,
@@ -312,7 +312,7 @@ test('builds with isolated settings, verifies the exact artifact and starts Dev 
   assert.ok(metro.params.includes(devScheme));
   assert.ok(metro.params.includes('--lan'));
   assert.ok(metro.params.includes(String(port)));
-  assert.equal(metro.options.env.CI, '1');
+  assert.equal(Object.hasOwn(metro.options.env, 'CI'), false);
   assert.equal(metro.options.env.REACT_NATIVE_PACKAGER_HOSTNAME, lanHost);
   const install = result.calls.find(call => call.step === 'install');
   assert.equal(install.params.at(-1), artifact);

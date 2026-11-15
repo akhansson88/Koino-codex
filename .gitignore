@@ -38,6 +38,7 @@ __pycache__/
 
 .codex/encryption-export/
 .codex/encryption-functions-deploy/
+.codex/koino-staging-functions/
 .codex/audit-legacy-collections.cjs
 .codex/search-*
 

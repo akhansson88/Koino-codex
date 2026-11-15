@@ -2,7 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
-const root = path.resolve(__dirname, '../..');
+const { metroPort, metroListening, openAndroidDevArgs, verifyAndroidMetro, withAndroidMetro } = require('./android-development-metro.cjs');
+const root = fs.realpathSync(path.resolve(__dirname, '../..'));
 const configPath = path.join(root, '.codex/tailscale-android.local.json');
 const args = process.argv.slice(2);
 const mode = args.shift() || 'connect';
@@ -21,14 +22,10 @@ function run(command, parameters, optional = false) {
   return result.stdout || '';
 }
 function launch(serial) {
-  run('adb', ['-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d',
-    'koino-dev://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081', '-p', 'com.akhansson.koinomvp.dev']);
-}
-async function metroRunning() {
-  try {
-    const response = await fetch('http://127.0.0.1:8081/status', { signal: AbortSignal.timeout(1500) });
-    return (await response.text()).includes('packager-status:running');
-  } catch { return false; }
+  const port = `tcp:${metroPort}`;
+  run('adb', ['-s', serial, 'reverse', port, port]);
+  console.log(`KOINO Android debugger: ${serial}; verified Dev Metro forwarded on port ${metroPort}.`);
+  run('adb', openAndroidDevArgs(serial));
 }
 async function main() {
   if (mode !== 'logs') require('../../state/store/firebase-development-config.cjs').requireStagingFirebaseConfig();
@@ -67,24 +64,18 @@ async function main() {
     }
   }
   if (!serial) throw new Error('Enable Wireless debugging on the phone. Read its IP address and port, then retry with --port <port>. If pairing was revoked, pair this computer again.');
-  run('adb', ['-s', serial, 'reverse', 'tcp:8081', 'tcp:8081']);
-  console.log(`KOINO Android debugger: ${serial}; Metro forwarded to this computer on port 8081.`);
   if (mode === 'logs') {
     const child = spawn('adb', ['-s', serial, 'logcat', '*:S', 'ReactNative:V', 'ReactNativeJS:V', 'AndroidRuntime:E', 'Expo:V'], { stdio: 'inherit' });
     child.on('error', error => { console.error(error.message); process.exitCode = 1; });
     child.on('exit', code => { process.exitCode = code || 0; });
     return;
   }
-  if (await metroRunning()) { launch(serial); return; }
+  if (await metroListening()) {
+    await verifyAndroidMetro(root);
+    launch(serial);
+    return;
+  }
   if (mode !== 'start') { console.log('Run npm run start:tailscale to start Metro.'); return; }
-  const child = spawn(process.execPath, [require.resolve('expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', '8081'], {
-    cwd: root, stdio: 'inherit', env: { ...process.env, APP_VARIANT: 'development', ANDROID_SERIAL: serial, REACT_NATIVE_PACKAGER_HOSTNAME: '127.0.0.1' },
-  });
-  const poll = setInterval(async () => {
-    if (await metroRunning()) { clearInterval(poll); try { launch(serial); } catch (error) { console.error(error.message); } }
-  }, 2000);
-  const deadline = setTimeout(() => clearInterval(poll), 120000);
-  child.on('exit', code => { clearInterval(poll); clearTimeout(deadline); process.exitCode = code || 0; });
-  child.on('error', error => { clearInterval(poll); clearTimeout(deadline); console.error(error.message); process.exitCode = 1; });
+  await withAndroidMetro(root, { ...process.env, ANDROID_SERIAL: serial }, () => launch(serial));
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

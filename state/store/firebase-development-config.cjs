@@ -1,17 +1,19 @@
-const production = require("./firebase-production.json");
 const approvedStaging = require("./firebase-staging.json");
-const productionAndroid = require("../../google-services.json");
-
-const productionApiKeys = new Set([
-  production.apiKey,
-  ...productionAndroid.client.flatMap(client => client.api_key.map(key => key.current_key)),
-]);
 
 const developmentRuntimeVersion = "2.1.0-development";
 const developmentIosId = "com.akhansson.koino.dev";
 const developmentAndroidId = "com.akhansson.koinomvp.dev";
 const developmentScheme = "koino-dev";
-const functionsRegion = "europe-west1";
+// Firebase Auth selects the project by this public Web API key, so pin it
+// independently of the editable configuration, along with the app and URLs.
+const expectedStaging = Object.freeze({
+  projectId: "koino-staging",
+  appId: "1:449587720664:web:3106e8239e899e193882ad",
+  apiKey: "AIzaSyCEXLygFuzYAKbykMJ_9mdkuIaSNcr08Ak",
+  authDomain: "koino-staging.firebaseapp.com",
+  databaseURL: "https://koino-staging-default-rtdb.europe-west1.firebasedatabase.app",
+  functionsRegion: "europe-west1",
+});
 
 function matchesExactly(candidate, expected) {
   return candidate != null && Object.keys(candidate).length === Object.keys(expected).length &&
@@ -22,21 +24,10 @@ function requireStagingFirebaseConfig() {
   if (!approvedStaging) {
     throw new Error("KOINO Dev requires a reviewed Firebase staging configuration in state/store/firebase-staging.json.");
   }
-  const { projectId, appId, apiKey, authDomain, databaseURL } = approvedStaging;
-  const expected = { projectId, appId, apiKey, authDomain, databaseURL, functionsRegion };
-  const validProject = typeof projectId === "string" && /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId) &&
-    projectId !== production.projectId && !projectId.startsWith("demo-");
-  const validAppId = typeof appId === "string" && /^1:[1-9]\d{5,14}:web:[a-f0-9]{16,32}$/.test(appId) &&
-    appId.split(":")[1] !== production.messagingSenderId;
-  const validKey = typeof apiKey === "string" && /^AIza[\w-]{35}$/.test(apiKey) &&
-    !productionApiKeys.has(apiKey);
-  if (!validProject || !validAppId || !validKey ||
-      authDomain !== projectId + ".firebaseapp.com" ||
-      databaseURL !== "https://" + projectId + "-default-rtdb." + functionsRegion + ".firebasedatabase.app" ||
-      !matchesExactly(approvedStaging, expected)) {
+  if (!matchesExactly(approvedStaging, expectedStaging)) {
     throw new Error("KOINO Dev Firebase staging configuration is invalid.");
   }
-  return Object.freeze(expected);
+  return expectedStaging;
 }
 
 function validateDevelopmentConfig(config, nativeApplicationId) {
