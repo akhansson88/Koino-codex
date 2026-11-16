@@ -39,16 +39,17 @@ async function launch({
   productsDirectory,
   existingArtifact = false,
   resolvedArtifact = expectedArtifact,
-  listenerPids = ['42\n'],
+  listenerPids = args[0] === '--metro-only' ? ['', '42\n'] : ['42\n'],
   manifestConfig = config,
   manifestRoot = root,
   manifestRuntime = devRuntime,
   manifestDevelopment = true,
   manifestHost = lanHost,
-  manifestPort = port,
+  manifestPort = args[0] === '--metro-only' ? 8082 : port,
 } = {}) {
   const calls = [];
   const errors = [];
+  const metroOnly = args[0] === '--metro-only';
   const fileContents = new Map([[path.join(root, 'ios', '.xcode.env'), xcodeEnvironment]]);
   let builtArtifact;
   const metro = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, pid: 42 });
@@ -218,9 +219,17 @@ async function launch({
     require: fixtureRequire,
     process: processState,
     __dirname: path.join(root, 'scripts', 'native'),
-    console: { log() {}, error: value => errors.push(value) },
+    console: {
+      log(message) {
+        if (message.startsWith('Open your verified KOINO Dev install')) {
+          calls.push({ step: 'metro ready', message });
+          if (metroOnly) queueMicrotask(closeMetro);
+        }
+      },
+      error: value => errors.push(value),
+    },
     fetch: async (url, options) => {
-      assert.equal(url, 'http://127.0.0.1:' + port + '/?platform=ios');
+      assert.equal(url, 'http://127.0.0.1:' + (metroOnly ? 8082 : port) + '/?platform=ios');
       assert.equal(options.redirect, 'error');
       assert.equal(options.headers['expo-platform'], 'ios');
       calls.push({ step: 'manifest' });
@@ -239,6 +248,7 @@ test('refuses unsupported platforms and missing device selection before subproce
     { platform: 'win32' },
     { args: [] },
     { args: ['--device', '--help'] },
+    { args: ['--metro-only', '--build-only'] },
   ]) {
     const result = await launch(options);
     assert.equal(result.exitCode, 1);
@@ -340,6 +350,43 @@ test('build-only stops after validating the fresh artifact, without Metro or ins
   assert.ok(steps(result).includes('verify artifact'));
   assert.ok(!steps(result).includes('start metro'));
   assert.ok(!steps(result).includes('install'));
+});
+
+test('metro-only serves a verified staging manifest on the same port without building or installing', async () => {
+  const result = await launch({ args: ['--metro-only'], generatedError: 'No generated workspace' });
+  assert.equal(result.exitCode, undefined, result.errors.join('\n'));
+  assert.deepEqual(steps(result), [
+    'staging', 'metro listener', 'start metro', 'metro listener', 'manifest', 'metro listener', 'metro ready',
+  ]);
+  const metro = result.calls.find(call => call.step === 'start metro');
+  assert.equal(metro.params.at(-1), '8082');
+  assert.equal(metro.options.env.APP_VARIANT, 'development');
+  assert.equal(metro.options.env.EXPO_OFFLINE, '1');
+  assert.equal(metro.options.env.EXPO_NO_DOTENV, '1');
+  assert.equal(Object.hasOwn(metro.options.env, 'CI'), false);
+  assert.match(result.calls.at(-1).message, /http:\/\/192\.168\.1\.16:8082/);
+});
+
+test('metro-only refuses an occupied port before spawning Expo', async () => {
+  const result = await launch({ args: ['--metro-only'], listenerPids: ['73\n'] });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.errors.join('\n'), /Metro port 8082 is already in use/);
+  assert.deepEqual(steps(result), ['staging', 'metro listener']);
+});
+
+test('metro-only refuses invalid staging configuration or an unverified server before printing the connection URL', async () => {
+  for (const [options, reason] of [
+    [{ stagingError: 'Invalid staging configuration' }, /staging configuration/],
+    [{ listenerPids: ['', '73\n'] }, /port is held by an unverified process/],
+    [{ listenerPids: ['', '42\n', '73\n'] }, /port is held by an unverified process/],
+    [{ manifestConfig: { extra: { koinoVariant: 'production' } } }, /Unexpected staging manifest/],
+    [{ manifestPort: 8081 }, /expected KOINO Dev iOS manifest/],
+  ]) {
+    const result = await launch({ args: ['--metro-only'], ...options });
+    assert.equal(result.exitCode, 1);
+    assert.match(result.errors.join('\n'), reason);
+    assert.ok(!steps(result).includes('metro ready'));
+  }
 });
 
 test('accepts the macOS /var alias for the isolated temporary directory', async () => {

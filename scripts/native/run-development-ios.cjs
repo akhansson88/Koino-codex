@@ -12,6 +12,7 @@ const {
 const { verifyGeneratedIos, verifyBuiltIos } = require('./verify-development-ios.cjs');
 
 const xcrun = '/usr/bin/xcrun';
+const iosMetroPort = 8082;
 
 function isInside(directory, filename) {
   const relative = path.relative(directory, filename);
@@ -115,12 +116,20 @@ function availablePort() {
   });
 }
 
-function ownsMetroPort(child, port) {
+function metroListenerPids(port) {
   const listener = spawnSync('/usr/sbin/lsof', ['-nP', '-iTCP:' + port, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' });
   if (listener.error) throw listener.error;
-  if (listener.status === 1 && !listener.stdout.trim() && !listener.stderr.trim()) return false;
-  const pids = new Set(listener.stdout.trim().split(/\s+/));
-  if (listener.status !== 0 || pids.size !== 1 || !pids.has(String(child.pid))) {
+  if (listener.status === 1 && !listener.stdout.trim() && !listener.stderr.trim()) return new Set();
+  if (listener.status !== 0 || !listener.stdout.trim()) {
+    throw new Error('Could not verify the Metro listener on port ' + port + '.');
+  }
+  return new Set(listener.stdout.trim().split(/\s+/));
+}
+
+function ownsMetroPort(child, port) {
+  const pids = metroListenerPids(port);
+  if (!pids.size) return false;
+  if (pids.size !== 1 || !pids.has(String(child.pid))) {
     throw new Error('Metro port is held by an unverified process.');
   }
   return true;
@@ -154,12 +163,11 @@ async function verifyMetro(child, port, lanHost, root, hasStopped) {
   throw new Error('Timed out waiting for the new KOINO Dev Metro process.');
 }
 
-async function installWithMetro(udid, artifact, root, options) {
+async function startMetro(root, options, port, install) {
   const interfaces = os.networkInterfaces();
   const lan = [interfaces.en0 ?? [], ...Object.values(interfaces)].flat()
     .find(address => address.family === 'IPv4' && !address.internal && !address.address.startsWith('169.254.'));
   if (!lan) throw new Error('Connect the Mac and iPhone to a reachable local IPv4 network.');
-  const port = await availablePort();
   const env = {
     ...options.env, EXPO_OFFLINE: '1', EXPO_NO_DOTENV: '1',
     EXPO_PACKAGER_PROXY_URL: '', REACT_NATIVE_PACKAGER_HOSTNAME: lan.address,
@@ -184,9 +192,9 @@ async function installWithMetro(udid, artifact, root, options) {
   try {
     const hasStopped = () => stopping || result !== undefined || child.exitCode !== null || child.signalCode !== null;
     await verifyMetro(child, port, lan.address, root, hasStopped);
-    if (hasStopped()) throw new Error('Dev Metro stopped before installation.');
-    run(['devicectl', 'device', 'install', 'app', '--device', udid, artifact], options);
-    console.log('Open KOINO Dev on the selected iPhone and enter http://' + lan.address + ':' + port + ' in the Dev Client.');
+    if (hasStopped()) throw new Error('Dev Metro stopped after verification.');
+    install?.();
+    console.log('Open your verified KOINO Dev install and enter http://' + lan.address + ':' + port + ' in the Dev Client.');
     await completed;
     if (result.error) throw result.error;
     if (!stopping && result.code !== 0) throw new Error('Dev Metro exited (' + (result.code ?? result.signal) + ').');
@@ -200,16 +208,15 @@ async function installWithMetro(udid, artifact, root, options) {
 async function main() {
   const [flag, requestedDevice, mode, ...extra] = process.argv.slice(2);
   if (process.platform !== 'darwin') throw new Error('KOINO iOS Dev requires macOS with Xcode.');
-  if (flag !== '--device' || !/^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(requestedDevice ?? '') ||
-      (mode !== undefined && mode !== '--build-only') || extra.length) {
-    throw new Error('Usage: npm run ios:dev -- --device <iPhone UDID> [--build-only]');
+  const metroOnly = flag === '--metro-only' && requestedDevice === undefined;
+  const buildForDevice = flag === '--device' && /^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(requestedDevice ?? '') &&
+    (mode === undefined || mode === '--build-only') && extra.length === 0;
+  if (!metroOnly && !buildForDevice) {
+    throw new Error('Usage: npm run ios:dev -- --device <iPhone UDID> [--build-only] or npm run ios:dev -- --metro-only');
   }
 
   requireStagingFirebaseConfig();
   const root = fs.realpathSync(path.resolve(__dirname, '../..'));
-  const { workspace, scheme } = nativeProject(root);
-  const scratch = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'koino-ios-dev-'));
-  const derivedData = path.join(scratch, 'DerivedData');
   const options = {
     cwd: root, encoding: 'utf8',
     env: {
@@ -217,6 +224,17 @@ async function main() {
       RCT_NO_LAUNCH_PACKAGER: 'true', SKIP_BUNDLING: '1',
     },
   };
+  if (metroOnly) {
+    if (metroListenerPids(iosMetroPort).size) {
+      throw new Error('Metro port ' + iosMetroPort + ' is already in use. Stop the existing listener before starting KOINO Dev Metro.');
+    }
+    await startMetro(root, options, iosMetroPort);
+    return;
+  }
+
+  const { workspace, scheme } = nativeProject(root);
+  const scratch = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'koino-ios-dev-'));
+  const derivedData = path.join(scratch, 'DerivedData');
   let keepArtifact = false;
   try {
     const udid = verifyPhone(requestedDevice, scratch, options);
@@ -239,7 +257,9 @@ async function main() {
       keepArtifact = true;
       return;
     }
-    await installWithMetro(udid, realArtifact, root, options);
+    await startMetro(root, options, await availablePort(), () => {
+      run(['devicectl', 'device', 'install', 'app', '--device', udid, realArtifact], options);
+    });
   } finally {
     if (!keepArtifact) fs.rmSync(scratch, { recursive: true, force: true });
   }

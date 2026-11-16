@@ -65,9 +65,23 @@ npm run ios:dev -- --device "$IPHONE_UDID"
 This performs a fresh local build and installs it only after verifying the
 artifact and the new Dev Metro instance. The launcher prints the Metro URL.
 Open **KOINO Dev** on the selected phone, allow Local Network access, and enter
-that URL in the Dev Client.
-Keep the terminal open for Fast Refresh. If verification reports a stale
-project, use a clean Dev checkout and regenerate it there.
+that URL in the Dev Client. Keep the terminal running for Fast Refresh.
+If verification reports a stale project, use a clean Dev checkout and
+regenerate it there.
+
+For day-to-day JavaScript and TypeScript edits with a verified KOINO Dev build
+already on the iPhone, start staging Metro on port 8082.
+
+```sh
+npm run ios:dev -- --metro-only
+```
+
+Open the printed LAN URL in the Dev Client and keep the terminal running.
+If port 8082 is in use, close the existing server before starting a new one.
+Use the latest printed URL if the Mac's LAN address changes. If Fast Refresh
+stops after a connection interruption, wait until the phone can reach Metro and
+choose **Reload** from the Dev Menu once. Rebuild when you change native code,
+native dependencies, or native app configuration.
 
 ### Local Android development build
 
