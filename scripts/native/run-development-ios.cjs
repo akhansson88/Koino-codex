@@ -18,6 +18,24 @@ function isInside(directory, filename) {
   return relative !== '' && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
 }
 
+function resolveTemporaryDirectoryAlias(artifact, scratch) {
+  const scratchName = path.basename(scratch);
+  const temporaryDirectory = path.dirname(scratch);
+  // Xcode can report /var when Node uses /private/var. Resolve only the
+  // prefix above the scratch directory so the verified output suffix stays exact.
+  for (let directory = path.dirname(artifact); directory !== path.parse(directory).root; directory = path.dirname(directory)) {
+    if (path.basename(directory) !== scratchName) continue;
+    try {
+      if (fs.realpathSync(path.dirname(directory)) === temporaryDirectory) {
+        return path.join(scratch, path.relative(directory, artifact));
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+    }
+  }
+  return artifact;
+}
+
 function nativeProject(root) {
   verifyGeneratedIos(root);
   const ios = path.join(root, 'ios');
@@ -73,7 +91,7 @@ function appFromBuildSettings(output, derivedData) {
       typeof name !== 'string' || path.basename(name) !== name || path.extname(name) !== '.app') {
     throw new Error('Xcode did not report a valid .app output path.');
   }
-  const artifact = path.join(directory, name);
+  const artifact = resolveTemporaryDirectoryAlias(path.join(directory, name), path.dirname(derivedData));
   if (!isInside(derivedData, artifact) || fs.existsSync(artifact)) {
     throw new Error('Xcode must build a new .app inside the isolated DerivedData directory.');
   }

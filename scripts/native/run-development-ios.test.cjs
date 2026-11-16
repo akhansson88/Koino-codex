@@ -11,11 +11,15 @@ const device = '00008110-001234560123401E';
 const devBundleId = 'com.akhansson.koino.dev';
 const devRuntime = '2.1.0-development';
 const devScheme = 'koino-dev';
-const temp = '/private/tmp/koino-ios-dev-test';
+const tempAlias = '/var/folders/fixture/T';
+const temp = path.join('/private' + tempAlias, 'koino-ios-dev-test');
 const workspace = 'KOINODev.xcworkspace';
 const port = 49800;
 const lanHost = '192.168.1.16';
 const productName = 'KOINODev.app';
+const products = path.join('Build', 'Products', 'Debug-iphoneos');
+const expectedArtifact = path.join(temp, 'DerivedData', products, productName);
+const aliasedProductsDirectory = path.join(tempAlias, path.basename(temp), 'DerivedData', products);
 const filename = nativePath.join(__dirname, 'run-development-ios.cjs');
 const source = fs.readFileSync(filename, 'utf8');
 const expoCli = '/checkout/node_modules/expo/bin/cli';
@@ -33,6 +37,8 @@ async function launch({
   buildVariant = 'development',
   deviceModel = 'iPhone17,1',
   productsDirectory,
+  existingArtifact = false,
+  resolvedArtifact = expectedArtifact,
   listenerPids = ['42\n'],
   manifestConfig = config,
   manifestRoot = root,
@@ -73,11 +79,16 @@ async function launch({
     connectionProperties: { pairingState: 'paired', tunnelState: 'connected' },
   }] } };
   const fileSystem = {
-    existsSync: filename => filename === builtArtifact || filename.endsWith('.xcworkspace') || fileContents.has(filename),
+    existsSync: filename => filename === builtArtifact || filename.endsWith('.xcworkspace') ||
+      fileContents.has(filename) || (existingArtifact && filename === expectedArtifact),
     statSync: () => ({ isDirectory: () => true, isFile: () => true }),
     lstatSync: () => ({ isDirectory: () => true, isFile: () => true }),
     mkdtempSync: () => temp,
-    realpathSync: value => value,
+    realpathSync: value => {
+      if (value === tempAlias) return path.dirname(temp);
+      if (value === builtArtifact) return resolvedArtifact;
+      return value;
+    },
     readFileSync: filename => {
       assert.ok(fileContents.has(filename), 'Unexpected file: ' + filename);
       return fileContents.get(filename);
@@ -117,7 +128,7 @@ async function launch({
           INFOPLIST_FILE: 'KOINODev/Info.plist',
           PRODUCT_BUNDLE_IDENTIFIER: bundleId,
           PLATFORM_NAME: buildPlatform,
-          TARGET_BUILD_DIR: productsDirectory || path.join(derivedData, 'Build', 'Products', 'Debug-iphoneos'),
+          TARGET_BUILD_DIR: productsDirectory || path.join(derivedData, products),
           FULL_PRODUCT_NAME: productName,
           WRAPPER_EXTENSION: 'app',
         },
@@ -130,7 +141,7 @@ async function launch({
       queueMicrotask(closeMetro);
     } else if (params.includes('build')) {
       step = 'build';
-      builtArtifact = path.join(derivedData, 'Build', 'Products', 'Debug-iphoneos', productName);
+      builtArtifact = path.join(derivedData, products, productName);
     } else {
       assert.fail('Unexpected subprocess: ' + command + ' ' + params.join(' '));
     }
@@ -142,7 +153,7 @@ async function launch({
     'node:fs': fileSystem,
     'node:path': path,
     'node:os': {
-      tmpdir: () => '/private/tmp',
+      tmpdir: () => tempAlias,
       networkInterfaces: () => ({ en0: [{ address: lanHost, family: 'IPv4', internal: false }] }),
     },
     'node:net': { createServer: () => {
@@ -328,5 +339,31 @@ test('build-only stops after validating the fresh artifact, without Metro or ins
   assert.equal(result.exitCode, undefined, result.errors.join('\n'));
   assert.ok(steps(result).includes('verify artifact'));
   assert.ok(!steps(result).includes('start metro'));
+  assert.ok(!steps(result).includes('install'));
+});
+
+test('accepts the macOS /var alias for the isolated temporary directory', async () => {
+  const result = await launch({ productsDirectory: aliasedProductsDirectory });
+  assert.equal(result.exitCode, undefined, result.errors.join('\n'));
+  assert.equal(result.calls.find(call => call.step === 'verify artifact').artifact, expectedArtifact);
+  assert.equal(result.calls.find(call => call.step === 'install').params.at(-1), expectedArtifact);
+});
+
+test('rejects a pre-existing app reported through the temporary directory alias before building', async () => {
+  const result = await launch({ productsDirectory: aliasedProductsDirectory, existingArtifact: true });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.errors.join('\n'), /must build a new \.app inside the isolated DerivedData directory/);
+  assert.ok(!steps(result).includes('build'));
+});
+
+test('rejects an app that resolves to a different path within DerivedData after building', async () => {
+  const result = await launch({
+    productsDirectory: aliasedProductsDirectory,
+    resolvedArtifact: path.join(temp, 'DerivedData', 'unexpected', productName),
+  });
+  assert.equal(result.exitCode, 1);
+  assert.match(result.errors.join('\n'), /does not resolve to the verified DerivedData output path/);
+  assert.ok(steps(result).includes('build'));
+  assert.ok(!steps(result).includes('verify artifact'));
   assert.ok(!steps(result).includes('install'));
 });
