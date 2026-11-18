@@ -1,12 +1,17 @@
 import { Feather } from "@expo/vector-icons";
 import { PropsWithChildren, useState } from "react";
-import { Pressable, StyleProp, Text, TextInput, TextInputProps, View, ViewStyle } from "react-native";
+import { Pressable, Text, TextInputProps, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { brandPalette, colors, platformShadow, radius, typography } from "@/ui/theme";
+import { Button } from "@/ui/shadcn/button";
+import { Card as ShadcnCard } from "@/ui/shadcn/card";
+import { Input } from "@/ui/shadcn/input";
+import { AmbientBackground } from "@/ui/ambient-background";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 export function Screen({ children }: PropsWithChildren) {
   return (
-    <View style={{ flex: 1, backgroundColor: colors.cream }}>
+    <View style={{ backgroundColor: colors.background, flex: 1 }}>
+      <AmbientBackground />
       {children}
     </View>
   );
@@ -14,37 +19,9 @@ export function Screen({ children }: PropsWithChildren) {
 
 export function Card({
   children,
-  tone = "paper",
   style,
 }: PropsWithChildren<{ tone?: "paper" | "moss" | "rose"; style?: StyleProp<ViewStyle> }>) {
-  const accentColor = tone === "moss" ? colors.moss : tone === "rose" ? colors.rose : colors.line;
-  return (
-    <View
-      style={[
-        {
-          backgroundColor: colors.paper,
-          borderColor: colors.line,
-          borderCurve: "continuous",
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderLeftColor: accentColor,
-          borderLeftWidth: tone === "paper" ? 1 : 3,
-          gap: 14,
-          padding: 18,
-          ...platformShadow({
-            boxShadow: "0 4px 12px rgba(11, 18, 32, 0.06)",
-            elevation: 1,
-            offset: { width: 0, height: 4 },
-            opacity: 0.06,
-            radius: 12,
-          }),
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+  return <ShadcnCard style={style}>{children}</ShadcnCard>;
 }
 
 export function Title({ children }: PropsWithChildren) {
@@ -77,59 +54,19 @@ export function PillButton({
   variant = "primary",
   disabled = false,
 }: PropsWithChildren<{ onPress: () => void; variant?: "primary" | "secondary" | "ghost"; disabled?: boolean }>) {
-  const backgroundColor = variant === "primary" ? colors.gold : variant === "secondary" ? colors.elevated : colors.paper;
-  const color = variant === "primary" ? brandPalette.deepNavy : variant === "secondary" ? colors.ink : colors.olive;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
+    <Button
       disabled={disabled}
       onPress={onPress}
-      style={{
-        alignItems: "center",
-        backgroundColor: disabled ? colors.disabled : backgroundColor,
-        borderColor: variant === "primary" ? colors.gold : colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        minHeight: 48,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        ...platformShadow({
-          boxShadow: variant === "primary" && !disabled ? "0 3px 8px rgba(11, 18, 32, 0.08)" : "none",
-          elevation: variant === "primary" && !disabled ? 1 : 0,
-          offset: { width: 0, height: 3 },
-          opacity: variant === "primary" && !disabled ? 0.08 : 0,
-          radius: 8,
-        }),
-      }}
+      variant={variant === "primary" ? "default" : variant === "secondary" ? "outline" : "ghost"}
     >
-      <Text style={[typography.button, { color: disabled ? colors.disabledText : color }]}>{children}</Text>
-    </Pressable>
+      {children}
+    </Button>
   );
 }
 
 export function Field(props: TextInputProps) {
-  return (
-    <TextInput
-      placeholderTextColor={colors.muted}
-      {...props}
-      style={[
-        {
-          backgroundColor: colors.input,
-          borderColor: colors.line,
-          borderCurve: "continuous",
-          borderRadius: radius.md,
-          borderWidth: 1,
-          color: colors.ink,
-          minHeight: props.multiline ? 112 : 52,
-          padding: 14,
-          textAlignVertical: props.multiline ? "top" : "center",
-        },
-        typography.body,
-        props.style,
-      ]}
-    />
-  );
+  return <Input {...props} />;
 }
 
 export function PasswordField({ showPasswordLabel, hidePasswordLabel, ...props }: TextInputProps & {
@@ -141,10 +78,10 @@ export function PasswordField({ showPasswordLabel, hidePasswordLabel, ...props }
 
   return (
     <View style={{ position: "relative" }}>
-      <Field
+      <Input
         {...props}
         secureTextEntry={!isVisible}
-        style={[props.style, { paddingRight: 58 }]}
+        style={[props.style, { paddingRight: 52 }]}
       />
       <Pressable
         accessibilityRole="button"
@@ -158,14 +95,14 @@ export function PasswordField({ showPasswordLabel, hidePasswordLabel, ...props }
           top: 4,
           bottom: 4,
           width: 44,
-          minHeight: 44,
+          minHeight: 40,
           alignItems: "center",
           justifyContent: "center",
           opacity: pressed ? 0.6 : 1,
         })}
       >
         <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Feather name={isVisible ? "eye-off" : "eye"} size={20} color={colors.olive} />
+          <Feather name={isVisible ? "eye-off" : "eye"} size={18} color={colors.muted} />
         </View>
       </Pressable>
     </View>
@@ -186,16 +123,16 @@ export function Choice({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={{
-        backgroundColor: selected ? colors.accentSubtle : colors.paper,
-        borderColor: selected ? colors.gold : colors.line,
-        borderRadius: 999,
+      style={({ pressed }) => ({
+        backgroundColor: selected ? shadcn.primary : pressed ? shadcn.secondary : shadcn.card,
+        borderColor: selected ? shadcn.primary : shadcn.border,
+        borderRadius: radius.md,
         borderWidth: 1,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-      }}
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+      })}
     >
-      <Text style={[typography.button, { color: selected ? colors.olive : colors.ink }]}>{label}</Text>
+      <Text style={[typography.button, { color: selected ? shadcn.primaryForeground : colors.ink, fontSize: 14 }]}>{label}</Text>
     </Pressable>
   );
 }

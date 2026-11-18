@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type DonationFrequency } from "@/features/donation-api";
 import { typography } from "@/ui/theme";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { donationColors } from "@/features/donation/colors";
 import { type FeatherName } from "@/features/donation/types";
 import { CircleIcon } from "@/features/donation/illustrations";
@@ -14,6 +15,7 @@ export function DonationScreenFrame({ children }: PropsWithChildren) {
 
   return (
     <View style={{ backgroundColor: donationColors.warmCanvas, flex: 1 }}>
+      <AmbientBackground />
       <ScrollView
         contentContainerStyle={{
           gap: 24,

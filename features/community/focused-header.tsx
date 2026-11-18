@@ -9,7 +9,8 @@ export function FocusedScreenHeader({ onBack, title }: { onBack: () => void; tit
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
       <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onBack} />
       <Text
-        style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}
+        numberOfLines={1}
+        style={[typography.title, { color: colors.ink, flex: 1, marginHorizontal: 8, textAlign: "center" }]}
       >
         {title}
       </Text>

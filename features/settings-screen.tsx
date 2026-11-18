@@ -55,7 +55,12 @@ import { PostCard } from "@/ui/post-card";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-composer";
-import { colors, radius, typography } from "@/ui/theme";
+import { Badge } from "@/ui/shadcn/badge";
+import { FieldLabel } from "@/ui/shadcn/input";
+import { Separator } from "@/ui/shadcn/separator";
+import { SheetFormPanel } from "@/ui/sheet-menu";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import {
   type RoomView,
@@ -1391,7 +1396,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       <Card style={{ flexShrink: 0, gap: 8, padding: 12 }}>
         <View style={{ alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 }}>
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-            <Feather name="check-circle" size={18} color={colors.olive} />
+            <Feather name="check-circle" size={18} color={colors.moss} />
           </View>
           <ScrollView
             contentInsetAdjustmentBehavior="never"
@@ -1434,7 +1439,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         <Card style={{ gap: 20, padding: 20 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
             <RoomImage name={group.name} size={58} />
-            <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900", flex: 1 }}>{group.name}</Text>
+            <Text style={[typography.heading, { color: colors.ink, flex: 1 }]}>{group.name}</Text>
           </View>
           <CommunityEncryptionNotice group={group} />
           <SecondaryButton onPress={openRoomOverview}>{t("community.rooms.other")}</SecondaryButton>
@@ -1599,8 +1604,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     return (
       <>
         <View onLayout={measurePublicationViewport} style={{ flex: 1, backgroundColor: colors.cream }}>
+          <AmbientBackground />
           <FlatList
-            style={{ flex: 1, minHeight: 0 }}
+            style={{ flex: 1, minHeight: 0, backgroundColor: "transparent" }}
             data={communityFeedRows}
             initialNumToRender={6}
             maxToRenderPerBatch={6}
@@ -1639,8 +1645,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
               >
                 <RoomImage image={group.image} name={group.name} size={44} />
                 <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
-                  <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{group.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
+                  <Text numberOfLines={1} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
+                  <Text style={[typography.caption, { color: colors.muted }]}>
                       {communityMemberCount(memberCount, t)} · {t("common.private")}
                   </Text>
                 </View>
@@ -1675,8 +1681,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     key={key}
                     onPress={onPress}
                     style={{
-                      backgroundColor: primary ? colors.accentWarm : colors.cream,
-                      borderColor: primary ? colors.accentWarm : colors.border,
+                      backgroundColor: primary ? shadcn.primary : shadcn.card,
+                      borderColor: primary ? shadcn.primary : shadcn.border,
                       borderRadius: radius.lg,
                       borderWidth: 1,
                       flex: 1,
@@ -1688,13 +1694,13 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     }}
                   >
                     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                      <Feather name={icon} size={20} color={primary ? colors.onAccent : colors.textPrimary} />
+                      <Feather name={icon} size={20} color={primary ? shadcn.primaryForeground : colors.textPrimary} />
                     </View>
                     <View style={{ gap: 3, minWidth: 0 }}>
-                      <Text style={[typography.cardTitle, { color: primary ? colors.onAccent : colors.textPrimary }]}>
+                      <Text style={[typography.cardTitle, { color: primary ? shadcn.primaryForeground : colors.textPrimary }]}>
                         {title}
                       </Text>
-                      <Text style={[typography.caption, { color: primary ? colors.onAccent : colors.textSecondary }]}>
+                      <Text style={[typography.caption, { color: primary ? shadcn.primaryForeground : colors.textSecondary, opacity: primary ? 0.8 : 1 }]}>
                         {subtitle}
                       </Text>
                     </View>
@@ -1779,40 +1785,29 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     <>
       <View style={{ flex: 1, backgroundColor: colors.cream }}>
         <AppScreen topInset={false}>
-          <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.ink, fontSize: 30, fontWeight: "900", lineHeight: 36 }}>{t("community.page.community")}</Text>
-        <BodyText muted>{t("community.page.description")}</BodyText>
-      </View>
+          <View style={{ gap: 6 }}>
+            <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>{t("community.page.community")}</Text>
+            <BodyText muted>{t("community.page.description")}</BodyText>
+          </View>
 
       <View style={{ gap: 10 }}>
         <SectionHeading>{t("community.rooms.current")}</SectionHeading>
-        <Card style={{ gap: 18, padding: 20 }}>
+        <Card style={{ gap: 16 }}>
           {group ? (
             <>
-              <View style={{ alignItems: "center", flexDirection: "row", gap: 18 }}>
-                <RoomImage image={group.image} name={group.name} size={76} />
-                <View style={{ flex: 1, gap: 5 }}>
-                  <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 15, fontWeight: "700" }}>{communityMemberCount(memberCount, t)}</Text>
-                  <View
-                    style={{
-                      alignSelf: "flex-start",
-                      backgroundColor: colors.accentSubtle,
-                      borderRadius: 999,
-                      marginTop: 10,
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{t("community.rooms.current")}</Text>
-                  </View>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
+                <RoomImage image={group.image} name={group.name} size={56} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
+                  <Text style={[typography.caption, { color: colors.muted }]}>{communityMemberCount(memberCount, t)}</Text>
+                  <Badge style={{ marginTop: 2 }} variant="brand">{t("community.rooms.current")}</Badge>
                 </View>
               </View>
               {group.migrationPending ? <CommunityEncryptionNotice group={group} /> : <>
-              <View style={{ backgroundColor: colors.line, height: 1 }} />
+              <Separator />
               <View style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("community.rooms.code")}</Text>
+                  <Text style={[typography.sectionLabel, { color: colors.muted, fontSize: 10 }]}>{t("community.rooms.code")}</Text>
                   <RoomCodeCopy code={group.inviteCode} />
                 </View>
                 <PrimaryButton icon="share-2" onPress={handleInvite} style={{ minHeight: 48 }}>
@@ -1822,12 +1817,29 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
               <SecondaryButton icon="message-circle" onPress={() => navigateToRoomView("detail", "back")}>
                 {t("community.rooms.open")}
               </SecondaryButton>
-              {inviteMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{inviteMessage}</Text> : null}
+              {inviteMessage ? <Text accessibilityLiveRegion="polite" style={[typography.caption, { color: colors.muted }]}>{inviteMessage}</Text> : null}
               </>}
             </>
           ) : (
             <>
-              <Text style={{ color: colors.ink, fontSize: 19, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
+              <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: shadcn.secondary,
+                    borderCurve: "continuous",
+                    borderRadius: radius.lg,
+                    height: 40,
+                    justifyContent: "center",
+                    width: 40,
+                  }}
+                >
+                  <Feather name="users" size={18} color={colors.muted} />
+                </View>
+                <Text accessibilityRole="header" style={[typography.cardTitle, { color: colors.ink, flex: 1 }]}>
+                  {t("community.rooms.noneSelected")}
+                </Text>
+              </View>
               <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
               <PrimaryButton icon="plus" onPress={openJoinSheet}>
                 {t("community.rooms.joinOrCreate")}
@@ -1841,51 +1853,74 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
       <View style={{ gap: 10 }}>
         <SectionHeading>{t("community.rooms.other")}</SectionHeading>
-        <Card style={{ gap: 0, padding: 0, overflow: "hidden" }}>
+        <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
           {otherRooms.length === 0 ? (
-            <BodyText muted style={{ padding: 16 }}>{t("community.rooms.noOther")}</BodyText>
-          ) : (
-            otherRooms.map((room, index) => (
-              <Pressable
-                accessibilityRole="button"
-                key={room.id}
-                onPress={() => {
-                  dispatch({ type: "switchGroup", id: room.id });
-                  setDetailTab("recent");
-                  navigateToRoomView("detail", "back");
-                }}
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+              <View
                 style={{
                   alignItems: "center",
-                  borderBottomColor: colors.line,
-                  borderBottomWidth: index === otherRooms.length - 1 ? 0 : 1,
-                  flexDirection: "row",
-                  gap: 12,
-                  padding: 14,
+                  backgroundColor: shadcn.secondary,
+                  borderCurve: "continuous",
+                  borderRadius: radius.md,
+                  height: 34,
+                  justifyContent: "center",
+                  width: 34,
                 }}
               >
-                <RoomImage image={room.image} name={room.name} size={48} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{room.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
-                    {room.migrationPending ? t(room.migrationAwaitingApproval ? "community.encryption.approvalTitle" : "community.encryption.setupTitle") : communityMemberCount(roomMemberCount(state.groupMemberCounts, room.id), t)}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={19} color={colors.muted} />
-              </Pressable>
+                <Feather name="layers" size={16} color={colors.muted} />
+              </View>
+              <BodyText muted style={{ flex: 1 }}>{t("community.rooms.noOther")}</BodyText>
+            </View>
+          ) : (
+            otherRooms.map((room, index) => (
+              <View key={room.id}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    dispatch({ type: "switchGroup", id: room.id });
+                    setDetailTab("recent");
+                    navigateToRoomView("detail", "back");
+                  }}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    backgroundColor: pressed ? shadcn.background : shadcn.card,
+                    flexDirection: "row",
+                    gap: 12,
+                    padding: 14,
+                  })}
+                >
+                  <RoomImage image={room.image} name={room.name} size={44} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink }]}>{room.name}</Text>
+                    <Text style={[typography.caption, { color: colors.muted }]}>
+                      {room.migrationPending ? t(room.migrationAwaitingApproval ? "community.encryption.approvalTitle" : "community.encryption.setupTitle") : communityMemberCount(roomMemberCount(state.groupMemberCounts, room.id), t)}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.disabledText} />
+                </Pressable>
+                {index < otherRooms.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
+              </View>
             ))
           )}
         </Card>
-        <Card style={{ gap: 0, padding: 0 }}>
-          <Pressable accessibilityRole="button" onPress={openJoinSheet} style={{ paddingHorizontal: 16 }}>
+        <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openJoinSheet}
+            style={({ pressed }) => ({ backgroundColor: pressed ? shadcn.background : shadcn.card, paddingHorizontal: 14 })}
+          >
             <Row icon="user-plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.joinAnother")}</Text>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.rooms.joinAnother")}</Text>
             </Row>
           </Pressable>
-        </Card>
-        <Card style={{ gap: 0, padding: 0 }}>
-          <Pressable accessibilityRole="button" onPress={openJoinSheet} style={{ paddingHorizontal: 16 }}>
+          <Separator style={{ marginHorizontal: 14 }} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={openJoinSheet}
+            style={({ pressed }) => ({ backgroundColor: pressed ? shadcn.background : shadcn.card, paddingHorizontal: 14 })}
+          >
             <Row icon="plus">
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.rooms.createNew")}</Text>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.rooms.createNew")}</Text>
             </Row>
           </Pressable>
         </Card>
@@ -1894,21 +1929,25 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       {state.currentUserId ? <CommunityRoomsLogout key={state.currentUserId} userId={state.currentUserId} /> : null}
 
       <BottomSheet title={t("community.rooms.joinOrCreate")} visible={joinSheetVisible} onClose={closeJoinSheet} dismissible={!joinForm.busy}>
-        <CommunityJoinForm form={joinForm} />
+        <SheetFormPanel>
+          <CommunityJoinForm form={joinForm} />
+        </SheetFormPanel>
         {!joinForm.receipt ? <>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
             <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "900" }}>{t("common.or")}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{t("common.or")}</Text>
             <View style={{ backgroundColor: colors.line, flex: 1, height: 1 }} />
           </View>
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{t("community.rooms.createNew")}</Text>
-            <TextInputField editable={!joinForm.busy} value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
-            <PrimaryButton disabled={!canCreate || joinForm.busy} onPress={handleCreateRoom}>
-              {t("community.rooms.createAction")}
-            </PrimaryButton>
-          </View>
-          {createGroupError ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontWeight: "800" }}>{createGroupError}</Text> : null}
+          <SheetFormPanel>
+            <View style={{ gap: 8 }}>
+              <FieldLabel>{t("community.rooms.createNew")}</FieldLabel>
+              <TextInputField editable={!joinForm.busy} value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
+              <PrimaryButton disabled={!canCreate || joinForm.busy} onPress={handleCreateRoom}>
+                {t("community.rooms.createAction")}
+              </PrimaryButton>
+            </View>
+          </SheetFormPanel>
+          {createGroupError ? <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{createGroupError}</Text> : null}
         </> : null}
         <SecondaryButton disabled={joinForm.busy} onPress={closeJoinSheet}>{t(joinForm.receipt ? "common.done" : "common.cancel")}</SecondaryButton>
       </BottomSheet>

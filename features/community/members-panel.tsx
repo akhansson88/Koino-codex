@@ -4,7 +4,7 @@ import { Avatar, Card, PrimaryButton, RoomImage, SecondaryButton } from "@/ui/ap
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount, communityMoodScaleLabel } from "@/ui/community-copy";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 
 export function MembersPanel({
   group,
@@ -29,8 +29,8 @@ export function MembersPanel({
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 14 }}>
         <RoomImage image={group.image} name={group.name} size={58} />
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{group.name}</Text>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{communityMemberCount(memberCount, t)}</Text>
+          <Text numberOfLines={1} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{communityMemberCount(memberCount, t)}</Text>
         </View>
       </Card>
       <Card style={{ gap: 0, padding: 0 }}>
@@ -50,12 +50,12 @@ export function MembersPanel({
             >
               <Avatar image={member.image} name={member.name} size={38} tone={member.role === "owner" ? "orange" : "green"} />
               <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-                <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{member.name}</Text>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{member.name}</Text>
+                <Text style={[typography.caption, { color: colors.muted }]}>
                   {t(member.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
                 </Text>
                 {checkIn ? (
-                  <Text style={{ color: colors.muted, flexShrink: 1, fontSize: 12, fontWeight: "600" }}>
+                  <Text style={[typography.caption, { color: colors.muted, flexShrink: 1 }]}>
                     {t("community.members.lastCheckIn", { mood: communityMoodScaleLabel(checkIn.mood, t) })}
                   </Text>
                 ) : null}
@@ -76,7 +76,7 @@ export function MembersPanel({
         {t("community.members.invite")}
       </PrimaryButton>
       <Card>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.rooms.code")}</Text>
+        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("community.rooms.code")}</Text>
         <RoomCodeCopy code={group.inviteCode} />
       </Card>
       <SecondaryButton icon="settings" onPress={onManage}>

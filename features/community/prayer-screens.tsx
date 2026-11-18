@@ -8,9 +8,9 @@ import {
   AppScreen,
   Avatar,
   BodyText,
+  BottomSheet,
   Card,
   ExpandableBodyText,
-  SecondaryButton,
   SectionHeading,
   StatusPill,
   TextInputField,
@@ -28,7 +28,11 @@ import { LinkPreviewContent } from "@/ui/link-preview";
 import { CommunityCardAction, CommunityCardResponseSummary, CommunityFeedCard } from "@/ui/post-card";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { Badge } from "@/ui/shadcn/badge";
+import { Button } from "@/ui/shadcn/button";
+import { Separator } from "@/ui/shadcn/separator";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { type PrayerFilter } from "@/features/community/types";
 import { FocusedCommunityScreenIntro, FocusedScreenHeader } from "@/features/community/focused-header";
 import {
@@ -108,23 +112,13 @@ export function CommunityPrayerScreen({
           onBack={onBack}
           title={t("community.page.prayer")}
         />
-        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <SecondaryButton icon="users" onPress={onPrayForSomeone} style={{ maxWidth: "100%", minHeight: 44, paddingHorizontal: 12, paddingVertical: 8 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Button icon="users" onPress={onPrayForSomeone} style={{ flex: 1 }} variant="outline">
             {t("community.prayer.prayForSomeone")}
-          </SecondaryButton>
-          <Pressable
-            accessibilityLabel={t("community.prayer.share")}
-            accessibilityRole="button"
-            onPress={onCreatePrayer}
-            style={{ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, maxWidth: "100%", minHeight: 44, minWidth: 0, paddingHorizontal: 4, paddingVertical: 8 }}
-          >
-            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-              <Feather name="plus" size={16} color={colors.textSecondary} />
-            </View>
-            <Text style={[typography.label, { color: colors.textSecondary, flexShrink: 1 }]}>
-              {t("community.prayer.share")}
-            </Text>
-          </Pressable>
+          </Button>
+          <Button icon="plus" onPress={onCreatePrayer} style={{ flex: 1 }}>
+            {t("community.prayer.share")}
+          </Button>
         </View>
         <View style={{ gap: 6 }}>
           <CommunityFilterChips
@@ -213,14 +207,14 @@ export function CommunityPrayerMomentDetailScreen({
     <AppScreen topInset={false}>
       <FocusedScreenHeader onBack={onBack} title={t("community.page.prayer")} />
       <View style={{ alignItems: "center", gap: 8 }}>
-        <Avatar image={authorImage} name={authorName} size={58} tone="green" />
-        <View style={{ alignItems: "center", gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
+        <Avatar image={authorImage} name={authorName} size={56} tone="green" />
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <Text style={[typography.cardTitle, { color: colors.ink }]}>{authorName}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
       </View>
       <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
+        <Text style={[typography.heading, { color: colors.ink, textAlign: "center" }]}>
           {displayCopy.title || communityDefaultFeedTitle(item, t)}
         </Text>
         <LinkPreviewContent text={displayCopy.body}>
@@ -234,11 +228,23 @@ export function CommunityPrayerMomentDetailScreen({
           )}
         </LinkPreviewContent>
       </View>
-      <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
-        <MaterialCommunityIcons name="hands-pray" size={20} color={colors.gold} />
+      <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: shadcn.secondary,
+            borderCurve: "continuous",
+            borderRadius: radius.md,
+            height: 38,
+            justifyContent: "center",
+            width: 38,
+          }}
+        >
+          <MaterialCommunityIcons name="hands-pray" size={19} color={colors.ink} />
+        </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.made")}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+          <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.prayer.made")}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>
             {t("community.prayer.sharedTime", { time: formatRelativeTime(item.createdAt, language) })}
           </Text>
         </View>
@@ -247,36 +253,31 @@ export function CommunityPrayerMomentDetailScreen({
       {replies.length > 0 ? (
         <View style={{ gap: 12 }}>
           <SectionHeading>{t("community.reply.heading")}</SectionHeading>
-          <Card style={{ gap: 0, padding: 0 }}>
+          <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
             {replies.map((reply, index) => (
-              <View
-                key={reply.id}
-                style={{
-                  borderBottomColor: colors.line,
-                  borderBottomWidth: index === replies.length - 1 ? 0 : 1,
-                  gap: 8,
-                  padding: 14,
-                }}
-              >
-                <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                  <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
-                  <View>
-                    <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                      {userById.get(reply.userId) ?? t("common.someone")}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                      {formatRelativeTime(reply.createdAt, language)}
-                    </Text>
+              <View key={reply.id}>
+                <View style={{ gap: 8, padding: 14 }}>
+                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                    <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={30} tone="pink" />
+                    <View>
+                      <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 14, lineHeight: 19 }]}>
+                        {userById.get(reply.userId) ?? t("common.someone")}
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.muted }]}>
+                        {formatRelativeTime(reply.createdAt, language)}
+                      </Text>
+                    </View>
                   </View>
+                  <LinkPreviewContent text={reply.body}>
+                    {({ hiddenUrl, preview }) => (
+                      <>
+                        <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                        {preview}
+                      </>
+                    )}
+                  </LinkPreviewContent>
                 </View>
-                <LinkPreviewContent text={reply.body}>
-                  {({ hiddenUrl, preview }) => (
-                    <>
-                      <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
-                      {preview}
-                    </>
-                  )}
-                </LinkPreviewContent>
+                {index < replies.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
               </View>
             ))}
           </Card>
@@ -291,15 +292,13 @@ export function CommunityPrayerMomentDetailScreen({
           returnKeyType="send"
           style={{ flex: 1 }}
         />
-        <Pressable
+        <Button
           accessibilityLabel={t("community.reply.send")}
-          accessibilityRole="button"
           disabled={!encouragementDraft.trim()}
+          icon="send"
           onPress={() => onSendEncouragement()}
-          style={{ alignItems: "center", height: 48, justifyContent: "center", opacity: encouragementDraft.trim() ? 1 : 0.4, width: 48 }}
-        >
-          <Feather name="send" size={22} color={colors.gold} />
-        </Pressable>
+          size="icon"
+        />
       </View>
       <PrayerActivity activity={activity} />
     </AppScreen>
@@ -308,20 +307,7 @@ export function CommunityPrayerMomentDetailScreen({
 
 function PrayerMomentPill() {
   const { t } = useAppTranslation();
-  return (
-    <View
-      style={{
-        backgroundColor: colors.rhythmSoft,
-        borderColor: colors.accentRhythm,
-        borderRadius: 999,
-        borderWidth: 1,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-      }}
-    >
-      <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: "800" }}>{t("community.action.prayer.completed")}</Text>
-    </View>
-  );
+  return <Badge variant="success">{t("community.action.prayer.completed")}</Badge>;
 }
 
 export function PrayerRequestCard({
@@ -356,6 +342,7 @@ export function PrayerRequestCard({
   const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
+  const pendingMenuAction = useRef<(() => void) | undefined>(undefined);
   const prayerStatus = item.answeredAt ? "answered" : "open";
   const prayerStatusLabel = t(`shared.status.${prayerStatus}`);
   const prayerMoment = isPrayerMomentKind(item.kind);
@@ -363,8 +350,14 @@ export function PrayerRequestCard({
 
   function runMenuAction(action: () => void) {
     suppressOpenRef.current = true;
+    pendingMenuAction.current = action;
     setMenuOpen(false);
-    action();
+  }
+
+  function finishMenuAction() {
+    const action = pendingMenuAction.current;
+    pendingMenuAction.current = undefined;
+    action?.();
     setTimeout(() => {
       suppressOpenRef.current = false;
     }, 250);
@@ -386,59 +379,32 @@ export function PrayerRequestCard({
     </Pressable>
   ) : null;
 
-  const menu = ownsItem && menuOpen ? (
-    <View
-      style={{
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        minWidth: 118,
-        paddingVertical: 4,
-        position: "absolute",
-        right: 14,
-        top: 54,
-        zIndex: 40,
-        ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-          elevation: 12,
-          offset: { width: 0, height: 10 },
-          opacity: 0.14,
-          radius: 24,
-        }),
-      }}
+  const menu = ownsItem && (onEdit || onDelete) ? (
+    <BottomSheet
+      title={t("community.card.postOptions")}
+      visible={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      onDismiss={finishMenuAction}
     >
-      {onEdit ? (
-        <Pressable
-          accessibilityLabel={t("common.edit")}
-          accessibilityRole="button"
-          onPressIn={(event) => event.stopPropagation()}
-          onPress={(event) => {
-            event.stopPropagation();
-            runMenuAction(onEdit);
-          }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-        >
-          <Feather name="edit-2" size={14} color={colors.ink} />
-          <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
-        </Pressable>
-      ) : null}
-      {onDelete ? (
-        <Pressable
-          accessibilityLabel={t("common.delete")}
-          accessibilityRole="button"
-          onPressIn={(event) => event.stopPropagation()}
-          onPress={(event) => {
-            event.stopPropagation();
-            runMenuAction(onDelete);
-          }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-        >
-          <Feather name="trash-2" size={14} color={colors.danger} />
-          <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
-        </Pressable>
-      ) : null}
-    </View>
+      <SheetMenuGroup>
+        {onEdit ? (
+          <SheetMenuItem
+            icon="edit-2"
+            title={t("common.edit")}
+            onPress={() => runMenuAction(onEdit)}
+          />
+        ) : null}
+        {onDelete ? (
+          <SheetMenuItem
+            icon="trash-2"
+            showDivider={Boolean(onEdit)}
+            title={t("common.delete")}
+            tone="danger"
+            onPress={() => runMenuAction(onDelete)}
+          />
+        ) : null}
+      </SheetMenuGroup>
+    </BottomSheet>
   ) : null;
 
   return (
@@ -453,36 +419,14 @@ export function PrayerRequestCard({
             tone="prayer"
           />
         ) : focused && !prayed ? (
-          <Pressable
+          <CommunityCardAction
             accessibilityLabel={t("community.prayer.prayForRequest", { name: authorName })}
-            accessibilityRole="button"
-            accessibilityState={{ selected: false }}
-            onPress={(event) => {
-              event.stopPropagation();
-              onPray();
-            }}
-            style={{
-              alignItems: "center",
-              backgroundColor: colors.warmSoft,
-              borderColor: colors.accentWarm,
-              borderRadius: 999,
-              borderWidth: 1,
-              flexDirection: "row",
-              gap: 7,
-              maxWidth: "100%",
-              minHeight: 44,
-              minWidth: 0,
-              paddingHorizontal: 13,
-              paddingVertical: 8,
-            }}
-          >
-            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-              <MaterialCommunityIcons name="hands-pray" size={20} color={colors.textPrimary} />
-            </View>
-            <Text style={[typography.label, { color: colors.textPrimary, flexShrink: 1 }]}>
-              {communityActionLabel("prayer_request", false, t)}
-            </Text>
-          </Pressable>
+            icon="pray"
+            label={communityActionLabel("prayer_request", false, t)}
+            onPress={onPray}
+            overview={overview || undefined}
+            tone="prayer"
+          />
         ) : (
           <CommunityCardAction
             accessibilityLabel={focused ? t("community.prayer.prayAgainForRequest", { name: authorName }) : undefined}

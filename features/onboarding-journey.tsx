@@ -10,6 +10,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { Field } from "@/ui/components";
 import type { TranslationKey } from "@/ui/localization";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
+import { FieldLabel } from "@/ui/shadcn";
 import { colors, typography } from "@/ui/theme";
 
 const receiptChoices = { requested: "join", approved: "joinApproved", created: "create" } as const;
@@ -126,7 +127,7 @@ export function OnboardingJourney({ userId }: { userId: string }) {
       ) : step === "join" || step === "create" ? (
         <>
           <Card>
-            <Text style={[typography.label, { color: colors.ink }]}>{fieldLabel}</Text>
+            <FieldLabel>{fieldLabel}</FieldLabel>
             <Field
               accessibilityLabel={fieldLabel}
               autoCapitalize={isJoin ? "characters" : "sentences"}

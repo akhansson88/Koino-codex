@@ -3,7 +3,8 @@ import type { PropsWithChildren } from "react";
 import { Pressable, Text, View } from "react-native";
 import { BodyText, BottomSheet, Card, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, radius } from "@/ui/theme";
+import { Separator } from "@/ui/shadcn";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { type FeatherName } from "@/features/identity/types";
 
 export function SettingsSection({ children, label }: PropsWithChildren<{ label: string }>) {
@@ -17,7 +18,7 @@ export function SettingsSection({ children, label }: PropsWithChildren<{ label: 
 
 export function SectionLabel({ children }: PropsWithChildren) {
   return (
-    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 0.4, textTransform: "uppercase" }}>
+    <Text style={[typography.sectionLabel, { color: colors.muted }]}>
       {children}
     </Text>
   );
@@ -42,28 +43,28 @@ export function SettingsRow({
 }) {
   const content = (
     <>
-      {showDivider ? <View style={{ backgroundColor: colors.line, height: 1, marginLeft: 60 }} /> : null}
+      {showDivider ? <Separator style={{ marginLeft: 60 }} /> : null}
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 68, paddingHorizontal: 14, paddingVertical: 10 }}>
         <View
           style={{
             alignItems: "center",
-            backgroundColor: tone === "danger" ? colors.dangerSurface : colors.accentSubtle,
-            borderColor: tone === "danger" ? colors.dangerBorder : colors.line,
-            borderRadius: 999,
+            backgroundColor: tone === "danger" ? colors.dangerSurface : shadcn.secondary,
+            borderColor: tone === "danger" ? colors.dangerBorder : "transparent",
+            borderRadius: radius.md,
             borderWidth: 1,
             height: 34,
             justifyContent: "center",
             width: 34,
           }}
         >
-          <Feather name={icon} size={17} color={tone === "danger" ? colors.danger : colors.olive} />
+          <Feather name={icon} size={17} color={tone === "danger" ? colors.danger : colors.ink} />
         </View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={{ color: tone === "danger" ? colors.danger : colors.ink, fontSize: 15, fontWeight: "900" }}>{title}</Text>
-          {subtitle ? <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", lineHeight: 17 }}>{subtitle}</Text> : null}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[typography.cardTitle, { color: tone === "danger" ? colors.danger : colors.ink }]}>{title}</Text>
+          {subtitle ? <Text style={[typography.caption, { color: colors.muted }]}>{subtitle}</Text> : null}
         </View>
         {value ? (
-          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12, fontWeight: "800", maxWidth: 112 }}>
+          <Text numberOfLines={1} style={[typography.caption, { color: colors.muted, maxWidth: 112 }]}>
             {value}
           </Text>
         ) : null}
@@ -82,9 +83,9 @@ export function SettingsRow({
 
 export function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ backgroundColor: colors.input, borderColor: colors.line, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: 14 }}>
-      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{label}</Text>
-      <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{value}</Text>
+    <View style={{ backgroundColor: shadcn.secondary, borderRadius: radius.md, gap: 3, padding: 14 }}>
+      <Text style={[typography.caption, { color: colors.muted }]}>{label}</Text>
+      <Text style={[typography.bodyMedium, { color: colors.ink }]}>{value}</Text>
     </View>
   );
 }

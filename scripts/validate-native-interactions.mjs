@@ -28,7 +28,7 @@ const mocks = {
   "react-native-gesture-handler": `export const GestureHandlerRootView = "GestureRoot";`,
   "react-native-reanimated": `export const ReduceMotion = { Always: "always", System: "system" };`,
   "@expo/vector-icons": `export const Feather = "Feather";`,
-  "@/ui/theme": `export const colors = { paper: "white", ink: "black", danger: "red" }, radius = { xxl: 24 }, typography = {};`,
+  "@/ui/theme": `export const colors = { paper: "white", ink: "black", danger: "red" }, radius = { xxl: 24 }, shadows = {}, typography = {};`,
   "@/ui/app-language": `export const useAppTranslation = () => ({ t: key => key });`,
   "@gorhom/bottom-sheet": `
     import React, { forwardRef, useImperativeHandle } from "react";

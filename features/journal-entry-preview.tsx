@@ -8,7 +8,7 @@ import type { JournalEntry } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { Card } from "@/ui/app-components";
 import { journalEntryHasSharedCopy, journalEntryPresentation } from "@/ui/journal-presentation";
-import { colors, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 export function JournalEntryPreview({
   entry,
@@ -39,20 +39,20 @@ export function JournalEntryPreview({
 
   const content = (
     <>
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6 }}>
-            <Feather name={typeIcon} size={15} color={colors.olive} />
-            <Text style={[typography.label, { color: colors.textMuted, flexShrink: 1 }]}>{typeLabel}</Text>
-          </View>
-          {date ? <Text style={[typography.caption, { color: colors.muted, flexShrink: 1 }]}>{date}</Text> : null}
-        </View>
-        <Feather name="chevron-right" size={16} color={colors.muted} />
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+        <Feather name={typeIcon} size={13} color={colors.muted} />
+        <Text
+          numberOfLines={1}
+          style={[typography.sectionLabel, { color: colors.muted, flex: 1, fontSize: 10, letterSpacing: 0.7 }]}
+        >
+          {date ? `${typeLabel}  ·  ${date}` : typeLabel}
+        </Text>
+        <Feather name="chevron-right" size={16} color={colors.disabledText} />
       </View>
       {moodLabel ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-          <Feather name={moodIcon} size={15} color={colors.olive} />
-          <Text style={[typography.label, { color: colors.olive, flex: 1 }]}>{moodLabel}</Text>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          <Feather name={moodIcon} size={13} color={colors.muted} />
+          <Text style={[typography.caption, { color: colors.muted, flex: 1 }]}>{moodLabel}</Text>
         </View>
       ) : null}
       {title ? (
@@ -66,9 +66,22 @@ export function JournalEntryPreview({
         </Text>
       ) : null}
       {references.length ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
-          <Feather name="book-open" size={14} color={colors.olive} />
-          <Text numberOfLines={2} style={[typography.caption, { color: colors.olive, flex: 1 }]}>
+        <View
+          style={{
+            alignItems: "center",
+            alignSelf: "flex-start",
+            backgroundColor: shadcn.secondary,
+            borderCurve: "continuous",
+            borderRadius: radius.sm,
+            flexDirection: "row",
+            gap: 6,
+            maxWidth: "100%",
+            paddingHorizontal: 8,
+            paddingVertical: 5,
+          }}
+        >
+          <Feather name="book-open" size={12} color={colors.muted} />
+          <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary, flexShrink: 1 }]}>
             {references.join(" · ")}
           </Text>
         </View>
@@ -87,11 +100,11 @@ export function JournalEntryPreview({
       onPress={onOpen}
     >
       {({ pressed }) => isJourney ? (
-        <View style={{ borderColor: colors.line, borderTopWidth: 1, gap: 6, opacity: pressed ? 0.7 : 1, paddingVertical: 12 }}>
+        <View style={{ backgroundColor: pressed ? shadcn.background : shadcn.card, gap: 6, paddingHorizontal: 14, paddingVertical: 13 }}>
           {content}
         </View>
       ) : (
-        <Card style={{ gap: 10, opacity: pressed ? 0.88 : 1, padding: 14 }}>{content}</Card>
+        <Card style={{ gap: 8, opacity: pressed ? 0.88 : 1, padding: 14 }}>{content}</Card>
       )}
     </Pressable>
   );

@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
 import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
-import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, SectionHeading, TextInputField } from "@/ui/app-components";
+import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, TextInputField } from "@/ui/app-components";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
 import { tabContentClearance } from "@/ui/navigation-layout";
-import { colors, typography } from "@/ui/theme";
+import { FieldLabel } from "@/ui/shadcn";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 const MAX_BODY_LENGTH = 500;
 
@@ -20,6 +22,7 @@ function CommunityComposerScreen({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
   return (
     <View style={{ backgroundColor: colors.cream, flex: 1 }}>
+      <AmbientBackground />
       <ScrollView
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         contentInsetAdjustmentBehavior="never"
@@ -127,11 +130,12 @@ function CommunityTypeSelector({
                 disabled={disabled}
                 key={option.value}
                 onPress={() => { if (!disabled) onChange(option.value); }}
-                style={{
+                style={({ pressed }) => ({
                   alignItems: "center",
-                  backgroundColor: selected ? colors.accentSubtle : colors.paper,
-                  borderColor: selected ? colors.gold : colors.line,
-                  borderRadius: 999,
+                  backgroundColor: selected ? shadcn.primary : pressed ? shadcn.secondary : shadcn.card,
+                  borderColor: selected ? shadcn.primary : shadcn.border,
+                  borderCurve: "continuous",
+                  borderRadius: radius.md,
                   borderWidth: 1,
                   flex: 1,
                   flexDirection: "row",
@@ -141,18 +145,18 @@ function CommunityTypeSelector({
                   minWidth: 0,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
-                }}
+                })}
               >
                 {selected ? (
                   <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-                    <Feather name="check" size={14} color={colors.olive} />
+                    <Feather name="check" size={14} color={shadcn.primaryForeground} />
                   </View>
                 ) : null}
                 <Text
                   style={[
                     typography.label,
                     {
-                      color: selected ? colors.olive : colors.muted,
+                      color: selected ? shadcn.primaryForeground : colors.clay,
                       flexShrink: 1,
                       textAlign: "center",
                     },
@@ -318,7 +322,7 @@ export function SharedComposer({
 
   const bodyField = (
     <View key="body" style={{ gap: 8 }}>
-      {isCommunityShare ? <Text accessible={false} style={[typography.label, { color: colors.ink }]}>{t(bodyLabelKey)}</Text> : null}
+      {isCommunityShare ? <FieldLabel>{t(bodyLabelKey)}</FieldLabel> : null}
       <TextInputField
         accessibilityLabel={isCommunityShare ? t(bodyLabelKey) : undefined}
         accessibilityHint={isCommunityShare ? t("community.composer.share.field.writingHint", { max: MAX_BODY_LENGTH }) : undefined}
@@ -340,11 +344,11 @@ export function SharedComposer({
         style={{ minHeight: 170 }}
         submitBehavior={isCommunityShare ? "newline" : "submit"}
       />
-      <Text accessibilityLabel={isCommunityShare ? t("community.composer.share.field.characterCount", { count: body.length, max: MAX_BODY_LENGTH }) : undefined} style={isCommunityShare ? [typography.caption, { alignSelf: "flex-end", color: colors.muted }] : { alignSelf: "flex-end", color: colors.muted, fontSize: 11, fontWeight: "700" }}>
+      <Text accessibilityLabel={isCommunityShare ? t("community.composer.share.field.characterCount", { count: body.length, max: MAX_BODY_LENGTH }) : undefined} style={[typography.caption, { alignSelf: "flex-end", color: colors.muted }]}>
         {body.length}/{MAX_BODY_LENGTH}
       </Text>
       {submissionAttempted && !scriptureRequired && !canSubmit ? (
-        <Text accessibilityLiveRegion={isCommunityShare && Platform.OS === "android" ? "polite" : undefined} style={isCommunityShare ? [typography.caption, { color: colors.danger }] : { color: colors.danger, fontSize: 12, fontWeight: "700" }}>{t("community.composer.validation.bodyRequired")}</Text>
+        <Text accessibilityLiveRegion={isCommunityShare && Platform.OS === "android" ? "polite" : undefined} style={[typography.caption, { color: colors.danger }]}>{t("community.composer.validation.bodyRequired")}</Text>
       ) : null}
     </View>
   );
@@ -398,12 +402,12 @@ export function SharedComposer({
             </View>
           </View>
           {!isCommunityShare && context !== "journal" ? (
-            <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
           ) : null}
         </View>
 
         <View style={{ gap: 10 }}>
-          <Text accessibilityRole={isCommunityShare ? "header" : undefined} style={isCommunityShare ? [typography.heading, { color: colors.ink }] : { color: colors.ink, fontSize: 24, fontWeight: "900" }}>{t(titleKey(context, editing, bibleIntent))}</Text>
+          <Text accessibilityRole={isCommunityShare ? "header" : undefined} style={[typography.screenTitle, { color: colors.ink }]}>{t(titleKey(context, editing, bibleIntent))}</Text>
           {isCommunityShare ? (
             <CommunityTypeSelector
               community
@@ -451,7 +455,7 @@ export function SharedComposer({
 
         {showTitle ? isCommunityShare ? (
           <View style={{ gap: 8 }}>
-            <Text accessible={false} style={[typography.label, { color: colors.ink }]}>{t("community.composer.share.field.title")}</Text>
+            <FieldLabel>{t("community.composer.share.field.title")}</FieldLabel>
             {titleField}
           </View>
         ) : titleField : null}
@@ -461,9 +465,9 @@ export function SharedComposer({
 
         {!isCommunityShare ? (
         <View style={{ gap: 8 }}>
-          <SectionHeading>
+          <FieldLabel>
             {t(context === "journal" ? "community.composer.journal.privacy" : "community.composer.shareWith")}
-          </SectionHeading>
+          </FieldLabel>
           {audienceLocked ? (
             <Text style={[typography.caption, { color: colors.muted }]}>{t("community.composer.checkInAudienceFixed")}</Text>
           ) : context === "journal" && editing && !communityAudienceAvailable ? (
@@ -513,14 +517,15 @@ export function SharedComposer({
               accessibilityRole="button"
               disabled={!showVisibility || locked}
               onPress={() => { if (!locked) onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private); }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
             >
               <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
                 <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")} size={34} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>
                     {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
                   </Text>
-                  <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  <Text style={[typography.caption, { color: colors.muted }]}>
                     {entryVisibility === visibility.room
                       ? t("community.composer.sharedWithCommunity")
                       : t("community.composer.privateOnly")}
@@ -542,7 +547,7 @@ export function SharedComposer({
             accessibilityState={{ busy: Boolean(submission?.inFlight) }}
             style={{ gap: 8 }}
           >
-            {submission?.inFlight ? <ActivityIndicator accessible={isCommunityShare ? false : undefined} color={colors.olive} /> : null}
+            {submission?.inFlight ? <ActivityIndicator accessible={isCommunityShare ? false : undefined} color={colors.ink} /> : null}
             <Text style={[typography.caption, { color: submission?.status === "failure" ? colors.danger : colors.muted }]}>{t(feedbackKey)}</Text>
           </View>
         ) : null}

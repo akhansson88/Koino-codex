@@ -3,6 +3,7 @@ import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useAppTranslation } from "@/ui/app-language";
+import { radius, typography } from "@/ui/theme";
 import { type FeatherName, type ReaderPalette } from "@/features/bible-reader/types";
 
 function ChapterTitle({ title, index, cursor, previous, next, color }: {
@@ -12,7 +13,7 @@ function ChapterTitle({ title, index, cursor, previous, next, color }: {
   const currentStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - Math.abs(cursor.value - index) * 2) }), [index]);
   const previousStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (index - cursor.value) * 2 - 1)) }), [index]);
   const nextStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, Math.min(1, (cursor.value - index) * 2 - 1)) }), [index]);
-  const textStyle = { color, fontSize: 18, fontWeight: "800" as const };
+  const textStyle = { color, fontFamily: "Inter_500Medium", fontSize: 17, letterSpacing: -0.2, lineHeight: 24 };
   return <View style={{ flex: 1, minWidth: 0 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
     <Animated.Text numberOfLines={1} ellipsizeMode="middle" style={[textStyle, currentStyle]}>{title}</Animated.Text>
     <Animated.Text numberOfLines={1} ellipsizeMode="middle" style={[textStyle, { position: "absolute", left: 0, right: 0, top: 0 }, previousStyle]}>{previous}</Animated.Text>
@@ -47,16 +48,16 @@ export function ReaderCircleButton({
         alignItems: "center",
         backgroundColor: palette.surface,
         borderColor: palette.line,
-        borderRadius: 999,
+        borderRadius: radius.md,
         borderWidth: 1,
-        height: 42,
+        height: 40,
         justifyContent: "center",
         opacity: disabled ? 0.48 : 1,
-        width: 42,
+        width: 40,
       }}
     >
-      {icon ? <Feather name={icon} size={18} color={palette.accent} /> : null}
-      {text ? <Text style={{ color: palette.accent, fontSize: 15, fontWeight: "800" }}>{text}</Text> : null}
+      {icon ? <Feather name={icon} size={17} color={palette.accent} /> : null}
+      {text ? <Text style={{ color: palette.accent, fontFamily: "Inter_500Medium", fontSize: 14 }}>{text}</Text> : null}
     </Pressable>
   );
 }
@@ -128,10 +129,10 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
           style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flex: 1, gap: 4, minWidth: 0, minHeight: 48, opacity: pressed ? 0.65 : 1 })}
         >
           {chapterCursor && chapterIndex !== undefined ? <ChapterTitle title={compactTitle ?? title} index={chapterIndex} cursor={chapterCursor}
-            previous={previousChapterTitle} next={nextChapterTitle} color={palette.text} /> : <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: palette.text, fontSize: 18, fontWeight: "800", flexShrink: 1 }}>
+            previous={previousChapterTitle} next={nextChapterTitle} color={palette.text} /> : <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: palette.text, fontFamily: "Inter_500Medium", fontSize: 17, letterSpacing: -0.2, flexShrink: 1 }}>
             {compactTitle ?? title}
           </Text>}
-          <Feather name="chevron-down" size={17} color={palette.muted} />
+          <Feather name="chevron-down" size={16} color={palette.muted} />
         </Pressable>
 
         <Pressable
@@ -143,19 +144,19 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
             alignItems: "center",
             backgroundColor: palette.surface,
             borderColor: palette.line,
-            borderRadius: 999,
+            borderRadius: radius.md,
             borderWidth: 1,
             flexDirection: "row",
             gap: 4,
-            height: 42,
-            maxWidth: 80,
+            height: 40,
+            maxWidth: 82,
             paddingHorizontal: 9,
           }}
         >
-          <Text numberOfLines={1} style={{ color: palette.text, fontSize: 13, fontWeight: "800" }}>
+          <Text numberOfLines={1} style={{ color: palette.text, fontFamily: "Inter_500Medium", fontSize: 12 }}>
             {translationLabel}
           </Text>
-          <Feather name="chevron-down" size={13} color={palette.muted} />
+          <Feather name="chevron-down" size={12} color={palette.muted} />
         </Pressable>
 
         {audioAvailable ? <ReaderCircleButton accessibilityLabel={t("audio.open")} icon="headphones" onPress={onOpenAudio} palette={palette} /> : null}

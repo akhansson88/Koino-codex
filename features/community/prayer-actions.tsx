@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Id } from "@/state/types";
 import { AppScreen, Avatar, BodyText, Card, FullScreenModal, IconButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors } from "@/ui/theme";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 import { type CommunityPrayerAssignment, type CommunityMember } from "@/features/community/types";
 
 export function CommunityPrayerActions({
@@ -103,8 +103,8 @@ function CommunityPrayerAction({
   title: string;
 }) {
   const { t } = useAppTranslation();
-  const titleColor = primary ? colors.onAccent : colors.ink;
-  const subtitleColor = primary ? colors.onAccent : colors.muted;
+  const titleColor = primary ? shadcn.primaryForeground : colors.ink;
+  const subtitleColor = primary ? shadcn.primaryForeground : colors.muted;
 
   return (
     <Pressable
@@ -113,9 +113,9 @@ function CommunityPrayerAction({
       onPress={onPress}
       style={{
         alignItems: "center",
-        backgroundColor: primary ? colors.gold : colors.paper,
-        borderColor: primary ? colors.gold : colors.line,
-        borderRadius: 16,
+        backgroundColor: primary ? shadcn.primary : shadcn.card,
+        borderColor: primary ? shadcn.primary : shadcn.border,
+        borderRadius: radius.xl,
         borderWidth: 1,
         flex: 1,
         flexDirection: "row",
@@ -124,6 +124,7 @@ function CommunityPrayerAction({
         minWidth: 140,
         paddingHorizontal: 9,
         paddingVertical: 9,
+        ...shadows.card,
       }}
     >
       {member ? (
@@ -132,21 +133,21 @@ function CommunityPrayerAction({
         <View
           style={{
             alignItems: "center",
-            backgroundColor: primary ? colors.paper : colors.accentSubtle,
-            borderRadius: 999,
+            backgroundColor: primary ? "rgba(255, 255, 255, 0.14)" : shadcn.secondary,
+            borderRadius: radius.md,
             height: 32,
             justifyContent: "center",
             width: 32,
           }}
         >
-          <Feather name={icon} size={16} color={colors.olive} />
+          <Feather name={icon} size={16} color={primary ? shadcn.primaryForeground : colors.ink} />
         </View>
       )}
-      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text style={{ color: titleColor, fontSize: 13, fontWeight: "900", lineHeight: 16 }}>
+      <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={[typography.label, { color: titleColor }]}>
           {title}
         </Text>
-        <Text style={{ color: subtitleColor, fontSize: 11, fontWeight: "700", lineHeight: 13 }}>
+        <Text numberOfLines={2} style={[typography.caption, { color: subtitleColor, fontSize: 11, lineHeight: 14 }]}>
           {subtitle}
         </Text>
       </View>
@@ -171,11 +172,11 @@ export function CommunityPrayerMemberModal({
       <AppScreen>
         <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
           <IconButton accessibilityLabel={t("common.close")} icon="arrow-left" onPress={onClose} />
-          <Text style={{ color: colors.olive, fontSize: 13, fontWeight: "900" }}>{t("community.prayer.actions.prayForSomeone")}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{t("community.prayer.actions.prayForSomeone")}</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900" }}>{t("community.prayer.memberPromptTitle")}</Text>
+          <Text style={[typography.screenTitle, { color: colors.ink }]}>{t("community.prayer.memberPromptTitle")}</Text>
           <BodyText muted>{t("community.prayer.memberPromptBody")}</BodyText>
         </View>
         <ScrollView contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false}>
@@ -183,11 +184,11 @@ export function CommunityPrayerMemberModal({
             <Pressable accessibilityRole="button" key={member.id} onPress={() => onSelect(member)}>
               <Card style={{ alignItems: "center", flexDirection: "row", gap: 14, padding: 14 }}>
                 <Avatar image={member.image} name={member.name} size={46} tone="green" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{member.name}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>{t("community.prayer.actions.prayForPerson", { name: member.name })}</Text>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={[typography.cardTitle, { color: colors.ink }]}>{member.name}</Text>
+                  <Text style={[typography.caption, { color: colors.muted }]}>{t("community.prayer.actions.prayForPerson", { name: member.name })}</Text>
                 </View>
-                <Feather name="heart" size={18} color={colors.gold} />
+                <Feather name="heart" size={18} color={shadcn.brand} />
               </Card>
             </Pressable>
           ))}

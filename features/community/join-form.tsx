@@ -7,7 +7,8 @@ import { useKoinoActions } from "@/state/koino-store";
 import { PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
-import { colors } from "@/ui/theme";
+import { FieldLabel } from "@/ui/shadcn/input";
+import { colors, typography } from "@/ui/theme";
 
 export function useCommunityJoinForm(userId: string | undefined, visible: boolean) {
   const { dispatch } = useKoinoActions();
@@ -72,14 +73,14 @@ export function CommunityJoinForm({ form }: { form: ReturnType<typeof useCommuni
     const { status } = form.receipt;
     return (
       <View style={{ gap: 6 }}>
-        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: "800" }}>
+        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.cardTitle, { color: colors.ink }]}>
           {t(status === "approved" ? "community.rooms.requestApproved" : status === "rejected" ? "community.rooms.requestRejected" : "community.encryption.requested")}
         </Text>
         {status === "pending" ? <>
-          <Text style={{ color: colors.muted }}>{t("onboarding.journey.requestedDescription")}</Text>
+          <Text style={[typography.subtitle, { color: colors.muted }]}>{t("onboarding.journey.requestedDescription")}</Text>
           {form.userId ? <CommunityJoinFingerprint userId={form.userId} /> : null}
         </> : null}
-        {status === "approved" ? <Text style={{ color: colors.muted }}>{t("community.rooms.requestApprovedBody")}</Text> : null}
+        {status === "approved" ? <Text style={[typography.subtitle, { color: colors.muted }]}>{t("community.rooms.requestApprovedBody")}</Text> : null}
       </View>
     );
   }
@@ -87,7 +88,7 @@ export function CommunityJoinForm({ form }: { form: ReturnType<typeof useCommuni
   const label = t("community.rooms.code");
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.enterCode")}</Text>
+      <FieldLabel>{t("community.rooms.enterCode")}</FieldLabel>
       <TextInputField
         accessibilityLabel={label}
         autoCapitalize="characters"
@@ -103,7 +104,7 @@ export function CommunityJoinForm({ form }: { form: ReturnType<typeof useCommuni
         {t(form.busy ? "onboarding.journey.working" : "onboarding.journey.request")}
       </PrimaryButton>
       {form.error ? (
-        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: colors.danger, fontWeight: "800" }}>{t(form.error)}</Text>
+        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.caption, { color: colors.danger }]}>{t(form.error)}</Text>
       ) : null}
     </View>
   );

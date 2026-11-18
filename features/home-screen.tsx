@@ -32,7 +32,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communitySystemError } from "@/ui/community-copy";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
-import { colors, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
@@ -305,39 +305,44 @@ function HomeRhythm({ state, group, activeGroupId }: {
         <HomeScripture plans={state.biblePlans} userId={state.currentUserId} date={todayKey} />
 
         {state.currentUserId ? (
-          <View style={{ borderTopWidth: 1, borderColor: colors.line }}>
-            {canOpenGroupPrayer ? (
-              <PrayerPreviewRow onPress={openPrayerSurface} openPrayer={openPrayer} userById={userById} />
-            ) : (
-              <HomeAction icon="heart" onPress={openPrivateReflection} title={t("home.privateReflection.title")} subtitle={t("home.privateReflection.subtitle")} />
-            )}
+          <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
+            <View style={{ paddingHorizontal: 16 }}>
+              {canOpenGroupPrayer ? (
+                <PrayerPreviewRow onPress={openPrayerSurface} openPrayer={openPrayer} userById={userById} />
+              ) : (
+                <HomeAction icon="heart" onPress={openPrivateReflection} title={t("home.privateReflection.title")} subtitle={t("home.privateReflection.subtitle")} />
+              )}
+            </View>
+            <View style={{ backgroundColor: colors.line, height: 1, marginHorizontal: 16 }} />
 
-            {moderatedToday ? (
-              <HomeStatus message={t("community.moderation.checkInRemoved")} />
-            ) : todaysCheckIn ? (
-              <HomeAction
-                icon={todaysCheckIn.visibility === "group" ? "users" : "lock"}
-                onPress={() => router.push({ pathname: "/me/[id]", params: { id: todaysCheckIn.id } })}
-                title={t("home.checkIn.completed")}
-                subtitle={todaysCheckIn.visibility === "group"
-                  ? t("community.checkIn.sharedWithCommunity", { name: group?.name ?? t("tabs.community") }) : t("home.checkIn.private")}
-                action={t("home.checkIn.view")}
-              />
-            ) : canOpenCheckIn ? (
-              <HomeAction
-                accessibilityLabel={t("community.checkIn.promptTitle")}
-                accessibilityHint={t("home.checkIn.promptHint")}
-                icon="plus"
-                onPress={openCheckIn}
-                title={t("home.checkIn.title")}
-                subtitle={t("home.checkIn.promptHint")}
-              />
-            ) : groupContentReady && !feedOffline && !state.authError ? (
-              <HomeStatus loading message={t("home.checkIn.loading")} />
-            ) : !state.currentGroupId && state.profileReady && state.userGroupsReady && !state.authError ? (
-              <HomeStatus message={t("home.checkIn.solo")} />
-            ) : null}
-          </View>
+            <View style={{ paddingHorizontal: 16 }}>
+              {moderatedToday ? (
+                <HomeStatus message={t("community.moderation.checkInRemoved")} />
+              ) : todaysCheckIn ? (
+                <HomeAction
+                  icon={todaysCheckIn.visibility === "group" ? "users" : "lock"}
+                  onPress={() => router.push({ pathname: "/me/[id]", params: { id: todaysCheckIn.id } })}
+                  title={t("home.checkIn.completed")}
+                  subtitle={todaysCheckIn.visibility === "group"
+                    ? t("community.checkIn.sharedWithCommunity", { name: group?.name ?? t("tabs.community") }) : t("home.checkIn.private")}
+                  action={t("home.checkIn.view")}
+                />
+              ) : canOpenCheckIn ? (
+                <HomeAction
+                  accessibilityLabel={t("community.checkIn.promptTitle")}
+                  accessibilityHint={t("home.checkIn.promptHint")}
+                  icon="plus"
+                  onPress={openCheckIn}
+                  title={t("home.checkIn.title")}
+                  subtitle={t("home.checkIn.promptHint")}
+                />
+              ) : groupContentReady && !feedOffline && !state.authError ? (
+                <HomeStatus loading message={t("home.checkIn.loading")} />
+              ) : !state.currentGroupId && state.profileReady && state.userGroupsReady && !state.authError ? (
+                <HomeStatus message={t("home.checkIn.solo")} />
+              ) : null}
+            </View>
+          </Card>
         ) : null}
 
         {showMigration && group ? (
@@ -490,7 +495,7 @@ function HomeStatus({ loading = false, message }: { loading?: boolean; message: 
       accessibilityState={loading ? { busy: true } : undefined}
       style={{ alignItems: "center", flexDirection: "row", gap: 10, paddingVertical: 10 }}
     >
-      {loading ? <ActivityIndicator color={colors.olive} /> : null}
+      {loading ? <ActivityIndicator color={colors.ink} /> : null}
       <BodyText muted style={{ flex: 1 }}>{message}</BodyText>
     </View>
   );
@@ -522,21 +527,36 @@ function HomeAction({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => ({
-        alignItems: "center", borderBottomWidth: 1, borderColor: colors.line, flexDirection: "row",
-        gap: 12, minHeight: 48, opacity: pressed ? 0.7 : 1, paddingVertical: 12,
+        alignItems: "center",
+        flexDirection: "row",
+        gap: 12,
+        minHeight: 56,
+        opacity: pressed ? 0.65 : 1,
+        paddingVertical: 12,
       })}
     >
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Feather name={icon} size={20} color={icon === "heart" ? colors.accentPrayer : colors.olive} />
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: shadcn.brandSoft,
+          borderRadius: radius.md,
+          height: 36,
+          justifyContent: "center",
+          width: 36,
+        }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Feather name={icon} size={17} color={shadcn.brand} />
       </View>
-      <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
-        {subtitle ? <BodyText muted>{subtitle}</BodyText> : null}
-        {preview ? <Text numberOfLines={2} style={[typography.body, { color: colors.muted }]}>{preview}</Text> : null}
-        {action ? <Text style={[typography.label, { color: colors.olive }]}>{action}</Text> : null}
+        {subtitle ? <Text style={[typography.subtitle, { color: colors.muted }]}>{subtitle}</Text> : null}
+        {preview ? <Text numberOfLines={2} style={[typography.body, { color: colors.muted, fontSize: 14, lineHeight: 20 }]}>{preview}</Text> : null}
+        {action ? <Text style={[typography.label, { color: colors.gold }]}>{action}</Text> : null}
       </View>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Feather name="chevron-right" size={18} color={colors.muted} />
+        <Feather name="chevron-right" size={16} color={colors.disabledText} />
       </View>
     </Pressable>
   );

@@ -8,7 +8,8 @@ import type { Group, Id } from "@/state/types";
 import { BodyText, BottomSheet, PrimaryButton, RoomImage, SecondaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount, communitySystemError } from "@/ui/community-copy";
-import { colors, radius } from "@/ui/theme";
+import { SheetFormPanel } from "@/ui/sheet-menu";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 import { roomMemberCount } from "@/features/identity/room-helpers";
 
 export function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; visible: boolean }) {
@@ -51,7 +52,7 @@ export function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; v
     <BottomSheet title={t("community.rooms.joinOrCreate")} visible={visible} onClose={closeSheet} dismissible={!joinForm.busy}>
       {!joinForm.receipt ? (
         <View style={{ gap: 10 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.other")}</Text>
+          <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("community.rooms.other")}</Text>
           <View style={{ gap: 8 }}>
             {otherRooms.length === 0 ? (
               <BodyText muted>{t("community.rooms.noOther")}</BodyText>
@@ -65,18 +66,20 @@ export function RoomSwitcherSheet({ onClose, visible }: { onClose: () => void; v
           </View>
         </View>
       ) : null}
-      <CommunityJoinForm form={joinForm} />
+      <SheetFormPanel>
+        <CommunityJoinForm form={joinForm} />
+      </SheetFormPanel>
       <CommunityJoinRequests userId={state.currentUserId} active={visible && !joinForm.receipt} />
       {!joinForm.receipt ? (
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{t("community.rooms.createNew")}</Text>
+        <SheetFormPanel>
+          <Text style={[typography.label, { color: colors.ink }]}>{t("community.rooms.createNew")}</Text>
           <TextInputField editable={!joinForm.busy} value={newGroupName} onChangeText={setNewGroupName} onSubmitEditing={handleCreateRoom} placeholder={t("community.rooms.newNamePlaceholder")} returnKeyType="done" />
           <SecondaryButton disabled={!canCreate || joinForm.busy} icon="plus" onPress={handleCreateRoom}>
             {t("community.rooms.createAction")}
           </SecondaryButton>
-        </View>
+        </SheetFormPanel>
       ) : null}
-      {error ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13, fontWeight: "800" }}>{error}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{error}</Text> : null}
       <SecondaryButton disabled={joinForm.busy} onPress={closeSheet}>{t(joinForm.receipt ? "common.done" : "common.cancel")}</SecondaryButton>
     </BottomSheet>
   );
@@ -88,22 +91,23 @@ function RoomMiniRow({ memberCount, room }: { memberCount: number; room: Group }
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.input,
-        borderColor: colors.line,
-        borderRadius: radius.lg,
+        backgroundColor: shadcn.card,
+        borderColor: shadcn.border,
+        borderRadius: radius.md,
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
         minHeight: 64,
         padding: 10,
+        ...shadows.control,
       }}
     >
       <RoomImage image={room.image} name={room.name} size={42} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
+        <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>
           {room.name}
         </Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{communityMemberCount(memberCount, t)}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{communityMemberCount(memberCount, t)}</Text>
       </View>
       <Feather name="chevron-right" size={18} color={colors.muted} />
     </View>

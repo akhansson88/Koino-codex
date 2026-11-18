@@ -13,8 +13,10 @@ import { useAppTranslation } from "@/ui/app-language";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { journalEntryHasSharedCopy, journalEntryPresentation, presentedJournalEntryType } from "@/ui/journal-presentation";
 import { LinkPreview } from "@/ui/link-preview";
+import { Button } from "@/ui/shadcn/button";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 
 function routeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -48,6 +50,7 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
   const [saved, setSaved] = useState(false);
   const draftRef = useRef<symbol | undefined>(undefined);
   const pending = useRef(false);
+  const pendingDeleteRef = useRef(false);
   const detailScrollRef = useRef<ScrollView>(null);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const entry = useMemo<DetailEntry | undefined>(() => {
@@ -153,11 +156,6 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
     }
   }
 
-  function confirmDelete() {
-    setEntryMenuVisible(false);
-    setDeleteConfirmVisible(true);
-  }
-
   function deleteEntry() {
     setDeleteConfirmVisible(false);
     dispatch({ type: isSharedCheckIn ? "deleteCheckIn" : "deleteJournalEntry", id: currentEntry.id });
@@ -188,39 +186,6 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         >
           <Feather name="more-horizontal" size={20} color={colors.ink} />
         </Pressable>
-        {entryMenuVisible ? (
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              minWidth: 132,
-              paddingVertical: 4,
-              position: "absolute",
-              right: 0,
-              top: 44,
-              zIndex: 60,
-              ...platformShadow({
-                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-                elevation: 12,
-                offset: { width: 0, height: 10 },
-                opacity: 0.14,
-                radius: 24,
-              }),
-            }}
-          >
-            <Pressable
-              accessibilityLabel={t("me.journey.detail.openDelete")}
-              accessibilityRole="button"
-              onPress={confirmDelete}
-              style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-              <Feather name="trash-2" size={14} color={colors.danger} />
-              <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
       <View style={{ gap: 12 }}>
         <Text style={[typography.caption, { color: colors.muted }]}>{formatDate(currentEntry.createdAt, language)}</Text>
@@ -287,19 +252,42 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         onSubmit={submitEdit}
       />
       <BottomSheet
+        title={t("me.journey.detail.entryOptions")}
+        visible={entryMenuVisible}
+        onClose={() => setEntryMenuVisible(false)}
+        onDismiss={() => {
+          if (!pendingDeleteRef.current) return;
+          pendingDeleteRef.current = false;
+          setDeleteConfirmVisible(true);
+        }}
+      >
+        <SheetMenuGroup>
+          <SheetMenuItem
+            icon="trash-2"
+            title={t("common.delete")}
+            tone="danger"
+            onPress={() => {
+              pendingDeleteRef.current = true;
+              setEntryMenuVisible(false);
+            }}
+          />
+        </SheetMenuGroup>
+      </BottomSheet>
+      <BottomSheet
         title={t(isSharedCheckIn ? "community.card.deleteCheckInTitle" : "me.journey.detail.deleteTitle")}
         visible={deleteConfirmVisible}
         onClose={() => setDeleteConfirmVisible(false)}
       >
         <BodyText muted>{t(isSharedCheckIn ? "community.card.deleteCheckInBody" : "me.journey.detail.deleteMessage")}</BodyText>
-        <SecondaryButton
+        <Button
           accessibilityLabel={t("me.journey.detail.confirmDelete")}
           icon="trash-2"
-          tone="danger"
           onPress={deleteEntry}
+          size="lg"
+          variant="destructive"
         >
           {t("common.delete")}
-        </SecondaryButton>
+        </Button>
         <SecondaryButton onPress={() => setDeleteConfirmVisible(false)}>{t("common.cancel")}</SecondaryButton>
       </BottomSheet>
     </AppScreen>

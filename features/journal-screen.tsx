@@ -11,11 +11,12 @@ import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { localDayKey } from "@/state/store/helpers";
 import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, KoinoState } from "@/state/types";
 import { AppScreen, BodyText, Card } from "@/ui/app-components";
-import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
 import { SharedComposer } from "@/ui/shared-composer";
-import { colors, typography } from "@/ui/theme";
+import { Button } from "@/ui/shadcn/button";
+import { Separator } from "@/ui/shadcn/separator";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 
 function journalTypeForKind(kind: EntryKind): JournalEntryType {
   if (kind === "prayer_request" || kind === "prayer_moment") return "prayer";
@@ -195,31 +196,61 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
         </BodyText>
       ) : null}
 
-      <View style={{ gap: 6 }}>
-        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
-          <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink, flexShrink: 1 }]}>
+      <View style={{ gap: 10 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 12, justifyContent: "space-between" }}>
+          <Text
+            accessibilityRole="header"
+            numberOfLines={1}
+            style={[typography.heading, { color: colors.ink, flex: 1 }]}
+          >
             {t("me.journey.title")}
           </Text>
-          <Pressable
+          <Button
             accessibilityHint={t("me.journey.seeAllHint")}
             accessibilityLabel={t("me.journey.seeAll")}
-            accessibilityRole="button"
+            iconColor={colors.muted}
+            iconRight="arrow-right"
             onPress={() => router.navigate("/me/history")}
-            style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", flexShrink: 1, gap: 6, minHeight: 44, opacity: pressed ? 0.7 : 1, paddingHorizontal: 4 })}
+            size="sm"
+            style={{ marginRight: -8, minHeight: 36, paddingHorizontal: 8 }}
+            textStyle={{ color: colors.muted, fontSize: 13 }}
+            variant="ghost"
           >
-            <Text style={[typography.label, { color: colors.olive, flexShrink: 1 }]}>{t("me.journey.seeAll")}</Text>
-            <Feather name="arrow-right" size={15} color={colors.olive} />
-          </Pressable>
+            {t("me.journey.seeAll")}
+          </Button>
         </View>
         {recentEntries.length ? (
-          recentEntries.map((entry) => (
-            <JournalEntryPreview entry={entry} key={entry.id} onOpen={() => openEntry(entry)} variant="journey" />
-          ))
+          <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
+            {recentEntries.map((entry, index) => (
+              <View key={entry.id}>
+                <JournalEntryPreview entry={entry} onOpen={() => openEntry(entry)} variant="journey" />
+                {index < recentEntries.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
+              </View>
+            ))}
+          </Card>
         ) : (
-          <View style={{ borderColor: colors.line, borderTopWidth: 1, gap: 4, paddingVertical: 12 }}>
-            <Text style={[typography.title, { color: colors.ink }]}>{t("me.journey.emptyState.title")}</Text>
-            <BodyText muted>{t("me.journey.emptyState.body")}</BodyText>
-          </View>
+          <Card style={{ gap: 12 }}>
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: shadcn.secondary,
+                borderCurve: "continuous",
+                borderRadius: radius.lg,
+                height: 40,
+                justifyContent: "center",
+                width: 40,
+              }}
+            >
+              <Feather name="book-open" size={18} color={colors.muted} />
+            </View>
+            <View style={{ gap: 4 }}>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("me.journey.emptyState.title")}</Text>
+              <BodyText muted>{t("me.journey.emptyState.body")}</BodyText>
+            </View>
+            <Button icon="edit-3" onPress={beginEntry} size="sm" style={{ alignSelf: "flex-start" }} variant="outline">
+              {t("me.journey.emptyState.action")}
+            </Button>
+          </Card>
         )}
       </View>
 
@@ -263,22 +294,49 @@ function ReflectTodayCard({ completed, onPress }: { completed: boolean; onPress:
   const subtitle = t(completed ? "me.reflect.openEntry" : "me.reflect.subtitle");
 
   return (
-    <Pressable accessibilityLabel={`${title}. ${subtitle}`} accessibilityRole="button" onPress={onPress}>
+    <Pressable accessibilityLabel={`${title}. ${subtitle}`} accessibilityRole="button" onPress={onPress} style={shadows.raised}>
       {({ pressed }) => (
-        <Card style={{ backgroundColor: colors.surface, borderColor: colors.border, justifyContent: "center", minHeight: 106, opacity: pressed ? 0.85 : 1, overflow: "hidden", padding: 16 }}>
-          <BrandWaveMotif
-            height={136}
-            opacity={0.9}
-            style={{ bottom: -12, position: "absolute", right: -54, transform: [{ rotate: "-2deg" }] }}
-            width={306}
-          />
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-            {completed ? <Feather name="check-circle" size={18} color={colors.olive} /> : null}
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
-              <BodyText muted>{subtitle}</BodyText>
+        <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: pressed ? shadcn.background : shadcn.card,
+              flexDirection: "row",
+              gap: 14,
+              padding: 16,
+            }}
+          >
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: completed ? shadcn.successSoft : shadcn.brandSoft,
+                borderCurve: "continuous",
+                borderRadius: radius.lg,
+                height: 44,
+                justifyContent: "center",
+                width: 44,
+              }}
+            >
+              <Feather name={completed ? "check" : "edit-3"} size={20} color={completed ? shadcn.success : shadcn.brand} />
             </View>
-            <Feather name="chevron-right" size={19} color={colors.muted} />
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{title}</Text>
+              <Text style={[typography.subtitle, { color: colors.muted }]}>{subtitle}</Text>
+            </View>
+            <View
+              style={{
+                alignItems: "center",
+                borderColor: shadcn.border,
+                borderCurve: "continuous",
+                borderRadius: radius.md,
+                borderWidth: 1,
+                height: 34,
+                justifyContent: "center",
+                width: 34,
+              }}
+            >
+              <Feather name="arrow-up-right" size={16} color={colors.muted} />
+            </View>
           </View>
         </Card>
       )}

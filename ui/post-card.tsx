@@ -14,11 +14,13 @@ import type { FeedItem, GroupImage } from "@/state/types";
 import {
   Avatar,
   AvatarStack,
+  BottomSheet,
   Card,
   ExpandableBodyText,
   VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import {
   communityActionLabel,
   communityDefaultFeedTitle,
@@ -31,7 +33,7 @@ import {
 } from "@/ui/community-copy";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 const FEED_BODY_PREVIEW_LINES = 3;
 
@@ -278,12 +280,11 @@ export function CommunityFeedCard({
   );
 }
 
-function ActionIcon({ active, icon }: { active: boolean; icon: CommunityCardActionIcon }) {
-  const iconColor = active ? colors.textMuted : colors.ink;
-  if (icon === "pray") return <MaterialCommunityIcons name="hands-pray" size={20} color={iconColor} />;
-  if (icon === "heart") return <Ionicons name={active ? "heart" : "heart-outline"} size={20} color={iconColor} />;
-  if (icon === "star") return <Ionicons name={active ? "star" : "star-outline"} size={19} color={iconColor} />;
-  return <Feather name={icon} size={19} color={iconColor} />;
+function ActionIcon({ active, color, icon }: { active: boolean; color: string; icon: CommunityCardActionIcon }) {
+  if (icon === "pray") return <MaterialCommunityIcons name="hands-pray" size={18} color={color} />;
+  if (icon === "heart") return <Ionicons name={active ? "heart" : "heart-outline"} size={18} color={color} />;
+  if (icon === "star") return <Ionicons name={active ? "star" : "star-outline"} size={17} color={color} />;
+  return <Feather name={icon} size={17} color={color} />;
 }
 
 export function CommunityCardAction({
@@ -293,7 +294,6 @@ export function CommunityCardAction({
   label,
   onPress,
   overview = false,
-  tone,
   variant = "primary",
 }: {
   accessibilityLabel?: string;
@@ -305,27 +305,29 @@ export function CommunityCardAction({
   tone: CommunityCardTone;
   variant?: "primary" | "secondary";
 }) {
-  const palette = toneColors(tone);
-  const quiet = overview && variant === "secondary";
+  const primary = variant === "primary";
+  const foreground = primary ? (active ? shadcn.primaryForeground : colors.ink) : colors.muted;
+  const quiet = overview && !primary;
   const actionStyle: ViewStyle = {
     alignItems: "center",
-    backgroundColor: variant === "primary" && active ? palette.soft : colors.paper,
-    borderColor: variant === "primary" ? (active ? palette.accent : colors.line) : colors.paper,
-    borderRadius: 999,
-    borderWidth: variant === "primary" ? 1 : 0,
+    backgroundColor: primary ? (active ? shadcn.primary : shadcn.card) : "transparent",
+    borderColor: primary ? (active ? shadcn.primary : shadcn.border) : "transparent",
+    borderCurve: "continuous",
+    borderRadius: radius.md,
+    borderWidth: primary ? 1 : 0,
     flexDirection: "row",
-    gap: 7,
+    gap: 6,
     minHeight: 44,
-    paddingHorizontal: variant === "primary" ? 13 : 8,
-    ...(overview ? { maxWidth: "100%", paddingVertical: 6 } : {}),
+    paddingHorizontal: primary ? 12 : 8,
+    ...(overview ? { maxWidth: "100%" } : {}),
   };
   const content = (
     <>
-      {!quiet ? <ActionIcon active={active} icon={icon} /> : null}
+      {!quiet ? <ActionIcon active={active} color={foreground} icon={icon} /> : null}
       <Text style={[
         typography.label,
         {
-          color: quiet ? colors.muted : active ? colors.textMuted : colors.ink,
+          color: foreground,
           ...(overview ? { flexShrink: 1 } : {}),
         },
       ]}>{label}</Text>
@@ -395,7 +397,8 @@ export function CommunityCheckInMood({ mood }: { mood: number }) {
       accessible
       style={{
         alignItems: "center",
-        backgroundColor: colors.rhythmSoft,
+        backgroundColor: shadcn.secondary,
+        borderCurve: "continuous",
         borderRadius: radius.md,
         flexDirection: "row",
         gap: 10,
@@ -408,14 +411,14 @@ export function CommunityCheckInMood({ mood }: { mood: number }) {
         importantForAccessibility="no-hide-descendants"
         style={{
           alignItems: "center",
-          backgroundColor: colors.paper,
-          borderRadius: 999,
+          backgroundColor: shadcn.card,
+          borderRadius: radius.sm,
           height: 36,
           justifyContent: "center",
           width: 36,
         }}
       >
-        <Feather name={option.icon} size={19} color={colors.textSecondary} />
+        <Feather name={option.icon} size={19} color={colors.muted} />
       </View>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text style={[typography.label, { color: colors.ink, flexShrink: 1, fontSize: 13, lineHeight: 18 }]}>{label}</Text>
@@ -467,11 +470,18 @@ export function PostCard({
   const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
+  const pendingMenuAction = useRef<(() => void) | undefined>(undefined);
 
   function runMenuAction(action: () => void) {
     suppressOpenRef.current = true;
+    pendingMenuAction.current = action;
     setMenuOpen(false);
-    action();
+  }
+
+  function finishMenuAction() {
+    const action = pendingMenuAction.current;
+    pendingMenuAction.current = undefined;
+    action?.();
     setTimeout(() => {
       suppressOpenRef.current = false;
     }, 250);
@@ -505,59 +515,32 @@ export function PostCard({
     </Pressable>
   ) : null;
 
-  const menu = ownsItem && menuOpen ? (
-    <View
-      style={{
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        minWidth: 118,
-        paddingVertical: 4,
-        position: "absolute",
-        right: 14,
-        top: 54,
-        zIndex: 40,
-        ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-          elevation: 12,
-          offset: { width: 0, height: 10 },
-          opacity: 0.14,
-          radius: 24,
-        }),
-      }}
+  const menu = ownsItem && (onEdit || onDelete) ? (
+    <BottomSheet
+      title={t("community.card.postOptions")}
+      visible={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      onDismiss={finishMenuAction}
     >
-      {onEdit ? (
-        <Pressable
-          accessibilityLabel={t("common.edit")}
-          accessibilityRole="button"
-          onPressIn={(event) => event.stopPropagation()}
-          onPress={(event) => {
-            event.stopPropagation();
-            runMenuAction(onEdit);
-          }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-        >
-          <Feather name="edit-2" size={14} color={colors.ink} />
-          <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
-        </Pressable>
-      ) : null}
-      {onDelete ? (
-        <Pressable
-          accessibilityLabel={t("common.delete")}
-          accessibilityRole="button"
-          onPressIn={(event) => event.stopPropagation()}
-          onPress={(event) => {
-            event.stopPropagation();
-            runMenuAction(onDelete);
-          }}
-          style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-        >
-          <Feather name="trash-2" size={14} color={colors.danger} />
-          <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
-        </Pressable>
-      ) : null}
-    </View>
+      <SheetMenuGroup>
+        {onEdit ? (
+          <SheetMenuItem
+            icon="edit-2"
+            title={t("common.edit")}
+            onPress={() => runMenuAction(onEdit)}
+          />
+        ) : null}
+        {onDelete ? (
+          <SheetMenuItem
+            icon="trash-2"
+            showDivider={Boolean(onEdit)}
+            title={t("common.delete")}
+            tone="danger"
+            onPress={() => runMenuAction(onDelete)}
+          />
+        ) : null}
+      </SheetMenuGroup>
+    </BottomSheet>
   ) : null;
 
   return (

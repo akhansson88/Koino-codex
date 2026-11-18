@@ -7,6 +7,7 @@ import type { FeedItem, GroupImage, Id } from "@/state/types";
 import {
   AppScreen,
   BodyText,
+  BottomSheet,
   Card,
   ExpandableBodyText,
   PrimaryButton,
@@ -22,7 +23,8 @@ import {
   CommunityCheckInMood,
   CommunityFeedCard,
 } from "@/ui/post-card";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { FocusedCommunityScreenIntro } from "@/features/community/focused-header";
 import {
   CommunityFeedOfflineState,
@@ -85,15 +87,30 @@ export function CommunityCheckInsScreen({
           title={t("community.page.checkIns")}
         />
         {!feedLoading && !feedError && !checkedInToday ? (
-          <Card style={{ backgroundColor: colors.warmSoft, borderColor: colors.border, gap: 10, padding: 14 }}>
-            <Text accessibilityRole="header" style={[typography.cardTitle, { color: colors.ink }]}>
-              {t("community.checkIns.weeklyTitle")}
-            </Text>
+          <Card style={{ gap: 12 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: shadcn.brandSoft,
+                  borderCurve: "continuous",
+                  borderRadius: radius.lg,
+                  height: 40,
+                  justifyContent: "center",
+                  width: 40,
+                }}
+              >
+                <Feather name="sun" size={18} color={shadcn.brand} />
+              </View>
+              <Text accessibilityRole="header" style={[typography.cardTitle, { color: colors.ink, flex: 1 }]}>
+                {t("community.checkIns.weeklyTitle")}
+              </Text>
+            </View>
             <BodyText muted>{t("community.checkIns.weeklyDescription")}</BodyText>
             <PrimaryButton
               icon="edit-3"
               onPress={onCheckIn}
-              style={{ alignSelf: "flex-start", maxWidth: "100%", minHeight: 44, paddingHorizontal: 14, paddingVertical: 8 }}
+              style={{ alignSelf: "flex-start", minHeight: 44 }}
             >
               {t("community.checkIns.action")}
             </PrimaryButton>
@@ -168,13 +185,20 @@ export function CheckInCard({
   const { t } = useAppTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
+  const pendingDelete = useRef<(() => void) | undefined>(undefined);
   const itemKind = feedItemKind(item);
 
   function openDeleteConfirmation() {
     if (!onDelete) return;
     suppressOpenRef.current = true;
+    pendingDelete.current = onDelete;
     setMenuOpen(false);
-    onDelete();
+  }
+
+  function finishDeleteConfirmation() {
+    const action = pendingDelete.current;
+    pendingDelete.current = undefined;
+    action?.();
     setTimeout(() => {
       suppressOpenRef.current = false;
     }, 250);
@@ -196,42 +220,22 @@ export function CheckInCard({
     </Pressable>
   ) : null;
 
-  const menu = ownsItem && onDelete && menuOpen ? (
-    <View
-      style={{
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        minWidth: 118,
-        paddingVertical: 4,
-        position: "absolute",
-        right: 14,
-        top: 54,
-        zIndex: 40,
-        ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-          elevation: 12,
-          offset: { width: 0, height: 10 },
-          opacity: 0.14,
-          radius: 24,
-        }),
-      }}
+  const menu = ownsItem && onDelete ? (
+    <BottomSheet
+      title={t("community.card.checkInOptions")}
+      visible={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      onDismiss={finishDeleteConfirmation}
     >
-      <Pressable
-        accessibilityLabel={t("common.delete")}
-        accessibilityRole="button"
-        onPressIn={(event) => event.stopPropagation()}
-        onPress={(event) => {
-          event.stopPropagation();
-          openDeleteConfirmation();
-        }}
-        style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 9 }}
-      >
-        <Feather name="trash-2" size={14} color={colors.danger} />
-        <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
-      </Pressable>
-    </View>
+      <SheetMenuGroup>
+        <SheetMenuItem
+          icon="trash-2"
+          title={t("common.delete")}
+          tone="danger"
+          onPress={openDeleteConfirmation}
+        />
+      </SheetMenuGroup>
+    </BottomSheet>
   ) : null;
 
   return (

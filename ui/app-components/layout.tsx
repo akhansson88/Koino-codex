@@ -1,15 +1,17 @@
 import { AppSheet } from "@/ui/app-sheet";
 import { tabContentClearance } from "@/ui/navigation-layout";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { Feather } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import type { ComponentProps, Ref } from "react";
-import { PropsWithChildren, ReactNode } from "react";
+import { PropsWithChildren, ReactNode, useCallback, useState } from "react";
 import type { ModalProps } from "react-native";
 import { Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { FullScreenModalHost } from "@/ui/full-screen-modal-host";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 import { type FeatherName } from "@/ui/app-components/types";
 import { Avatar } from "@/ui/app-components/avatars";
 
@@ -32,12 +34,24 @@ export function AppScreen({
   topInset?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
+  const [ambientActive, setAmbientActive] = useState(true);
+  useFocusEffect(useCallback(() => {
+    setAmbientActive(true);
+    return () => setAmbientActive(false);
+  }, []));
+
   if (!scroll) {
-    return <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>{children}</View>;
+    return (
+      <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>
+        <AmbientBackground active={ambientActive} />
+        {children}
+      </View>
+    );
   }
 
   return (
     <View style={{ backgroundColor: colors.cream, flex: 1 }}>
+      <AmbientBackground active={ambientActive} />
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
@@ -47,6 +61,7 @@ export function AppScreen({
         ref={scrollRef}
         scrollEventThrottle={scrollEventThrottle}
         showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: "transparent" }}
         contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: tabContentClearance(insets.bottom), paddingTop: (topInset ? insets.top : 0) + 18 }}
       >
         {children}
@@ -81,19 +96,14 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
     <View
       style={[
         {
-          backgroundColor: colors.paper,
-          borderColor: colors.line,
+          backgroundColor: shadcn.card,
+          borderColor: shadcn.border,
           borderCurve: "continuous",
           borderRadius: radius.xl,
           borderWidth: 1,
           gap: 14,
           padding: 16,
-          ...platformShadow({
-            boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
-            offset: { width: 0, height: 10 },
-            opacity: 0.055,
-            radius: 24,
-          }),
+          ...shadows.card,
         },
         style,
       ]}
@@ -125,24 +135,20 @@ export function HeartPromptCard({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
+        backgroundColor: pressed ? "#FFF7ED" : shadcn.card,
+        borderColor: shadcn.border,
+        borderCurve: "continuous",
         borderRadius: radius.xl,
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
         padding: 14,
-        ...platformShadow({
-          boxShadow: "0 10px 24px rgba(11, 18, 32, 0.055)",
-          offset: { width: 0, height: 10 },
-          opacity: 0.055,
-          radius: 24,
-        }),
-      }}
+        ...shadows.card,
+      })}
     >
-      <Avatar image={image} name={name ?? "K"} size={48} tone="orange" />
+      <Avatar image={image} name={name ?? "K"} size={44} tone="orange" />
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.checkIn.promptTitle")}</Text>
         <Text style={[typography.subtitle, { color: colors.muted }]}>{resolvedSubtitle}</Text>
@@ -150,20 +156,20 @@ export function HeartPromptCard({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: colors.accentSubtle,
-          borderColor: colors.line,
-          borderRadius: 999,
+          backgroundColor: actionLabel ? shadcn.card : shadcn.primary,
+          borderColor: actionLabel ? shadcn.border : shadcn.primary,
+          borderRadius: radius.md,
           borderWidth: 1,
           flexDirection: "row",
           gap: 7,
-          height: 46,
+          height: 42,
           justifyContent: "center",
-          minWidth: actionLabel ? 92 : 46,
+          minWidth: actionLabel ? 92 : 42,
           paddingHorizontal: actionLabel ? 13 : 0,
         }}
       >
-        <Feather name={actionIcon} size={actionLabel ? 16 : 23} color={colors.olive} />
-        {actionLabel ? <Text style={[typography.label, { color: colors.olive }]}>{actionLabel}</Text> : null}
+        <Feather name={actionIcon} size={actionLabel ? 16 : 21} color={actionLabel ? colors.ink : shadcn.primaryForeground} />
+        {actionLabel ? <Text style={[typography.label, { color: colors.ink }]}>{actionLabel}</Text> : null}
       </View>
     </Pressable>
   );
@@ -177,16 +183,39 @@ export function Row({
 }: PropsWithChildren<{ icon?: FeatherName; onPress?: () => void; tone?: "default" | "danger" }>) {
   const content: ReactNode = (
     <>
-      {icon ? <Feather name={icon} size={19} color={tone === "danger" ? colors.danger : colors.ink} /> : null}
-      <View style={{ flex: 1 }}>{children}</View>
-      {onPress ? <Feather name="chevron-right" size={18} color={colors.muted} /> : null}
+      {icon ? (
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: tone === "danger" ? colors.dangerSurface : shadcn.secondary,
+            borderRadius: radius.md,
+            height: 36,
+            justifyContent: "center",
+            width: 36,
+          }}
+        >
+          <Feather name={icon} size={17} color={tone === "danger" ? colors.danger : colors.ink} />
+        </View>
+      ) : null}
+      <View style={{ flex: 1, gap: 2 }}>{children}</View>
+      {onPress ? <Feather name="chevron-right" size={18} color={colors.disabledText} /> : null}
     </>
   );
   if (!onPress) {
     return <View style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 56 }}>{content}</View>;
   }
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={{ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 56 }}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        flexDirection: "row",
+        gap: 12,
+        minHeight: 56,
+        opacity: pressed ? 0.62 : 1,
+      })}
+    >
       {content}
     </Pressable>
   );

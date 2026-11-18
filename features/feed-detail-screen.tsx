@@ -3,8 +3,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -21,6 +20,7 @@ import {
   Avatar,
   AvatarStack,
   BodyText,
+  BottomSheet,
   Card,
   IconButton,
   SectionHeading,
@@ -44,8 +44,11 @@ import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-composer";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { Button } from "@/ui/shadcn/button";
+import { Separator } from "@/ui/shadcn/separator";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 import { confirmAction } from "@/ui/confirm";
 
@@ -71,10 +74,9 @@ export function FeedDetailScreen() {
   const { state, dispatch } = useKoino();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [replyDraft, setReplyDraft] = useState("");
   const [ownerMenuVisible, setOwnerMenuVisible] = useState(false);
-  const [editingPost, setEditingPost] = useState(false);
+  const pendingOwnerAction = useRef<(() => void) | undefined>(undefined);  const [editingPost, setEditingPost] = useState(false);
   const [allowRemove, setAllowRemove] = useState(false);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
   const [reflectionComposerVisible, setReflectionComposerVisible] = useState(false);
@@ -416,44 +418,39 @@ export function FeedDetailScreen() {
   }
 
   const replyList = replies.length > 0 ? (
-    <Card style={{ gap: 0, padding: 0 }}>
+    <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
       {replies.map((reply, index) => (
-        <View
-          key={reply.id}
-          style={{
-            borderBottomColor: colors.line,
-            borderBottomWidth: index === replies.length - 1 ? 0 : 1,
-            gap: 8,
-            padding: 14,
-          }}
-        >
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={32} tone="pink" />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                {userById.get(reply.userId) ?? t("common.someone")}
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(reply.createdAt, language)}</Text>
+        <View key={reply.id}>
+          <View style={{ gap: 8, padding: 14 }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+              <Avatar image={userImageById.get(reply.userId)} name={userById.get(reply.userId)} size={30} tone="pink" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={2} style={[typography.cardTitle, { color: colors.ink, fontSize: 14, lineHeight: 19 }]}>
+                  {userById.get(reply.userId) ?? t("common.someone")}
+                </Text>
+                <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(reply.createdAt, language)}</Text>
+              </View>
+              {reply.userId === state.currentUserId ? (
+                <Pressable
+                  accessibilityLabel={t("community.reply.delete")}
+                  accessibilityRole="button"
+                  onPress={() => dispatch({ type: "deleteReply", id: reply.id })}
+                  style={{ alignItems: "center", height: 36, justifyContent: "center", width: 36 }}
+                >
+                  <Feather name="trash-2" size={16} color={colors.danger} />
+                </Pressable>
+              ) : <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={reply.id} authorId={reply.userId} />}
             </View>
-            {reply.userId === state.currentUserId ? (
-              <Pressable
-                accessibilityLabel={t("community.reply.delete")}
-                accessibilityRole="button"
-                onPress={() => dispatch({ type: "deleteReply", id: reply.id })}
-                style={{ padding: 6 }}
-              >
-                <Feather name="trash-2" size={16} color={colors.danger} />
-              </Pressable>
-            ) : <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={reply.id} authorId={reply.userId} />}
+            <LinkPreviewContent text={reply.body}>
+              {({ hiddenUrl, preview }) => (
+                <>
+                  <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                  {preview}
+                </>
+              )}
+            </LinkPreviewContent>
           </View>
-          <LinkPreviewContent text={reply.body}>
-            {({ hiddenUrl, preview }) => (
-              <>
-                <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
-                {preview}
-              </>
-            )}
-          </LinkPreviewContent>
+          {index < replies.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
         </View>
       ))}
     </Card>
@@ -480,21 +477,13 @@ export function FeedDetailScreen() {
         returnKeyType="send"
         style={{ flex: 1 }}
       />
-      <Pressable
+      <Button
         accessibilityLabel={t("community.reply.send")}
-        accessibilityRole="button"
         disabled={!replyDraft.trim()}
+        icon="send"
         onPress={sendReply}
-        style={{
-          alignItems: "center",
-          height: 48,
-          justifyContent: "center",
-          opacity: replyDraft.trim() ? 1 : 0.4,
-          width: 48,
-        }}
-      >
-        <Feather name="send" size={22} color={colors.gold} />
-      </Pressable>
+        size="icon"
+      />
     </View>
   );
 
@@ -531,15 +520,15 @@ export function FeedDetailScreen() {
           </View>
         ) : (
           <>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-              <Feather name={kindIcon(item)} size={18} color={colors.gold} />
-              <Text style={{ color: colors.gold, fontSize: 14, fontWeight: "900" }}>{communityFeedItemLabel(item, t)}</Text>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+              <Feather name={kindIcon(item)} size={14} color={colors.muted} />
+              <Text style={[typography.label, { color: colors.muted }]}>{communityFeedItemLabel(item, t)}</Text>
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-              <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={48} tone="orange" />
-              <View>
-                <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{authorName}</Text>
-                <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
+              <Avatar image={authorImage as GroupImage | undefined} name={authorName} size={46} tone="orange" />
+              <View style={{ gap: 2 }}>
+                <Text style={[typography.cardTitle, { color: colors.ink }]}>{authorName}</Text>
+                <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
               </View>
             </View>
           </>
@@ -547,7 +536,7 @@ export function FeedDetailScreen() {
         {!isScripture || hasPersonalNote ? (
           <View style={{ gap: 12 }}>
             {!isExpandedFeedCard && !isScripture && !isPraise ? (
-              <Text style={{ color: colors.ink, fontSize: 23, fontWeight: "900", lineHeight: 30 }}>
+              <Text style={[typography.heading, { color: colors.ink }]}>
                 {displayCopy.title || communityDefaultFeedTitle(item, t)}
               </Text>
             ) : null}
@@ -568,27 +557,27 @@ export function FeedDetailScreen() {
         {isPrayerRequest ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
             <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer?.count ?? 0}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{communityPrayerNoun(prayer?.count ?? 0, t)}</Text>
+              <Text style={[typography.title, { color: colors.ink }]}>{prayer?.count ?? 0}</Text>
+              <Text style={[typography.caption, { color: colors.muted }]}>{communityPrayerNoun(prayer?.count ?? 0, t)}</Text>
             </View>
             <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
-            <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+            <View style={{ alignItems: "center", flex: 1, gap: 5 }}>
               <StatusPill status={prayerAnswered ? "answered" : "open"} />
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.prayer.status.label")}</Text>
+              <Text style={[typography.caption, { color: colors.muted }]}>{t("community.prayer.status.label")}</Text>
             </View>
           </Card>
         ) : null}
         {prayerAnswered ? (
           <Card style={{ alignItems: "center", flexDirection: "row", gap: 10, padding: 14 }}>
-            <Feather name="check-circle" size={20} color={colors.olive} />
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
-              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>
+            <Feather name="check-circle" size={20} color={colors.moss} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.prayer.answeredTitle")}</Text>
+              <Text style={[typography.caption, { color: colors.muted }]}>
                 {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
               </Text>
               {item.type === "post" && item.answeredUpdate?.trim() ? (
                 <>
-                  <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900", marginTop: 4 }}>
+                  <Text style={[typography.sectionLabel, { color: colors.muted, fontSize: 10, marginTop: 4 }]}>
                     {t("community.prayer.updateLabel")}
                   </Text>
                   <BodyText>{item.answeredUpdate}</BodyText>
@@ -652,7 +641,7 @@ export function FeedDetailScreen() {
         ) : null}
         {!isPrayerMoment && !isExpandedFeedCard && !isPraise && (!isScripture || (prayer?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>
               {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
                 count: prayer?.count ?? 0,
               })}
@@ -662,7 +651,7 @@ export function FeedDetailScreen() {
         ) : null}
         {canReact && !isScripture && !isExpandedFeedCard && (!isPraise || (reaction?.count ?? 0) > 0) ? (
           <View style={{ gap: 12 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>
               {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {
                 action: actionPastLabel,
                 count: reaction?.count ?? 0,
@@ -681,7 +670,7 @@ export function FeedDetailScreen() {
         ) : null}
         {isExpandedFeedCard && canReact ? (
           <View style={{ gap: 12 }}>
-            <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>
               {t("community.detail.encouragementsHeading", { count: reaction?.count ?? 0 })}
             </Text>
             {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
@@ -704,60 +693,39 @@ export function FeedDetailScreen() {
         ) : null}
         {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
-      <Modal
-        animationType="fade"
-        onRequestClose={() => setOwnerMenuVisible(false)}
-        transparent
+      <BottomSheet
+        title={t("community.card.postOptions")}
         visible={ownerMenuVisible && ownsItem}
+        onClose={() => setOwnerMenuVisible(false)}
+        onDismiss={() => {
+          const action = pendingOwnerAction.current;
+          pendingOwnerAction.current = undefined;
+          action?.();
+        }}
       >
-        <Pressable
-          accessibilityLabel={t("common.close")}
-          onPress={() => setOwnerMenuVisible(false)}
-          style={{ backgroundColor: "transparent", flex: 1 }}
-        >
-          <View
-            style={{
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              minWidth: 148,
-              paddingVertical: 4,
-              position: "absolute",
-              right: 16,
-              top: insets.top + 52,
-              ...platformShadow({
-                boxShadow: "0 10px 24px rgba(11, 18, 32, 0.14)",
-                elevation: 12,
-                offset: { width: 0, height: 10 },
-                opacity: 0.14,
-                radius: 24,
-              }),
+        <SheetMenuGroup>
+          {item.type === "post" ? (
+            <SheetMenuItem
+              icon="edit-2"
+              title={t("common.edit")}
+              onPress={() => {
+                pendingOwnerAction.current = openPostEditor;
+                setOwnerMenuVisible(false);
+              }}
+            />
+          ) : null}
+          <SheetMenuItem
+            icon="trash-2"
+            showDivider={item.type === "post"}
+            title={t("common.delete")}
+            tone="danger"
+            onPress={() => {
+              pendingOwnerAction.current = deleteOwnedItem;
+              setOwnerMenuVisible(false);
             }}
-          >
-            {item.type === "post" ? (
-              <Pressable
-                accessibilityLabel={t("common.edit")}
-                accessibilityRole="button"
-                onPress={openPostEditor}
-                style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
-              >
-                <Feather name="edit-2" size={15} color={colors.ink} />
-                <Text style={[typography.label, { color: colors.ink }]}>{t("common.edit")}</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityLabel={t("common.delete")}
-              accessibilityRole="button"
-              onPress={deleteOwnedItem}
-              style={{ alignItems: "center", flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 14, paddingVertical: 9 }}
-            >
-              <Feather name="trash-2" size={15} color={colors.danger} />
-              <Text style={[typography.label, { color: colors.danger }]}>{t("common.delete")}</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+          />
+        </SheetMenuGroup>
+      </BottomSheet>
       <SharedComposer
         visible={reflectionComposerVisible && reflectionIsCurrent()}
         context={editingPost ? "room" : "journal"}
@@ -806,21 +774,22 @@ function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: 
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: prayed ? colors.prayerSoft : colors.gold,
-        borderColor: prayed ? colors.accentPrayer : colors.gold,
-        borderRadius: 999,
+        backgroundColor: prayed ? shadcn.secondary : pressed ? "#292524" : shadcn.primary,
+        borderColor: prayed ? shadcn.border : shadcn.primary,
+        borderCurve: "continuous",
+        borderRadius: radius.lg,
         borderWidth: 1,
         flexDirection: "row",
-        gap: 10,
+        gap: 9,
         justifyContent: "center",
-        minHeight: 58,
+        minHeight: 52,
         paddingHorizontal: 18,
-      }}
+      })}
     >
-      <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>
+      <MaterialCommunityIcons name="hands-pray" size={20} color={prayed ? colors.ink : shadcn.primaryForeground} />
+      <Text style={[typography.button, { color: prayed ? colors.ink : shadcn.primaryForeground }]}>
         {t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
       </Text>
     </Pressable>
@@ -832,21 +801,22 @@ function DetailReactionButton({ active, label, onPress }: { active: boolean; lab
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: 999,
+        backgroundColor: pressed ? shadcn.secondary : shadcn.card,
+        borderColor: shadcn.border,
+        borderCurve: "continuous",
+        borderRadius: radius.lg,
         borderWidth: 1,
         flexDirection: "row",
         gap: 9,
         justifyContent: "center",
-        minHeight: 52,
+        minHeight: 48,
         paddingHorizontal: 18,
-      }}
+      })}
     >
-      <Ionicons name={active ? "heart" : "heart-outline"} size={20} color={active ? colors.accentPrayer : colors.olive} />
-      <Text style={{ color: colors.olive, fontSize: 16, fontWeight: "900" }}>{label}</Text>
+      <Ionicons name={active ? "heart" : "heart-outline"} size={19} color={active ? colors.ink : colors.muted} />
+      <Text style={[typography.button, { color: colors.ink }]}>{label}</Text>
     </Pressable>
   );
 }

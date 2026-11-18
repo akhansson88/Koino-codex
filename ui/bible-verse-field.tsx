@@ -6,7 +6,7 @@ import { ActivityIndicator, Keyboard, Pressable, Text, View } from "react-native
 import { usePreferredBibleVersion } from "@/features/bible-preferences";
 import { useKoinoSelector } from "@/state/koino-store";
 import type { BibleVerse } from "@/state/types";
-import { AppScreen, FullScreenModal, SectionHeading, SecondaryButton, VersePreviewCard } from "@/ui/app-components";
+import { AppScreen, FullScreenModal, SecondaryButton, VersePreviewCard } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 
@@ -75,10 +75,8 @@ export function BibleVerseField({
   return (
     <View style={{ gap: 8 }}>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-        {communityComposer ? (
-          <Text style={[typography.label, { color: colors.ink, flex: 1, minWidth: 0 }]}>{label || t("shared.scripturePicker.fieldLabel")}</Text>
-        ) : <SectionHeading>{label || t("shared.scripturePicker.fieldLabel")}</SectionHeading>}
-        <Text style={communityComposer ? [typography.caption, { color: colors.muted, flexShrink: 0 }] : { color: colors.muted, fontSize: 12, fontWeight: "800" }}>{selectedVerses.length}/5</Text>
+        <Text style={[typography.label, { color: colors.ink, flex: 1, minWidth: 0 }]}>{label || t("shared.scripturePicker.fieldLabel")}</Text>
+        <Text style={[typography.caption, { color: colors.muted, flexShrink: 0 }]}>{selectedVerses.length}/5</Text>
       </View>
       {selectedVerses.length > 0 ? (
         <View style={{ gap: 8 }}>
@@ -103,7 +101,7 @@ export function BibleVerseField({
                 onPress={() => removeVerse(verse.reference)}
                 style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
               >
-                <Feather name="x" size={18} color={colors.olive} />
+                <Feather name="x" size={18} color={colors.muted} />
               </Pressable>
             </View>
           ))}
@@ -119,7 +117,7 @@ export function BibleVerseField({
         </SecondaryButton>
       )}
       {!canAddVerse ? (
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{t("shared.scripturePicker.maxReferences")}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{t("shared.scripturePicker.maxReferences")}</Text>
       ) : null}
       {canAddVerse && pickerVisible ? (
         // Keep the native modal mounted while the lazy picker and database load.
@@ -129,7 +127,7 @@ export function BibleVerseField({
             fallback={
               <AppScreen>
                 <View style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
-                  <ActivityIndicator color={colors.olive} />
+                  <ActivityIndicator color={colors.ink} />
                 </View>
               </AppScreen>
             }

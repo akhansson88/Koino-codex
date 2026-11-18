@@ -1,7 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
-import { brandPalette } from "@/ui/theme";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Switch, Text, View } from "react-native";
 import { NativeViewGestureHandler } from "react-native-gesture-handler";
@@ -60,10 +59,10 @@ function Progress({ chapter, index, passage, palette, active = true, inSheet = f
         setDragging(null);
         if (canSeek && target) void seek(target.seconds);
       }}
-      minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={brandPalette.warmPersika} style={{ height: compact ? 32 : 44 }} />;
+      minimumTrackTintColor={palette.accent} maximumTrackTintColor={palette.line} thumbTintColor={palette.accent} style={{ height: compact ? 32 : 44 }} />;
   return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ flex: compact ? 1 : undefined, minWidth: 0, paddingTop: compact ? 0 : 30 }}>
-    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging.seconds / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: brandPalette.warmPersika }}>
-      <Text accessibilityLabel={t("audio.verse", { verse: selected.verse })} style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{selected.verse}</Text>
+    {dragging !== null ? <View pointerEvents="none" testID="audio-verse-tooltip" style={{ position: "absolute", top: compact ? -28 : 0, left: Math.max(0, Math.min(width - 52, 16 + (width - 32) * dragging.seconds / total - 26)), width: 52, minHeight: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: palette.peach }}>
+      <Text accessibilityLabel={t("audio.verse", { verse: selected.verse })} style={{ color: palette.text, fontWeight: "700" }}>{selected.verse}</Text>
     </View> : null}
     {/* Keep the sheet's pan and scroll handlers from taking over a scrub. */}
     {inSheet ? <NativeViewGestureHandler disallowInterruption shouldActivateOnStart>
@@ -122,8 +121,8 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
   const play = selection ? () => void audio.playSelectedChapter() : audio.problem === "network" ? audio.retry : audio.toggle;
   const iconButton = (icon: "play" | "pause" | "skip-back" | "skip-forward" | "x", label: string, action: () => void, disabled = false, primary = false, compact = false) => <Pressable
     accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={action}
-    style={{ width: compact ? 44 : primary ? 68 : 48, height: compact ? 44 : primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: compact && primary ? palette.surface : primary ? brandPalette.warmPersika : "transparent", borderColor: compact && primary ? palette.line : "transparent", borderWidth: compact && primary ? 1 : 0, opacity: disabled ? 0.35 : 1 }}>
-    {primary && audio.loading ? <ActivityIndicator color={brandPalette.deepNavy} /> : <Feather name={icon} size={primary && !compact ? 28 : 22} color={primary ? brandPalette.deepNavy : palette.accent} />}
+    style={{ width: compact ? 44 : primary ? 68 : 48, height: compact ? 44 : primary ? 68 : 48, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: primary ? palette.peach : "transparent", borderColor: primary ? "#F3C9A4" : "transparent", borderWidth: primary ? 1 : 0, opacity: disabled ? 0.35 : 1 }}>
+    {primary && audio.loading ? <ActivityIndicator color={palette.text} /> : <Feather name={icon} size={primary && !compact ? 28 : 22} color={primary ? palette.text : palette.accent} />}
   </Pressable>;
   const close = () => { void audio.stop(); onClose(); };
   const dismissToFollow = () => { if (selection || (session && !session.passage && !session.topic)) onFollow(); onClose(); };
@@ -156,24 +155,24 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
       {topicItem ? <Text numberOfLines={1} style={{ color: palette.muted, fontSize: 12 }}>{topicItem.reference} · {t("bible.topics.audio.position", { current: topicIndex + 1, count: topicItems.length })}</Text> : null}
       {topic?.phase === "gap" ? <Text style={{ color: palette.muted, fontSize: 12, fontVariant: ["tabular-nums"] }}>{t("bible.topics.audio.gap", { seconds: Math.max(0, Math.ceil(topic.gapRemainingSeconds ?? 0)) })}</Text> : null}
       {session ? <Progress key={progressKey} chapter={session.chapter} index={session.index} passage={progressPassage} palette={palette} active={!visible} compact />
-        : <View><Slider disabled accessibilityLabel={t("audio.progress")} minimumValue={0} maximumValue={1} value={0} minimumTrackTintColor={brandPalette.warmPersika} maximumTrackTintColor={palette.line} thumbTintColor={palette.muted} style={{ height: 32 }} /></View>}
+        : <View><Slider disabled accessibilityLabel={t("audio.progress")} minimumValue={0} maximumValue={1} value={0} minimumTrackTintColor={palette.line} maximumTrackTintColor={palette.line} thumbTintColor={palette.muted} style={{ height: 32 }} /></View>}
       {audio.problem ? <Text accessibilityLiveRegion="polite" style={{ color: palette.muted }}>{t(audio.problem === "network" ? "audio.network" : "audio.unavailable")}</Text> : null}
       {!follow || !matching ? <Pressable accessibilityRole="button" accessibilityLabel={t("audio.follow")} accessibilityState={{ selected: false }} onPress={onFollow}
-        style={{ marginTop: 4, minHeight: 44, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: brandPalette.warmPersika }}>
-        <Text style={{ color: brandPalette.deepNavy, fontWeight: "700" }}>{t("audio.follow")}</Text>
+        style={{ marginTop: 4, minHeight: 40, borderRadius: 8, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", backgroundColor: palette.peach }}>
+        <Text style={{ color: palette.text, fontWeight: "700" }}>{t("audio.follow")}</Text>
       </Pressable> : null}
     </View> : null}
     <AppSheet visible={visible} onClose={dismissToFollow} title={t("audio.title")} backgroundColor={palette.sheet} foregroundColor={palette.text} scroll>
       <View style={{ paddingHorizontal: 24, paddingBottom: 30, gap: 20 }}>
-        <View style={{ gap: 6 }}><Text style={{ color: palette.muted, fontSize: 12, letterSpacing: 1.5 }}>REFORMATIONSBIBELN</Text>
-          <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 26, fontWeight: "700" }}>{selection || session || passage || topicDefinition ? title : `${entry?.bookName ?? book} ${chapter}`}</Text>
+        <View style={{ gap: 6 }}><Text style={{ color: palette.muted, fontSize: 11, letterSpacing: 1.5, fontFamily: "Inter_500Medium" }}>REFORMATIONSBIBELN</Text>
+          <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 24, letterSpacing: -0.4, fontFamily: "Montserrat_600SemiBold" }}>{selection || session || passage || topicDefinition ? title : `${entry?.bookName ?? book} ${chapter}`}</Text>
           {topicItem ? <Text style={{ color: palette.text, fontSize: 18, fontWeight: "700" }}>{topicItem.reference}</Text> : null}
           {topic ? <Text style={{ color: palette.muted }}>{t("bible.topics.audio.position", { current: topicIndex + 1, count: topicItems.length })}</Text> : null}
           {topic?.phase === "gap" ? <Text accessibilityLiveRegion="polite" style={{ color: palette.muted, fontVariant: ["tabular-nums"] }}>{t("bible.topics.audio.gap", { seconds: Math.max(0, Math.ceil(topic.gapRemainingSeconds ?? 0)) })}</Text> : null}
           {selection || session ? <Text style={{ color: palette.muted }}>{t("audio.verse", { verse: verse ?? 1 })}</Text> : null}
         </View>
         {selection || passage || topicDefinition ? null : !supported ? <View style={{ gap: 12 }}><Text style={{ color: palette.muted }}>{t("audio.translationUnavailable")}</Text><Pressable accessibilityRole="button" onPress={onChooseTranslation} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("audio.chooseTranslation")}</Text></Pressable></View> : !entry ? <Text style={{ color: palette.muted }}>{t(audio.catalogState === "loading" ? "audio.loading" : audio.catalogState === "error" ? "audio.network" : "audio.unavailable")}</Text> : !matching ?
-          <Pressable accessibilityRole="button" onPress={() => void audio.start(entry)} style={{ backgroundColor: brandPalette.warmPersika, padding: 16, borderRadius: 14 }}><Text style={{ color: brandPalette.deepNavy, textAlign: "center", fontWeight: "700" }}>{t("audio.startChapter", { chapter: `${entry.bookName} ${chapter}` })}</Text></Pressable> : null}
+          <Pressable accessibilityRole="button" onPress={() => void audio.start(entry)} style={{ backgroundColor: palette.peach, padding: 16, borderRadius: 10, borderWidth: 1, borderColor: "#F3C9A4" }}><Text style={{ color: palette.text, textAlign: "center", fontWeight: "700" }}>{t("audio.startChapter", { chapter: `${entry.bookName} ${chapter}` })}</Text></Pressable> : null}
         <View accessibilityLiveRegion="polite" style={{ minHeight: 24, flexDirection: "row", gap: 10 }}>{audio.loading ? <><ActivityIndicator color={palette.accent} /><Text style={{ color: palette.muted }}>{t("audio.loading")}</Text></> : null}</View>
         {audio.problem ? <Text accessibilityLiveRegion="polite" style={{ color: palette.muted }}>{t(audio.problem === "network" ? "audio.network" : topicDefinition ? "bible.topics.audio.unavailable" : passage ? "audio.passageUnavailable" : "audio.nextUnavailable")}</Text> : null}
         {audio.problem === "network" || audio.catalogState === "error" ? <Pressable accessibilityRole="button" onPress={() => { void audio.refresh(); if (audio.problem === "network") audio.retry(); }} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("audio.retry")}</Text></Pressable> : null}
@@ -182,10 +181,10 @@ export function BibleAudioPlayer({ visible, onClose, onOpen, palette, book, chap
           {controls}
           {topic ? <TopicPlaybackSettings topic={topic} palette={palette} disabled={audio.loading || audio.commandPending} /> : null}
           <Text style={{ color: palette.muted }}>{t("audio.speed")}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[0.75, 1, 1.25, 1.5, 2].map((speed) => <Pressable key={speed} accessibilityRole="button" accessibilityLabel={`${t("audio.speed")} ${speed}`} accessibilityState={{ selected: audio.speed === speed }} onPress={() => audio.setSpeed(speed)} style={{ minHeight: 44, minWidth: 48, padding: 10, borderRadius: 12, backgroundColor: audio.speed === speed ? brandPalette.warmPersika : palette.surface }}><Text style={{ textAlign: "center", color: audio.speed === speed ? brandPalette.deepNavy : palette.text }}>{speed}×</Text></Pressable>)}</View>
-          {!topic ? <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><Text style={{ color: palette.text, flex: 1 }}>{t("audio.continuous")}</Text><Switch accessibilityLabel={t("audio.continuous")} accessibilityState={{ disabled: !!session?.passage }} disabled={!!session?.passage} value={!session?.passage && audio.continuous} onValueChange={audio.setContinuous} trackColor={{ true: brandPalette.warmPersika }} /></View> : null}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[0.75, 1, 1.25, 1.5, 2].map((speed) => <Pressable key={speed} accessibilityRole="button" accessibilityLabel={`${t("audio.speed")} ${speed}`} accessibilityState={{ selected: audio.speed === speed }} onPress={() => audio.setSpeed(speed)} style={{ minHeight: 44, minWidth: 48, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: audio.speed === speed ? palette.accent : palette.line, backgroundColor: audio.speed === speed ? palette.peach : palette.surface }}><Text style={{ textAlign: "center", color: audio.speed === speed ? palette.text : palette.text }}>{speed}×</Text></Pressable>)}</View>
+          {!topic ? <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}><Text style={{ color: palette.text, flex: 1 }}>{t("audio.continuous")}</Text><Switch accessibilityLabel={t("audio.continuous")} accessibilityState={{ disabled: !!session?.passage }} disabled={!!session?.passage} value={!session?.passage && audio.continuous} onValueChange={audio.setContinuous} thumbColor="#FFFFFF" trackColor={{ true: palette.accent, false: palette.line }} /></View> : null}
           <Text style={{ color: palette.muted }}>{t("audio.sleep")}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{(topic ? [0, 15, 30, 60] as const : [0, 15, 30, 60, "chapter"] as const).map((timer) => <Pressable key={timer} accessibilityRole="button" accessibilityState={{ selected: audio.sleep === timer }} onPress={() => audio.setSleep(timer)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 12, backgroundColor: audio.sleep === timer ? brandPalette.warmPersika : palette.surface }}><Text style={{ color: audio.sleep === timer ? brandPalette.deepNavy : palette.text }}>{timer === "chapter" ? t("audio.endChapter") : timer === 0 ? t("audio.off") : t("audio.minutes", { minutes: timer })}</Text></Pressable>)}</View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{(topic ? [0, 15, 30, 60] as const : [0, 15, 30, 60, "chapter"] as const).map((timer) => <Pressable key={timer} accessibilityRole="button" accessibilityState={{ selected: audio.sleep === timer }} onPress={() => audio.setSleep(timer)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: audio.sleep === timer ? palette.accent : palette.line, backgroundColor: audio.sleep === timer ? palette.peach : palette.surface }}><Text style={{ color: palette.text }}>{timer === "chapter" ? t("audio.endChapter") : timer === 0 ? t("audio.off") : t("audio.minutes", { minutes: timer })}</Text></Pressable>)}</View>
           <Pressable accessibilityRole="button" accessibilityState={{ selected: follow && !!matching }} onPress={followAndClose} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("audio.follow")}</Text></Pressable>
         </> : null}
       </View>

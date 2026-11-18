@@ -1,5 +1,5 @@
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, radius, typography } from "@/ui/theme";
+import { colors, radius, shadows, typography } from "@/ui/theme";
 import { Feather } from "@expo/vector-icons";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetScrollView, BottomSheetTextInput, BottomSheetView, type BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
@@ -131,13 +131,13 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
   ), [dismiss, dismissible, t]);
 
   const renderHeader = useCallback(() => <View onLayout={({ nativeEvent }) => setHeaderHeight(nativeEvent.layout.height)}>
-    <View style={{ alignItems: "center", paddingVertical: 10 }}><View style={{ height: 4, borderRadius: 2, width: 44, backgroundColor: foregroundColor, opacity: 0.25 }} /></View>
+    <View style={{ alignItems: "center", paddingBottom: 8, paddingTop: 10 }}><View style={{ height: 4, borderRadius: 2, width: 36, backgroundColor: colors.accentSubtle }} /></View>
     {header}
-    {title ? <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 12, gap: 12 }}>
+    {title ? <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 14, paddingTop: 4, gap: 12 }}>
       <Text ref={heading} accessible accessibilityRole="header" style={[typography.heading, { color: foregroundColor, flex: 1 }]}>{title}</Text>
       <Pressable disabled={!dismissible} accessibilityRole="button" accessibilityLabel={t("shared.sheet.close")}
-        onPress={() => dismiss()} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}>
-        <Feather name="x" size={22} color={foregroundColor} />
+        onPress={() => dismiss()} style={{ minWidth: 38, minHeight: 38, width: 38, alignItems: "center", justifyContent: "center", borderColor: colors.line, borderRadius: radius.md, borderWidth: 1 }}>
+        <Feather name="x" size={18} color={foregroundColor} />
       </Pressable>
     </View> : null}
   </View>, [dismiss, dismissible, foregroundColor, header, t, title]);
@@ -152,7 +152,7 @@ export const AppSheet = forwardRef<AppSheetHandle, AppSheetProps>(function AppSh
             enableContentPanningGesture={contentPanning} enableHandlePanningGesture={dismissible}
             keyboardBehavior="interactive" keyboardBlurBehavior="restore" android_keyboardInputMode="adjustResize"
             enableBlurKeyboardOnGesture overrideReduceMotion={reducedMotion ? ReduceMotion.Always : ReduceMotion.System}
-            backgroundStyle={{ backgroundColor, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl }}
+            backgroundStyle={{ backgroundColor, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, ...shadows.raised }}
             handleComponent={renderHeader}
             backdropComponent={backdrop} onClose={finish}
             onAnimate={(_from, to) => { if (to === -1) closing.current = true; }}
@@ -184,9 +184,12 @@ export function SheetActionRow({ title, subtitle, icon, onPress, destructive = f
 }) {
   const tint = destructive ? colors.danger : color;
   return <Pressable accessibilityRole="button" onPress={onPress}
-    style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, minHeight: 64, paddingVertical: 12, opacity: pressed ? 0.6 : 1 })}>
-    <Feather name={icon} size={21} color={tint} />
-    <View style={{ flex: 1, gap: 4 }}><Text style={[typography.cardTitle, { color: tint }]}>{title}</Text>
-      {subtitle ? <Text style={{ color, opacity: 0.65, fontSize: 13 }}>{subtitle}</Text> : null}</View>
+    style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 60, paddingVertical: 10, opacity: pressed ? 0.6 : 1 })}>
+    <View style={{ alignItems: "center", backgroundColor: destructive ? colors.dangerSurface : colors.elevated, borderRadius: radius.md, height: 38, justifyContent: "center", width: 38 }}>
+      <Feather name={icon} size={18} color={tint} />
+    </View>
+    <View style={{ flex: 1, gap: 2 }}><Text style={[typography.cardTitle, { color: tint }]}>{title}</Text>
+      {subtitle ? <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 18 }}>{subtitle}</Text> : null}</View>
+    <Feather name="chevron-right" size={17} color={colors.disabledText} />
   </Pressable>;
 }

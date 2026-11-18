@@ -8,7 +8,7 @@ import { AppHeader, AppScreen, BodyText, BottomSheet, Card, PrimaryButton, TextI
 import { useAppTranslation } from "@/ui/app-language";
 import { confirmAction } from "@/ui/confirm";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 import { type RoomSheet } from "@/features/identity/types";
 import { roomMemberCount, shareRoomInvite, selectedImageSize } from "@/features/identity/room-helpers";
 import { RoomHeaderCard, JoinSwitchCard } from "@/features/identity/room-cards";
@@ -185,7 +185,7 @@ export function RoomDetailsScreen() {
         <AppHeader showBack onBack={() => router.back()} />
 
         <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>{t("community.roomDetails.title")}</Text>
+          <Text style={[typography.screenTitle, { color: colors.ink }]}>{t("community.roomDetails.title")}</Text>
           <BodyText muted>{t("community.roomDetails.subtitle")}</BodyText>
         </View>
 
@@ -212,7 +212,7 @@ export function RoomDetailsScreen() {
               ) : null}
             </SettingsSection>
 
-            {roomMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{roomMessage}</Text> : null}
+            {roomMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{roomMessage}</Text> : null}
 
             <SettingsSection label={t("community.management.settingsTitle")}>
               <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => router.push("/encryption" as never)} />
@@ -269,7 +269,7 @@ export function RoomDetailsScreen() {
         ) : (
           <>
             <Card>
-              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "900" }}>{t("community.rooms.noneSelected")}</Text>
+              <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.rooms.noneSelected")}</Text>
               <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText>
               <PrimaryButton icon="plus" onPress={openSwitcher}>
                 {t("community.rooms.joinOrCreate")}

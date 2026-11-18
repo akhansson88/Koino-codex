@@ -2,8 +2,10 @@ import { tabBarHeight } from "@/ui/navigation-layout";
 import { KoinoTabHeader } from "@/ui/tab-header";
 import { Feather } from "@expo/vector-icons";
 import type { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
-import { Tabs } from "expo-router";
-import { Platform, StyleSheet, Text } from "react-native";
+import { router, Tabs, usePathname } from "expo-router";
+import { useMemo } from "react";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AnimatedDockBackground, AnimatedDockTabBar, DockTabButton } from "@/ui/animated-dock-tab-bar";
@@ -11,12 +13,27 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
 
+const TAB_ROUTES = ["/(tabs)/bible", "/(tabs)", "/(tabs)/me", "/(tabs)/community"] as const;
+
+function rootTabIndex(pathname: string) {
+  if (pathname === "/bible") return 0;
+  if (pathname === "/" || pathname === "/(tabs)") return 1;
+  if (pathname === "/me") return 2;
+  if (pathname === "/community") return 3;
+  return -1;
+}
+
 const sceneStyleInterpolator: NonNullable<BottomTabNavigationOptions["sceneStyleInterpolator"]> = ({ current }) => ({
   sceneStyle: {
     opacity: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }),
-    transform: [{
-      translateX: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [-12, 0, 12] }),
-    }],
+    transform: [
+      {
+        translateX: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [-18, 0, 18] }),
+      },
+      {
+        scale: current.progress.interpolate({ inputRange: [-1, 0, 1], outputRange: [0.988, 1, 0.988] }),
+      },
+    ],
   },
 });
 
@@ -24,9 +41,29 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
   const reducedMotion = useReducedMotion();
+  const pathname = usePathname();
+  const rootIndex = rootTabIndex(pathname);
+
+  const swipeGesture = useMemo(() => Gesture.Pan()
+    .enabled(rootIndex >= 0)
+    .activeOffsetX([-26, 26])
+    .failOffsetY([-18, 18])
+    .runOnJS(true)
+    .onEnd((event) => {
+      const passedDistance = Math.abs(event.translationX) >= 56;
+      const passedVelocity = Math.abs(event.velocityX) >= 420;
+      if (!passedDistance && !passedVelocity) return;
+      const direction = Math.sign(event.translationX || event.velocityX);
+      if (!direction) return;
+      const nextIndex = rootIndex + (direction < 0 ? 1 : -1);
+      if (nextIndex < 0 || nextIndex >= TAB_ROUTES.length) return;
+      router.navigate(TAB_ROUTES[nextIndex] as never);
+    }), [rootIndex]);
 
   return (
-    <Tabs
+    <GestureDetector gesture={swipeGesture}>
+      <View collapsable={false} style={{ flex: 1 }}>
+        <Tabs
       // Android can detach the nested Community stack during a push and leave
       // its content blank until the tab is reselected. Keep the tab host attached.
       detachInactiveScreens={Platform.OS !== "android"}
@@ -121,7 +158,9 @@ export default function TabLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+      </View>
+    </GestureDetector>
   );
 }
 

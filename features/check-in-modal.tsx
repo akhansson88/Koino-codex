@@ -14,12 +14,12 @@ import {
   PrimaryButton,
   RoomImage,
   SecondaryButton,
-  SectionHeading,
   TextInputField,
 } from "@/ui/app-components";
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, platformShadow, radius, typography } from "@/ui/theme";
+import { FieldLabel } from "@/ui/shadcn";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 
 export type CheckInStep = "choose" | "details" | "thanks";
 const moodCopyKeys = {
@@ -57,12 +57,12 @@ export function moodNumber(mood?: HeartMood) {
 }
 
 function moodToneFor(mood: HeartMood): { background: string; color: string } {
-  if (mood === "peaceful") return { background: colors.rhythmSoft, color: colors.textMuted };
-  if (mood === "grateful") return { background: colors.warmSoft, color: colors.textMuted };
-  if (mood === "heavy") return { background: colors.reflectionSoft, color: colors.textSecondary };
-  if (mood === "anxious") return { background: colors.prayerSoft, color: colors.textMuted };
-  if (mood === "hopeful") return { background: colors.warmSoft, color: colors.textMuted };
-  return { background: colors.lavenderSoft, color: colors.textMuted };
+  if (mood === "peaceful") return { background: colors.rhythmSoft, color: colors.accentRhythm };
+  if (mood === "grateful") return { background: colors.warmSoft, color: colors.accentWarm };
+  if (mood === "heavy") return { background: colors.reflectionSoft, color: colors.accentReflection };
+  if (mood === "anxious") return { background: colors.prayerSoft, color: colors.accentPrayer };
+  if (mood === "hopeful") return { background: colors.warmSoft, color: shadcn.warning };
+  return { background: colors.lavenderSoft, color: colors.clay };
 }
 
 export function CheckInModal({
@@ -198,7 +198,7 @@ export function CheckInModal({
                 <BodyText muted>{t("community.checkIn.detailsBody")}</BodyText>
               </View>
               <View style={{ gap: 8 }}>
-                <SectionHeading>{t("community.checkIn.shareWith")}</SectionHeading>
+                <Text style={[typography.label, { color: colors.ink }]}>{t("community.checkIn.shareWith")}</Text>
                 <Pressable
                   accessibilityLabel={share
                     ? t("community.checkIn.sharedNotice", { name: roomName })
@@ -207,24 +207,29 @@ export function CheckInModal({
                   accessibilityState={{ checked: share, disabled: submitting }}
                   disabled={submitting}
                   onPress={() => onShare(!share)}
-                  style={{ minHeight: 44 }}
+                  style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.86 : 1 })}
                 >
                   <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
                     <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
-                    <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
-                      <Text style={[typography.subtitle, { color: colors.ink }]}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
+                    <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
                       <Text style={[typography.caption, { color: colors.muted }]}>
                         {share ? t("community.checkIn.sharedNotice", { name: roomName }) : t("community.checkIn.privateOnly")}
                       </Text>
                     </View>
-                    <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-                      <Feather name={share ? "users" : "lock"} size={18} color={colors.ink} />
+                    <View
+                      accessibilityElementsHidden
+                      accessible={false}
+                      importantForAccessibility="no-hide-descendants"
+                      style={{ alignItems: "center", backgroundColor: shadcn.secondary, borderRadius: radius.md, height: 34, justifyContent: "center", width: 34 }}
+                    >
+                      <Feather name={share ? "users" : "lock"} size={16} color={colors.ink} />
                     </View>
                   </Card>
                 </Pressable>
               </View>
               <View style={{ gap: 6 }}>
-                <BodyText muted style={typography.label}>{t("community.checkIn.noteOptional")}</BodyText>
+                <FieldLabel>{t("community.checkIn.noteOptional")}</FieldLabel>
                 <TextInputField
                   accessibilityLabel={t("community.checkIn.noteOptional")}
                   editable={!submitting}
@@ -248,7 +253,7 @@ export function CheckInModal({
               ) : null}
               <BibleVerseField label={t("community.checkIn.scriptureOptional")} verses={verses} onChange={onVerses} />
               {submitError ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{submitError}</BodyText> : null}
-              <PrimaryButton disabled={submitting} icon="send" onPress={submit} style={{ minHeight: 58 }}>
+              <PrimaryButton disabled={submitting} icon="send" onPress={submit}>
                 {submitting
                   ? t("community.checkIn.saving")
                   : share
@@ -279,14 +284,14 @@ export function CheckInModal({
               <View
                 style={{
                   alignItems: "center",
-                  backgroundColor: colors.accentSubtle,
+                  backgroundColor: shadcn.primary,
                   borderRadius: 999,
-                  height: 96,
+                  height: 88,
                   justifyContent: "center",
-                  width: 96,
+                  width: 88,
                 }}
               >
-                <Feather name="heart" size={42} color={colors.gold} />
+                <Feather name="heart" size={38} color={shadcn.primaryForeground} />
               </View>
               <View style={{ alignItems: "center", gap: 8 }}>
                 <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink, textAlign: "center" }]}>
@@ -335,25 +340,41 @@ function MoodOptionCard({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: selected ? colors.accentSubtle : colors.paper,
-          borderColor: selected ? colors.gold : colors.line,
-          borderRadius: radius.lg,
+          backgroundColor: selected ? shadcn.secondary : shadcn.card,
+          borderColor: selected ? shadcn.primary : shadcn.border,
+          borderRadius: radius.xl,
           borderWidth: 1,
           gap: 10,
           minHeight: 136,
           padding: 12,
+          position: "relative",
           width: "100%",
-          ...platformShadow({
-            boxShadow: "0 8px 18px rgba(11, 18, 32, 0.04)",
-            offset: { width: 0, height: 8 },
-            opacity: 0.04,
-            radius: 18,
-          }),
+          ...shadows.card,
         }}
       >
+        {selected ? (
+          <View
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              alignItems: "center",
+              backgroundColor: shadcn.primary,
+              borderRadius: 999,
+              height: 20,
+              justifyContent: "center",
+              position: "absolute",
+              right: 8,
+              top: 8,
+              width: 20,
+            }}
+          >
+            <Feather name="check" size={12} color={shadcn.primaryForeground} />
+          </View>
+        ) : null}
         <MoodIcon mood={option.value} />
         <View style={{ alignItems: "center", alignSelf: "stretch", gap: 4, minWidth: 0 }}>
-          <Text style={[typography.subtitle, { color: colors.ink, flexShrink: 1, textAlign: "center" }]}>{label}</Text>
+          <Text style={[typography.cardTitle, { color: colors.ink, flexShrink: 1, fontSize: 15, textAlign: "center" }]}>{label}</Text>
           <Text style={[typography.caption, { color: colors.muted, flexShrink: 1, textAlign: "center" }]}>{description}</Text>
         </View>
       </View>

@@ -7,6 +7,7 @@ import { OnboardingJourney } from "@/features/onboarding-journey";
 import { OnboardingGuide } from "@/features/onboarding-guide";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { AppScreen, BodyText, PrimaryButton } from "@/ui/app-components";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { useAppTranslation } from "@/ui/app-language";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
 import { colors } from "@/ui/theme";
@@ -21,7 +22,8 @@ export default function Index() {
   if (!state.authReady || (onboarding.pending && onboarding.userId !== state.currentUserId)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.cream }}>
-        <ActivityIndicator accessibilityLabel={t("onboarding.loading")} color={colors.olive} />
+        <AmbientBackground />
+        <ActivityIndicator accessibilityLabel={t("onboarding.loading")} color={colors.ink} />
       </View>
     );
   }

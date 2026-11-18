@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Text, View } from "react-native";
 
 import { displayBibleReference } from "@/features/bible-book-names";
@@ -9,7 +11,7 @@ import storage from "@/state/encryption/local-storage";
 import type { BiblePlan } from "@/state/types";
 import { BodyText, Card, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, typography } from "@/ui/theme";
+import { colors, radius, shadows, typography } from "@/ui/theme";
 
 export function HomeScripture({ date, plans, userId }: { date: string; plans: BiblePlan[]; userId?: string }) {
   const { language, t } = useAppTranslation();
@@ -38,18 +40,33 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
   const title = reference ? displayBibleReference(reference, language) : t("home.scripture.readerTitle");
 
   return (
-    <Card style={{ backgroundColor: colors.elevated, gap: 16, padding: 18 }}>
-      <View style={{ gap: 6 }}>
-        <Text accessibilityRole="header" style={[typography.sectionLabel, { color: colors.muted }]}>
-          {t("home.scripture.title")}
-        </Text>
-        <Text style={[typography.heading, { color: colors.ink }]}>{title}</Text>
-        {plan && day ? <BodyText muted>{plan.title}</BodyText> : null}
+    <Card style={{ gap: 16, padding: 18, ...shadows.raised }}>
+      <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
+        <LinearGradient
+          colors={["#FFE1C9", "#FFC79A"]}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={{
+            alignItems: "center",
+            borderRadius: radius.md,
+            height: 38,
+            justifyContent: "center",
+            width: 38,
+          }}
+        >
+          <Feather name="book-open" size={18} color="#8A4A1F" />
+        </LinearGradient>
+        <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+          <Text accessibilityRole="header" style={[typography.sectionLabel, { color: colors.muted }]}>
+            {t("home.scripture.title")}
+          </Text>
+          <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>{title}</Text>
+          {plan && day ? <BodyText muted>{plan.title}</BodyText> : null}
+        </View>
       </View>
       <PrimaryButton
-        icon="book-open"
+        icon="arrow-right"
         onPress={() => router.push(plan && day ? biblePlanReadingRoute(plan.id, day.dayNumber) : "/(tabs)/bible")}
-        style={{ paddingVertical: 12 }}
       >
         {day ? t("home.scripture.continuePlan") : canResume ? t("home.scripture.resume") : t("home.scripture.open")}
       </PrimaryButton>

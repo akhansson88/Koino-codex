@@ -22,7 +22,7 @@ import { AppScreen, BodyText, Card, FilterChips, IconButton, PrimaryButton, Seco
 import { useAppTranslation } from "@/ui/app-language";
 import { confirmAction } from "@/ui/confirm";
 import type { AppLanguage, TranslationFunction } from "@/ui/localization";
-import { colors, radius, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 type PlanTab = "active" | "saved" | "completed" | "group";
 type RangeDraft = {
@@ -129,12 +129,12 @@ export function BiblePlansScreen() {
     <AppScreen>
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
         <IconButton accessibilityLabel={t("bible.plans.back")} icon="arrow-left" onPress={() => router.back()} />
-        <Text style={[typography.label, { color: colors.olive }]}>{t("bible.plans.title")}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>{t("bible.plans.title")}</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <View style={{ gap: 6 }}>
-        <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{t("bible.plans.title")}</Text>
+        <Text style={[typography.screenTitle, { color: colors.ink }]}>{t("bible.plans.title")}</Text>
         <BodyText muted>{t("bible.plans.description")}</BodyText>
       </View>
 
@@ -401,16 +401,16 @@ function PickerRow({
             onPress={() => onSelect(value)}
             style={{
               alignItems: "center",
-              backgroundColor: isSelected ? colors.accentSubtle : colors.paper,
-              borderColor: isSelected ? colors.gold : colors.line,
-              borderRadius: 999,
+              backgroundColor: isSelected ? shadcn.primary : shadcn.card,
+              borderColor: isSelected ? shadcn.primary : shadcn.border,
+              borderRadius: radius.md,
               borderWidth: 1,
               justifyContent: "center",
               minHeight: 34,
               paddingHorizontal: 12,
             }}
           >
-            <Text style={{ color: isSelected ? colors.olive : colors.muted, fontSize: 13, fontWeight: "800" }}>{label}</Text>
+            <Text style={[typography.label, { color: isSelected ? shadcn.primaryForeground : colors.clay }]}>{label}</Text>
           </Pressable>
         );
       })}
@@ -470,8 +470,8 @@ function PlanCard({
           <Feather name="trash-2" size={18} color={colors.danger} />
         </Pressable>
       </View>
-      <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 8, overflow: "hidden" }}>
-        <View style={{ backgroundColor: colors.gold, height: 8, width: `${percent}%` }} />
+      <View style={{ backgroundColor: shadcn.secondary, borderRadius: 999, height: 6, overflow: "hidden" }}>
+        <View style={{ backgroundColor: shadcn.primary, height: 6, width: `${percent}%` }} />
       </View>
       {plan.pausedAt ? <BodyText>{t("bible.plans.paused")}</BodyText> : null}
       <BodyText muted>{today ? t("bible.plans.plan.today", { day: today.dayNumber }) : t("bible.plans.noToday")}</BodyText>
@@ -537,8 +537,8 @@ function PlanCard({
                   }}
                   style={{ flex: 1, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: saving ? 0.5 : 1 }}
                 >
-                  <Feather name={read ? "check-square" : "square"} size={20} color={colors.olive} />
-                  <Text style={[typography.label, { color: colors.olive }]}>{t(read ? "bible.plans.markUnread" : "bible.plans.markRead")}</Text>
+                  <Feather name={read ? "check-square" : "square"} size={20} color={colors.ink} />
+                  <Text style={[typography.label, { color: colors.ink }]}>{t(read ? "bible.plans.markUnread" : "bible.plans.markRead")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -587,8 +587,8 @@ function GroupAnnouncementCard({
           </Pressable>
         ) : null}
       </View>
-      <View style={{ backgroundColor: colors.line, borderRadius: 999, height: 8, overflow: "hidden" }}>
-        <View style={{ backgroundColor: colors.olive, height: 8, width: `${percent}%` }} />
+      <View style={{ backgroundColor: shadcn.secondary, borderRadius: 999, height: 6, overflow: "hidden" }}>
+        <View style={{ backgroundColor: shadcn.primary, height: 6, width: `${percent}%` }} />
       </View>
       <PrimaryButton disabled={joined} icon={joined ? "check" : "plus"} onPress={onJoin}>
         {joined ? t("bible.plans.group.joined") : t("bible.plans.group.join")}

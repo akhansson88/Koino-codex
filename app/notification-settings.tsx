@@ -25,18 +25,18 @@ function PreferenceRow({
   const value = state.notificationPreferences[preferenceKey];
   return (
     <View style={{ alignItems: "center", flexDirection: "row", gap: 16, minHeight: 66 }}>
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={[typography.body, { color: disabled ? colors.disabledText : colors.textPrimary, fontWeight: "700" }]}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[typography.cardTitle, { color: disabled ? colors.disabledText : colors.textPrimary }]}>
           {title}
         </Text>
-        <Text style={[typography.label, { color: colors.textSecondary }]}>{subtitle}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>{subtitle}</Text>
       </View>
       <Switch
         accessibilityLabel={title}
         disabled={disabled}
         onValueChange={(nextValue) => void dispatch({ type: "setNotificationPreference", key: preferenceKey, value: nextValue })}
         thumbColor={value ? colors.paper : colors.disabledText}
-        trackColor={{ false: colors.disabled, true: colors.rose }}
+        trackColor={{ false: colors.disabled, true: colors.gold }}
         value={value}
       />
     </View>

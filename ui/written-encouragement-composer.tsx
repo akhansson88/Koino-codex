@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Text, View } from "react-native";
 
 import { TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { Button } from "@/ui/shadcn/button";
 import { colors, typography } from "@/ui/theme";
 
 export const MAX_WRITTEN_ENCOURAGEMENT_LENGTH = 500;
@@ -82,7 +82,7 @@ export function WrittenEncouragementComposer({
   );
 
   const error = submissionFailed ? (
-    <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger, fontWeight: "800" }]}>
+    <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>
       {t("community.error.generic")}
     </Text>
   ) : null;
@@ -93,57 +93,12 @@ export function WrittenEncouragementComposer({
         {input}
         {error}
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <Pressable
-            accessibilityLabel={t("community.encouragement.notNow")}
-            accessibilityRole="button"
-            disabled={submitting}
-            onPress={onDismiss}
-            style={{
-              alignItems: "center",
-              backgroundColor: colors.paper,
-              borderColor: colors.line,
-              borderRadius: 999,
-              borderWidth: 1,
-              flex: 1,
-              justifyContent: "center",
-              minHeight: 52,
-              opacity: submitting ? 0.5 : 1,
-              paddingHorizontal: 16,
-            }}
-          >
-            <Text style={[typography.button, { color: colors.olive, textAlign: "center" }]}>
-              {t("community.encouragement.notNow")}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel={t("community.encouragement.send")}
-            accessibilityRole="button"
-            accessibilityState={{ busy: submitting, disabled: sendDisabled }}
-            disabled={sendDisabled}
-            onPress={send}
-            style={{
-              alignItems: "center",
-              backgroundColor: sendDisabled ? colors.disabled : colors.gold,
-              borderColor: sendDisabled ? colors.disabled : colors.gold,
-              borderRadius: 999,
-              borderWidth: 1,
-              flex: 1,
-              flexDirection: "row",
-              gap: 8,
-              justifyContent: "center",
-              minHeight: 52,
-              paddingHorizontal: 16,
-            }}
-          >
-            {submitting ? (
-              <ActivityIndicator color={colors.onAccent} size="small" />
-            ) : (
-              <Feather name="send" size={17} color={sendDisabled ? colors.disabledText : colors.onAccent} />
-            )}
-            <Text style={[typography.button, { color: sendDisabled ? colors.disabledText : colors.onAccent, textAlign: "center" }]}>
-              {t("community.encouragement.send")}
-            </Text>
-          </Pressable>
+          <Button disabled={submitting} onPress={onDismiss} style={{ flex: 1 }} variant="outline">
+            {t("community.encouragement.notNow")}
+          </Button>
+          <Button disabled={sendDisabled} icon="send" loading={submitting} onPress={send} style={{ flex: 1 }}>
+            {t("community.encouragement.send")}
+          </Button>
         </View>
       </View>
     );
@@ -153,22 +108,14 @@ export function WrittenEncouragementComposer({
     <View style={{ gap: 6 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
         {input}
-        <Pressable
+        <Button
           accessibilityLabel={t("community.reply.send")}
-          accessibilityRole="button"
-          accessibilityState={{ busy: submitting, disabled: sendDisabled }}
           disabled={sendDisabled}
+          icon="send"
+          loading={submitting}
           onPress={send}
-          style={{
-            alignItems: "center",
-            height: 48,
-            justifyContent: "center",
-            opacity: sendDisabled ? 0.4 : 1,
-            width: 48,
-          }}
-        >
-          {submitting ? <ActivityIndicator color={colors.gold} size="small" /> : <Feather name="send" size={22} color={colors.gold} />}
-        </Pressable>
+          size="icon"
+        />
       </View>
       {error}
     </View>

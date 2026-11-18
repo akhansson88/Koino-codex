@@ -68,10 +68,10 @@ function PrayerHorizonBackground() {
     >
       <LinearGradient
         colors={[
-          "rgba(255, 199, 154, 0.44)",
-          "rgba(243, 172, 200, 0.16)",
-          "rgba(255, 255, 252, 0.76)",
-          "rgba(250, 248, 244, 0.98)",
+          "rgba(255, 199, 154, 0.5)",
+          "rgba(255, 217, 186, 0.22)",
+          "rgba(255, 255, 252, 0.8)",
+          "rgba(255, 248, 241, 0.99)",
         ]}
         locations={[0, 0.25, 0.49, 1]}
         style={StyleSheet.absoluteFillObject}
@@ -79,18 +79,18 @@ function PrayerHorizonBackground() {
       <LinearGradient
         colors={[
           "rgba(255, 255, 252, 0)",
-          "rgba(255, 238, 222, 0.54)",
-          "rgba(255, 255, 252, 0.58)",
-          "rgba(200, 188, 231, 0)",
+          "rgba(255, 238, 222, 0.6)",
+          "rgba(255, 255, 252, 0.6)",
+          "rgba(255, 199, 154, 0)",
         ]}
         locations={[0, 0.34, 0.58, 1]}
         style={{ height: "28%", left: 0, position: "absolute", right: 0, top: "39%" }}
       />
       <LinearGradient
         colors={[
-          "rgba(200, 188, 231, 0)",
-          "rgba(200, 188, 231, 0.15)",
-          "rgba(142, 220, 218, 0.24)",
+          "rgba(255, 199, 154, 0)",
+          "rgba(255, 199, 154, 0.16)",
+          "rgba(255, 217, 186, 0.3)",
         ]}
         locations={[0, 0.47, 1]}
         style={{ bottom: 0, height: "44%", left: 0, position: "absolute", right: 0 }}
@@ -550,7 +550,7 @@ export function PrayerMoment({
           }}
         >
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-            <Ionicons color={brandPalette.lavenderHaze} name="heart-outline" size={compactHeight ? 26 : 30} />
+            <Ionicons color="#C96A2E" name="heart-outline" size={compactHeight ? 26 : 30} />
           </View>
           <Text
             style={{

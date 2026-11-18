@@ -7,11 +7,12 @@ import { useKoinoActions } from "@/state/koino-store";
 import { developmentMode, emulatorMode } from "@/state/store/firebase";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { BrandWaveMotif } from "@/ui/brand-wave-motif";
+import { AmbientBackground } from "@/ui/ambient-background";
 import { Field, PasswordField } from "@/ui/components";
 import { KoinoLogo } from "@/ui/koino-logo";
 import { type TranslationKey } from "@/ui/localization";
-import { colors, typography } from "@/ui/theme";
+import { FieldLabel } from "@/ui/shadcn";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 type AuthMode = "signIn" | "signUp";
 
@@ -54,9 +55,6 @@ export function OnboardingScreen() {
             <Text style={[typography.body, { color: colors.muted, textAlign: "center" }]}>
               {t("onboarding.welcome.description")}
             </Text>
-            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <BrandWaveMotif width={200} height={34} variant="accent" />
-            </View>
           </View>
           <PrimaryButton onPress={() => setMode("signUp")}>{t("onboarding.account.signUp")}</PrimaryButton>
           <SecondaryButton onPress={() => setMode("signIn")}>{t("onboarding.account.signIn")}</SecondaryButton>
@@ -71,16 +69,17 @@ export function OnboardingScreen() {
                   accessibilityState={{ selected: language === option }}
                   onPress={() => setLanguage(option)}
                   style={{
+                    alignItems: "center",
                     justifyContent: "center",
-                    minHeight: 44,
-                    paddingHorizontal: 14,
-                    borderRadius: 999,
+                    minHeight: 40,
+                    paddingHorizontal: 16,
+                    borderRadius: radius.md,
                     borderWidth: 1,
-                    borderColor: language === option ? colors.olive : colors.line,
-                    backgroundColor: language === option ? colors.accentSubtle : colors.paper,
+                    borderColor: language === option ? shadcn.primary : shadcn.border,
+                    backgroundColor: language === option ? shadcn.primary : shadcn.card,
                   }}
                 >
-                  <Text style={[typography.label, { color: colors.ink }]}>{option === "sv" ? "Svenska" : "English"}</Text>
+                  <Text style={[typography.label, { color: language === option ? shadcn.primaryForeground : colors.clay }]}>{option === "sv" ? "Svenska" : "English"}</Text>
                 </Pressable>
               ))}
             </View>
@@ -139,7 +138,6 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
   const nameLabel = t("onboarding.account.name");
   const emailLabel = t("onboarding.account.email");
   const passwordLabel = t("onboarding.account.password");
-  const fieldLabelStyle = [typography.label, { color: colors.ink }];
 
   return (
     <>
@@ -154,16 +152,16 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
       <Card>
         {signingUp ? (
           <View style={{ gap: 6 }}>
-            <Text style={fieldLabelStyle}>{nameLabel}</Text>
+            <FieldLabel>{nameLabel}</FieldLabel>
             <Field accessibilityLabel={nameLabel} autoCapitalize="words" autoComplete="name" editable={!pending} value={name} onChangeText={setName} />
           </View>
         ) : null}
         <View style={{ gap: 6 }}>
-          <Text style={fieldLabelStyle}>{emailLabel}</Text>
+          <FieldLabel>{emailLabel}</FieldLabel>
           <Field accessibilityLabel={emailLabel} autoCapitalize="none" autoComplete="email" autoCorrect={false} editable={!pending} keyboardType="email-address" value={email} onChangeText={setEmail} />
         </View>
         <View style={{ gap: 6 }}>
-          <Text style={fieldLabelStyle}>{passwordLabel}</Text>
+          <FieldLabel>{passwordLabel}</FieldLabel>
           <PasswordField
             accessibilityLabel={passwordLabel}
             accessibilityHint={signingUp ? t("onboarding.account.passwordHint") : undefined}
@@ -206,6 +204,7 @@ export function OnboardingPage({ children, center = false }: PropsWithChildren<{
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.cream }}>
+      <AmbientBackground />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentInsetAdjustmentBehavior="never"

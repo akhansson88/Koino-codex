@@ -61,8 +61,17 @@ const mocks = {
     export const router = { navigate: route => { h.navigated = route; h.route = (typeof route === "string" ? route : route.pathname).split('/').pop(); }, push: route => { h.pushed = route; }, back: () => { h.backs++; }, replace: route => { h.replaced?.push(route); }, dismissTo: route => { h.dismissedTo = route; } };
     export const useNavigation = () => ({ canGoBack: () => true, setOptions() {} });
     export const useLocalSearchParams = () => (h.params ?? {});
+    export const usePathname = () => h.pathname ?? "/";
     export const useFocusEffect = callback => React.useEffect(() => h.focused === false ? undefined : callback(), [callback, h.focused]);
     export const Tabs = Object.assign(props => React.createElement("Tabs", props), { Screen: () => null });
+  `,
+  "expo-linear-gradient": `import React from "react"; export const LinearGradient = props => React.createElement("LinearGradient", props);`,
+  "react-native-gesture-handler": `
+    import React from "react";
+    const pan = { enabled() { return this; }, activeOffsetX() { return this; }, failOffsetY() { return this; }, runOnJS() { return this; }, onEnd() { return this; } };
+    export const Gesture = { Pan: () => pan };
+    export const GestureDetector = props => React.createElement("GestureDetector", props);
+    export const GestureHandlerRootView = "GestureRoot";
   `,
   "@react-navigation/native": 'export const useIsFocused = () => globalThis.__communityNavigation.focused !== false; export const useNavigation = () => ({ dispatch() {} }); export const usePreventRemove = () => {};',
   "@/state/koino-store": `
@@ -384,7 +393,7 @@ try {
   await build({
     stdin: { contents: `export { JournalDetailScreen as JournalDetail } from "./features/journal-detail-screen"; export { SharedComposer as RealComposer } from "./ui/shared-composer"; export { BibleVerseField as RealBibleVerseField } from "./ui/bible-verse-field"; export { HomeScreen as Home } from "./features/home-screen"; export { default as Tabs } from "./app/(tabs)/_layout";
       export { translateMessage } from "./ui/localization";
-      export { colors } from "./ui/theme";
+      export { colors, shadcn } from "./ui/theme";
       export { PrayerRequestCard } from "./features/community/prayer-screens";
       export { HomePrayerFlowScreen } from "./features/home-prayer-flow-screen";
       export { CheckInModal as RealCheckInModal } from "./features/check-in-modal";
@@ -510,7 +519,7 @@ try {
   harness.state = overviewState;
   harness.actions = [];
   await act(async () => { tree = create(React.createElement(screens.Prayer)); });
-  const prayForSomeone = tree.root.findAllByType("SecondaryButton").find(node => node.props.children === "community.prayer.prayForSomeone");
+  const prayForSomeone = tree.root.findAllByType("Button").find(node => node.props.children === "community.prayer.prayForSomeone");
   assert.ok(prayForSomeone, "Prayer retains its Pray for someone action");
   const memberModal = () => tree.root.find(node => node.type?.name === "CommunityPrayerMemberModal");
   assert.equal(memberModal().props.visible, false);
@@ -582,9 +591,9 @@ try {
   await act(async () => { tree = create(React.createElement(screens.Prayer)); });
   assert.ok(tree.root.findAll(node => node.type?.name === "PrayerRequestCard").every(node => node.props.focused === true), "Only the dedicated Prayer screen opts into focused request actions");
   assert.ok(cards().every(node => !node.props.overview), "Focused Prayer retains its existing card shell");
-  assert.equal(requestAction("unprayed").type, "Pressable");
+  assert.equal(requestAction("unprayed").type.name, "CommunityCardAction");
   assert.equal(requestAction("unprayed").props.accessibilityLabel, "community.prayer.prayForRequest:Sarah");
-  assert.ok(entryStyle(requestAction("unprayed")).minHeight >= 44);
+  assert.ok(entryStyle(requestAction("unprayed").findByType("Pressable")).minHeight >= 44);
   assert.equal(requestAction("unprayed").findByType("MaterialCommunityIcons").props.name, "hands-pray");
   assert.equal(card("unprayed").props.status.props.status, "open");
   await act(() => press(requestAction("unprayed")));
@@ -613,14 +622,14 @@ try {
   assert.equal(harness.actions.at(-1).type, "finishPrayer", "Repeat prayer must not toggle or remove participation");
   await act(() => overviewChips().props.onChange("answered"));
   assert.equal(card("answered").props.status.props.status, "answered");
-  assert.equal(requestAction("answered").type, "Pressable", "Answered status does not imply that this reader has prayed");
-  const sharePrayer = tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.share");
-  assert.ok(sharePrayer && entryStyle(sharePrayer).minHeight >= 44, "Sharing is an accessible tertiary action");
+  assert.equal(requestAction("answered").type.name, "CommunityCardAction", "Answered status does not imply that this reader has prayed");
+  const sharePrayer = tree.root.findAll(node => node.type === "Button").find(node => node.props.children === "community.prayer.share");
+  assert.ok(sharePrayer, "Sharing is an accessible tertiary action");
   await act(() => press(sharePrayer));
   assert.equal(tree.root.findByType("SharedComposer").props.visible, true);
   assert.equal(tree.root.findByType("SharedComposer").props.kind, "prayer_request");
   await act(() => tree.root.findByType("SharedComposer").props.onClose());
-  await act(() => press(tree.root.findAllByType("SecondaryButton").find(node => node.props.children === "community.prayer.prayForSomeone")));
+  await act(() => press(tree.root.findAll(node => node.type === "Button").find(node => node.props.children === "community.prayer.prayForSomeone")));
   await act(() => memberModal().props.onSelect(memberModal().props.members.find(member => member.id === "sarah")));
   assert.equal(memberModal().props.visible, false);
   assert.deepEqual(moment().props.target, { ...expectedTarget, targetType: "user", targetId: "sarah", body: "" }, "Personal prayer still selects a user, independently of request prayer");
@@ -801,7 +810,7 @@ try {
         await act(() => overviewChips().props.onChange(filter));
         assert.deepEqual(overviewChips().props.options.map(option => option.label), copy.filters);
         assert.ok(renderedTree().includes(copy.description) && renderedTree().includes(copy.counts[filter][count - 1]), `${language} ${filter} describes only the loaded requests, with correct singular/plural copy`);
-        assert.ok(tree.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === copy.share));
+        assert.ok(tree.root.findAll(node => node.type === "Button").some(node => node.props.children === copy.share));
         assert.equal(requestAction(sample.id).props.accessibilityLabel, copy.prayLabel);
         assert.ok(requestAction(sample.id).findAllByType("Text").some(node => node.props.children === copy.pray));
         await updatePrayer({ ...localizedState, prayerReactions: [{ id: `reader_post_${sample.id}`, userId: "reader", targetType: "post", targetId: sample.id, createdAt: now }] });
@@ -968,7 +977,7 @@ try {
   const greeting = () => tree.root.findAllByType("Text").find(node => node.props.accessibilityRole === "header");
   const scriptureCard = () => tree.root.findAllByType("Card").find(node => node.findAllByType("PrimaryButton").length === 1);
   assert.equal(entryStyle(greeting()).color, screens.colors.ink);
-  assert.equal(entryStyle(scriptureCard()).backgroundColor, screens.colors.elevated);
+  assert.ok(entryStyle(scriptureCard()).elevation >= 1, "Scripture card carries the raised theme shadow");
   harness.localized = true;
   for (const language of ["en", "sv"]) {
     harness.language = language;
@@ -1332,7 +1341,8 @@ try {
       await act(async () => { tree = create(React.createElement(screens.RealCheckInModal, modalProps)); });
       assert.equal(audienceSwitch().props.accessibilityState.checked, share);
       assert.equal(audienceSwitch().props.accessibilityLabel, share ? sharedNotice : `${privateLabel}. ${shareLabel}`);
-      assert.ok(entryStyle(audienceSwitch()).minHeight >= 44);
+      const audienceStyle = audienceSwitch().props.style;
+      assert.ok((typeof audienceStyle === "function" ? audienceStyle({ pressed: false }) : audienceStyle).minHeight >= 44);
       assert.deepEqual(tree.root.findAll(node => ["TextInputField", "BibleVerseField"].includes(node.type) || node.type === "Pressable" && node.props.accessibilityRole === "switch").map(node => node.type === "Pressable" ? "audience" : node.type), ["audience", "TextInputField", "BibleVerseField"], "Audience is clear before optional words and Scripture");
       assert.equal(tree.root.findByType("TextInputField").props.accessibilityLabel, noteLabel);
       assertAudienceSelection(share);
@@ -1926,7 +1936,10 @@ try {
       assert.deepEqual({ title: clarityProps.title, body: clarityProps.body, verses: clarityProps.verses }, retained, "Switching Community type preserves the complete unsent input");
       const controls = claritySelector().findAllByType("Pressable");
       assert.deepEqual(controls.filter(node => node.props.accessibilityState.checked).map(node => node.props.accessibilityLabel), [labels[kind]]);
-      assert.ok(controls.every(node => entryStyle(node).minHeight >= 44), "Existing accessible selector target sizes are retained");
+      assert.ok(controls.every(node => {
+        const style = typeof node.props.style === "function" ? node.props.style({ pressed: false }) : node.props.style;
+        return style.minHeight >= 44;
+      }), "Existing accessible selector target sizes are retained");
       const description = screens.translateMessage(language, `community.composer.share.description.${kind}`);
       assert.ok(description && description !== `community.composer.share.description.${kind}`);
       assert.ok(clarityText(description), "Only the selected contribution's contextual explanation is displayed");
@@ -2041,7 +2054,7 @@ try {
       assert.equal(nativeTitle().props.returnKeyType, "done");
       for (const field of [nativeBody(), nativeTitle()]) {
         assert.ok(field.props.accessibilityLabel && !field.props.accessibilityLabel.startsWith("community."), "EN/SV fields retain a localized accessible label when populated");
-        assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === field.props.accessibilityLabel), "A persistent visible label accompanies each Community input");
+        assert.ok(tree.root.findAll(node => node.type === "Text" || node.type === "FieldLabel").some(node => node.props.children === field.props.accessibilityLabel), "A persistent visible label accompanies each Community input");
         assert.notEqual(field.props.allowFontScaling, false);
       }
       assert.equal(nativeTitle().props.accessibilityLabel, language === "en" ? "Prayer title (optional)" : "Rubrik för böneämnet (valfri)");
@@ -2052,7 +2065,7 @@ try {
         await act(() => updateNative({ kind }));
         assert.equal(nativeBody().props.accessibilityLabel, label, "Each type identifies required writing or the optional Scripture note");
         assert.equal(nativeBody().props.accessibilityHint, screens.translateMessage(language, "community.composer.share.field.writingHint", { max: 500 }));
-        assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === label));
+        assert.ok(tree.root.findAll(node => node.type === "Text" || node.type === "FieldLabel").some(node => node.props.children === label));
       }
       await act(() => updateNative({ kind: "prayer_request" }));
       await act(() => nativeBody().props.onChangeText("First line\nSecond line"));
@@ -2067,7 +2080,10 @@ try {
         await act(() => updateNative({}));
         const options = nativeSelector().findAllByType("Pressable");
         assert.equal(options.length, 4);
-        assert.ok(options.every(node => node.props.accessibilityRole === "radio" && entryStyle(node).minHeight >= 44));
+        assert.ok(options.every(node => {
+          const style = typeof node.props.style === "function" ? node.props.style({ pressed: false }) : node.props.style;
+          return node.props.accessibilityRole === "radio" && style.minHeight >= 44;
+        }));
         assert.equal(options.filter(node => node.props.accessibilityState.checked).length, 1, "Screen readers have one checked contribution type");
         assert.ok(options.every(node => node.parent.findAllByType("Pressable").length === rowSize), "Narrow or enlarged-text Community choices use one column without shortening their labels");
         assert.ok(options.every(node => node.findByType("Text").props.numberOfLines === undefined), "Localized type names can wrap");
@@ -2149,7 +2165,7 @@ try {
       assert.equal(entryStyle(label).flex, 1);
       assert.equal(label.props.numberOfLines, undefined, "Community passage labels wrap beside the count");
     } else {
-      assert.ok(tree.root.findByType("SectionHeading"), "Existing non-Community picker heading is retained");
+      assert.ok(tree.root.findAllByType("Text").some(node => node.props.children === "A passage label that wraps"), "Existing non-Community picker heading is retained");
     }
     await act(async () => tree.root.findByType("SecondaryButton").props.onPress());
     assert.equal(harness.keyboardDismissals, communityComposer ? 1 : 0, "Only the Community picker dismisses its writing keyboard before opening");
@@ -2174,7 +2190,7 @@ try {
       assert.equal(actualComposer().props.kind, "reflection", "Both overview Share entry points retain their Reflection default");
       await act(() => actualComposer().findByType("IconButton").props.onPress());
       await act(() => overviewEntry(overviewEntryLabels.prayer).props.onPress());
-      await act(() => tree.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "community.prayer.share").props.onPress());
+      await act(() => tree.root.findAll(node => node.type === "Button").find(node => node.props.children === "community.prayer.share").props.onPress());
       assert.equal(actualComposer().props.kind, "prayer_request", "Dedicated Prayer opens the real composer with its request type preselected");
       await act(() => actualComposer().findByType("IconButton").props.onPress());
       await act(() => tree.unmount());

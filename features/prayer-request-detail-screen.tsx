@@ -1,7 +1,7 @@
 import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
@@ -30,7 +30,9 @@ import { LinkPreviewContent } from "@/ui/link-preview";
 import { PrayerActivity, type PrayerActivityEntry } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
-import { colors } from "@/ui/theme";
+import { Separator } from "@/ui/shadcn/separator";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 
 const MAX_ANSWERED_UPDATE_LENGTH = 280;
@@ -83,7 +85,7 @@ function PrayerRequestHeader({ onBack, onOpenOptions, item }: { onBack: () => vo
   return (
     <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
       <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={onBack} />
-      <Text style={{ color: colors.ink, flex: 1, fontSize: 18, fontWeight: "900", marginHorizontal: 8, textAlign: "center" }}>
+      <Text numberOfLines={1} style={[typography.title, { color: colors.ink, flex: 1, marginHorizontal: 8, textAlign: "center" }]}>
         {t("community.page.prayer")}
       </Text>
       {onOpenOptions ? (
@@ -129,7 +131,7 @@ function AnsweredPrayerEditorSheet({
         placeholder={t("community.prayer.answerPlaceholder")}
         value={draft}
       />
-      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700", textAlign: "right" }}>
+      <Text style={[typography.caption, { color: colors.muted, textAlign: "right" }]}>
         {draft.length}/{MAX_ANSWERED_UPDATE_LENGTH}
       </Text>
       {error ? <BodyText style={{ color: colors.danger }}>{error}</BodyText> : null}
@@ -163,22 +165,25 @@ function PrayerOwnerActionsSheet({
   visible: boolean;
 }) {
   const { t } = useAppTranslation();
+  const pendingAction = useRef<(() => void) | undefined>(undefined);
   return (
-    <BottomSheet dismissible={!saving} onClose={onClose} title={t("community.prayer.ownerActions")} visible={visible}>
-      {answered ? (
-        <>
-          <SecondaryButton disabled={saving} icon="edit-2" onPress={onEditAnswer}>
-            {t("community.prayer.editAnswer")}
-          </SecondaryButton>
-          <SecondaryButton disabled={saving} icon="rotate-ccw" onPress={onReopen}>
-            {t("community.prayer.reopen")}
-          </SecondaryButton>
-        </>
-      ) : (
-        <PrimaryButton disabled={saving} icon="check-circle" onPress={onMarkAnswered}>
-          {t("community.prayer.markAnswered")}
-        </PrimaryButton>
-      )}
+    <BottomSheet dismissible={!saving} onClose={onClose} title={t("community.prayer.ownerActions")} visible={visible}
+      onDismiss={() => {
+        const action = pendingAction.current;
+        pendingAction.current = undefined;
+        action?.();
+      }}
+    >
+      <SheetMenuGroup>
+        {answered ? (
+          <>
+            <SheetMenuItem disabled={saving} icon="edit-2" title={t("community.prayer.editAnswer")} onPress={() => { pendingAction.current = onEditAnswer; onClose(); }} />
+            <SheetMenuItem disabled={saving} icon="rotate-ccw" showDivider title={t("community.prayer.reopen")} onPress={() => { pendingAction.current = onReopen; onClose(); }} />
+          </>
+        ) : (
+          <SheetMenuItem disabled={saving} icon="check-circle" title={t("community.prayer.markAnswered")} onPress={() => { pendingAction.current = onMarkAnswered; onClose(); }} />
+        )}
+      </SheetMenuGroup>
       {error ? <BodyText style={{ color: colors.danger }}>{error}</BodyText> : null}
       <SecondaryButton disabled={saving} onPress={onClose}>
         {t("common.cancel")}
@@ -193,7 +198,7 @@ function PrayerRequestRouteState({ loading, onBack }: { loading: boolean; onBack
     <AppScreen>
       <PrayerRequestHeader onBack={onBack} />
       <Card style={{ alignItems: loading ? "center" : undefined }}>
-        {loading ? <ActivityIndicator color={colors.olive} /> : <BodyText muted>{t("community.prayer.unavailable")}</BodyText>}
+        {loading ? <ActivityIndicator color={colors.ink} /> : <BodyText muted>{t("community.prayer.unavailable")}</BodyText>}
       </Card>
     </AppScreen>
   );
@@ -226,14 +231,14 @@ export function PrayerRequestDetailScreen({
       <AppScreen>
       <PrayerRequestHeader onBack={onBack} item={item} onOpenOptions={ownsItem ? onOpenOwnerActions : undefined} />
       <View style={{ alignItems: "center", gap: 8 }}>
-        <Avatar image={authorImage} name={authorName} size={58} tone="green" />
-        <View style={{ alignItems: "center", gap: 3 }}>
-          <Text style={{ color: colors.ink, fontSize: 15, fontWeight: "900" }}>{authorName}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{formatRelativeTime(item.createdAt, language)}</Text>
+        <Avatar image={authorImage} name={authorName} size={56} tone="green" />
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <Text style={[typography.cardTitle, { color: colors.ink }]}>{authorName}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{formatRelativeTime(item.createdAt, language)}</Text>
         </View>
       </View>
       <View style={{ gap: 12 }}>
-        <Text style={{ color: colors.ink, fontSize: 24, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
+        <Text style={[typography.heading, { color: colors.ink, textAlign: "center" }]}>
           {item.title || t("community.defaultTitle.prayerRequest")}
         </Text>
         <LinkPreviewContent text={item.body}>
@@ -250,28 +255,41 @@ export function PrayerRequestDetailScreen({
       <VerseList verse={item.verse} verses={item.verses} />
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
         <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
-          <Text style={{ color: colors.gold, fontSize: 18, fontWeight: "900" }}>{prayer.count}</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{communityPrayerNoun(prayer.count, t)}</Text>
+          <Text style={[typography.title, { color: colors.ink }]}>{prayer.count}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{communityPrayerNoun(prayer.count, t)}</Text>
         </View>
         <View style={{ backgroundColor: colors.line, height: 34, width: 1 }} />
-        <View style={{ alignItems: "center", flex: 1, gap: 3 }}>
+        <View style={{ alignItems: "center", flex: 1, gap: 5 }}>
           <StatusPill status={answered ? "answered" : "open"} />
-          <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>{t("community.prayer.status.label")}</Text>
+          <Text style={[typography.caption, { color: colors.muted }]}>{t("community.prayer.status.label")}</Text>
         </View>
       </Card>
       {prayer.prayedBy.length > 0 ? <AvatarStack users={prayer.prayedBy} /> : null}
       {answered ? (
-        <Card style={{ backgroundColor: colors.mossSurface, gap: 8 }}>
+        <Card style={{ gap: 10 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-            <Feather name="check-circle" size={20} color={colors.olive} />
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>{t("community.prayer.answeredTitle")}</Text>
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: shadcn.successSoft,
+                borderCurve: "continuous",
+                borderRadius: radius.md,
+                height: 36,
+                justifyContent: "center",
+                width: 36,
+              }}
+            >
+              <Feather name="check" size={18} color={shadcn.success} />
+            </View>
+            <Text style={[typography.cardTitle, { color: colors.ink, flex: 1 }]}>{t("community.prayer.answeredTitle")}</Text>
           </View>
           <BodyText muted>
             {t("community.prayer.markedAnswered", { time: formatRelativeTime(item.answeredAt ?? item.createdAt, language) })}
           </BodyText>
           {item.answeredUpdate?.trim() ? (
-            <View style={{ borderTopColor: colors.line, borderTopWidth: 1, gap: 6, paddingTop: 10 }}>
-              <Text style={{ color: colors.olive, fontSize: 12, fontWeight: "900" }}>
+            <View style={{ gap: 8 }}>
+              <Separator />
+              <Text style={[typography.sectionLabel, { color: colors.muted, fontSize: 10 }]}>
                 {t("community.prayer.updateLabel")}
               </Text>
               <BodyText>{item.answeredUpdate}</BodyText>
@@ -283,46 +301,41 @@ export function PrayerRequestDetailScreen({
       {encouragements.length > 0 ? (
         <View style={{ gap: 12 }}>
           <SectionHeading>{t("community.reply.heading")}</SectionHeading>
-          <Card style={{ gap: 0, padding: 0 }}>
+          <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>
             {encouragements.map((encouragement, index) => (
-              <View
-                key={encouragement.id}
-                style={{
-                  borderBottomColor: colors.line,
-                  borderBottomWidth: index === encouragements.length - 1 ? 0 : 1,
-                  gap: 8,
-                  padding: 14,
-                }}
-              >
-                <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-                  <Avatar image={encouragement.authorImage} name={encouragement.authorName} size={32} tone="pink" />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={2} style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>
-                      {encouragement.authorName}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                      {formatRelativeTime(encouragement.createdAt, language)}
-                    </Text>
+              <View key={encouragement.id}>
+                <View style={{ gap: 8, padding: 14 }}>
+                  <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+                    <Avatar image={encouragement.authorImage} name={encouragement.authorName} size={30} tone="pink" />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={2} style={[typography.cardTitle, { color: colors.ink, fontSize: 14, lineHeight: 19 }]}>
+                        {encouragement.authorName}
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.muted }]}>
+                        {formatRelativeTime(encouragement.createdAt, language)}
+                      </Text>
+                    </View>
+                    {encouragement.canDelete ? (
+                      <Pressable
+                        accessibilityLabel={t("community.reply.delete")}
+                        accessibilityRole="button"
+                        onPress={() => onDeleteEncouragement(encouragement.id)}
+                        style={{ alignItems: "center", height: 36, justifyContent: "center", width: 36 }}
+                      >
+                        <Feather name="trash-2" size={16} color={colors.danger} />
+                      </Pressable>
+                    ) : encouragement.authorId ? <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={encouragement.id} authorId={encouragement.authorId} /> : null}
                   </View>
-                  {encouragement.canDelete ? (
-                    <Pressable
-                      accessibilityLabel={t("community.reply.delete")}
-                      accessibilityRole="button"
-                      onPress={() => onDeleteEncouragement(encouragement.id)}
-                      style={{ padding: 6 }}
-                    >
-                      <Feather name="trash-2" size={16} color={colors.danger} />
-                    </Pressable>
-                  ) : encouragement.authorId ? <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={encouragement.id} authorId={encouragement.authorId} /> : null}
+                  <LinkPreviewContent text={encouragement.body}>
+                    {({ hiddenUrl, preview }) => (
+                      <>
+                        <BodyText hiddenUrl={hiddenUrl}>{encouragement.body}</BodyText>
+                        {preview}
+                      </>
+                    )}
+                  </LinkPreviewContent>
                 </View>
-                <LinkPreviewContent text={encouragement.body}>
-                  {({ hiddenUrl, preview }) => (
-                    <>
-                      <BodyText hiddenUrl={hiddenUrl}>{encouragement.body}</BodyText>
-                      {preview}
-                    </>
-                  )}
-                </LinkPreviewContent>
+                {index < encouragements.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
               </View>
             ))}
           </Card>
@@ -349,21 +362,22 @@ function PrayerActionButton({ onPress, prayed }: { onPress: () => void; prayed: 
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: prayed ? colors.prayerSoft : colors.gold,
-        borderColor: prayed ? colors.accentPrayer : colors.gold,
-        borderRadius: 999,
+        backgroundColor: prayed ? shadcn.secondary : pressed ? "#292524" : shadcn.primary,
+        borderColor: prayed ? shadcn.border : shadcn.primary,
+        borderCurve: "continuous",
+        borderRadius: radius.lg,
         borderWidth: 1,
         flexDirection: "row",
-        gap: 10,
+        gap: 9,
         justifyContent: "center",
-        minHeight: 54,
+        minHeight: 52,
         paddingHorizontal: 18,
-      }}
+      })}
     >
-      <MaterialCommunityIcons name="hands-pray" size={21} color={prayed ? colors.textMuted : colors.onAccent} />
-      <Text style={{ color: prayed ? colors.textMuted : colors.onAccent, fontSize: 16, fontWeight: "900" }}>
+      <MaterialCommunityIcons name="hands-pray" size={20} color={prayed ? colors.ink : shadcn.primaryForeground} />
+      <Text style={[typography.button, { color: prayed ? colors.ink : shadcn.primaryForeground }]}>
         {communityActionLabel("prayer_request", prayed, t)}
       </Text>
     </Pressable>

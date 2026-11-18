@@ -1,10 +1,12 @@
-import { SheetTextInput } from "@/ui/app-sheet";
 import { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { PropsWithChildren } from "react";
-import { Pressable, ScrollView, StyleProp, Text, TextInputProps, View, ViewStyle } from "react-native";
+import { Pressable, ScrollView, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+
+import { Button } from "@/ui/shadcn/button";
+import { Input } from "@/ui/shadcn/input";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, radius, typography } from "@/ui/theme";
+import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 import { type FeatherName } from "@/ui/app-components/types";
 
 export function PrimaryButton({
@@ -13,6 +15,7 @@ export function PrimaryButton({
   children,
   disabled = false,
   icon,
+  loading = false,
   onPress,
   style,
 }: PropsWithChildren<{
@@ -20,42 +23,24 @@ export function PrimaryButton({
   accessibilityLabel?: string;
   disabled?: boolean;
   icon?: FeatherName;
+  loading?: boolean;
   onPress: ComponentProps<typeof Pressable>["onPress"];
   style?: StyleProp<ViewStyle>;
 }>) {
   return (
-    <Pressable
+    <Button
       accessibilityHint={accessibilityHint}
-      accessibilityLabel={accessibilityLabel ?? (typeof children === "string" ? children : undefined)}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled}
+      icon={icon}
+      loading={loading}
       onPress={onPress}
-      style={[
-        {
-          alignItems: "center",
-          backgroundColor: disabled ? colors.disabled : colors.gold,
-          borderColor: disabled ? colors.disabled : colors.gold,
-          borderRadius: 999,
-          borderWidth: 1,
-          flexDirection: "row",
-          gap: 10,
-          justifyContent: "center",
-          minHeight: 54,
-          paddingHorizontal: 18,
-        },
-        style,
-      ]}
+      size="lg"
+      style={style}
+      variant="default"
     >
-      {icon ? (
-        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-          <Feather name={icon} size={19} color={disabled ? colors.disabledText : colors.onAccent} />
-        </View>
-      ) : null}
-      <Text style={[typography.button, { color: disabled ? colors.disabledText : colors.onAccent, flexShrink: 1, textAlign: "center" }]}>
-        {children}
-      </Text>
-    </Pressable>
+      {children}
+    </Button>
   );
 }
 
@@ -77,66 +62,25 @@ export function SecondaryButton({
   style?: StyleProp<ViewStyle>;
   tone?: "default" | "danger";
 }>) {
-  const color = tone === "danger" ? colors.danger : colors.olive;
   return (
-    <Pressable
+    <Button
       accessibilityHint={accessibilityHint}
-      accessibilityLabel={accessibilityLabel ?? (typeof children === "string" ? children : undefined)}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled}
+      icon={icon}
       onPress={onPress}
-      style={[
-        {
-          alignItems: "center",
-          backgroundColor: colors.paper,
-          borderColor: tone === "danger" ? colors.dangerBorder : colors.line,
-          borderRadius: 999,
-          borderWidth: 1,
-          flexDirection: "row",
-          gap: 9,
-          justifyContent: "center",
-          minHeight: 52,
-          paddingHorizontal: 18,
-        },
-        style,
-      ]}
+      size="lg"
+      style={style}
+      textStyle={tone === "danger" ? { color: colors.danger } : undefined}
+      variant="outline"
     >
-      {icon ? (
-        <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-          <Feather name={icon} size={18} color={disabled ? colors.disabledText : color} />
-        </View>
-      ) : null}
-      <Text style={[typography.button, { color: disabled ? colors.disabledText : color, flexShrink: 1, textAlign: "center" }]}>
-        {children}
-      </Text>
-    </Pressable>
+      {children}
+    </Button>
   );
 }
 
-export function TextInputField(props: TextInputProps) {
-  return (
-    <SheetTextInput
-      placeholderTextColor={colors.muted}
-      {...props}
-      style={[
-        {
-          backgroundColor: colors.input,
-          borderColor: colors.line,
-          borderCurve: "continuous",
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          color: colors.ink,
-          minHeight: props.multiline ? 116 : 50,
-          paddingHorizontal: 14,
-          paddingVertical: props.multiline ? 14 : 0,
-          textAlignVertical: props.multiline ? "top" : "center",
-        },
-        typography.body,
-        props.style,
-      ]}
-    />
-  );
+export function TextInputField(props: import("react-native").TextInputProps) {
+  return <Input {...props} />;
 }
 
 export function IconButton({
@@ -144,31 +88,24 @@ export function IconButton({
   icon,
   onPress,
   tone = "default",
+  variant = "outline",
 }: {
   accessibilityLabel: string;
   icon: FeatherName;
   onPress: () => void;
   tone?: "default" | "danger";
+  variant?: "outline" | "ghost";
 }) {
   return (
-    <Pressable
+    <Button
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      hitSlop={8}
+      icon={icon}
       onPress={onPress}
-      style={{
-        alignItems: "center",
-        backgroundColor: colors.paper,
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        height: 38,
-        justifyContent: "center",
-        width: 38,
-      }}
-    >
-      <Feather name={icon} size={18} color={tone === "danger" ? colors.danger : colors.ink} />
-    </Pressable>
+      size="icon-sm"
+      variant={variant}
+      style={tone === "danger" ? { borderColor: colors.dangerBorder } : undefined}
+      iconColor={tone === "danger" ? colors.danger : undefined}
+    />
   );
 }
 
@@ -196,11 +133,12 @@ export function FilterChips<T extends string>({
         accessibilityState={{ selected }}
         key={option.value}
         onPress={() => onChange(option.value)}
-        style={{
+        style={({ pressed }) => ({
           alignItems: "center",
-          backgroundColor: selected ? colors.accentSubtle : colors.paper,
-          borderColor: selected ? colors.gold : colors.line,
-          borderRadius: 999,
+          backgroundColor: selected ? shadcn.primary : pressed ? "#FBE7D3" : shadcn.secondary,
+          borderColor: selected ? shadcn.primary : shadcn.border,
+          borderCurve: "continuous",
+          borderRadius: radius.md,
           borderWidth: 1,
           flex: fit ? 1 : undefined,
           flexDirection: "row",
@@ -208,19 +146,26 @@ export function FilterChips<T extends string>({
           justifyContent: "center",
           minHeight,
           minWidth: fit ? 0 : undefined,
-          paddingHorizontal: fit ? 4 : 18,
-        }}
+          paddingHorizontal: fit ? 4 : 14,
+          ...(selected ? {} : shadows.control),
+        })}
       >
         {selected && showSelectionIndicator ? (
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-            <Feather name="check" size={14} color={colors.olive} />
+            <Feather name="check" size={13} color={shadcn.primaryForeground} />
           </View>
         ) : null}
         <Text
           adjustsFontSizeToFit={fit}
           minimumFontScale={fit ? 0.78 : undefined}
           numberOfLines={1}
-          style={[typography.label, { color: selected ? colors.olive : colors.muted, fontSize: fit ? 12 : typography.label.fontSize }]}
+          style={[
+            typography.label,
+            {
+              color: selected ? shadcn.primaryForeground : colors.muted,
+              fontSize: fit ? 12 : typography.label.fontSize,
+            },
+          ]}
         >
           {option.label}
         </Text>
@@ -241,17 +186,21 @@ export function StatusPill({ status }: { status: "answered" | "open" }) {
   return (
     <View
       style={{
-        backgroundColor: answered ? colors.rhythmSoft : colors.warmSoft,
-        borderColor: answered ? colors.accentRhythm : colors.border,
-        borderRadius: 999,
+        alignItems: "center",
+        backgroundColor: answered ? shadcn.successSoft : shadcn.warningSoft,
+        borderColor: answered ? "#BBF7D0" : "#FDE68A",
+        borderRadius: radius.sm,
         borderWidth: 1,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
+        justifyContent: "center",
+        minHeight: 24,
+        paddingHorizontal: 8,
       }}
     >
-      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>
+      <Text style={[typography.navLabel, { color: answered ? shadcn.success : shadcn.warning, fontSize: 11 }]}>
         {t(answered ? "shared.status.answered" : "shared.status.open")}
       </Text>
     </View>
   );
 }
+
+export const controlTextStyle: TextStyle = { color: colors.ink };

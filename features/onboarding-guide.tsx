@@ -10,13 +10,13 @@ import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
-import { colors, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 const guideItems = [
-  { title: "onboarding.guide.scripture", body: "onboarding.guide.scriptureBody", icon: "book-open", tint: "warmSoft" },
-  { title: "onboarding.guide.prayer", body: "onboarding.guide.prayerBody", icon: "heart", tint: "prayerSoft" },
-  { title: "tabs.me", body: "onboarding.guide.meBody", icon: "book", tint: "reflectionSoft" },
-  { title: "tabs.community", body: "onboarding.guide.communityBody", icon: "users", tint: "rhythmSoft" },
+  { title: "onboarding.guide.scripture", body: "onboarding.guide.scriptureBody", icon: "book-open" },
+  { title: "onboarding.guide.prayer", body: "onboarding.guide.prayerBody", icon: "heart" },
+  { title: "tabs.me", body: "onboarding.guide.meBody", icon: "book" },
+  { title: "tabs.community", body: "onboarding.guide.communityBody", icon: "users" },
 ] as const;
 
 export function OnboardingGuide({ userId, journey }: { userId: string; journey: OnboardingChoice }) {
@@ -64,15 +64,15 @@ export function OnboardingGuide({ userId, journey }: { userId: string; journey: 
       ) : null}
       <Card>
         <View role="list" style={{ gap: 16 }}>
-          {guideItems.map(({ title, body, icon, tint }) => (
+          {guideItems.map(({ title, body, icon }) => (
             <View key={title} role="listitem" style={{ alignItems: "flex-start", flexDirection: "row", gap: 12 }}>
               <View
                 accessible={false}
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
-                style={{ alignItems: "center", backgroundColor: colors[tint], borderRadius: 18, height: 36, justifyContent: "center", width: 36 }}
+                style={{ alignItems: "center", backgroundColor: shadcn.secondary, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 }}
               >
-                <Feather name={icon} size={18} color={colors.ink} />
+                <Feather name={icon} size={17} color={colors.ink} />
               </View>
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={[typography.label, { color: colors.ink }]}>{t(title)}</Text>

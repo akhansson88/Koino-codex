@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import type { Id, Membership } from "@/state/types";
 import { Avatar, BodyText } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { colors, radius } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 export function MemberList({
   currentUserId,
@@ -51,9 +51,9 @@ function RoomMemberRow({
     <View
       style={{
         alignItems: "center",
-        backgroundColor: colors.input,
-        borderColor: colors.line,
-        borderRadius: radius.lg,
+        backgroundColor: shadcn.card,
+        borderColor: shadcn.border,
+        borderRadius: radius.md,
         borderWidth: 1,
         flexDirection: "row",
         gap: 12,
@@ -62,8 +62,8 @@ function RoomMemberRow({
     >
       <Avatar image={membership.image} name={membership.userName} size={38} tone={membership.role === "owner" ? "orange" : "green"} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ color: colors.ink, fontSize: 14, fontWeight: "900" }}>{membership.userName}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+        <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{membership.userName}</Text>
+        <Text style={[typography.caption, { color: colors.muted }]}>
           {t(membership.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
         </Text>
       </View>
@@ -75,9 +75,9 @@ function RoomMemberRow({
           onPress={() => onTransfer?.(membership)}
           style={({ pressed }) => ({
             alignItems: "center",
-            backgroundColor: colors.mossSurface,
-            borderColor: colors.moss,
-            borderRadius: 999,
+            backgroundColor: pressed ? shadcn.secondary : shadcn.card,
+            borderColor: shadcn.border,
+            borderRadius: radius.md,
             borderWidth: 1,
             height: 36,
             justifyContent: "center",
@@ -85,7 +85,7 @@ function RoomMemberRow({
             width: 36,
           })}
         >
-          <Feather name="user-check" size={17} color={colors.olive} />
+          <Feather name="user-check" size={16} color={colors.ink} />
         </Pressable>
       ) : null}
       {canRemove ? (
@@ -98,7 +98,7 @@ function RoomMemberRow({
             alignItems: "center",
             backgroundColor: colors.dangerSurface,
             borderColor: colors.dangerBorder,
-            borderRadius: 999,
+            borderRadius: radius.md,
             borderWidth: 1,
             height: 36,
             justifyContent: "center",
@@ -106,7 +106,7 @@ function RoomMemberRow({
             width: 36,
           })}
         >
-          <Feather name="user-x" size={17} color={colors.danger} />
+          <Feather name="user-x" size={16} color={colors.danger} />
         </Pressable>
       ) : null}
     </View>

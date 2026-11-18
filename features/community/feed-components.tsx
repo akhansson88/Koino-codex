@@ -4,8 +4,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { FeedItem } from "@/state/types";
 import { Card } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { BrandWaveMotif } from "@/ui/brand-wave-motif";
-import { colors, typography } from "@/ui/theme";
+import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { type RoomDetailTab } from "@/features/community/types";
 import { communityFeedEndpointBody } from "@/features/community/feed-helpers";
 
@@ -42,26 +41,27 @@ export function CommunityFilterChips<T extends string>({
             style={{
               alignItems: "center",
               alignSelf: "stretch",
-              backgroundColor: selected ? colors.accentSubtle : colors.paper,
-              borderColor: selected ? colors.gold : colors.line,
-              borderRadius: 999,
+              backgroundColor: selected ? shadcn.primary : shadcn.card,
+              borderColor: selected ? shadcn.primary : shadcn.border,
+              borderCurve: "continuous",
+              borderRadius: radius.md,
               borderWidth: 1,
               flexDirection: "row",
               flexShrink: 0,
               gap: 6,
               justifyContent: "center",
               maxWidth: "100%",
-              minHeight: 44,
+              minHeight: 40,
               paddingHorizontal: 13,
               paddingVertical: 8,
             }}
           >
             {selected ? (
               <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-                <Feather name="check" size={14} color={colors.olive} />
+                <Feather name="check" size={13} color={shadcn.primaryForeground} />
               </View>
             ) : null}
-            <Text style={[typography.label, { color: selected ? colors.olive : colors.muted, flexShrink: 1, textAlign: "center" }]}>
+            <Text style={[typography.label, { color: selected ? shadcn.primaryForeground : colors.muted, flexShrink: 1, textAlign: "center" }]}>
               {option.label}
             </Text>
           </Pressable>
@@ -84,11 +84,21 @@ export function CommunityFeedEndpoint({
 }) {
   const { t } = useAppTranslation();
   return (
-    <View style={{ alignItems: "center", gap: 5, paddingBottom: 6, paddingHorizontal: 16, paddingTop: 14 }}>
-      <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-        <BrandWaveMotif height={12} opacity={0.65} variant="accent" width={58} />
+    <View style={{ alignItems: "center", gap: 6, paddingBottom: 6, paddingHorizontal: 16, paddingTop: 16 }}>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: shadcn.secondary,
+          borderCurve: "continuous",
+          borderRadius: radius.md,
+          height: 36,
+          justifyContent: "center",
+          width: 36,
+        }}
+      >
+        <Feather name={variant === "caught-up" ? "check" : "clock"} size={17} color={colors.muted} />
       </View>
-      <Text style={[typography.cardTitle, { color: colors.ink, fontSize: 15, lineHeight: 20, textAlign: "center" }]}>
+      <Text style={[typography.cardTitle, { color: colors.ink, textAlign: "center" }]}>
         {t(variant === "caught-up" ? "community.feed.caughtUpTitle" : "community.feed.noRecentTitle")}
       </Text>
       <Text style={[typography.caption, { color: colors.muted, maxWidth: 260, textAlign: "center" }]}>
@@ -102,8 +112,8 @@ export function CommunityFeedEndpoint({
           onPress={onViewEarlier}
           style={{ alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 44, paddingHorizontal: 12 }}
         >
-          <Text style={[typography.label, { color: colors.olive }]}>{t("community.feed.viewEarlier")}</Text>
-          <Feather name="chevron-down" size={16} color={colors.olive} />
+          <Text style={[typography.label, { color: colors.ink }]}>{t("community.feed.viewEarlier")}</Text>
+          <Feather name="chevron-down" size={16} color={colors.ink} />
         </Pressable>
       ) : null}
     </View>
@@ -119,7 +129,7 @@ export function CommunityFeedLoadingState() {
       accessibilityRole="progressbar"
       style={{ alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 24 }}
     >
-      <ActivityIndicator color={colors.olive} size="small" />
+      <ActivityIndicator color={colors.ink} size="small" />
       <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>{t("community.feed.loading")}</Text>
     </View>
   );

@@ -20,7 +20,7 @@ import {
 import { useAppTranslation } from "@/ui/app-language";
 import { confirmAction } from "@/ui/confirm";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
-import { colors } from "@/ui/theme";
+import { colors, typography } from "@/ui/theme";
 import { type IdentityPresentation, type IdentitySheet } from "@/features/identity/types";
 import { roomMemberCount, selectedImageSize } from "@/features/identity/room-helpers";
 import {
@@ -178,7 +178,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
     <>
       {presentation === "screen" ? (
         <View style={{ gap: 7 }}>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 }}>{t("identity.title")}</Text>
+          <Text style={[typography.screenTitle, { color: colors.ink }]}>{t("identity.title")}</Text>
           <BodyText muted>{t("identity.description")}</BodyText>
         </View>
       ) : null}
@@ -254,8 +254,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         <View style={{ alignItems: "center", gap: 12 }}>
           <Avatar image={user?.image} name={user?.name ?? state.authEmail ?? "K"} size={86} tone="pink" />
           <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>{user?.name ?? t("identity.profile.fallback")}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{state.authEmail ?? t("identity.profile.signedIn")}</Text>
+            <Text style={[typography.title, { color: colors.ink }]}>{user?.name ?? t("identity.profile.fallback")}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{state.authEmail ?? t("identity.profile.signedIn")}</Text>
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -271,7 +271,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         {emulatorMode || developmentMode ? (
           <BodyText muted>{t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable")}</BodyText>
         ) : null}
-        {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{avatarMessage}</Text> : null}
+        {avatarMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{avatarMessage}</Text> : null}
       </BottomSheet>
 
       <BottomSheet
@@ -315,7 +315,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         <SecondaryButton disabled={loggingOut} icon="log-out" onPress={handleLogOut}>
           {t(loggingOut ? "identity.account.loggingOut" : "common.logOut")}
         </SecondaryButton>
-        {logoutFailed ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive">{t("identity.account.logoutError")}</BodyText> : null}
+        {logoutFailed ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{t("identity.account.logoutError")}</BodyText> : null}
       </BottomSheet>
 
       <InfoSheet
@@ -330,7 +330,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         <PrimaryButton disabled={emulatorMode || developmentMode} icon="mail" onPress={handleSendPasswordReset}>
           {t("identity.security.sendReset")}
         </PrimaryButton>
-        {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}
+        {securityMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{securityMessage}</Text> : null}
       </BottomSheet>
 
       <InfoSheet

@@ -1,10 +1,12 @@
 import { BottomTabBar, type BottomTabBarButtonProps, type BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { PlatformPressable } from "@react-navigation/elements";
+import * as Haptics from "expo-haptics";
+import { usePathname } from "expo-router";
 import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
-import { I18nManager, StyleSheet, View } from "react-native";
+import { I18nManager, Platform, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
-import { colors, platformShadow } from "@/ui/theme";
+import { colors, platformShadow, readerSurface } from "@/ui/theme";
 
 type DockState = {
   activeIndex: number;
@@ -18,7 +20,7 @@ const BAR_HORIZONTAL_PADDING = 24;
 const ITEM_MARGIN = 2;
 const MARKER_TOP = 14;
 const MARKER_HEIGHT = 62;
-const spring = { damping: 22, stiffness: 260, mass: 0.8, overshootClamping: true } as const;
+const spring = { damping: 17, stiffness: 300, mass: 0.72 } as const;
 
 function useDockState() {
   const state = useContext(DockContext);
@@ -41,6 +43,8 @@ export function AnimatedDockTabBar({ reducedMotion, ...props }: BottomTabBarProp
 
 export function AnimatedDockBackground() {
   const { activeIndex, count, insets, reducedMotion } = useDockState();
+  const pathname = usePathname();
+  const bibleSurface = pathname.startsWith("/bible");
   const [barWidth, setBarWidth] = useState(0);
   const markerX = useSharedValue(0);
   const previousGeometry = useRef<string | null>(null);
@@ -71,7 +75,7 @@ export function AnimatedDockBackground() {
         const width = event.nativeEvent.layout.width;
         setBarWidth((previous) => previous === width ? previous : width);
       }}
-      style={[StyleSheet.absoluteFill, styles.background]}
+      style={[StyleSheet.absoluteFill, styles.background, bibleSurface ? { backgroundColor: readerSurface } : null]}
     >
       <View style={[styles.dock, { bottom: Math.max(insets.bottom, 8) }]} />
       {markerWidth > 0 ? (
@@ -89,6 +93,9 @@ export function DockTabButton({ style, children, ...props }: BottomTabBarButtonP
 
   useLayoutEffect(() => {
     const destination = selected ? 1 : 0;
+    if (selected && mounted.current && Platform.OS !== "web") {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    }
     selectedProgress.value = !mounted.current || reducedMotion
       ? destination
       : withSpring(destination, spring);
@@ -97,8 +104,8 @@ export function DockTabButton({ style, children, ...props }: BottomTabBarButtonP
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: -2 * selectedProgress.value },
-      { scale: 1 + 0.04 * selectedProgress.value },
+      { translateY: -3 * selectedProgress.value },
+      { scale: 1 + 0.06 * selectedProgress.value },
     ],
   }));
 
@@ -116,23 +123,23 @@ export function DockTabButton({ style, children, ...props }: BottomTabBarButtonP
 
 const styles = StyleSheet.create({
   background: {
-    backgroundColor: colors.cream,
+    backgroundColor: "transparent",
   },
   dock: {
     ...StyleSheet.absoluteFillObject,
     left: 12,
     right: 12,
-    backgroundColor: colors.paper,
+    backgroundColor: "#FFFDFA",
     borderColor: colors.line,
     borderCurve: "continuous",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     ...platformShadow({
-      boxShadow: "0 4px 14px rgba(11, 18, 32, 0.06)",
-      elevation: 2,
-      offset: { width: 0, height: 4 },
-      opacity: 0.06,
-      radius: 14,
+      boxShadow: "0 2px 4px rgba(90, 53, 26, 0.05), 0 14px 34px rgba(90, 53, 26, 0.12)",
+      elevation: 4,
+      offset: { width: 0, height: 8 },
+      opacity: 0.12,
+      radius: 20,
     }),
   },
   marker: {
@@ -140,10 +147,10 @@ const styles = StyleSheet.create({
     top: MARKER_TOP,
     left: 0,
     height: MARKER_HEIGHT,
-    backgroundColor: `${colors.accentWarm}5C`,
-    borderColor: `${colors.accentWarm}80`,
+    backgroundColor: "#FFE8D3",
+    borderColor: "#F6D2B2",
     borderCurve: "continuous",
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
   },
   button: {
