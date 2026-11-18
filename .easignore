@@ -49,4 +49,5 @@ __pycache__/
 # Search generation caches and source downloads are not native build inputs.
 /assets/bible/search/.cache/
 /assets/bible/search/sources/
+/scripts/hybrid-search/.cache/
 /scripts/hybrid-search/.deps/
