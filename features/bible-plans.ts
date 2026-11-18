@@ -5,7 +5,7 @@ import {
   type BiblePosition,
 } from "@/features/bible-canon";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange, BiblePlanStatus } from "@/state/types";
-import { nextUnreadPlanDay, scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
+import { addPlanDays, nextUnreadPlanDay, scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
 
 type ChapterKey = `${string} ${number}`;
 
@@ -113,16 +113,140 @@ export function expandPlanRangeToChapterRanges(range: BiblePlanRange): BiblePlan
 
 export function buildBiblePlanDays(ranges: BiblePlanRange[], dayCount: number): BiblePlanDay[] {
   const safeDayCount = Math.max(1, Math.floor(dayCount));
-  const chapterRanges = ranges.flatMap(expandPlanRangeToChapterRanges);
   const days = Array.from({ length: safeDayCount }, (_, index): BiblePlanDay => ({ dayNumber: index + 1, ranges: [] }));
-  if (chapterRanges.length === 0) return days;
+  const verses = planRangeVerses(ranges);
+  if (verses.length === 0) return days;
 
-  chapterRanges.forEach((range, index) => {
-    const dayIndex = Math.min(safeDayCount - 1, Math.floor((index * safeDayCount) / chapterRanges.length));
-    days[dayIndex].ranges.push(range);
+  // Distribute by verse count rather than chapter count so a day with Psalm 119
+  // is not treated like a day with four short chapters.
+  const buckets = Array.from({ length: safeDayCount }, () => [] as PlanVerse[]);
+  verses.forEach((verse, index) => {
+    const dayIndex = Math.min(safeDayCount - 1, Math.floor((index * safeDayCount) / verses.length));
+    buckets[dayIndex].push(verse);
   });
 
+  buckets.forEach((bucket, index) => {
+    days[index].ranges = rangesForPlanDay(bucket, index + 1);
+  });
   return days;
+}
+
+type PlanVerse = { book: string; chapter: number; verse: number };
+
+function planRangeVerses(ranges: BiblePlanRange[]): PlanVerse[] {
+  const seen = new Set<string>();
+  const verses: PlanVerse[] = [];
+  ranges.forEach((range) => {
+    expandPlanRangeToChapterRanges(range).forEach((chapterRange) => {
+      for (let verse = chapterRange.start.verse; verse <= chapterRange.end.verse; verse += 1) {
+        const key = `${chapterRange.start.book} ${chapterRange.start.chapter}:${verse}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        verses.push({ book: chapterRange.start.book, chapter: chapterRange.start.chapter, verse });
+      }
+    });
+  });
+  return verses;
+}
+
+function rangesForPlanDay(verses: PlanVerse[], dayNumber: number): BiblePlanRange[] {
+  const ranges: BiblePlanRange[] = [];
+  let start: PlanVerse | undefined;
+  let previous: PlanVerse | undefined;
+
+  const flush = () => {
+    if (!start || !previous) return;
+    ranges.push(makeBiblePlanRange(`day_${dayNumber}_range_${ranges.length + 1}`, start, previous));
+  };
+
+  verses.forEach((verse) => {
+    if (!start || !previous) {
+      start = verse;
+      previous = verse;
+      return;
+    }
+    const continuesChapter = verse.book === previous.book && verse.chapter === previous.chapter;
+    if (continuesChapter && verse.verse === previous.verse + 1) {
+      previous = verse;
+      return;
+    }
+    flush();
+    start = verse;
+    previous = verse;
+  });
+  flush();
+  return ranges;
+}
+
+export function verseCountInPlanRange(range: BiblePlanRange) {
+  return expandPlanRangeToChapterRanges(range).reduce(
+    (total, part) => total + Math.max(0, part.end.verse - part.start.verse + 1),
+    0,
+  );
+}
+
+export function planDayVerseCount(day?: BiblePlanDay) {
+  return day?.ranges.reduce((total, range) => total + verseCountInPlanRange(range), 0) ?? 0;
+}
+
+export function planDayMinutes(day?: BiblePlanDay) {
+  const verses = planDayVerseCount(day);
+  if (!verses) return 0;
+  return Math.max(1, Math.round(verses / 8));
+}
+
+export function formatPlanDate(value: string, language: "sv" | "en", options?: Intl.DateTimeFormatOptions) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", options ?? { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+export type BiblePlanPace = {
+  behind: number;
+  today?: BiblePlanDay;
+  next?: BiblePlanDay;
+  todayCompleted: boolean;
+  notStarted: boolean;
+};
+
+export function planPace(
+  plan: Pick<BiblePlan, "days" | "startDate" | "pausedAt" | "status">,
+  date: string,
+): BiblePlanPace {
+  const today = todayPlanDay(plan, date);
+  const next = nextUnreadPlanDay(plan);
+  const behind = plan.pausedAt || plan.status === "completed"
+    ? 0
+    : plan.days.filter((day) => day.ranges.length > 0 && !day.completedAt && scheduledPlanDate(plan, day.dayNumber) < date).length;
+  const notStarted = plan.days.length > 0 && plan.days.every((day) => scheduledPlanDate(plan, day.dayNumber) > date);
+  return { behind, today, next, todayCompleted: Boolean(today?.completedAt), notStarted };
+}
+
+export type PlanWeekStatus = "done" | "today" | "upcoming" | "missed" | "empty";
+export type PlanWeekDay = { date: string; day?: BiblePlanDay; status: PlanWeekStatus };
+
+export function planWeek(
+  plan: Pick<BiblePlan, "days" | "startDate" | "pausedAt">,
+  date: string,
+): PlanWeekDay[] {
+  const value = new Date(`${date}T12:00:00Z`);
+  if (Number.isNaN(value.getTime())) return [];
+  const mondayOffset = (value.getUTCDay() + 6) % 7;
+  const monday = addPlanDays(date, -mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const dateKey = addPlanDays(monday, index);
+    const day = plan.days.find((item) => scheduledPlanDate(plan, item.dayNumber) === dateKey);
+    const status: PlanWeekStatus = !day || day.ranges.length === 0
+      ? "empty"
+      : day.completedAt
+        ? "done"
+        : dateKey === date
+          ? "today"
+          : dateKey < date
+            ? "missed"
+            : "upcoming";
+    return { date: dateKey, day, status };
+  });
 }
 
 export function todayDateKey() {
@@ -179,7 +303,7 @@ export function firstPositionForPlanDay(day?: BiblePlanDay) {
 }
 
 export function highlightedBiblePlan(ownedPlans: BiblePlan[], date: string): { plan: BiblePlan; day?: BiblePlanDay } | undefined {
-  const activePlans = ownedPlans.filter((plan) => plan.status === "active");
+  const activePlans = ownedPlans.filter((plan) => plan.status !== "completed");
   let catchUp: { plan: BiblePlan; day: BiblePlanDay } | undefined;
 
   // The store supplies most recently updated plans first.

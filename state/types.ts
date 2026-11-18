@@ -135,6 +135,8 @@ export type BiblePlan = {
   days: BiblePlanDay[];
   groupId?: Id;
   announcementId?: Id;
+  templateId?: string;
+  coverKey?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -149,6 +151,8 @@ export type GroupBiblePlanAnnouncement = {
   dayCount: number;
   ranges: BiblePlanRange[];
   days: BiblePlanDay[];
+  templateId?: string;
+  coverKey?: string;
   createdAt: string;
   updatedAt: string;
 };

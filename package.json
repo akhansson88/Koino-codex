@@ -28,7 +28,7 @@
     "ios:dev:verify": "node scripts/native/verify-development-ios.cjs",
     "bible:build": "node scripts/generate-bible-data.mjs",
     "doctor": "npx expo-doctor",
-    "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs",
+    "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs && node scripts/validate-bible-plan-progress.mjs && node scripts/validate-bible-plan-library.mjs && node scripts/validate-me-bible-plans.mjs",
     "validate:bible-search": "node scripts/validate-bible-search.mjs",
     "validate:bible-async": "node scripts/validate-bible-async.mjs",
     "validate:bible-verse-selection": "node scripts/validate-bible-verse-selection.mjs",

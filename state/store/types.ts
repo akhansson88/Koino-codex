@@ -1,5 +1,5 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
-import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -81,12 +81,13 @@ export type Action =
   | { type: "removeBibleHighlights"; ids: Id[] }
   | { type: "saveBibleHighlightColor"; hex: BibleHighlightColor; id?: Id; label?: string }
   | { type: "deleteBibleHighlightColor"; id: Id }
-  | { type: "createBiblePlan"; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
+  | { type: "createBiblePlan"; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string; days?: BiblePlanDay[]; coverKey?: string; templateId?: string }
   | { type: "updateBiblePlan"; id: Id; title: string; ranges: BiblePlanRange[]; dayCount: number; startDate: string }
   | { type: "deleteBiblePlan"; id: Id }
   | { type: "markBiblePlanDay"; planId: Id; dayNumber: number; read: boolean }
   | { type: "pauseBiblePlan"; planId: Id }
   | { type: "rescheduleBiblePlan"; planId: Id; startDate: string }
+  | { type: "restartBiblePlan"; planId: Id; startDate?: string }
   | { type: "announceBiblePlan"; planId: Id }
   | { type: "unannounceBiblePlan"; announcementId: Id }
   | { type: "joinGroupBiblePlan"; announcementId: Id }

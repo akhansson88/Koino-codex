@@ -339,9 +339,13 @@ export function BibleScreen() {
     () => state.biblePlans.filter((plan) => plan.userId === state.currentUserId),
     [state.biblePlans, state.currentUserId],
   );
+  const readerBiblePlans = useMemo(
+    () => activeBiblePlans.filter((plan) => plan.status !== "completed"),
+    [activeBiblePlans],
+  );
   const selectedPlan = useMemo(
-    () => activeBiblePlans.find((plan) => plan.id === selectedPlanId) ?? activeBiblePlans[0],
-    [activeBiblePlans, selectedPlanId],
+    () => readerBiblePlans.find((plan) => plan.id === selectedPlanId) ?? readerBiblePlans[0],
+    [readerBiblePlans, selectedPlanId],
   );
   const selectedPlanCurrentDay = useMemo(() => {
     if (!selectedPlan) return undefined;
@@ -433,14 +437,14 @@ export function BibleScreen() {
   const group = state.groups.find((item) => item.id === state.currentGroupId);
 
   useEffect(() => {
-    if (activeBiblePlans.length === 0) {
+    if (readerBiblePlans.length === 0) {
       setSelectedPlanId(undefined);
       return;
     }
-    if (!selectedPlanId || !activeBiblePlans.some((plan) => plan.id === selectedPlanId)) {
-      setSelectedPlanId(activeBiblePlans[0].id);
+    if (!selectedPlanId || !readerBiblePlans.some((plan) => plan.id === selectedPlanId)) {
+      setSelectedPlanId(readerBiblePlans[0].id);
     }
-  }, [activeBiblePlans, selectedPlanId]);
+  }, [readerBiblePlans, selectedPlanId]);
 
   useEffect(() => {
     positionRef.current = position;
@@ -1548,6 +1552,29 @@ export function BibleScreen() {
       />
       </Animated.View>
 
+      {selectedPlan && readerBiblePlans.length > 0 && readerHeaderHidden ? (
+        <View
+          pointerEvents="box-none"
+          style={{ left: 18, position: "absolute", right: 18, top: insets.top + 6, zIndex: 25 }}
+        >
+          <BiblePlanReaderPanel
+            currentDay={selectedPlanCurrentDay}
+            markers={pagePlanMarkers[chapterKey] ?? []}
+            onJump={jumpToSelectedPlanDay}
+            onMarkRead={toggleSelectedPlanDay}
+            onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
+            onSelectDay={(dayNumber) => {
+              const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
+              const start = firstPositionForPlanDay(day);
+              if (start) { setSelectedPlanDayNumber(dayNumber); jumpToPosition(start, { highlight: true }); }
+            }}
+            palette={readerPalette}
+            plan={selectedPlan}
+            plans={readerBiblePlans}
+          />
+        </View>
+      ) : null}
+
       <ChapterPager
         ref={pagerRef}
         pages={chapterPages}
@@ -1586,24 +1613,9 @@ export function BibleScreen() {
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
-          contentContainerStyle={{ alignSelf: "stretch", paddingBottom: readerBottomPadding, paddingHorizontal: 22, paddingTop: readerHeaderHeight + 18 }}
+          contentContainerStyle={{ alignSelf: "stretch", paddingBottom: readerBottomPadding, paddingHorizontal: 22, paddingTop: readerHeaderHeight + 18 + (selectedPlan ? 68 : 0) }}
           contentStyle={{ alignSelf: "center", gap: 28, maxWidth: contentWidth, width: "100%" }}
         >
-          <BiblePlanReaderPanel
-            currentDay={selectedPlanCurrentDay}
-            markers={pagePlanMarkers[page.key] ?? []}
-            onJump={jumpToSelectedPlanDay}
-            onMarkRead={toggleSelectedPlanDay}
-            onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
-            onSelectDay={(dayNumber) => {
-              const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
-              const start = firstPositionForPlanDay(day);
-              if (start) { setSelectedPlanDayNumber(dayNumber); jumpToPosition(start, { highlight: true }); }
-            }}
-            palette={readerPalette}
-            plan={selectedPlan}
-            plans={activeBiblePlans}
-          />
           {page.chapter ? <BibleText
             key={`${page.key}:${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}:${width}`}
             flowingParagraphText={flowingParagraphText}

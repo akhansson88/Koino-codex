@@ -36,8 +36,8 @@ import {
 } from "@/state/firebase-pagination";
 import { markStartupMilestone } from "@/features/startup-performance";
 import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bible-plan-progress";
-import { isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
-import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus } from "@/features/bible-plans";
+import { addPlanDays, isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
+import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus, todayDateKey } from "@/features/bible-plans";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
@@ -2285,12 +2285,20 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createBiblePlan": {
-              if (!firebaseUser || !action.title.trim() || action.ranges.length === 0) return;
+              if (!firebaseUser || !action.title.trim() || (action.ranges.length === 0 && !action.days?.length)) return;
               if (!isPlanDate(action.startDate) || !Number.isInteger(action.dayCount) || action.dayCount < 1 || action.dayCount > 3660) throw new Error("Choose a valid date and between 1 and 3660 days.");
               const timestamp = now();
               const planId = id("bibleplan");
               const dayCount = Math.max(1, Math.floor(action.dayCount));
-              const days = buildBiblePlanDays(action.ranges, dayCount);
+              const days = action.days?.length
+                ? action.days.map((day, index) => ({
+                    dayNumber: index + 1,
+                    ranges: day.ranges.map((range, rangeIndex) => ({
+                      ...range,
+                      id: range.id || `day_${index + 1}_range_${rangeIndex + 1}`,
+                    })),
+                  }))
+                : buildBiblePlanDays(action.ranges, dayCount);
               const plan: BiblePlan = {
                 id: planId,
                 userId: firebaseUser.uid,
@@ -2298,9 +2306,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 source: "personal",
                 status: "active",
                 startDate: action.startDate,
-                dayCount,
+                dayCount: Math.max(dayCount, days.length),
                 ranges: action.ranges,
                 days,
+                ...(action.coverKey ? { coverKey: action.coverKey } : {}),
+                ...(action.templateId ? { templateId: action.templateId } : {}),
                 createdAt: timestamp,
                 updatedAt: timestamp,
               };
@@ -2335,6 +2345,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 [`biblePlans/${firebaseUser.uid}/${action.id}`]: null,
               };
               if (plan.announcementId) {
+                const announcement = groupBiblePlanAnnouncements.find(
+                  (item) => item.id === plan.announcementId && item.groupId === plan.groupId,
+                );
+                if (announcement && announcement.ownerId === firebaseUser.uid && plan.groupId) {
+                  updates[`groupBiblePlanAnnouncements/${plan.groupId}/${plan.announcementId}`] = null;
+                  updates[`groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}`] = null;
+                }
                 const participantId = groupBiblePlanParticipantIds[plan.announcementId];
                 if (plan.groupId && participantId) {
                   updates[`groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}/${participantId}`] = null;
@@ -2357,6 +2374,38 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 const { pausedAt, ...resumed } = current;
                 return { ...resumed, days: rescheduleBiblePlan(current, action.startDate), updatedAt: timestamp };
               });
+              return;
+            }
+            case "restartBiblePlan": {
+              if (!firebaseUser) return;
+              const plan = biblePlans.find((item) => item.id === action.planId && item.userId === firebaseUser.uid);
+              if (!plan) return;
+              const startDate = action.startDate ?? todayDateKey();
+              if (!isPlanDate(startDate)) throw new Error("Use a valid date in YYYY-MM-DD format.");
+              const timestamp = now();
+              await runTransaction(ref(database, `biblePlans/${firebaseUser.uid}/${plan.id}`), (current: BiblePlan | null) => {
+                if (!current) return;
+                const days = current.days.map((day, index) => {
+                  const { completedAt: _completedAt, ...unreadDay } = day;
+                  return { ...unreadDay, scheduledDate: addPlanDays(startDate, index) };
+                });
+                return {
+                  ...current,
+                  days,
+                  startDate,
+                  status: "active",
+                  pausedAt: null,
+                  completedAt: null,
+                  updatedAt: timestamp,
+                };
+              });
+              const participantId = plan.announcementId ? groupBiblePlanParticipantIds[plan.announcementId] : undefined;
+              if (plan.groupId && plan.announcementId && participantId) {
+                await update(
+                  ref(database, `groupBiblePlanParticipation/${plan.groupId}/${plan.announcementId}/${participantId}`),
+                  { completedDayNumbers: {}, updatedAt: timestamp },
+                );
+              }
               return;
             }
             case "markBiblePlanDay": {
@@ -2395,6 +2444,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!plan) return;
               const timestamp = now();
               const announcementId = id("planannouncement");
+              const participantId = id("planparticipant");
               const announcement: GroupBiblePlanAnnouncement = {
                 id: announcementId,
                 groupId: group.id,
@@ -2404,11 +2454,24 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 dayCount: plan.dayCount,
                 ranges: plan.ranges,
                 days: plan.days.map((day) => ({ dayNumber: day.dayNumber, ranges: day.ranges })),
+                ...(plan.templateId ? { templateId: plan.templateId } : {}),
+                ...(plan.coverKey ? { coverKey: plan.coverKey } : {}),
                 createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              const participation: GroupBiblePlanParticipation = {
+                id: participantId,
+                userId: firebaseUser.uid,
+                announcementId,
+                completedDayNumbers: completedDayNumbers(plan.days),
+                totalDays: plan.dayCount,
+                joinedAt: timestamp,
                 updatedAt: timestamp,
               };
               await update(ref(database), {
                 [`groupBiblePlanAnnouncements/${group.id}/${announcementId}`]: announcement,
+                [`groupBiblePlanParticipation/${group.id}/${announcementId}/${participantId}`]: participation,
+                [`groupBiblePlanParticipantIds/${firebaseUser.uid}/${announcementId}`]: participantId,
                 [`biblePlans/${firebaseUser.uid}/${plan.id}/groupId`]: group.id,
                 [`biblePlans/${firebaseUser.uid}/${plan.id}/announcementId`]: announcementId,
                 [`biblePlans/${firebaseUser.uid}/${plan.id}/updatedAt`]: timestamp,
@@ -2423,6 +2486,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const updates: Record<string, null> = {
                 [`groupBiblePlanAnnouncements/${group.id}/${action.announcementId}`]: null,
                 [`groupBiblePlanParticipation/${group.id}/${action.announcementId}`]: null,
+                [`groupBiblePlanParticipantIds/${firebaseUser.uid}/${action.announcementId}`]: null,
               };
               biblePlans
                 .filter((plan) => plan.userId === firebaseUser.uid && plan.announcementId === action.announcementId)
@@ -2452,6 +2516,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 dayCount: announcement.dayCount,
                 ranges: announcement.ranges,
                 days: announcement.days.map((day) => ({ dayNumber: day.dayNumber, ranges: day.ranges })),
+                ...(announcement.templateId ? { templateId: announcement.templateId } : {}),
+                ...(announcement.coverKey ? { coverKey: announcement.coverKey } : {}),
                 groupId: announcement.groupId,
                 announcementId: announcement.id,
                 createdAt: timestamp,
@@ -2670,6 +2736,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "createBiblePlan" ||
           action.type === "pauseBiblePlan" ||
           action.type === "rescheduleBiblePlan" ||
+          action.type === "restartBiblePlan" ||
           action.type === "requestPasswordReset" ||
           action.type === "confirmPasswordReset" ||
           action.type === "changePassword" ||
