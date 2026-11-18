@@ -159,6 +159,7 @@ rules.moderationActions = { "$groupId": { ".read": owner, ".write": false } };
 rules.moderatedCheckInDays = { "$uid": { ".read": own, ".write": false } };
 rules.e2eePolicy = { ".read": "auth != null", ".write": false };
 rules.e2eeAccounts = { "$uid": { ".read": "auth != null", ".write": false } };
+rules.e2eeEscrow = { "$uid": { ".read": false, ".write": false } };
 rules.e2eeSigners = { ".read": "auth != null", ".write": false };
 rules.e2eeGroups = { "$groupId": { ".read": `(auth != null && root.child('e2eeGroups').child($groupId).child('members').child(auth.uid).exists()) || (${migratingOwner})`, ".write": false } };
 rules.e2eeDeviceRequests = { "$uid": { ".read": own, ".write": false } };

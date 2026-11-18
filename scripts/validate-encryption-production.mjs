@@ -33,13 +33,25 @@ async function client(label) {
   user.uid = credential.user.uid;
   const vault = { uid: user.uid, identity: user.root }, recoveryKey = crypto.randomKey();
   const device = { id: 'test', ...pub(user.device), certificate: crypto.signature({ uid: user.uid, id: 'test', ...pub(user.device) }, user.root.signingPrivateKey), grant: crypto.seal(vault, user.device.publicKey) };
-  const data = { ...pub(user.root), device, recovery: crypto.encrypt(vault, `recovery/${user.uid}`, 'recovery:1', recoveryKey, user.root) };
+  const escrowKey = await call(user, 'escrowKey', {});
+  const escrow = escrowKey.publicKey ? crypto.seal({ v: 1, recoveryKey, signingPublicKey: user.root.signingPublicKey }, escrowKey.publicKey) : undefined;
+  const data = { ...pub(user.root), device, recovery: crypto.encrypt(vault, `recovery/${user.uid}`, 'recovery:1', recoveryKey, user.root), ...(escrow ? { escrow } : {}) };
   await call(user, 'setup', { ...data, proof: crypto.signature(data, user.root.signingPrivateKey) });
+  user.recoveryKey = recoveryKey;
+  user.escrowAvailable = Boolean(escrowKey.publicKey);
   return user;
 }
 let passed = false;
 try {
   const owner = await client('owner'), outsider = await client('outsider');
+  if (!owner.escrowAvailable) console.warn('Production automatic recovery is not configured. Set KOINO_RECOVERY_SEED before releasing the client.');
+  if (owner.escrowAvailable) {
+    const restoreDevice = crypto.identity();
+    const restoreRequest = { operation: 'escrowRecover', data: { device: { id: 'restore', ...pub(restoreDevice) } }, deviceId: 'restore', requestId: crypto.randomKey(), timestamp: Date.now() };
+    const restored = (await owner.operation({ ...restoreRequest, signature: crypto.signature(restoreRequest, restoreDevice.signingPrivateKey) })).data;
+    assert.equal(crypto.unseal(restored.escrow, restoreDevice).recoveryKey, owner.recoveryKey, 'production escrow restores a new device');
+    console.log('Production check: automatic recovery escrow');
+  }
   const policy = (await get(ref(owner.database,'e2eePolicy'))).val();
   const historyMetadata = policy?.historyGeneration ? {historyGeneration:policy.historyGeneration} : {};
   const path = `journalEntries/${owner.uid}/fixture`, key = crypto.randomKey();
@@ -94,7 +106,7 @@ finally {
   if (users[0]?.uid) { try { await call(users[0], 'deleteGroup', { groupId }); } catch { /* Group may already be removed or was never created. */ } }
   const updates = {};
   for (const user of users) if (user.uid) {
-    for (const collection of ['e2eeAccounts','e2eeRequests','e2eeDeviceRequests','e2eeMigrations/user','e2eeImageObjects/user-avatars','encryptedData/journalEntries','encryptedData/userGroups','encryptedData/userDiscussionFollows']) updates[`${collection}/${user.uid}`] = null;
+    for (const collection of ['e2eeAccounts','e2eeEscrow','e2eeRequests','e2eeDeviceRequests','e2eeMigrations/user','e2eeImageObjects/user-avatars','encryptedData/journalEntries','encryptedData/userGroups','encryptedData/userDiscussionFollows']) updates[`${collection}/${user.uid}`] = null;
     updates[`e2eeSigners/${user.device.signingPublicKey}`] = null;
   }
   if (Object.keys(updates).length) {

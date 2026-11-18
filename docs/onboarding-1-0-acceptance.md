@@ -6,7 +6,10 @@ The native iOS app-switcher cover introduced in `78ff3ca` still requires Swift c
 
 This source integration does not establish production readiness. Keep iOS release acceptance open until the following checks pass on an approved `emulator-ios` build from the integrated source, using the isolated `demo-koino` backend and a dummy account.
 
-1. Open recovery setup and verify the key is fully readable and selectable while the app is active.
+Automatic recovery is the default and shows no key. These checks apply to the
+fallback screen rendered when `escrowKey` is unavailable.
+
+1. Open the fallback recovery setup and verify the key is fully readable and selectable while the app is active.
 2. Enter part of the confirmation with the keyboard open, then open the iOS app switcher. The preview must be fully opaque and reveal no recovery-key characters. Repeat rapid background and foreground transitions.
 3. Return to the app and verify that the same draft and partial confirmation are restored. Complete confirmation and verify that VoiceOver, Dynamic Type, and onboarding navigation still work.
 

@@ -47,6 +47,39 @@ async function invoke<T>(operation: string, data: unknown, device?: Device) {
   return response.data;
 }
 export const encryptedOperation = invoke;
+let escrowServerPublicKey: string | undefined;
+let escrowKeyRequest: Promise<string | undefined> | undefined;
+async function loadEscrowPublicKey(device?: Device) {
+  if (escrowServerPublicKey) return escrowServerPublicKey;
+  if (!escrowKeyRequest) {
+    escrowKeyRequest = invoke<{ available?: boolean; publicKey?: string }>("escrowKey", {}, device ?? current?.device)
+      .then((result) => {
+        if (result?.publicKey) escrowServerPublicKey = result.publicKey;
+        return result?.publicKey;
+      })
+      .catch(() => undefined)
+      .finally(() => { escrowKeyRequest = undefined; });
+  }
+  return escrowKeyRequest;
+}
+function escrowPayload(vault: Vault, publicKey: string) {
+  return crypto.seal({ v: 1, recoveryKey: vault.recoveryKey, signingPublicKey: vault.identity.signingPublicKey }, publicKey);
+}
+export async function escrowAvailable(uid?: string) {
+  const device = current?.device ?? (uid ? await localDevice(uid) : undefined);
+  return Boolean(await loadEscrowPublicKey(device));
+}
+export async function ensureEscrow() {
+  const state = current;
+  if (!state) return false;
+  // Refresh on every unlock as well as creating a missing escrow. This picks up
+  // a rotated server recovery key and keeps a legacy account on the same path.
+  const token = generation, key = await loadEscrowPublicKey(state.device);
+  if (!key) return false;
+  if (token !== generation || current !== state) throw new Error("Account changed while saving recovery.");
+  await invoke("setEscrow", { escrow: escrowPayload(state.vault, key) }, state.device);
+  return true;
+}
 let backupQueue: Promise<void> = Promise.resolve();
 function saveVault() {
   const token = generation;
@@ -84,7 +117,7 @@ export async function localDevice(uid: string): Promise<Device> {
   await storage.setItem(devicePath(uid), JSON.stringify(device));
   return device;
 }
-export async function unlockExisting(uid: string): Promise<"setup" | "recovery" | "ready"> {
+export async function unlockExisting(uid: string): Promise<"setup" | "recovery" | "revoked" | "ready"> {
   lockSession();
   const token = generation;
   const [snapshot, device] = await Promise.all([get(ref(database, `e2eeAccounts/${uid}`)), localDevice(uid)]);
@@ -92,6 +125,7 @@ export async function unlockExisting(uid: string): Promise<"setup" | "recovery" 
   if (auth.currentUser?.uid !== uid || token !== generation) throw new Error("The account changed while unlocking.");
   if (!remote) return "setup";
   const registration = remote.devices?.[device.id];
+  if (registration && !registration.active) return "revoked";
   if (!registration?.active) return "recovery";
   if (registration.publicKey !== device.identity.publicKey || registration.signingPublicKey !== device.identity.signingPublicKey) throw new Error("Device identity changed unexpectedly.");
   if (!crypto.verify({ uid, id: device.id, publicKey: registration.publicKey, signingPublicKey: registration.signingPublicKey }, registration.certificate, remote.signingPublicKey)) throw new Error("Device certificate could not be verified.");
@@ -111,14 +145,24 @@ export async function draftAccount(uid: string) {
   await storage.setItem(`e2ee.draft.${uid}`, JSON.stringify(vault));
   return vault;
 }
-export async function confirmAccount(vault: Vault) {
+export async function confirmAccount(vault: Vault, options?: { requireEscrow?: boolean }) {
   if (auth.currentUser?.uid !== vault.uid) throw new Error("Sign in again.");
   const device = await localDevice(vault.uid);
+  const escrowKey = await loadEscrowPublicKey(device);
+  if (options?.requireEscrow && !escrowKey) throw new Error("Automatic recovery is unavailable. Try again.");
   const identity = publicIdentity(vault.identity);
   const recovery = crypto.encrypt(vault, `recovery/${vault.uid}`, "recovery:1", vault.recoveryKey, vault.identity);
   const certificate = crypto.signature({ uid: vault.uid, id: device.id, ...publicIdentity(device.identity) }, vault.identity.signingPrivateKey);
-  const data = { ...identity, device: { id: device.id, ...publicIdentity(device.identity), active: true, certificate, grant: crypto.seal(vault, device.identity.publicKey) }, recovery };
-  await invoke("setup", { ...data, proof: crypto.signature(data, vault.identity.signingPrivateKey) }, device);
+  const data = { ...identity, device: { id: device.id, ...publicIdentity(device.identity), active: true, certificate, grant: crypto.seal(vault, device.identity.publicKey) }, recovery, ...(escrowKey ? { escrow: escrowPayload(vault, escrowKey) } : {}) };
+  try {
+    await invoke("setup", { ...data, proof: crypto.signature(data, vault.identity.signingPrivateKey) }, device);
+  } catch (problem) {
+    // Setup can commit and then fail while storing the recovery escrow. If the
+    // device is already registered, finish normally and let the unlock path
+    // refresh the escrow instead of forcing a second account setup.
+    const result = await unlockExisting(vault.uid).catch(() => undefined);
+    if (result !== "ready") throw problem;
+  }
   await unlockExisting(vault.uid);
   await storage.removeItem(`e2ee.draft.${vault.uid}`);
 }
@@ -134,6 +178,26 @@ export async function recoverAccount(uid: string, code: string) {
   const data = { device: { id: device.id, ...publicIdentity(device.identity), active: true, certificate, grant: crypto.seal(vault, device.identity.publicKey) } };
   await invoke("recover", { ...data, proof: crypto.signature(data, vault.identity.signingPrivateKey) }, device);
   await unlockExisting(uid);
+}
+export async function restoreWithEscrow(uid: string) {
+  const device = await localDevice(uid);
+  let response: { escrow?: string } | undefined;
+  try {
+    response = await invoke<{ escrow?: string }>("escrowRecover", { device: { id: device.id, ...publicIdentity(device.identity) } }, device);
+  } catch {
+    return false;
+  }
+  if (!response?.escrow) return false;
+  try {
+    const opened = crypto.unseal(response.escrow, device.identity) as { recoveryKey?: string };
+    if (!opened?.recoveryKey || crypto.decode(opened.recoveryKey).length !== 32) return false;
+    await recoverAccount(uid, opened.recoveryKey);
+    return true;
+  } catch {
+    // Registration may have committed even if the follow-up unlock failed.
+    try { if (await unlockExisting(uid) === "ready") return true; } catch { /* fall through */ }
+    return false;
+  }
 }
 export async function requestDeviceApproval(uid: string) {
   const device = await localDevice(uid);
@@ -237,12 +301,14 @@ export async function revokeDevice(id: string, vault: Vault, name: string) {
   const remote = await account(state.uid);
   const devices = Object.fromEntries(Object.entries(remote.devices).map(([deviceId, device]) => [deviceId, { ...device, active: deviceId === id ? false : device.active, certificate: crypto.signature({ uid: state.uid, id: deviceId, publicKey: device.publicKey, signingPublicKey: device.signingPublicKey }, vault.identity.signingPrivateKey), grant: deviceId !== id && device.active ? crypto.seal(vault, device.publicKey) : device.grant }]));
   const recovery = crypto.encrypt(vault, `recovery/${state.uid}`, "recovery:1", vault.recoveryKey, vault.identity);
+  const escrowKey = await loadEscrowPublicKey(state.device);
+  const escrow = escrowKey ? escrowPayload(vault, escrowKey) : undefined;
   const groupRequests: Record<string, string> = {};
   for (const groupId of Object.keys(vault.groups)) {
     const group = await loadGroup(groupId);
     if (group.ownerId !== state.uid) groupRequests[groupId] = crypto.seal({ name }, group.members[group.ownerId].publicKey);
   }
-  await invoke("revokeDevice", { id, next, rotation, devices, personalEpoch: vault.personalEpoch, recovery, groupRequests });
+  await invoke("revokeDevice", { id, next, rotation, devices, personalEpoch: vault.personalEpoch, recovery, ...(escrow ? { escrow } : {}), groupRequests });
   state.vault = vault;
   await storage.setItem(vaultPath(state.uid), JSON.stringify(vault));
   await account(state.uid);

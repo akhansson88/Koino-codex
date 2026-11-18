@@ -30,6 +30,7 @@ const fixture = globalThis.__onboardingRouting = {
   readGates: new Map(),
   writeGates: new Map(),
   encryption: new Map(),
+  autoEscrow: false,
   confirmationGates: new Map(),
   confirmationErrors: new Map(),
   createdCommunities: new Map(),
@@ -235,6 +236,14 @@ const mocks = {
       h.storage.delete("e2ee.draft." + uid);
     }
     export async function recoverAccount(uid) { await h.recover?.(uid); }
+    export async function escrowAvailable() { return h.autoEscrow === true; }
+    export async function ensureEscrow() { return h.autoEscrow === true; }
+    export async function restoreWithEscrow(uid) {
+      if (h.restore !== true) return false;
+      h.encryption.set(uid, "ready");
+      if (h.auth.currentUser?.uid === uid) h.sessionUid = uid;
+      return true;
+    }
     export function listenRaw(_path, listener) {
       listener({ signingPublicKey: identity.signingPublicKey, devices: { "fixture-device": { active: true } } });
       return () => {};
@@ -590,6 +599,37 @@ try {
   await act(async () => tree.root.findByType("Guide").props.complete());
   assert.equal(route(), "(tabs)");
   assert.deepEqual(stored(uid), { phase: "complete" });
+
+  fixture.autoEscrow = true;
+  const silent = "silent-new";
+  save(silent, { phase: "journey", signupName: "Silent Member" });
+  await changeAccount(silent);
+  await act(async () => {});
+  assert.ok(!press("Enable encryption"), "Automatic recovery sets up encryption without a code screen");
+  assert.ok(shown("StoreProvider") && shown("Route") && shown("Journey") && !shown("Notifications"));
+  assert.equal(fixture.encryption.get(silent), "ready");
+  assert.deepEqual(fixture.migrations.find((item) => item.uid === silent), { uid: silent, signupName: "Silent Member" });
+  fixture.autoEscrow = false;
+
+  fixture.autoEscrow = true;
+  fixture.restore = true;
+  fixture.encryption.set("escrowed-device", "recovery");
+  fixture.migrated.add("escrowed-device");
+  save("escrowed-device", { phase: "complete" });
+  await changeAccount("escrowed-device");
+  await act(async () => {});
+  assert.equal(route(), "(tabs)", "A new device restores automatically before showing the recovery screen");
+  assert.ok(!press("Recover content") && shown("StoreProvider") && shown("Route"), "Automatic restore replaced the recovery fallback");
+  fixture.restore = false;
+  fixture.encryption.set("revoked-device", "revoked");
+  fixture.restore = true;
+  save("revoked-device", { phase: "complete" });
+  await changeAccount("revoked-device");
+  await act(async () => {});
+  assert.ok(press("Recover content") && !shown("StoreProvider") && !shown("Route"), "A revoked device cannot auto-restore itself");
+  assert.ok(!press("Try automatic restore again"), "A revoked device is not offered escrow restore");
+  fixture.restore = false;
+  fixture.autoEscrow = false;
 
   const legacy = { uid: "legacy-before-encryption", email: "legacy@example.test" };
   fixture.legacyProfiles.add(legacy.uid);

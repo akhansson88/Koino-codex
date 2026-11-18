@@ -11,7 +11,8 @@ legacy identities are cleared. Only authenticated encrypted membership records
 populate communities. Explicit new joins still use `e2eeJoinRequests` and require
 the owner's signed grant; no access is automatically approved.
 
-Migration/cache and startup membership regressions plus TypeScript passed. The
+Automatic recovery escrow, silent setup, and automatic new-device restore were
+added on 2026-11-18. Migration/cache and startup membership regressions plus TypeScript passed. The
 preview APK profile now increments Android version codes. Root phone diagnostic
 images/XML are excluded from cloud build inputs. The runtime 2.0.1 cloud APK
 build completed: `b91c9539-f097-46e2-9496-64a93df5a843`, version code 21,
@@ -25,6 +26,50 @@ The APK is staged in WhatsApp for the matched self-chat ending 0049; final sendi
 awaits the Computer Use action-time confirmation. The local native build also
 passed, but targets the separate development package and is not the delivery APK.
 No phone was connected for installation testing.
+
+## Automatic recovery (2026-11-18)
+
+New accounts no longer show a recovery code or a device-approval screen. The
+client generates the vault silently, seals `{ recoveryKey, signingPublicKey }`
+to the KOINO recovery public key, and stores that sealed copy in the
+functions-only `e2eeEscrow/$uid` node (clients cannot read or write it). The
+matching private seed exists only as the `KOINO_RECOVERY_SEED` Functions secret
+in Secret Manager. Local emulator runs use a public test seed; a deployed
+function never falls back to it.
+
+Signing in on a new install is enough. The client calls `escrowRecover`, which
+requires a fresh Firebase authentication (`auth_time` within 15 minutes), opens
+the sealed escrow with the Functions secret, seals the recovery key to the new
+device public key, and returns it. The client then uses the normal `recover`
+operation to register the device and unlock. If the escrow is missing (legacy
+accounts) or the secret is unavailable, the recovery-code and device-approval
+fallback remains.
+
+`setup` writes the first escrow, `revokeDevice` rotates it atomically with the
+account identity, and every authorized device silently refreshes it on unlock
+through `setEscrow`. This also picks up a rotated server recovery key and moves
+legacy accounts onto automatic recovery. The recovery screen is now a
+last-resort fallback.
+
+This changes the security promise. Content is encrypted in transit and at rest,
+and the service does not read it during normal operation, but KOINO holds a
+recovery capability and can decrypt an account's content if it chooses or if its
+Functions secret or IAM access is compromised. It is not end-to-end encryption
+against KOINO. Account takeover also becomes content access, so add 2FA or
+passkeys and login alerts before broad rollout. App copy and the store listing
+must not claim end-to-end encryption.
+
+Provision the secret once per deployed project before releasing a client that
+uses `escrowKey`:
+
+```sh
+npm run encryption:recovery-seed
+firebase functions:secrets:set KOINO_RECOVERY_SEED --project koino-codex
+# Repeat for koino-staging if the Dev app should also use automatic recovery.
+```
+
+The generated value must never be committed. The client only needs the public
+key returned by `escrowKey`.
 
 ## Encrypted-only community cutover (2026-10-17)
 
@@ -219,25 +264,42 @@ roles, timestamps, invitation codes, notification routing references, device
 public keys, push tokens and delivery preferences, and payment/support routing
 data. Firebase Authentication still processes login email and credentials;
 payment providers still process payment records. These are not covered by
-content E2EE. HTTPS remains necessary.
+content encryption. HTTPS remains necessary.
+
+The recovery seed and the sealed escrow are additional service-held material.
+The seed is not present in the client. A compromised secret or the IAM access
+needed to invoke the recovery function can decrypt the recovery vault for every
+account whose escrow was written under that key. This is the deliberate cost of
+effortless recovery.
 
 ## Recovery and access
 
-Users save a random recovery code and confirm its last six characters during
-setup. The code decrypts an encrypted vault backup. A login password reset cannot
-recover encrypted content. Losing every authorized device and the code loses
-access to the content.
+New accounts use automatic recovery by default. The app generates the keys
+silently and uploads an escrow sealed to the KOINO recovery key. Signing in on a
+new device restores the content without a code or an existing device, subject to
+the fresh-authentication check.
 
-An existing authorized device can approve another device after fingerprint
-verification. Community owners approve membership after verifying the member's
-fingerprint. New members receive the full history, as requested.
+The fallback recovery screen still exists for legacy accounts, unavailable
+escrow, or a failed automatic attempt. It accepts the random recovery code and
+supports approving the device from another signed-in device after fingerprint
+verification. A login password reset cannot recover encrypted content by itself;
+automatic recovery is the normal path. Community owners still approve membership
+after verifying the member's fingerprint. New members receive the full history,
+as requested.
 
-Removing a device rotates the account identity, personal content key and recovery
-code. Its old recovery proof and subsequent writes are rejected. All affected
-communities are paused until their owner rotates the community key and approves
-the replacement identity. Departing members similarly pause new community writes
-until rotation. Revocation cannot erase plaintext or old keys already held by a
-device. Full-history sharing does not provide forward secrecy.
+Removing a device rotates the account identity, personal content key, recovery
+code and recovery escrow. Its old recovery proof and subsequent writes are
+rejected. All affected communities are paused until their owner rotates the
+community key and approves the replacement identity. Departing members similarly
+pause new community writes until rotation. Revocation cannot erase plaintext or
+old keys already held by a device. Full-history sharing does not provide forward
+secrecy.
+
+The escrow operation rejects the exact revoked device ID and the app never
+auto-restores it. A reinstall or a new device identity with valid account
+credentials can still recover through escrow, so revocation is not an account
+ban. Account credentials and any second factor are the recovery boundary; revoke
+the identity provider's sessions if an account is compromised.
 
 ## Migration
 
@@ -263,6 +325,11 @@ logs require a separate retention cleanup; migrating live records cannot remove
 those copies automatically.
 
 ## Deployment order
+
+Provision `KOINO_RECOVERY_SEED` before deploying the Functions. A production
+deploy that omits it leaves new accounts on the recovery-code fallback and makes
+`escrowRecover` return `not-found`. Local emulator runs use the built-in test
+seed and require no provisioning.
 
 1. Complete independent review of key distribution, recovery, revocation,
    database authorization, metadata exposure, concurrent operations and migration.

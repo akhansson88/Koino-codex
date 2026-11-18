@@ -10,7 +10,7 @@ The validation results and 50-file manifest at the end of this guide are histori
 
 ## What is real and what is disabled
 
-Real: Firebase Auth emulator ID tokens; callable HTTP authentication; device signatures/certificates; E2EE account recovery and community admission; journals; posts/check-ins/replies; rules; atomic moderation, tombstones/audits and daily claims; in-app notification triggers.
+Real: Firebase Auth emulator ID tokens; callable HTTP authentication; device signatures/certificates; automatic encrypted-account recovery and community admission; journals; posts/check-ins/replies; rules; atomic moderation, tombstones/audits and daily claims; in-app notification triggers.
 
 Disabled only in the separate Emulator apps/backend: external Supabase images, Expo/APNs/FCM push registration/delivery, Stripe/donations, password-reset emails, scheduled jobs and external browser/network features. Images have no new insecure local persistence path. Prayer Dwell data remains local/emulated; push delivery is not covered. The backend exports only encryptedAccount and the two local notification triggers. A local RTDB limitation requires us-central1 for those triggers; the callable stays europe-west1 and production regions are unchanged.
 
@@ -174,7 +174,7 @@ To reset disposable test data, stop everything and **rename** the data directory
 ## Two-device acceptance (record build IDs, OS versions and results)
 
 1. Verify both apps say KOINO Emulator/demo-koino, use separate OS app IDs and coexist with production. Backend console shows only demo-koino and local services. Only the two selected phones can connect; no public port/tunnel exists.
-2. Create fresh A (iPhone) and B (Android) with dummy emails/passwords. Complete real encryption setup/recovery-code confirmation. A creates a community, B joins with its invite, A grants access. Both decrypt shared content.
+2. Create fresh A (iPhone) and B (Android) with dummy emails/passwords. Let encryption set up automatically; use the recovery-code fallback only if automatic recovery is unavailable. A creates a community, B joins with its invite, A grants access. Both decrypt shared content.
 3. B creates an ordinary private journal entry; A cannot see it. B opens a new Heart check-in, verifies the initial audience is Private, explicitly chooses community sharing and saves exactly once. It appears for A and B retains its personal journal copy. Do not save a private daily check-in first or attempt a second one that day; test standalone private check-in persistence with A's own check-in or another day's fixture.
 4. B creates a reflection, prayer request, praise and replies. B has no owner removal control. A cancels confirmation once, then removes each shared type. Both feeds/details stop displaying it. Individual reply removal preserves its parent and other replies. Check automatic in-app notification references disappear. Push delivery is intentionally out of scope.
 5. B's private journal/check-in and Prayer Dwell remain decryptable. Moderating today's shared check-in does not release its daily claim or permit a second private/shared check-in. Removal copy never promises to recall downloaded copies.

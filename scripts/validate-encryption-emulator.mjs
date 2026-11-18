@@ -86,6 +86,8 @@ try {
   assert.equal((await get(ref(owner.database, journalPath))).child("body/ciphertext").val(), body.ciphertext);
   await denied(() => set(ref(owner.database, `journalEntries/${owner.uid}/plaintext`), { body: "Old client plaintext" }));
   await denied(() => set(ref(owner.database, `e2eeAccounts/${owner.uid}/devices/fake`), { active: true }));
+  await denied(() => get(ref(owner.database, `e2eeEscrow/${owner.uid}`)));
+  await denied(() => set(ref(owner.database, `e2eeEscrow/${owner.uid}`), "fake"));
   const notificationPath = `encryptedData/activityNotifications/${owner.uid}/legacy-notice`;
   const notice = { id: "legacy-notice", recipientUserId: owner.uid, actorUserId: member.uid, groupId: "community", targetId: "post1", targetType: "post", createdAt: "2026-01-01T00:00:00Z" };
   await denied(() => set(ref(owner.database, notificationPath), notice));

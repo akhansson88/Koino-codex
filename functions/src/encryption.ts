@@ -10,6 +10,12 @@ import { productionExternalServicesEnabled } from "./production-external-service
 import { assertEmulatorOperationAllowed, assertExternalStorageAllowed, emulatorTestConfiguration, withEmulatorAdmissionDiagnostics } from "./emulator-safety";
 
 const storageKey = productionExternalServicesEnabled(adminApp.options) ? defineSecret("KOINO_SUPABASE_SERVICE_KEY") : undefined;
+const recoverySeed = defineSecret("KOINO_RECOVERY_SEED");
+// The seed only exists for deployed staging/production projects. Local emulator
+// runs use a public test seed so automatic recovery can be exercised without
+// provisioning a real secret. A deployed function never falls back to it.
+const recoverySecret = productionExternalServicesEnabled(adminApp.options) || adminApp.options.projectId === "koino-staging" ? recoverySeed : undefined;
+const EMULATOR_RECOVERY_SEED = "PhjhmEyHTBwx2HMJGq7XI7tJpWSe77dUWt5yyD0nobs";
 const storageUrl = "https://prumjueusdyqnwwovpen.supabase.co";
 const retiredPersonalCollections = ["privateBiblePlans", "privateBiblePlanProgress", "pendingNotificationBundles", "pushDeliveryDiagnostics"];
 const retiredGroupCollections = ["groupBiblePlans", "groupBiblePlanProgress", "commentReactions"];
@@ -60,6 +66,53 @@ const invalid = (message = "Invalid encrypted request."): never => { throw new H
 const denied = (message = "This encrypted operation is not authorized."): never => { throw new HttpsError("permission-denied", message); };
 const id = (value: unknown): string => typeof value === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(value) ? value : invalid();
 const decode = (value: string) => sodium.from_base64(value, sodium.base64_variants.URLSAFE_NO_PADDING);
+const encode = (value: Uint8Array) => sodium.to_base64(value, sodium.base64_variants.URLSAFE_NO_PADDING);
+let recoveryKeypairCache: { seed: string; publicKey: Uint8Array; privateKey: Uint8Array } | undefined;
+function recoveryKeypair() {
+  let seed: string | undefined;
+  if (recoverySecret) seed = recoverySecret.value()?.trim() || undefined;
+  else if (process.env.KOINO_RECOVERY_SEED) seed = process.env.KOINO_RECOVERY_SEED.trim() || undefined;
+  else if (process.env.FUNCTIONS_EMULATOR === "true" && adminApp.options.projectId === "demo-koino") seed = EMULATOR_RECOVERY_SEED;
+  if (!seed) return undefined;
+  let bytes: Uint8Array;
+  try { bytes = decode(seed); } catch { throw new HttpsError("failed-precondition", "Recovery configuration is invalid."); }
+  if (bytes.length !== 32) throw new HttpsError("failed-precondition", "Recovery configuration is invalid.");
+  if (recoveryKeypairCache?.seed !== seed) {
+    const pair = sodium.crypto_box_seed_keypair(bytes);
+    recoveryKeypairCache = { seed, publicKey: pair.publicKey, privateKey: pair.privateKey };
+  }
+  return recoveryKeypairCache;
+}
+function requireRecoveryKeypair() {
+  const pair = recoveryKeypair();
+  if (!pair) throw new HttpsError("failed-precondition", "Automatic recovery is not configured.");
+  return pair;
+}
+function recoveryKeyMaterial(value: unknown) {
+  if (typeof value !== "string" || value.length > 4096) return invalid("Invalid recovery escrow.");
+  const sealed = value;
+  const pair = requireRecoveryKeypair();
+  let opened: Obj;
+  try { opened = JSON.parse(sodium.to_string(sodium.crypto_box_seal_open(decode(sealed), pair.publicKey, pair.privateKey))); }
+  catch { return invalid("Invalid recovery escrow."); }
+  if (!opened || opened.v !== 1 || typeof opened.recoveryKey !== "string" || typeof opened.signingPublicKey !== "string") return invalid("Invalid recovery escrow.");
+  try { if (decode(opened.recoveryKey).length !== 32 || decode(opened.signingPublicKey).length !== 32) return invalid("Invalid recovery escrow."); }
+  catch { return invalid("Invalid recovery escrow."); }
+  return { recoveryKey: opened.recoveryKey, signingPublicKey: opened.signingPublicKey };
+}
+function recoveryEscrow(value: unknown, expectedSigningPublicKey: string) {
+  const opened = recoveryKeyMaterial(value);
+  if (opened.signingPublicKey !== expectedSigningPublicKey) invalid("Invalid recovery escrow.");
+  return value as string;
+}
+function openRecoveryEscrow(value: unknown, expectedSigningPublicKey: string) {
+  const opened = recoveryKeyMaterial(value);
+  if (opened.signingPublicKey !== expectedSigningPublicKey) invalid("Recovery escrow could not be verified.");
+  return opened.recoveryKey;
+}
+function sealRecoveryEscrow(recoveryKey: string, devicePublicKey: string) {
+  return encode(sodium.crypto_box_seal(JSON.stringify({ v: 1, recoveryKey }), decode(devicePublicKey)));
+}
 function publicKey(value: unknown) { if (typeof value !== "string") return invalid(); try { if (decode(value).length !== 32) return invalid(); } catch { return invalid(); } return value; }
 function verify(value: unknown, signature: unknown, key: string) { try { return typeof signature === "string" && sodium.crypto_sign_verify_detached(decode(signature), canonical(value), decode(key)); } catch { return false; } }
 const same = (left: unknown, right: unknown) => canonical(left) === canonical(right);
@@ -129,7 +182,7 @@ function validGroup(next: Obj, uid: string, account: Obj, previous?: Obj) {
   return next;
 }
 
-export const encryptedAccount = onCall({ region: "europe-west1", secrets: storageKey ? [storageKey] : [], timeoutSeconds: 120 }, (request) => withEmulatorAdmissionDiagnostics(request.data?.operation, async () => {
+export const encryptedAccount = onCall({ region: "europe-west1", secrets: [...(storageKey ? [storageKey] : []), ...(recoverySecret ? [recoverySecret] : [])], timeoutSeconds: 120 }, (request) => withEmulatorAdmissionDiagnostics(request.data?.operation, async () => {
   await sodium.ready;
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   const uid = request.auth.uid;
@@ -150,18 +203,46 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
   if (policy?.sharedWritesFrozen && ["removeCommunityContent", "createGroup", "groupChange", "deleteGroup", "leaveGroup", "imageUpload", "imageDelete", "requestJoin", "rejectJoin", "stageLegacyMembers", "deleteLegacyBatch"].includes(payload.operation)) {
     throw new HttpsError("unavailable", "Community maintenance is in progress. Try again shortly.");
   }
-  const firstOperations = ["setup", "recover", "requestDevice"];
+  const firstOperations = ["setup", "recover", "requestDevice", "escrowKey", "escrowRecover"];
   if (!firstOperations.includes(payload.operation)) {
     const activeDevice = account?.devices?.[id(payload.deviceId)];
     if (!activeDevice?.active || !verify(signed, signature, activeDevice.signingPublicKey)) denied("Unlock this device before continuing.");
   }
   // Requests are signed with random IDs and a bounded lifetime. A transaction
   // prevents replay of destructive operations while preserving retries safely.
-  if (payload.operation !== "removeCommunityContent" && payload.operation !== "listJoinRequests") {
+  if (!["removeCommunityContent", "listJoinRequests", "escrowKey"].includes(payload.operation)) {
     const replay = await db().ref(`e2eeRequests/${uid}/${payload.requestId}`).transaction((value) => value ? undefined : payload.timestamp);
     if (!replay.committed) throw new HttpsError("already-exists", "This request was already processed. Reload its result.");
   }
   switch (payload.operation) {
+    case "escrowKey": {
+      const pair = recoveryKeypair();
+      return pair ? { v: 1, publicKey: encode(pair.publicKey) } : { v: 1, available: false };
+    }
+    case "escrowRecover": {
+      if (!account) return denied();
+      const currentAccount = account;
+      const deviceId = id(data.device?.id);
+      publicKey(data.device.publicKey); publicKey(data.device.signingPublicKey);
+      if (payload.deviceId !== deviceId || !verify(signed, signature, data.device.signingPublicKey)) return denied();
+      if (currentAccount.devices?.[deviceId]?.active === false) return denied("This device was removed from the account.");
+      const authenticatedAt = Number(request.auth.token?.auth_time ?? 0) * 1000;
+      if (!Number.isFinite(authenticatedAt) || Date.now() - authenticatedAt > 15 * 60_000) {
+        throw new HttpsError("failed-precondition", "Sign in again to restore this device.");
+      }
+      const storedEscrow = (await db().ref(`e2eeEscrow/${uid}`).get()).val();
+      if (typeof storedEscrow !== "string") throw new HttpsError("not-found", "Automatic recovery is not set up for this account.");
+      const recoveryKey = openRecoveryEscrow(storedEscrow, currentAccount.signingPublicKey);
+      return { escrow: sealRecoveryEscrow(recoveryKey, data.device.publicKey) };
+    }
+    case "setEscrow": {
+      const escrow = recoveryEscrow(data.escrow, account!.signingPublicKey);
+      const signingPublicKey = account!.signingPublicKey;
+      const current = (await accountRef.get()).val() as Obj | null;
+      if (!current || current.signingPublicKey !== signingPublicKey) throw new HttpsError("aborted", "Account changed while saving recovery. Retry.");
+      await db().ref(`e2eeEscrow/${uid}`).set(escrow);
+      return {};
+    }
     case "removeCommunityContent": {
       const target = moderationReference(data);
       // Reject unauthorized callers before downloading the database root.
@@ -183,12 +264,14 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
     case "setup": {
       if (account) throw new HttpsError("already-exists", "Encryption is already configured.");
       publicKey(data.publicKey); publicKey(data.signingPublicKey); envelope(data.recovery);
+      const escrow = data.escrow === undefined ? undefined : recoveryEscrow(data.escrow, data.signingPublicKey);
       const { proof, ...initial } = data;
       if (!verify(initial, proof, data.signingPublicKey)) denied();
       const registration = device(data.device, uid, data.signingPublicKey);
       const result = await accountRef.transaction((value) => value ? undefined : { publicKey: data.publicKey, signingPublicKey: data.signingPublicKey, personalEpoch: 1, recovery: data.recovery, devices: { [data.device.id]: registration } });
       if (!result.committed) throw new HttpsError("already-exists", "Encryption is already configured.");
       await db().ref(`e2eeSigners/${registration.signingPublicKey}`).set({ uid, deviceId: data.device.id, active: true });
+      if (escrow) await db().ref(`e2eeEscrow/${uid}`).set(escrow);
       return {};
     }
     case "recover": {
@@ -254,6 +337,7 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
       publicKey(data.next?.publicKey); publicKey(data.next?.signingPublicKey); envelope(data.recovery);
       const { signature: recoverySignature, ...recoveryPayload } = data.recovery;
       if (data.recovery.signer !== data.next.signingPublicKey || !verify({ path: `recovery/${uid}`, ...recoveryPayload }, recoverySignature, data.next.signingPublicKey)) denied("Invalid replacement recovery backup.");
+      const escrow = data.escrow === undefined ? undefined : recoveryEscrow(data.escrow, data.next.signingPublicKey);
       const previous = { publicKey: account!.publicKey, signingPublicKey: account!.signingPublicKey };
       if (!same(data.rotation?.previous, previous) || !same(data.rotation.next, data.next) || !verify({ previous, next: data.next }, data.rotation.signature, account!.signingPublicKey)) denied();
       if (!same(Object.keys(data.devices ?? {}).sort(), Object.keys(account!.devices).sort())) invalid();
@@ -264,7 +348,10 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: storag
       }
       const result = await rootTransaction((root: Obj | null) => {
         if (!root || !same(root.e2eeAccounts?.[uid], account)) return;
-        root.e2eeAccounts[uid] = { ...account, ...data.next, personalEpoch: data.personalEpoch, recovery: data.recovery, devices: data.devices, rotations: [...(account!.rotations ?? []), data.rotation] };
+        const nextAccount = { ...account, ...data.next, personalEpoch: data.personalEpoch, recovery: data.recovery, devices: data.devices, rotations: [...(account!.rotations ?? []), data.rotation] };
+        root.e2eeAccounts[uid] = nextAccount;
+        if (escrow) { root.e2eeEscrow ??= {}; root.e2eeEscrow[uid] = escrow; }
+        else delete root.e2eeEscrow?.[uid];
         root.e2eeSigners[account!.devices[revokedId].signingPublicKey].active = false;
         for (const groupId of Object.keys(root.encryptedData?.userGroups?.[uid] ?? {})) {
           const group = root.e2eeGroups[groupId];

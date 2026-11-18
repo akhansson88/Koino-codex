@@ -46,6 +46,7 @@ assert.equal(crypto.verify({ id: 1, revision: 3 }, crypto.signature({ id: 1, rev
 const rules = readFileSync("firebase.rules.json", "utf8");
 assert.ok(rules.includes("encryptedData"));
 assert.ok(rules.includes("e2eeGroupLocks"));
+assert.ok(rules.includes("e2eeEscrow"), "Automatic recovery escrow stays functions-only");
 assert.ok(!rules.includes("numChildren()"), "Realtime Database rules do not implement numChildren()");
 const storageRules = readFileSync("supabase-storage-rules.sql", "utf8");
 assert.doesNotMatch(storageRules, /to anon, authenticated/i);

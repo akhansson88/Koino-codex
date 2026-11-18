@@ -6,34 +6,56 @@ const require = createRequire(new URL('../functions/package.json', import.meta.u
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 const app = initializeApp({ projectId: 'demo-koino', databaseURL: 'https://demo-koino-default-rtdb.firebaseio.com' });
+process.env.KOINO_RECOVERY_SEED = 'PhjhmEyHTBwx2HMJGq7XI7tJpWSe77dUWt5yyD0nobs';
 const { encryptedAccount } = require(`${compiledFunctionsDirectory}/encryption.js`);
 const { createCommentNotification, sendPrayerNotification } = require(`${compiledFunctionsDirectory}/activity-notifications.js`);
 const db = getDatabase(app);
 const pub = (identity) => ({ publicKey: identity.publicKey, signingPublicKey: identity.signingPublicKey });
-function request(user, operation, data) {
+function request(user, operation, data, authTime = Math.floor(Date.now() / 1000)) {
   const payload = { operation, data, deviceId: user.device.id, requestId: crypto.randomKey(), timestamp: Date.now() };
-  return { auth: { uid: user.uid }, data: { ...payload, signature: crypto.signature(payload, user.device.identity.signingPrivateKey) } };
+  return { auth: { uid: user.uid, token: { auth_time: authTime } }, data: { ...payload, signature: crypto.signature(payload, user.device.identity.signingPrivateKey) } };
 }
-const call = (user, operation, data) => encryptedAccount.run(request(user, operation, data));
+const call = (user, operation, data, authTime) => encryptedAccount.run(request(user, operation, data, authTime));
 async function setup(uid) {
   const user = { uid, root: crypto.identity(), device: { id: 'initial', identity: crypto.identity() }, recoveryKey: crypto.randomKey() };
   user.vault = { uid, identity: user.root };
   const device = { id: user.device.id, ...pub(user.device.identity), grant: crypto.seal(user.vault, user.device.identity.publicKey), certificate: crypto.signature({ uid, id: user.device.id, ...pub(user.device.identity) }, user.root.signingPrivateKey) };
-  const data = { ...pub(user.root), device, recovery: crypto.encrypt(user.vault, `recovery/${uid}`, 'recovery:1', user.recoveryKey, user.root) };
+  const { publicKey: escrowPublicKey } = await call(user, 'escrowKey', {});
+  user.escrowPublicKey = escrowPublicKey;
+  const escrow = crypto.seal({ v: 1, recoveryKey: user.recoveryKey, signingPublicKey: user.root.signingPublicKey }, escrowPublicKey);
+  const data = { ...pub(user.root), device, recovery: crypto.encrypt(user.vault, `recovery/${uid}`, 'recovery:1', user.recoveryKey, user.root), escrow };
   await call(user, 'setup', { ...data, proof: crypto.signature(data, user.root.signingPrivateKey) });
+  user.recoveryRecord = data.recovery;
   return user;
+}
+async function escrowRecover(user, device, authTime) {
+  return call({ ...user, device }, 'escrowRecover', { device: { id: device.id, ...pub(device.identity) } }, authTime);
 }
 const signGroup = (group, identity) => { const { signature, ...payload } = group; return { ...payload, signature: crypto.signature({ ...payload, previous: payload.previous ?? null }, identity.signingPrivateKey) }; };
 try {
   await db.ref().set(null);
   const owner = await setup('owner'), member = await setup('member');
+  const automatic = { id: 'automatic', identity: crypto.identity() };
+  const automaticEscrow = await escrowRecover(owner, automatic);
+  const opened = crypto.unseal(automaticEscrow.escrow, automatic.identity);
+  assert.equal(opened.recoveryKey, owner.recoveryKey, 'a new device receives its escrowed recovery key');
+  assert.equal((await db.ref('e2eeAccounts/owner/devices/automatic').get()).exists(), false, 'escrow access alone does not register a device');
+  await assert.rejects(escrowRecover(owner, automatic, Math.floor(Date.now() / 1000) - 3600), /Sign in again/);
+  await db.ref('e2eeEscrow/owner').remove();
+  await assert.rejects(escrowRecover(owner, automatic), /not set up/);
+  await call(owner, 'setEscrow', { escrow: crypto.seal({ v: 1, recoveryKey: owner.recoveryKey, signingPublicKey: owner.root.signingPublicKey }, owner.escrowPublicKey) });
+  assert.equal(crypto.unseal((await escrowRecover(owner, automatic)).escrow, automatic.identity).recoveryKey, owner.recoveryKey, 'a legacy account can upload its escrow after unlock');
+  const automaticVault = crypto.decrypt(owner.recoveryRecord, 'recovery/owner', opened.recoveryKey, new Set([owner.root.signingPublicKey]));
+  const automaticRegistration = { id: automatic.id, ...pub(automatic.identity), grant: crypto.seal(automaticVault, automatic.identity.publicKey), certificate: crypto.signature({ uid: 'owner', id: automatic.id, ...pub(automatic.identity) }, owner.root.signingPrivateKey) };
+  await call({ ...owner, device: automatic }, 'recover', { device: automaticRegistration, proof: crypto.signature({ device: automaticRegistration }, owner.root.signingPrivateKey) });
+  assert.equal((await db.ref('e2eeAccounts/owner/devices/automatic').get()).exists(), true, 'escrowed recovery registers the new device');
   const extra = { id: 'second', identity: crypto.identity() };
   const expected = pub(extra.identity);
   await call({ ...owner, device: extra }, 'requestDevice', { id: extra.id, ...expected });
   await assert.rejects(call(owner, 'approveDevice', { id: extra.id, expected: pub(member.root) }), /changed/);
   await call(owner, 'approveDevice', { id: extra.id, expected, certificate: crypto.signature({ uid: owner.uid, id: extra.id, ...expected }, owner.root.signingPrivateKey), grant: crypto.seal(owner.vault, extra.identity.publicKey) });
   const recovery = crypto.encrypt(owner.vault, 'recovery/owner', 'recovery:1', owner.recoveryKey, owner.root);
-  const backup = request(owner, 'backup', { recovery, grants: { initial: crypto.seal(owner.vault, owner.device.identity.publicKey), second: crypto.seal(owner.vault, extra.identity.publicKey) } });
+  const backup = request(owner, 'backup', { recovery, grants: { initial: crypto.seal(owner.vault, owner.device.identity.publicKey), second: crypto.seal(owner.vault, extra.identity.publicKey), automatic: crypto.seal(owner.vault, automatic.identity.publicKey) } });
   await encryptedAccount.run(backup);
   await assert.rejects(encryptedAccount.run(backup), /already processed/);
   const key = crypto.randomKey();
@@ -98,7 +120,11 @@ try {
   const newVault = { uid: 'owner', identity: newRoot, previousIdentities: [owner.root] };
   const devices = Object.fromEntries(Object.entries(before.devices).map(([id, entry]) => [id, { ...entry, active: id === 'second' ? false : entry.active, certificate: crypto.signature({ uid: 'owner', id, publicKey: entry.publicKey, signingPublicKey: entry.signingPublicKey }, newRoot.signingPrivateKey), grant: id === 'second' ? entry.grant : crypto.seal(newVault, entry.publicKey) }]));
   const rotation = { previous: pub(owner.root), next: pub(newRoot), signature: crypto.signature({ previous: pub(owner.root), next: pub(newRoot) }, owner.root.signingPrivateKey) };
-  await call(owner, 'revokeDevice', { id: 'second', next: pub(newRoot), rotation, devices, personalEpoch: 2, recovery: crypto.encrypt(newVault, 'recovery/owner', 'recovery:1', newRecoveryKey, newRoot), groupRequests: {} });
+  await call(owner, 'revokeDevice', { id: 'second', next: pub(newRoot), rotation, devices, personalEpoch: 2, recovery: crypto.encrypt(newVault, 'recovery/owner', 'recovery:1', newRecoveryKey, newRoot), escrow: crypto.seal({ v: 1, recoveryKey: newRecoveryKey, signingPublicKey: newRoot.signingPublicKey }, owner.escrowPublicKey), groupRequests: {} });
+  const afterRevoke = { id: 'after-revoke', identity: crypto.identity() };
+  const afterRevokeEscrow = await escrowRecover({ ...owner, root: newRoot, recoveryKey: newRecoveryKey }, afterRevoke);
+  assert.equal(crypto.unseal(afterRevokeEscrow.escrow, afterRevoke.identity).recoveryKey, newRecoveryKey, 'revocation rotates the automatic recovery copy');
+  await assert.rejects(escrowRecover({ ...owner, root: newRoot }, extra), /removed from the account/, 'a revoked device ID cannot use escrow recovery');
   await assert.rejects(call({ ...owner, device: extra }, 'resolveInvite', { code: 'INVITE' }), /Unlock/);
   await assert.rejects(call({ ...owner, device: recovered }, 'recover', { device: registration, proof: crypto.signature({ device: registration }, owner.root.signingPrivateKey) }), /Recovery proof/);
   assert.equal((await db.ref('e2eeGroupLocks/community').get()).val(), true);
@@ -148,6 +174,6 @@ try {
   globalThis.fetch=async()=>{throw Error('Stale event attempted network push');};
   try { await sendPrayerNotification.run({params:{recipientUserId:'owner',notificationId:'stale'},data:{val:()=>stalePrayer}}); }
   finally { globalThis.fetch=originalFetch; }
-  console.log('Encryption backend checks passed: device approvals, recovery proof, request replay, owner admission, history grants, departure locks, rotation, revocation, deletion, conditional migration, and silent history imports.');
+  console.log('Encryption backend checks passed: automatic recovery escrow, device approvals, recovery proof, request replay, owner admission, history grants, departure locks, rotation, revocation, deletion, conditional migration, and silent history imports.');
 } finally { await deleteApp(app); }
 process.exit(0);

@@ -8,7 +8,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 import { useKoino } from "@/state/koino-store";
 import { encodeAt } from "@/state/encryption/database";
-import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
+import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, escrowAvailable, ensureEscrow, restoreWithEscrow, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
@@ -77,7 +77,7 @@ function RecoveryKeySetup({ recoveryKey, confirmation, onConfirmation, onConfirm
         <Text accessibilityRole="header" allowFontScaling={!ios} style={[scaled(typography.screenTitle), { color: colors.ink }]}>
           {w("Protect your KOINO account", "Skydda ditt KOINO-konto")}
         </Text>
-        <Text allowFontScaling={!ios} style={body}>{w("Your personal and community content will be encrypted before upload. Save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
+        <Text allowFontScaling={!ios} style={body}>{w("Your personal and community content will be encrypted before upload. Automatic recovery is unavailable right now, so save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Automatisk återställning är inte tillgänglig just nu, så spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
         <View style={styles.card}>
           <Text selectable allowFontScaling={!ios} style={body}>{recoveryKey}</Text>
         </View>
@@ -101,11 +101,12 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const w = useWords();
   const authRevision = useRef(0);
   const [user, setUser] = useState<User | null>(null);
-  const [phase, setPhase] = useState<"loading" | "signedOut" | "setup" | "recovery" | "migrating" | "ready" | "error">("loading");
+  const [phase, setPhase] = useState<"loading" | "signedOut" | "setup" | "restoring" | "recovery" | "migrating" | "ready" | "error">("loading");
   const [draft, setDraft] = useState<Vault>();
   const [code, setCode] = useState("");
   const [savedCode, setSavedCode] = useState("");
   const [fingerprint, setFingerprint] = useState("");
+  const [revoked, setRevoked] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -129,6 +130,30 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     }
     const nextDraft = await draftAccount(uid);
     if (!isCurrent()) return;
+    const automatic = await escrowAvailable(uid).catch(() => false);
+    if (!isCurrent()) return;
+    if (automatic) {
+      try {
+        await confirmAccount(nextDraft, { requireEscrow: true });
+        if (!isCurrent()) return;
+        setDraft(undefined); await finish();
+        return;
+      } catch (problem) {
+        if (!isCurrent()) return;
+        setError(problem instanceof Error ? problem.message : "");
+        // A committed setup whose unlock was interrupted can continue without
+        // showing a second key-confirmation screen.
+        const result = await unlockExisting(uid).catch(() => undefined);
+        if (!isCurrent()) return;
+        if (result === "ready") { setDraft(undefined); await finish(); return; }
+        if (result === "revoked") { setRevoked(true); setPhase("recovery"); return; }
+        if (result === "recovery") { setPhase("recovery"); return; }
+        // Automatic recovery was available, so a transient setup failure should
+        // not expose a recovery code. Retry replays the silent setup path.
+        setPhase("error");
+        return;
+      }
+    }
     setDraft(nextDraft); setPhase("setup");
   }
   async function finish() {
@@ -159,7 +184,9 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
         }
       }
       setOnboarding(saved && saved.phase !== "complete" ? { userId: uid, generation: token, progress: saved } : undefined);
+      setRevoked(false);
       setPhase("ready");
+      void ensureEscrow().catch(() => undefined);
     } catch (problem) {
       if (!isCurrent()) return;
       setPhase("error");
@@ -188,15 +215,21 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
       setOnboarding(undefined);
-      setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setError(""); setBusy(false);
+      setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setRevoked(false); setError(""); setBusy(false);
       if (!next) { setPhase("signedOut"); return; }
       const isCurrent = () => active && authRevision.current === request && auth.currentUser?.uid === next.uid;
       setPhase("loading");
       void unlockExisting(next.uid).then(async (result) => {
         if (!isCurrent()) return;
         if (result === "setup") await showSetup(next.uid, isCurrent);
-        else if (result === "recovery") setPhase("recovery");
-        else await finish();
+        else if (result === "revoked") { setRevoked(true); setPhase("recovery"); }
+        else if (result === "recovery") {
+          setPhase("restoring");
+          const restored = await restoreWithEscrow(next.uid).catch(() => false);
+          if (!isCurrent()) return;
+          if (restored) await finish();
+          else setPhase("recovery");
+        } else await finish();
       }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
     });
     return () => { active = false; authRevision.current++; unsubscribe(); lockSession(); clearEncryptedImages(); };
@@ -208,12 +241,12 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     return listenRaw(`e2eeAccounts/${user.uid}`, (value) => {
       if (auth.currentUser?.uid !== user.uid) return;
       const remote = value as Account | null;
-      if (!remote?.devices[deviceId]?.active) { lockSession(); clearEncryptedImages(); setPhase("recovery"); return; }
+      if (!remote?.devices[deviceId]?.active) { lockSession(); clearEncryptedImages(); setRevoked(true); setPhase("recovery"); return; }
       if (!refreshing && !identityRotationInProgress() && remote.signingPublicKey !== session().vault.identity.signingPublicKey) {
         const request = authRevision.current;
         const isCurrent = () => authRevision.current === request && auth.currentUser?.uid === user.uid;
         refreshing = true; setPhase("loading"); clearEncryptedImages();
-        void unlockExisting(user.uid).then(async (result) => { if (!isCurrent()) return; if (result === "ready") await finish(); else setPhase("recovery"); }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
+        void unlockExisting(user.uid).then(async (result) => { if (!isCurrent()) return; if (result === "ready") await finish(); else { if (result === "revoked") setRevoked(true); setPhase("recovery"); } }).catch((problem: Error) => { if (isCurrent()) { setError(problem.message); setPhase("error"); } });
       }
     });
   }, [user?.uid, phase]);
@@ -243,6 +276,11 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
     <ActivityIndicator accessibilityLabel={w("Opening KOINO", "Öppnar KOINO")} color={colors.ink} />
   </View>;
+  if (phase === "restoring") return <View style={[styles.screen, { alignItems: "center", justifyContent: "center", gap: 18, padding: 24 }]}>
+    <Text accessibilityRole="header" style={styles.title}>{w("Restoring your account", "Återställer ditt konto")}</Text>
+    <ActivityIndicator accessibilityLabel={w("Restoring encrypted data", "Återställer krypterade data")} color={colors.ink} />
+    <Text style={[styles.body, { textAlign: "center", maxWidth: 360 }]}>{w("Restoring your encrypted data. Keep the app open.", "Återställer dina krypterade data. Håll appen öppen.")}</Text>
+  </View>;
   if (phase === "setup" && draft) return <RecoveryKeySetup
     recoveryKey={draft.recoveryKey}
     confirmation={savedCode}
@@ -258,9 +296,24 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     onSignOut={() => void work(async () => { await signOut(auth); })}
   />;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <Text style={styles.title}>{phase === "migrating" ? w("Encrypting your history", "Krypterar din historik") : w("Protect your KOINO account", "Skydda ditt KOINO-konto")}</Text>
+    <Text style={styles.title}>{phase === "migrating" ? w("Encrypting your history", "Krypterar din historik") : w("Restore this device", "Återställ den här enheten")}</Text>
     {phase === "recovery" && user ? <>
-      <Text style={styles.body}>{w("Unlock with your recovery code, or approve this device from an existing device under Encryption & devices. Resetting your login password does not recover encrypted history.", "Lås upp med återställningskoden, eller godkänn enheten från en befintlig enhet under Kryptering och enheter. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
+      <Text style={styles.body}>{revoked
+        ? w("This device was removed from your KOINO account. Enter your recovery code or approve this device from another signed-in device to use it again. Resetting your login password does not recover encrypted history.", "Den här enheten har tagits bort från ditt KOINO-konto. Ange återställningskoden eller godkänn enheten från en annan inloggad enhet för att använda den igen. En återställning av inloggningslösenordet återställer inte krypterad historik.")
+        : w("We couldn't restore this device automatically. Try again, approve this device from another signed-in device, or enter your recovery code. Resetting your login password does not recover encrypted history.", "Vi kunde inte återställa den här enheten automatiskt. Försök igen, godkänn enheten från en annan inloggad enhet eller ange återställningskoden. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
+      {revoked ? null : <Button label={w("Try automatic restore again", "Försök återställa automatiskt igen")} disabled={busy} onPress={() => void work(async (isCurrent) => {
+        if (!isCurrent()) return;
+        setPhase("restoring");
+        try {
+          const restored = await restoreWithEscrow(user.uid);
+          if (!isCurrent()) return;
+          if (restored) await finish();
+          else setPhase("recovery");
+        } catch (problem) {
+          if (isCurrent()) setPhase("recovery");
+          throw problem;
+        }
+      })} />}
       <TextInput accessibilityLabel={w("Recovery code", "Återställningskod")} secureTextEntry autoCapitalize="none" autoCorrect={false} value={code} onChangeText={setCode} style={styles.input} />
       <Button label={w("Recover content", "Återställ innehåll")} disabled={busy || !code} onPress={() => void work(async (isCurrent) => {
         if (!isCurrent()) return;
@@ -288,6 +341,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       const result = await unlockExisting(user.uid);
       if (!isCurrent()) return;
       if (result === "ready") await finish();
+      else if (result === "revoked") { setRevoked(true); setPhase("recovery"); }
       else if (result === "recovery") setPhase("recovery");
       else await showSetup(user.uid, isCurrent);
     })} /> : null}
@@ -366,9 +420,9 @@ export function EncryptionSettings() {
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Button label={w("Back", "Tillbaka")} onPress={() => router.back()} />
     <Text style={styles.title}>{w("Encryption & devices", "Kryptering och enheter")}</Text>
-    <Text style={styles.body}>{w("Personal and community content is encrypted on your devices. Account identity, membership, delivery routing, and payment records remain available to the services that need them.", "Personligt innehåll och gemenskapsinnehåll krypteras på dina enheter. Kontoidentitet, medlemskap, leveransinformation och betalningsuppgifter är tillgängliga för tjänsterna som behöver dem.")}</Text>
+    <Text style={styles.body}>{w("Personal and community content is encrypted on your devices. KOINO keeps a protected recovery copy so you can restore your content on a new phone. Account identity, membership, delivery routing, and payment records remain available to the services that need them.", "Personligt innehåll och gemenskapsinnehåll krypteras på dina enheter. KOINO förvarar en skyddad återställningskopia så att du kan återställa ditt innehåll på en ny telefon. Kontoidentitet, medlemskap, leveransinformation och betalningsuppgifter är tillgängliga för tjänsterna som behöver dem.")}</Text>
     <Text selectable style={styles.body}>{w("Your identity fingerprint:", "Ditt identitetsfingeravtryck:")} {crypto.fingerprint(session().vault.identity.signingPublicKey)}</Text>
-    <Text style={styles.body}>{w("Keep your recovery code safe. Without an authorized device or that code, encrypted history cannot be recovered.", "Förvara återställningskoden säkert. Utan en godkänd enhet eller koden kan krypterad historik inte återställas.")}</Text>
+    <Text style={styles.body}>{w("If you lose this device, sign in on a new one and KOINO will restore your encrypted content automatically.", "Om du tappar den här enheten kan du logga in på en ny och KOINO återställer ditt krypterade innehåll automatiskt.")}</Text>
     {Object.entries(devices).map(([id, identity]) => requestCard(id, identity, "device"))}
     {Object.entries(registered).filter(([, device]) => device.active).map(([id, device]) => <View key={id} style={styles.card}>
       <Text style={styles.body}>{id === session().device.id ? w("This device", "Denna enhet") : w("Authorized device", "Godkänd enhet")}</Text>

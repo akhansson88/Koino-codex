@@ -221,7 +221,7 @@ test("staging image callables fail before database or storage transport and bind
     const { encryptedAccount } = require(${JSON.stringify(entry)});
     const secrets = encryptedAccount.__endpoint.secretEnvironmentVariables ?? [];
     if (process.argv[1] === "production") {
-      assert.deepEqual(secrets.map(secret => secret.key), ["KOINO_SUPABASE_SERVICE_KEY"]);
+      assert.deepEqual(secrets.map(secret => secret.key), ["KOINO_SUPABASE_SERVICE_KEY", "KOINO_RECOVERY_SEED"]);
     } else {
       assert.deepEqual(secrets, []);
       (async () => {
