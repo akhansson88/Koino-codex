@@ -129,7 +129,6 @@ const mocks = {
   "@/features/bible-database-provider": "export const BibleDatabaseProvider = ({ children }) => children;",
   "@/features/startup-performance": "",
   "@/ui/notification-runtime": "export const NotificationRuntime = 'Notifications';",
-  "@/ui/emulator-badge": "export const EmulatorBadge = () => null;",
   "@/ui/use-reduced-motion": "export const useReducedMotion = () => false;",
   "@/features/onboarding-screen": "export const OnboardingScreen = 'Login';",
   "@/features/onboarding-journey": `

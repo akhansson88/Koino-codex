@@ -1,4 +1,4 @@
-import './state/store/firebase-emulator-bootstrap';
+import './state/store/firebase-bootstrap';
 import TrackPlayer from 'react-native-track-player';
 import { playbackService } from './features/bible-audio/engine';
 

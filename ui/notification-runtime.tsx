@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import { developmentMode, emulatorMode } from "@/state/store/firebase";
+import { developmentMode } from "@/state/store/firebase";
 import type { NotificationResponse } from "expo-notifications";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
@@ -48,13 +48,13 @@ export function NotificationRuntime() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!Notifications || emulatorMode || Platform.OS === "web") return;
+    if (!Notifications || Platform.OS === "web") return;
     const unreadCount = activityNotifications.filter((item) => !item.readAt).length;
     void Notifications.setBadgeCountAsync(unreadCount).catch(() => undefined);
   }, [activityNotifications]);
 
   useEffect(() => {
-    if (!Notifications || emulatorMode || Platform.OS === "web") return;
+    if (!Notifications || Platform.OS === "web") return;
     if (!currentUserId) {
       setNotificationRegistrationState({ status: "idle" });
       return;
@@ -131,7 +131,7 @@ export function NotificationRuntime() {
   }, [retryVersion, currentUserId]);
 
   useEffect(() => {
-    if (!Notifications || emulatorMode || !currentUserId || Platform.OS === "web") return;
+    if (!Notifications || !currentUserId || Platform.OS === "web") return;
 
     const openResponse = (response: NotificationResponse | null) => {
       if (!response || handledResponseId.current === response.notification.request.identifier) return;

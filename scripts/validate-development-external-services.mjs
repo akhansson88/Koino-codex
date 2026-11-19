@@ -4,7 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const read = filename => readFileSync(new URL("../" + filename, import.meta.url), "utf8");
-const devMode = { developmentMode: true, emulatorMode: false };
+const devMode = { developmentMode: true };
 const calls = [];
 const compile = (source, fileName) => ts.transpileModule(source, {
   fileName,
@@ -106,7 +106,6 @@ assert.equal(NotificationRuntime(), null);
 const alerts = [];
 const { openLinkInApp } = load("ui/open-link.ts", {
   "react-native": { Alert: { alert: (...args) => alerts.push(args) } },
-  "@/state/store/emulator-client-network": {},
   "expo-web-browser": { openBrowserAsync: unexpected("external browser") },
 });
 await openLinkInApp("https://koino-codex.firebaseapp.com/reset-password");

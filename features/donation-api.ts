@@ -1,4 +1,4 @@
-import { developmentMode, emulatorMode } from "@/state/store/firebase";
+import { developmentMode } from "@/state/store/firebase";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 
@@ -58,7 +58,6 @@ async function openDonationBrowser(url: string) {
 }
 
 async function donationRequest<T>(path: string, token: string | null, body: unknown, fallbackMessage = "Betalningen kunde inte startas. Försök igen om en stund."): Promise<T> {
-  if (emulatorMode) throw new Error("Payments are disabled in KOINO Emulator. / Betalningar är avstängda i KOINO Emulator.");
   if (developmentMode) throw new Error("Payments are disabled in KOINO Dev. / Betalningar är avstängda i KOINO Dev.");
   if (!token) throw new Error("Logga in igen för att fortsätta med gåvan.");
   // Keep configuration errors distinct from connectivity failures.
@@ -103,7 +102,7 @@ export async function verifyDonation(token: string | null, sessionId: string) {
 }
 
 export async function getDonationStatus(token: string | null, userId: string, force = false) {
-  if (emulatorMode || developmentMode) return { hasCompletedDonation: false, hasSubscriptionHistory: false, hasManageableSubscription: false };
+  if (developmentMode) return { hasCompletedDonation: false, hasSubscriptionHistory: false, hasManageableSubscription: false };
   const cached = donationStatusCache.get(userId);
   if (!force && cached && cached.expiresAt > Date.now()) return cached.value;
   const pending = donationStatusRequests.get(userId);
