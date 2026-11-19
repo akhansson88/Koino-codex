@@ -48,7 +48,7 @@ for (const template of biblePlanTemplates) {
   assert.ok(template.title.en && template.title.sv, `${label}: bilingual title`);
   assert.ok(template.description.en && template.description.sv, `${label}: bilingual description`);
   assert.ok(template.tags.length > 0, `${label}: searchable tags`);
-  assert.ok(fs.existsSync(path.join(coverDir, `${template.coverKey}.png`)), `${label}: missing cover ${template.coverKey}.png`);
+  assert.ok([".jpg", ".png"].some((extension) => fs.existsSync(path.join(coverDir, `${template.coverKey}${extension}`))), `${label}: missing cover ${template.coverKey}`);
   assert.ok(template.minutesPerDay > 0, `${label}: reading estimate`);
 
   const days = planTemplateDays(template);

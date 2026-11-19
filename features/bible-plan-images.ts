@@ -1,10 +1,13 @@
 import type { ImageSourcePropType } from "react-native";
 
 /**
- * Featured art for the plan library. The covers are built in
- * design/build-bible-plan-covers.mjs with FigCraft and exported from
- * assets/bible-plans. They are intentionally language-neutral so the same art
- * works in both app languages.
+ * Featured art for the plan library.
+ *
+ * A cohesive series of flat graphical Bible-land illustrations (arched "window"
+ * scenes) drawn procedurally in FigCraft by design/paint-bible-plan-art.mjs and
+ * exported as PNGs to assets/bible-plans. They are intentionally language-neutral
+ * so the same art works in Swedish and English; the app overlays the localized
+ * title on the bottom gradient.
  */
 export const biblePlanCovers: Record<string, ImageSourcePropType> = {
   "whole-bible-1-year": require("../assets/bible-plans/whole-bible-1-year.png"),
