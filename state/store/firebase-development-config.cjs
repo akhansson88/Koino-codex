@@ -4,6 +4,30 @@ const developmentRuntimeVersion = "2.1.0-development";
 const developmentIosId = "com.akhansson.koino.dev";
 const developmentAndroidId = "com.akhansson.koinomvp.dev";
 const developmentScheme = "koino-dev";
+const retiredEmulatorIds = new Set(["com.akhansson.koino.emulator", "com.akhansson.koinomvp.emulator"]);
+
+function retiredEmulatorError() {
+  return new Error("The KOINO Emulator app variant has been retired.");
+}
+
+function assertSupportedAppVariant(variant) {
+  if (variant === "emulator") throw retiredEmulatorError();
+  if (variant !== undefined && variant !== "production" && variant !== "development") {
+    throw new Error("Unknown KOINO app variant; refusing to select a live backend.");
+  }
+}
+
+function assertSupportedAppConfig(config, nativeApplicationId) {
+  const scheme = config?.scheme;
+  if (retiredEmulatorIds.has(nativeApplicationId) ||
+      retiredEmulatorIds.has(config?.ios?.bundleIdentifier) || retiredEmulatorIds.has(config?.android?.package) ||
+      config?.extra?.koinoEmulator !== undefined || config?.name === "KOINO Emulator" ||
+      config?.runtimeVersion === "2.1.0-emulator" || [scheme].flat().includes("koino-emulator")) {
+    throw retiredEmulatorError();
+  }
+  assertSupportedAppVariant(config?.extra?.koinoVariant);
+}
+
 // Firebase Auth selects the project by this public Web API key, so pin it
 // independently of the editable configuration, along with the app and URLs.
 const expectedStaging = Object.freeze({
@@ -65,6 +89,8 @@ module.exports = {
   developmentAndroidId,
   developmentScheme,
   requireStagingFirebaseConfig,
+  assertSupportedAppVariant,
+  assertSupportedAppConfig,
   validateDevelopmentConfig,
   assertStagingAppOptions,
 };

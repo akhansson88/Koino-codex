@@ -1,28 +1,17 @@
-import { developmentFirebaseConfiguration, emulatorConfiguration } from "./firebase-emulator-bootstrap";
+import { developmentFirebaseConfiguration } from "./firebase-bootstrap";
 import { assertStagingAppOptions } from "./firebase-development-config.cjs";
 import productionFirebaseConfiguration from "./firebase-production.json";
-import { installEmulatorClientNetworkGuard } from "./emulator-client-network";
 import AsyncStorage from "@/state/encryption/local-storage";
 import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
 import * as FirebaseAuth from "@firebase/auth";
 import type { Auth } from "@firebase/auth";
-import { connectDatabaseEmulator, getDatabase } from "firebase/database";
-import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
+import { getDatabase } from "firebase/database";
+import { getFunctions } from "firebase/functions";
 
-
-export { emulatorConfiguration };
-installEmulatorClientNetworkGuard(emulatorConfiguration);
-export const emulatorMode = Boolean(emulatorConfiguration);
 export const developmentMode = Boolean(developmentFirebaseConfiguration);
 
 const { functionsRegion, ...stagingOptions } = developmentFirebaseConfiguration ?? {};
-const firebaseConfig: FirebaseOptions = developmentFirebaseConfiguration ? stagingOptions : emulatorConfiguration ? {
-  apiKey: "demo-koino-emulator-only",
-  authDomain: "demo-koino.firebaseapp.com",
-  databaseURL: "https://demo-koino-default-rtdb.firebaseio.com",
-  projectId: "demo-koino",
-  appId: "1:000000000000:web:demo-koino",
-} : productionFirebaseConfiguration;
+const firebaseConfig: FirebaseOptions = developmentFirebaseConfiguration ? stagingOptions : productionFirebaseConfiguration;
 
 // Keep the DEFAULT app: encryption and existing consumers expect getApp().
 const apps = getApps();
@@ -43,11 +32,6 @@ try {
 } catch {
   authInstance = FirebaseAuth.getAuth(app);
 }
-// Configure emulator routing synchronously, before exposing any service. Errors
-// deliberately stop startup; emulator builds never fall back to live services.
-if (emulatorConfiguration) FirebaseAuth.connectAuthEmulator(authInstance, `http://${emulatorConfiguration.host}:${emulatorConfiguration.authPort}`, { disableWarnings: true });
 export const auth = authInstance;
 export const database = getDatabase(app);
-if (emulatorConfiguration) connectDatabaseEmulator(database, emulatorConfiguration.host, emulatorConfiguration.databasePort);
 export const functions = getFunctions(app, functionsRegion ?? "europe-west1");
-if (emulatorConfiguration) connectFunctionsEmulator(functions, emulatorConfiguration.host, emulatorConfiguration.functionsPort);

@@ -2,11 +2,11 @@ import { AppSheet, type AppSheetHandle } from "@/ui/app-sheet";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import type { PropsWithChildren } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Platform, Text, useWindowDimensions, View } from "react-native";
 import { SupportKoinoCard } from "@/features/donation-flow-screen";
 import { useKoino } from "@/state/koino-store";
-import { developmentMode, emulatorMode } from "@/state/store/firebase";
+import { developmentMode } from "@/state/store/firebase";
 import {
   AppHeader,
   AppScreen,
@@ -39,10 +39,6 @@ function IdentityRouteSheet({ children, onDismiss, sheetRef }: PropsWithChildren
   return <AppSheet ref={sheetRef} modal={false} visible onClose={onDismiss} title={t("identity.title")} height={height * 0.92} backgroundColor={colors.cream} scroll>{children}</AppSheet>;
 }
 
-function traceIdentity(event: string) {
-  if (emulatorMode) console.info(`[KOINO Emulator UI] identity:${event}`);
-}
-
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
   const { language, setLanguage, t } = useAppTranslation();
@@ -62,13 +58,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const user = state.users.find((item) => item.id === state.currentUserId);
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
-  useEffect(() => {
-    traceIdentity(`state language=${language} sheet=${activeSheet ?? "none"} switcher=${switcherVisible}`);
-  }, [language, activeSheet, switcherVisible]);
-  useEffect(() => {
-    traceIdentity("mounted");
-    return () => traceIdentity("unmounted");
-  }, []);
 
   function openAvatarCropper(source: RoomImageCropSource) {
     if (Platform.OS === "web") {
@@ -81,8 +70,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleChooseAvatar() {
-    if (emulatorMode || developmentMode) {
-      setAvatarMessage(t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable"));
+    if (developmentMode) {
+      setAvatarMessage(t("identity.avatar.devUnavailable"));
       return;
     }
     setAvatarMessage("");
@@ -117,8 +106,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSaveAvatar(localUri: string) {
-    if (emulatorMode || developmentMode) {
-      throw new Error(t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable"));
+    if (developmentMode) {
+      throw new Error(t("identity.avatar.devUnavailable"));
     }
     await dispatch({ type: "uploadUserAvatar", localUri });
     setAvatarCropSource(undefined);
@@ -142,8 +131,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   }
 
   async function handleSendPasswordReset() {
-    if (emulatorMode || developmentMode) {
-      setSecurityMessage(t(developmentMode ? "onboarding.account.resetUnavailableDev" : "identity.security.emulatorUnavailable"));
+    if (developmentMode) {
+      setSecurityMessage(t("onboarding.account.resetUnavailableDev"));
       return;
     }
     if (!state.authEmail) {
@@ -190,7 +179,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           title={t("settings.language.title")}
           subtitle={t("settings.language.subtitle")}
           value={language === "en" ? t("settings.language.option.english") : t("settings.language.option.swedish")}
-          onPress={() => { traceIdentity("language.press"); setActiveSheet("language"); }}
+          onPress={() => setActiveSheet("language")}
           showDivider
         />
         <SettingsRow
@@ -210,7 +199,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             icon="repeat"
             title={t("community.rooms.joinOrCreate")}
             subtitle={t("community.identity.joinOrCreateBody")}
-            onPress={() => { traceIdentity("community.press"); setSwitcherVisible(true); }}
+            onPress={() => setSwitcherVisible(true)}
           />
         </Card>
       </View>
@@ -221,10 +210,10 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           icon="lock"
           title={t("identity.security.title")}
           subtitle={t("identity.security.subtitle")}
-          onPress={() => { traceIdentity("security.press"); setActiveSheet("security"); }}
+          onPress={() => setActiveSheet("security")}
           showDivider
         />
-        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => { traceIdentity("encryption.push"); router.push("/encryption" as never); }} />
+        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => router.push("/encryption" as never)} />
         <SettingsRow icon="shield" title={t("identity.privacy.title")} subtitle={t("identity.privacy.subtitle")} onPress={() => setActiveSheet("privacy")} showDivider />
         <SettingsRow
           icon="file-text"
@@ -259,7 +248,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <SecondaryButton disabled={emulatorMode || developmentMode} icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
+          <SecondaryButton disabled={developmentMode} icon="image" onPress={handleChooseAvatar} style={{ flex: 1 }}>
             {t(user?.image ? "identity.profile.changeImage" : "identity.profile.chooseImage")}
           </SecondaryButton>
           {user?.image ? (
@@ -268,8 +257,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             </SecondaryButton>
           ) : null}
         </View>
-        {emulatorMode || developmentMode ? (
-          <BodyText muted>{t(developmentMode ? "identity.avatar.devUnavailable" : "identity.avatar.emulatorUnavailable")}</BodyText>
+        {developmentMode ? (
+          <BodyText muted>{t("identity.avatar.devUnavailable")}</BodyText>
         ) : null}
         {avatarMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{avatarMessage}</Text> : null}
       </BottomSheet>
@@ -277,7 +266,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       <BottomSheet
         title={t("settings.language.sheetTitle")}
         visible={activeSheet === "language"}
-        onShow={() => traceIdentity("language.presented")}
         onClose={() => setActiveSheet(undefined)}
       >
         <BodyText muted>{t("settings.language.description")}</BodyText>
@@ -325,9 +313,9 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         body={t("identity.help.body")}
       />
 
-      <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onShow={() => traceIdentity("security.presented")} onClose={() => setActiveSheet(undefined)}>
-        <BodyText muted>{t(developmentMode ? "onboarding.account.resetUnavailableDev" : emulatorMode ? "identity.security.emulatorUnavailable" : "identity.security.body")}</BodyText>
-        <PrimaryButton disabled={emulatorMode || developmentMode} icon="mail" onPress={handleSendPasswordReset}>
+      <BottomSheet title={t("identity.security.title")} visible={activeSheet === "security"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{t(developmentMode ? "onboarding.account.resetUnavailableDev" : "identity.security.body")}</BodyText>
+        <PrimaryButton disabled={developmentMode} icon="mail" onPress={handleSendPasswordReset}>
           {t("identity.security.sendReset")}
         </PrimaryButton>
         {securityMessage ? <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>{securityMessage}</Text> : null}

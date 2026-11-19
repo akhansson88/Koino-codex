@@ -35,7 +35,7 @@ const mocks = {
     const dispatch = async action => { harness.actions.push(action); await harness.handleAction?.(action); };
     export const useKoinoActions = () => ({ dispatch });
   `,
-  "@/state/store/firebase": "export let emulatorMode = false; export const developmentMode = false; export const setEmulatorMode = value => { emulatorMode = value; };",
+  "@/state/store/firebase": "export let developmentMode = false; export const setDevelopmentMode = value => { developmentMode = value; };",
   "@/ui/koino-logo": 'export const KoinoLogo = "KoinoLogo";',
   "@/ui/brand-wave-motif": 'export const BrandWaveMotif = "BrandWaveMotif";',
   "@/ui/app-components": `
@@ -58,7 +58,7 @@ try {
         export { OnboardingScreen } from "./features/onboarding-screen";
         export { AppLanguageProvider } from "./ui/app-language";
         export { colors } from "./ui/theme";
-        export { setEmulatorMode } from "@/state/store/firebase";
+        export { setDevelopmentMode } from "@/state/store/firebase";
       `,
       resolveDir: process.cwd(), loader: "tsx",
     },
@@ -72,7 +72,7 @@ try {
     } }],
   });
 
-  const { OnboardingScreen, AppLanguageProvider, colors, setEmulatorMode } = require(outfile);
+  const { OnboardingScreen, AppLanguageProvider, colors, setDevelopmentMode } = require(outfile);
   const mount = () => act(async () => {
     tree = create(React.createElement(AppLanguageProvider, null, React.createElement(OnboardingScreen)));
   });
@@ -182,12 +182,12 @@ try {
   assert.equal(input("Lösenord").props.secureTextEntry, true);
   assert.equal(hostStyle(input("Lösenord")).color, colors.ink);
   assert.equal(tree.root.findByType("ScrollView").props.keyboardShouldPersistTaps, "handled");
-  setEmulatorMode(true);
+  setDevelopmentMode(true);
   await enter("E-post", "person@example.test");
   const actionsBeforeReset = harness.actions.length;
   await tap("Jag har glömt mitt lösenord");
-  assert.match(alerts(), /avstängd i emulatorn/);
-  assert.equal(harness.actions.length, actionsBeforeReset, "Emulator UI must never request a reset email");
+  assert.match(alerts(), /avstängd i KOINO Dev/);
+  assert.equal(harness.actions.length, actionsBeforeReset, "Dev must never request a reset email");
   await act(() => tree.unmount());
   tree = undefined;
   console.log("Onboarding account regression passed: separate accessible forms, validation, reset, submit locking, localized feedback, language persistence, and the app palette.");
