@@ -62,7 +62,13 @@ type BiblePlanTemplate = {
 
    The FigCraft source is `design/bible-plan-covers.figcraft` (page `Bible Plan Illustrations`). Set `ONLY=<scene>` to iterate on a single cover, or `SKIP_EXPORT=1` to preview without writing assets.
 
-4. Run the checks:
+4. Shrink the exported PNGs before committing (downscale to 1080×608, 256-colour dithered palette; ~50% smaller with no visible loss at card size):
+
+   ```sh
+   python design/optimize-bible-plan-art.py --apply
+   ```
+
+5. Run the checks:
 
    ```sh
    npm run typecheck
