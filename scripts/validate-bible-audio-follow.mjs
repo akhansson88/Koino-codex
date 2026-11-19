@@ -55,6 +55,12 @@ const mocks = {
     export const router = { push: value => globalThis.__bibleAudioFollowTest.navigations.push(value) };
   `,
   "expo-clipboard": `export const setStringAsync = async () => {};`,
+  "expo-sqlite": `
+    export const importDatabaseFromAssetAsync = async () => {};
+    export const openDatabaseAsync = async () => ({
+      getAllAsync: async () => [], execAsync: async () => {}, closeAsync: async () => {},
+    });
+  `,
   "@/ui/native-pressable": `export const NativePressable = "NativePressable";`,
   "@/ui/use-reduced-motion": `export const useReducedMotion = () => !!globalThis.__bibleAudioFollowTest.reducedMotion;`,
   "react-native-reanimated": `export default { View: "AnimatedView", Text: "AnimatedText" };`,
@@ -65,7 +71,7 @@ const mocks = {
     export function useReaderHeader(options) {
       const test = globalThis.__bibleAudioFollowTest;
       test.headerEnabled = options.enabled;
-      return useRef({ height: 0, hidden: false, motion: {}, style: {}, onLayout() {},
+      return useRef({ height: 0, hidden: Boolean(test.headerHidden), motion: {}, style: {}, onLayout() {},
         reveal() { test.headerReveals = (test.headerReveals ?? 0) + 1; },
         stopTracking() {}, suspend() {}, topOcclusion: () => test.headerTopInset ?? 0 }).current;
     }
@@ -220,6 +226,7 @@ async function loadComponent(entryPoint) {
           if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
         });
         builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "jsx", resolveDir: projectRoot }));
+        builder.onLoad({ filter: /\.db$/ }, () => ({ contents: "", loader: "text" }));
       },
     }],
   });
@@ -1210,6 +1217,80 @@ try {
   assert.equal(measuredScrolls.length, beforeManualTick, "recovery checks respect manual browsing until Follow is pressed");
   delete audio.appState;
   await unmount();
+
+  // The default row layout needs the same recovery guarantees. Android can
+  // restore a stale scroll position after background audio, and a delayed
+  // native measurement can arrive after the reader has already moved.
+  const rowPlayback = session("Psalms", 23, undefined, 20);
+  await mount({ session: rowPlayback, playWhenReady: true });
+  measuredScrolls.length = 0;
+  await act(async () => { layoutVerses(0, 100, 100); });
+  await flushFrames();
+  const spokenRowDestination = 1900 - 18;
+  assert.equal(measuredScrolls.at(-1).y, spokenRowDestination, "row layout aligns the spoken verse initially");
+  await reportOffset(spokenRowDestination);
+  await changeAppState("background");
+  await reportOffset(0);
+  const beforeRowRecovery = measuredScrolls.length;
+  await publish({ position: 1 });
+  assert.equal(measuredScrolls.length, beforeRowRecovery, "background row measurements cannot scroll hidden content");
+  await changeAppState("active");
+  assert.equal(measuredScrolls.length, beforeRowRecovery + 1, "returning to the reader realigns the spoken row");
+  assert.equal(measuredScrolls.at(-1).y, spokenRowDestination);
+  await reportOffset(spokenRowDestination);
+
+  deferredMeasurements = [];
+  await publish({ session: { ...rowPlayback, index: 20 } });
+  const staleRowMeasurements = deferredMeasurements;
+  deferredMeasurements = [];
+  await reportOffset(1200);
+  await act(async () => { staleRowMeasurements.forEach(deliver => deliver()); });
+  await flushFrames();
+  const retriedRowMeasurements = deferredMeasurements;
+  deferredMeasurements = undefined;
+  await act(async () => { retriedRowMeasurements.forEach(deliver => deliver()); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 1982, "a delayed row measurement is retried instead of combining stale bounds with a new offset");
+  await reportOffset(1982);
+
+  await reportOffset(2400);
+  const beforeRowSettle = measuredScrolls.length;
+  await act(async () => { scrollView().onMomentumScrollEnd(); });
+  await flushFrames();
+  assert.equal(measuredScrolls.length, beforeRowSettle + 1, "a settling animation realigns the spoken row");
+  assert.equal(measuredScrolls.at(-1).y, 1982);
+  await reportOffset(1982);
+  // A remote/native scroll can leave the reading position behind the spoken
+  // verse. A reflow must then keep following audio rather than restoring that
+  // stale position.
+  await reportOffset(500);
+  await act(async () => { props("ReadingSettingsSheet").onFontSizeChange(10); });
+  await act(async () => { layoutVerses(0, 110, 110); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 2182, "a row reflow keeps the spoken verse instead of restoring the stale reading position");
+  delete audio.appState;
+  await unmount();
+
+  // The collapsed plan panel sits above the reader while the header is hidden.
+  // Follow must keep the spoken row visible below it rather than underneath it.
+  audio.store = { currentUserId: "overlay-reader", biblePlans: [{
+    id: "overlay-plan", userId: "overlay-reader", title: "Fixture plan", status: "active", startDate: "2026-01-01",
+    days: [{ dayNumber: 1, ranges: [] }],
+  }] };
+  audio.headerHidden = true;
+  await mount({ session: session("Psalms", 23, undefined, 20), playWhenReady: true });
+  measuredScrolls.length = 0;
+  await act(async () => { layoutVerses(0, 100, 100); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 1882, "follow aligns to the visible top before the plan height is measured");
+  const planOverlay = renderer.root.findAllByType("View").find(node =>
+    node.props.pointerEvents === "box-none" && typeof node.props.onLayout === "function");
+  assert.ok(planOverlay, "the plan panel is rendered over a hidden header");
+  await act(async () => { planOverlay.props.onLayout({ nativeEvent: { layout: { height: 54 } } }); });
+  await flushFrames();
+  assert.equal(measuredScrolls.at(-1).y, 1816, "follow keeps the spoken row below the plan panel");
+  await unmount();
+  delete audio.store; delete audio.headerHidden;
 
   // An overlay changes the visible top without changing the native viewport.
   // Verse targeting, history, headphones, and Follow must use that same inset.

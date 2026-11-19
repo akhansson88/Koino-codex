@@ -1,7 +1,12 @@
 type Bounds = { y: number; height: number };
 type Measurements = { verse: Bounds; viewport: Bounds; offset: number; controlsTop: number };
 
-/** A follow request survives delayed layout, but never manual browsing or a newer verse. */
+/**
+ * Keeps the spoken verse aligned while Follow is active. A request survives
+ * delayed layout; callers re-request after playback ticks, layout changes and
+ * foreground restores so a late scroll cannot leave the reader on another verse.
+ * Manual browsing and explicit navigation cancel it.
+ */
 export class AudioFollowScroll {
   private target?: { chapterKey: string; verse: number };
   request(chapterKey: string, verse: number) { this.target = { chapterKey, verse }; }

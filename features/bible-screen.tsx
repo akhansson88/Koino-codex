@@ -157,6 +157,7 @@ export function BibleScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const readerViewportRef = useRef<View>(null);
   const audioFollowScroll = useRef(new AudioFollowScroll());
+  const audioFollowFrameRef = useRef<number | undefined>(undefined);
   const isAudioPageFocused = useIsFocused();
   const verseOffsetsRef = useRef<Record<number, number>>({});
   const relativeVerseOffsetsRef = useRef<Record<number, number>>({});
@@ -288,10 +289,10 @@ export function BibleScreen() {
   const activelyFollowingAudio = followAudio && !boundedAudioPending && (!audioPassageKey || followedAudioPassageKey === audioPassageKey);
   const [audioMiniHeight, setAudioMiniHeight] = useState(82);
   const [audioMiniTop, setAudioMiniTop] = useState<number | undefined>();
+  const [planOverlayHeight, setPlanOverlayHeight] = useState(0);
   const audioChapter = audio.chapterSelection ?? audio.session?.chapter;
   const hasAudioSelection = !!(audio.chapterSelection || audio.session);
   const spokenVerse = audio.chapterSelection?.verse ?? audio.session?.chapter.verses[audio.session.index].verse;
-  const paragraphSpokenVerse = flowingParagraphText ? spokenVerse : undefined;
   const audioMatchesChapter = bibleVersionId === "reformationsbibeln2026" && audioChapter?.book === position.book && audioChapter.chapter === position.chapter;
   const chapterKey = `${bibleVersionId}:${position.book}:${position.chapter}`;
   const readerInteractionsEnabled = preferencesReady && isAudioPageFocused && !pickerVisible && !searchVisible && !settingsVisible &&
@@ -304,7 +305,7 @@ export function BibleScreen() {
     focused: isAudioPageFocused, reducedMotion, pageKey: chapterKey });
   const readerLayoutKey = `${chapterKey}:${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}:${width}:${readerHeaderHeight}`;
   if (layoutChapterKeyRef.current !== readerLayoutKey) {
-    if (layoutChapterKeyRef.current.startsWith(`${chapterKey}:`) && readerScrollIntent.current.pending?.target.kind !== "top") {
+    if (layoutChapterKeyRef.current.startsWith(`${chapterKey}:`) && readerScrollIntent.current.pending?.target.kind !== "top" && !activelyFollowingAudio) {
       readerScrollIntent.current.request(chapterKey, readerScrollOffsetRef.current <= 1 && positionRef.current.verse === 1
         ? { kind: "top" } : { kind: "verse", verse: positionRef.current.verse });
     }
@@ -355,6 +356,7 @@ export function BibleScreen() {
       ? { day: selectedPlan.days[index], index, isBeforeStart: false, isAfterEnd: false }
       : currentPlanDay(selectedPlan);
   }, [selectedPlan, selectedPlanDayNumber]);
+  const planOverlayVisible = Boolean(selectedPlan && readerBiblePlans.length > 0 && readerHeaderHidden);
   const pagePlanMarkers = useMemo(() => Object.fromEntries(chapterPages.map(page => [page.key,
     selectedPlan ? planMarkersForChapter(selectedPlan, page.position, selectedPlanCurrentDay?.day) : [],
   ])), [chapterPages, selectedPlan, selectedPlanCurrentDay]);
@@ -771,15 +773,25 @@ export function BibleScreen() {
 
   const scrollToAudioVerse = useCallback(() => {
     if (pagerInteractingRef.current || !isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter || loadedChapter?.key !== chapterKey) return;
-    if (flowingParagraphText && AppState.currentState !== "active") return;
+    if (AppState.currentState !== "active") return;
     audioFollowScroll.current.tryScroll(chapterKey, (verse, done) => {
       if (!readerViewportRef.current) return;
       const row = verseRowsRef.current[verse];
       if (!flowingParagraphText && !row) return;
+      // Window bounds and the scroll offset are read at different moments.
+      // If the reader moved while a native measurement was in flight, mixing
+      // the older bounds with the newer offset would scroll to another verse.
+      const offset = readerScrollOffsetRef.current;
+      const finish = (value: Omit<Parameters<typeof done>[0], "offset">) => {
+        if (layoutChapterKeyRef.current !== readerLayoutKey) return;
+        if (AppState.currentState !== "active") return;
+        if (readerScrollOffsetRef.current !== offset) { requestAnimationFrame(scrollToAudioVerse); return; }
+        done({ ...value, offset });
+      };
       readerViewportRef.current.measureInWindow((_x, y, _w, viewportHeight) => {
         if (layoutChapterKeyRef.current !== readerLayoutKey) return;
-        if (flowingParagraphText && AppState.currentState !== "active") return;
-        const topInset = readerTopOcclusion();
+        if (AppState.currentState !== "active") return;
+        const topInset = Math.max(readerTopOcclusion(), planOverlayVisible && planOverlayHeight > 0 ? planOverlayHeight + 12 : 0);
         const viewport = { y: y + topInset, height: viewportHeight - topInset };
         if (flowingParagraphText) {
           // Paragraph verses share a potentially very tall native Text node.
@@ -788,17 +800,16 @@ export function BibleScreen() {
           const verseOffset = verseOffsetsRef.current[verse];
           const verseHeight = verseHeightsRef.current[verse];
           if (!Number.isFinite(verseOffset) || !Number.isFinite(verseHeight)) return;
-          const offset = readerScrollOffsetRef.current;
-          done({
-            verse: { y: y + verseOffset - offset, height: verseHeight },
-            viewport, offset,
+          const contentOffset = readerScrollOffsetRef.current;
+          finish({
+            verse: { y: y + verseOffset - contentOffset, height: verseHeight },
+            viewport,
             controlsTop: audioMiniTop ?? y + viewportHeight,
           });
           return;
         }
-        row!.measureInWindow((_vx, verseY, _vw, verseHeight) => done({
+        row!.measureInWindow((_vx, verseY, _vw, verseHeight) => finish({
           verse: { y: verseY, height: verseHeight }, viewport,
-          offset: readerScrollOffsetRef.current,
           controlsTop: audioMiniTop ?? y + viewportHeight,
         }));
       });
@@ -808,28 +819,40 @@ export function BibleScreen() {
       stopHeaderTracking();
       scrollRef.current?.scrollTo({ animated: true, y: offset });
     });
-  }, [isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, audioMiniTop, flowingParagraphText, readerLayoutKey, readerTopOcclusion, stopHeaderTracking]);
+  }, [isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, loadedChapter?.key, chapterKey, audioMiniTop, flowingParagraphText, readerLayoutKey, readerTopOcclusion, stopHeaderTracking, planOverlayVisible, planOverlayHeight]);
 
-  const refreshParagraphAudioFollow = useCallback(() => {
-    if (!paragraphSpokenVerse || !isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter) return;
-    audioFollowScroll.current.request(chapterKey, paragraphSpokenVerse);
-    requestAnimationFrame(scrollToAudioVerse);
-  }, [paragraphSpokenVerse, isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, chapterKey, scrollToAudioVerse]);
+  const refreshAudioFollow = useCallback(() => {
+    if (!spokenVerse || !isAudioPageFocused || !activelyFollowingAudio || !audioMatchesChapter) return;
+    audioFollowScroll.current.request(chapterKey, spokenVerse);
+    if (audioFollowFrameRef.current !== undefined) return;
+    audioFollowFrameRef.current = requestAnimationFrame(() => {
+      audioFollowFrameRef.current = undefined;
+      scrollToAudioVerse();
+    });
+  }, [spokenVerse, isAudioPageFocused, activelyFollowingAudio, audioMatchesChapter, chapterKey, scrollToAudioVerse]);
+  const refreshAudioFollowRef = useRef(refreshAudioFollow);
+  refreshAudioFollowRef.current = refreshAudioFollow;
+  useEffect(() => () => {
+    if (audioFollowFrameRef.current !== undefined) cancelAnimationFrame(audioFollowFrameRef.current);
+  }, []);
 
   // A completed visibility check can be invalidated by an animation finishing
   // later or by Android restoring the scroll position after background audio.
-  // Recheck during playback as well as when the reader becomes visible again.
+  // Recheck on every playback tick as well as when the reader becomes visible
+  // again, for row and paragraph layouts alike.
+  const lastFollowPositionRef = useRef(audio.position);
   useEffect(() => {
-    if (audio.playWhenReady) refreshParagraphAudioFollow();
-  }, [audio.position, audio.playWhenReady, refreshParagraphAudioFollow]);
+    if (!audio.playWhenReady || lastFollowPositionRef.current === audio.position) return;
+    lastFollowPositionRef.current = audio.position;
+    refreshAudioFollow();
+  }, [audio.position, audio.playWhenReady, refreshAudioFollow]);
 
   useEffect(() => {
-    if (!flowingParagraphText) return;
     const subscription = AppState.addEventListener("change", state => {
-      if (state === "active") refreshParagraphAudioFollow();
+      if (state === "active") refreshAudioFollow();
     });
     return () => subscription.remove();
-  }, [flowingParagraphText, refreshParagraphAudioFollow]);
+  }, [refreshAudioFollow]);
 
   const ensureVerseVisibleAboveSelection = useCallback((verse: number) => {
     const verseRow = verseRowsRef.current[verse];
@@ -1012,24 +1035,21 @@ export function BibleScreen() {
   const handleVerseLayout = useCallback(
     (verse: number, offset: number, verseHeight?: number) => {
       if (layoutChapterKeyRef.current !== readerLayoutKey) return;
-      const previousHeight = verseHeightsRef.current[verse];
       relativeVerseOffsetsRef.current[verse] = offset;
       if (verseHeight !== undefined) verseHeightsRef.current[verse] = verseHeight;
       audioSelectionLayoutChanged();
       const origin = readerContentOriginRef.current;
       if (origin === undefined) return;
-      const absoluteOffset = origin + offset;
-      const changed = verseOffsetsRef.current[verse] !== absoluteOffset ||
-        (verseHeight !== undefined && previousHeight !== verseHeight);
-      verseOffsetsRef.current[verse] = absoluteOffset;
-      if (verse === paragraphSpokenVerse && changed) refreshParagraphAudioFollow();
-      else requestAnimationFrame(scrollToAudioVerse);
+      verseOffsetsRef.current[verse] = origin + offset;
+      // A layout callback can arrive long after the follow request completed.
+      // Re-request so a moved verse is realigned instead of left behind.
+      refreshAudioFollowRef.current();
       const request = readerScrollIntent.current.pending;
       if (request?.target.kind === "verse" && request.target.verse === verse) {
         requestAnimationFrame(() => tryScrollToVerse(verse, !reducedMotion, request));
       }
     },
-    [readerLayoutKey, tryScrollToVerse, scrollToAudioVerse, audioSelectionLayoutChanged, paragraphSpokenVerse, refreshParagraphAudioFollow, reducedMotion],
+    [readerLayoutKey, tryScrollToVerse, audioSelectionLayoutChanged, reducedMotion],
   );
 
   const handleVerseRef = useCallback((verse: number, node: MeasurableView | null) => {
@@ -1049,8 +1069,8 @@ export function BibleScreen() {
     const wasActive = pagerInteractingRef.current;
     pagerInteractingRef.current = active;
     suspendHeaderTracking(active);
-    if (!active && wasActive) requestAnimationFrame(scrollToAudioVerse);
-  }, [scrollToAudioVerse, suspendHeaderTracking]);
+    if (!active && wasActive) refreshAudioFollowRef.current();
+  }, [suspendHeaderTracking]);
 
   const handleReaderScrollBeginDrag = useCallback(() => {
     setFollowAudio(false);
@@ -1552,9 +1572,13 @@ export function BibleScreen() {
       />
       </Animated.View>
 
-      {selectedPlan && readerBiblePlans.length > 0 && readerHeaderHidden ? (
+      {planOverlayVisible ? (
         <View
           pointerEvents="box-none"
+          onLayout={({ nativeEvent }) => {
+            const next = nativeEvent.layout.height;
+            setPlanOverlayHeight(current => Math.abs(current - next) < 0.5 ? current : next);
+          }}
           style={{ left: 18, position: "absolute", right: 18, top: insets.top + 6, zIndex: 25 }}
         >
           <BiblePlanReaderPanel
@@ -1589,8 +1613,7 @@ export function BibleScreen() {
         viewportRef={readerViewportRef}
         onLayout={() => {
           audioSelectionLayoutChanged();
-          if (flowingParagraphText) refreshParagraphAudioFollow();
-          else requestAnimationFrame(scrollToAudioVerse);
+          refreshAudioFollowRef.current();
         }}
         onCommit={(page) => jumpToPosition(page.position, { intent: "chapter", haptic: false })}
         onInteractionChange={handlePagerInteraction}
@@ -1606,7 +1629,7 @@ export function BibleScreen() {
           directionalLockEnabled
           keyboardShouldPersistTaps="handled"
           onScroll={active ? handleScroll : undefined}
-          onMomentumScrollEnd={active && flowingParagraphText ? refreshParagraphAudioFollow : undefined}
+          onMomentumScrollEnd={active ? () => refreshAudioFollowRef.current() : undefined}
           onContentSizeChange={active ? () => tryScrollToChapterTop() : undefined}
           removeClippedSubviews={false}
           onScrollBeginDrag={active ? handleReaderScrollBeginDrag : undefined}
