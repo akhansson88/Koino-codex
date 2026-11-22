@@ -48,7 +48,43 @@ Run it with a Java 21+ runtime:
 npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino "node scripts/validate-plaintext-rules.mjs"
 ```
 
-## Deploy (koino-staging)
+## Deploy (koino-codex production, 2026-11-22)
+
+The staging project (`koino-staging`) has no owner and rejects both rules and
+functions deploys for `ak.hansson88@gmail.com` (Viewer + Firebase Authentication
+Admin only). The owner approved deploying straight to production instead.
+
+```powershell
+npx firebase-tools deploy --only functions --project koino-codex
+npx firebase-tools deploy --only database --project koino-codex
+```
+
+Results:
+
+- `koinoAccount` created; existing functions updated.
+- Legacy `encryptedAccount` and `pruneEncryptedRequests` deleted from the
+  project and removed from `functions/src/index.ts`.
+- New plaintext rules released on `koino-codex-default-rtdb`.
+- `createSupportPayment` was left out of this deploy (it needs
+  `STRIPE_SECRET_KEY`, which this project does not have yet).
+
+Acceptance run on the Pixel_10 emulator against production:
+
+- New account `ak.hansson88+plain@gmail.com` created through the app, no key or
+  recovery screen.
+- Journal entry written and stored as plaintext:
+  `encryptedData/journalEntries/AWeGwM2WNSVimul0v1R9ceDPSgi1/...` contains
+  `"title":"Plaintext test"` and `"userId":"AWeGwM2WNSVimul0v1R9ceDPSgi1"`.
+- App uninstalled, reinstalled, signed in again: the entry is visible.
+- The old production app build on the emulator was uninstalled to free space;
+  old builds generally stop working once the rules are live, so the new build
+  must ship before testers update.
+
+Existing encrypted accounts migrate on the device that still holds their vault
+when it first runs the new build. Devices without the vault cannot read the old
+records; those records stay untouched rather than being deleted.
+
+## Deploy (koino-staging) — blocked
 
 ```powershell
 npx firebase-tools deploy --config firebase.staging.deploy.json --project koino-staging --only database,functions
