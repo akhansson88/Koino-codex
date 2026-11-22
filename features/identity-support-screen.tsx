@@ -224,7 +224,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           onPress={() => { traceIdentity("security.press"); setActiveSheet("security"); }}
           showDivider
         />
-        <SettingsRow icon="lock" title={t("common.encryption")} onPress={() => { traceIdentity("encryption.push"); router.push("/encryption" as never); }} />
         <SettingsRow icon="shield" title={t("identity.privacy.title")} subtitle={t("identity.privacy.subtitle")} onPress={() => setActiveSheet("privacy")} showDivider />
         <SettingsRow
           icon="file-text"

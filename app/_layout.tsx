@@ -105,7 +105,7 @@ function RootNavigator() {
           <Stack.Screen name="feed/[targetType]/[id]" options={{ headerBackButtonMenuEnabled: false, headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="encryption" options={{ headerShown: false }} />
+          <Stack.Screen name="members" options={{ headerShown: false }} />
           <Stack.Screen name="me/history" options={{ headerShown: false }} />
           <Stack.Screen name="me/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false, headerShown: false }} />
@@ -114,3 +114,4 @@ function RootNavigator() {
     </>
   );
 }
+
