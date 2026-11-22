@@ -12,7 +12,7 @@ import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/
 import { crypto } from "./encryption-test-helpers.mjs";
 
 // Real Auth, callable HTTP, RTDB SDK/rules, signed key grants, sodium ciphertext
-// and Functions triggers. No handler.run, mocked authorization or live phone data.
+// and Functions triggers. The suite uses only its isolated demo fixture.
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectId = "demo-koino", databaseURL = "https://demo-koino-default-rtdb.firebaseio.com";
 const host = "127.0.0.1", ports = { auth: 19099, database: 19001, functions: 15001 };
@@ -128,7 +128,11 @@ async function verifyMembership() {
   }
 }
 async function verifyRemoved({ type, id, logical, record, cleanup, tombstones, audit }) {
-  for (const person of [A, B]) assert.equal(await read(person, logical), null, "Both real clients must observe removal");
+  for (const person of [A, B]) {
+    assert.equal(await read(person, logical), null, "Both real clients must observe removal");
+    const tombstone = await get(ref(person.database, `moderationTombstones/${manifest.groupId}/${type}/${id}`));
+    assert.ok(tombstone.exists(), "Both community members must observe the tombstone");
+  }
   for (const physical of cleanup) await absent(physical);
   for (const physical of tombstones) assert.ok(await readFixture(physical), "Every removed target needs persistent tombstone");
   const currentAudit = (await get(ref(A.database, `moderationActions/${manifest.groupId}/${type}/${id}`))).val();
@@ -176,12 +180,27 @@ async function verifyOfflineCheckInReplay() {
 async function verifyDailyClaim() {
   const claim = await read(B, manifest.dailyClaimLogical);
   assert.equal(claim.checkInId, manifest.sharedCheckId); assert.equal(claim.status, "committed"); assert.equal(claim.moderated, true);
+  assert.equal(claim.visibility, "group");
   assert.equal(await readFixture(`moderatedCheckInDays/${B.uid}/${manifest.groupId}/2026-01-02`), true);
   await denied(() => put(B, manifest.dailyClaimLogical, null));
   await denied(() => put(B, manifest.dailyClaimLogical, { ...claim, moderated: false }));
   const duplicateId = "duplicate_daily";
   await denied(() => put(B, `checkIns/${manifest.groupId}/${duplicateId}`, { ...manifest.sharedCheckRecord, id: duplicateId }));
   await denied(() => put(B, `privateCheckIns/${B.uid}/${duplicateId}`, { ...manifest.privateRecords[1].record, id: duplicateId, dayKey: "2026-01-02" }));
+}
+async function readRestartTombstones(person) {
+  const root = `moderationTombstones/${manifest.groupId}`;
+  const [reflection, checkIn] = await Promise.all([
+    get(ref(person.database, `${root}/post/reflection`)),
+    get(ref(person.database, `${root}/check_in/${manifest.sharedCheckId}`)),
+  ]);
+  return { reflection: reflection.val(), checkIn: checkIn.val() };
+}
+async function verifyModerationAuthorization(type, id) {
+  for (const person of [B, C]) await denied(() => moderate(person, type, id));
+  const request = signed(A, "removeCommunityContent", { groupId: manifest.groupId, targetType: type, targetId: id });
+  await denied(() => anonymous.endpoint(request));
+  await denied(() => B.endpoint(request));
 }
 async function recordRemoval(type, id, logical, record, cleanup = [], tombstones = []) {
   const request = signed(A, "removeCommunityContent", { groupId: manifest.groupId, targetType: type, targetId: id });
@@ -199,6 +218,14 @@ try {
     manifest = { version: 1, suite: "moderation-acceptance", initialComplete: false, groupId: `acceptance_${run}`, unrelatedId: `unrelated_${run}`, inviteCode: `ACCEPT_${run}`, initialKey: crypto.randomKey(), groupKey: crypto.randomKey(), unrelatedKey: crypto.randomKey(), people: { A: credentials("owner"), B: credentials("member"), C: credentials("outsider") }, removals: [], privateRecords: [], survivorId: "survivor", sharedCheckId: "shared_check" };
     await step("isolated empty fixture policy", initializePolicy);
     await step("real Auth and encrypted account setup", async () => { A = await client("owner", manifest.people.A, true); B = await client("member", manifest.people.B, true); C = await client("outsider", manifest.people.C, true); anonymous = await client("anonymous", null, true, false); save(manifest); });
+    await step("external image storage operations rejected over HTTP", async () => {
+      for (const operation of ["imageUpload", "imageDownload", "imageDelete", "legacyImage"]) {
+        await assert.rejects(
+          () => call(A, operation, { bucket: "user-avatars", path: `${A.uid}/not-uploaded` }),
+          error => error?.code === "functions/failed-precondition" && /disabled.*emulator|emulator.*disabled/i.test(error.message),
+        );
+      }
+    });
     await step("signed creation and owner-controlled encrypted admission", async () => {
       const first = await createGroup(A, manifest.groupId, manifest.inviteCode, manifest.initialKey);
       await createGroup(C, manifest.unrelatedId, `OTHER_${run}`, manifest.unrelatedKey);
@@ -224,9 +251,7 @@ try {
       await verifyPrivacy(); save(manifest);
     });
     await step("member outsider anonymous and forged signer denied", async () => {
-      for (const person of [B, C]) await denied(() => moderate(person, "post", manifest.survivorId));
-      const request = signed(A, "removeCommunityContent", { groupId: manifest.groupId, targetType: "post", targetId: manifest.survivorId });
-      await denied(() => anonymous.endpoint(request)); await denied(() => B.endpoint(request));
+      await verifyModerationAuthorization("post", manifest.survivorId);
       await denied(() => moderate(A, "post", "keep", manifest.unrelatedId));
       await denied(() => put(A, `posts/${manifest.unrelatedId}/keep`, null));
       await denied(() => read(A, `posts/${manifest.unrelatedId}/keep`));
@@ -245,7 +270,7 @@ try {
         const liveObservations = [A, B].map(person => observePresence(person, logical));
         await eventually(async () => liveObservations.every(x => x.present === true && !x.failed), "Both real client listeners must initially receive the shared target");
         await denied(() => put(A, logical, null));
-        for (const person of [B, C]) await denied(() => moderate(person, type, id));
+        await verifyModerationAuthorization(type, id);
         const field = type === "post" ? "body" : "reflectionText";
         const readable = await read(A, logical);
         assert.equal(crypto.decrypt(readable[field], `${logical}/${field}`, manifest.groupKey, new Set([B.device.identity.signingPublicKey])), type === "check_in" ? "Synthetic shared check-in" : "Synthetic shared content", "An authorized client must decrypt shared content before moderation");
@@ -261,7 +286,16 @@ try {
         }
         const childA = `${id}_A`, childB = `${id}_B`, reaction = `${id}_reaction`, prayerReaction = `${id}_prayer_reaction`;
         await put(A, `replies/${manifest.groupId}/${childA}`, reply(childA, type, id, A));
-        await eventually(async () => Boolean(await read(B, `activityNotifications/${B.uid}/${childA}`)), "Real reply notification trigger did not run");
+        const noticePath = `activityNotifications/${B.uid}/${childA}`;
+        await eventually(async () => Boolean(await read(B, noticePath)), "Real reply notification trigger did not run");
+        const notice = await read(B, noticePath);
+        assert.equal(notice.actorUserId, A.uid);
+        assert.equal(notice.recipientUserId, B.uid);
+        assert.equal(notice.groupId, manifest.groupId);
+        assert.equal(notice.targetType, type);
+        assert.equal(notice.targetId, id);
+        assert.equal(notice.replyId, childA);
+        assert.equal(notice.historyGeneration, 1);
         await put(B, `replies/${manifest.groupId}/${childB}`, reply(childB, type, id, B));
         await put(A, `prayerReactions/${manifest.groupId}/${prayerReaction}`, { userId: A.uid, targetType: "reply", targetId: childB, historyGeneration: 1, durationSeconds: cipher(12, `prayerReactions/${manifest.groupId}/${prayerReaction}/durationSeconds`, A) });
         await put(B, `postReactions/${manifest.groupId}/${reaction}`, { userId: B.uid, targetType: type, targetId: id, historyGeneration: 1, kind: cipher("heart", `postReactions/${manifest.groupId}/${reaction}/kind`) });
@@ -300,6 +334,9 @@ try {
       await put(B, `posts/${manifest.groupId}/${parent}`, manifest.selective.parentRecord);
       const record = { ...reply(target, "post", parent, B), mentionUserIds: [A.uid] };
       await put(B, `replies/${manifest.groupId}/${target}`, record);
+      await denied(() => put(A, `replies/${manifest.groupId}/${target}`, null));
+      await denied(() => put(A, `replies/${manifest.groupId}/${target}/body`, cipher("Unauthorized edit", `replies/${manifest.groupId}/${target}/body`, A)));
+      await verifyModerationAuthorization("reply", target);
       await eventually(async () => Boolean(await read(A, `activityNotifications/${A.uid}/${target}`)), "Real mention notification missing");
       await put(A, `replies/${manifest.groupId}/${sibling}`, manifest.selective.siblingRecord);
       await eventually(async () => Boolean(await read(B, `activityNotifications/${B.uid}/${sibling}`)), "Sibling notification missing");
@@ -344,6 +381,10 @@ try {
       const persisted = JSON.stringify(await readFixture(""));
       const privateKeys = [A, B, C].flatMap(person => [person.personalKey, ...[person.root, person.device.identity].flatMap(identity => Object.entries(identity).filter(([key, value]) => /private/i.test(key) && typeof value === "string").map(([, value]) => value))]);
       for (const secret of [manifest.groupKey, manifest.initialKey, manifest.unrelatedKey, ...privateKeys, "Synthetic shared content", ...manifest.privateRecords.map(x => x.plaintext)]) if (secret) assert.ok(!persisted.includes(secret), "Keys/sensitive plaintext must never enter database");
+      const dailyClaim = await read(B, manifest.dailyClaimLogical);
+      const tombstones = await readRestartTombstones(B);
+      assert.ok(dailyClaim && tombstones.reflection && tombstones.checkIn, "All three integrity records must exist before export");
+      manifest.restartRecords = { dailyClaim, tombstones };
       manifest.initialComplete = true; save(manifest);
     });
   } else {
@@ -352,6 +393,14 @@ try {
     await step("imported Auth users and encrypted memberships", async () => { A = await client("owner", manifest.people.A, false); B = await client("member", manifest.people.B, false); C = await client("outsider", manifest.people.C, false); anonymous = await client("anonymous", null, false, false); await verifyMembership(); });
     await step("removed targets tombstones references audits survive import", async () => { for (const result of manifest.removals) { await verifyRemoved(result); await verifyStaleReferences(result); } });
     await step("private journals check-ins Prayer Dwell daily claims survive import", async () => { await verifyPrivacy(); await verifyDailyClaim(); });
+    await step("complete moderation records survive export and import", async () => {
+      assert.ok(manifest.restartRecords, "Initial suite must capture the complete moderation records");
+      const { dailyClaim, tombstones } = manifest.restartRecords;
+      assert.deepEqual(await read(B, manifest.dailyClaimLogical), dailyClaim, "Daily claim changed during export/import");
+      for (const person of [A, B]) {
+        assert.deepEqual(await readRestartTombstones(person), tombstones, "Tombstone metadata changed during export/import");
+      }
+    });
     await step("selective survivors and author self-deletes survive import", async () => {
       assert.deepEqual(await read(B, `posts/${manifest.groupId}/${manifest.selective.parent}`), manifest.selective.parentRecord);
       assert.deepEqual(await read(B, `replies/${manifest.groupId}/${manifest.selective.sibling}`), manifest.selective.siblingRecord);

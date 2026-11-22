@@ -38,7 +38,7 @@ if (isolated) {
 }
 export const compiledFunctionsDirectory = compiled;
 
-const hosts = new Set(["127.0.0.1", "127.0.0.2", "localhost", "::1", "[::1]"]);
+const hosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const ports = new Set([emulatorEndpoints.authPort, emulatorEndpoints.databasePort, emulatorEndpoints.functionsPort]);
 const transport = globalThis.fetch;
 globalThis.fetch = (input, options) => {

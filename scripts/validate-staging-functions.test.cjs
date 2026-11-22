@@ -68,7 +68,7 @@ test("staging entry refuses any pre-initialized Admin app before loading the cal
   }
 });
 
-test("the built package discovers exactly one secret-free callable and pins the real Admin SDK", () => {
+test("the built package pins the real Admin SDK and binds only the staging recovery secret", () => {
   const directory = path.resolve(root, deploy.functions[0].source);
   const packagedRequire = createRequire(path.join(directory, "package.json"));
   assert.deepEqual(fs.readdirSync(directory).sort(), [
@@ -101,7 +101,7 @@ test("the built package discovers exactly one secret-free callable and pins the 
       assert.ok(fn.callableTrigger);
       assert.equal(fn.scheduleTrigger, undefined);
       assert.equal(fn.eventTrigger, undefined);
-      assert.deepEqual(fn.secretEnvironmentVariables ?? [], []);
+      assert.deepEqual(fn.secretEnvironmentVariables ?? [], [{ key: "KOINO_RECOVERY_SEED" }]);
       assert.equal(fn.serviceAccountEmail, "koino-dev-runtime@koino-staging.iam.gserviceaccount.com");
       assert.equal(fn.minInstances, 0);
       assert.equal(fn.maxInstances, 2);
