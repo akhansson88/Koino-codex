@@ -16,6 +16,7 @@ const mocks = {
   "react-native": `export const View = "View", Text = "Text", ActivityIndicator = "ActivityIndicator";`,
   "@/ui/theme": `export const colors = { cream: "cream", olive: "olive", ink: "ink" };`,
   "@/features/startup-performance": `export const markStartupMilestone = () => {};`,
+  "expo-file-system/legacy": `export const getInfoAsync = async () => ({ exists: true });`,
   "@/features/bible-database": `
     export const initializeBibleDatabase = async () => { globalThis.__bibleStartup.initializations++; };
     export const retainBibleDatabase = () => { globalThis.__bibleStartup.retains++; };
@@ -24,6 +25,7 @@ const mocks = {
   "expo-sqlite": `
     import { useEffect, useState } from "react";
     const database = {};
+    export const defaultDatabaseDirectory = "/mock";
     export const useSQLiteContext = () => database;
     export function SQLiteProvider({ children, onInit, onError }) {
       const [ready, setReady] = useState(false);

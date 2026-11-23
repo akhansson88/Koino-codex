@@ -317,7 +317,7 @@ export function BibleScreen() {
     verseHeightsRef.current = {};
     verseRowsRef.current = {};
   }
-  const { pages: chapterPages, loadedChapter, retry: retryChapter } = useChapterWindow(position, bibleVersionId);
+  const { pages: chapterPages, loadedChapter, retry: retryChapter } = useChapterWindow(position, bibleVersionId, preferencesReady);
   const chapter = loadedChapter?.key === chapterKey ? loadedChapter.value : { heading: undefined, subtitles: [], verses: [] };
   const chapterVerses = chapter.verses;
   const { select: selectVisibleAudioVerse, retry: retryAudioSelection, layoutChanged: audioSelectionLayoutChanged, cancel: cancelAudioSelection } = useVisibleVerseSelection({
@@ -644,6 +644,9 @@ export function BibleScreen() {
       sync.localSnapshot = readStoredBibleReaderPreferences(value) ?? undefined;
       sync.updatedAt = sync.localSnapshot?.updatedAt ?? 0;
       localLoaded = true;
+      // Paint from the on-device snapshot immediately; the cloud copy still
+      // reconciles below and only moves the reader when it is genuinely newer.
+      if (sync.localSnapshot) applyLocalFallback();
       if (sync.connected) void refreshFromCloud();
       else if (sync.connectionKnown) applyLocalFallback();
     }).catch(() => {

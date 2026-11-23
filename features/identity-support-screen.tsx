@@ -193,7 +193,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             : preference === "dark"
               ? t("settings.appearance.option.dark")
               : t("settings.appearance.option.light")}
-          onPress={() => { traceIdentity("appearance.press"); setActiveSheet("appearance"); }}
+          onPress={() => setActiveSheet("appearance")}
           showDivider
         />
         <SettingsRow
@@ -303,7 +303,6 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       <BottomSheet
         title={t("settings.appearance.sheetTitle")}
         visible={activeSheet === "appearance"}
-        onShow={() => traceIdentity("appearance.presented")}
         onClose={() => setActiveSheet(undefined)}
       >
         <BodyText muted>{t("settings.appearance.description")}</BodyText>

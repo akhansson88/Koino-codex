@@ -10,7 +10,7 @@ export type ChapterPage = {
   error?: boolean;
 };
 
-export function useChapterWindow(position: BiblePosition, version: BibleVersionId) {
+export function useChapterWindow(position: BiblePosition, version: BibleVersionId, enabled = true) {
   const positions = useMemo(() => [
     previousBibleChapter(position.book, position.chapter),
     { book: position.book, chapter: position.chapter, verse: 1 },
@@ -24,11 +24,18 @@ export function useChapterWindow(position: BiblePosition, version: BibleVersionI
   const windowKey = descriptors.map(item => item.key).join("|");
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     // The database already deduplicates requests and keeps a bounded chapter cache.
     // React retains only this three-page window, never the entire Bible.
     setEntries(old => Object.fromEntries(descriptors.filter(item => old[item.key]).map(item => [item.key, old[item.key]])));
-    for (const item of descriptors) {
+    // Queue the visible chapter first; neighbours fill in while it renders.
+    const currentKey = readerChapterKey(version, position);
+    const loadOrder = descriptors.map(item => item.key)
+      .sort((left, right) => (left === currentKey ? -1 : right === currentKey ? 1 : 0));
+    for (const key of loadOrder) {
+      const item = descriptors.find(entry => entry.key === key);
+      if (!item) continue;
       // Keep the measured preview's verse/projection identities during handoff.
       // Re-mapping cached rows can invalidate paragraph wrapping without causing
       // a new native text-layout event when the visible text is unchanged.
@@ -40,7 +47,7 @@ export function useChapterWindow(position: BiblePosition, version: BibleVersionI
       });
     }
     return () => { active = false; };
-  }, [windowKey, attempt]);
+  }, [windowKey, attempt, enabled]);
 
   const retry = useCallback((key?: string) => {
     setEntries(old => Object.fromEntries(Object.entries(old).filter(([entryKey, entry]) => entry.chapter || (key && key !== entryKey))));
