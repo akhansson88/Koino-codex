@@ -33,6 +33,7 @@ import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomen
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 
 function firstName(name?: string) {
   return name?.trim().split(/\s+/)[0];
@@ -81,6 +82,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
 }) {
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
+  useTheme();
   const params = useLocalSearchParams<{ checkIn?: string }>();
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");

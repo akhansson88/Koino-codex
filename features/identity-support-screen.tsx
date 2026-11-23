@@ -21,6 +21,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { confirmAction } from "@/ui/confirm";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 import { type IdentityPresentation, type IdentitySheet } from "@/features/identity/types";
 import { roomMemberCount, selectedImageSize } from "@/features/identity/room-helpers";
 import {
@@ -46,6 +47,7 @@ function traceIdentity(event: string) {
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
   const { language, setLanguage, t } = useAppTranslation();
+  const { preference, setPreference } = useTheme();
   const identitySheetRef = useRef<AppSheetHandle>(null);
   const navigateFromIdentity = (path: "/room-details" | "/donation-amount") => {
     if (presentation === "sheet") identitySheetRef.current?.dismiss(() => router.push(path));
@@ -194,6 +196,18 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           showDivider
         />
         <SettingsRow
+          icon={preference === "dark" ? "moon" : preference === "light" ? "sun" : "smartphone"}
+          title={t("settings.appearance.title")}
+          subtitle={t("settings.appearance.subtitle")}
+          value={preference === "system"
+            ? t("settings.appearance.option.system")
+            : preference === "dark"
+              ? t("settings.appearance.option.dark")
+              : t("settings.appearance.option.light")}
+          onPress={() => { traceIdentity("appearance.press"); setActiveSheet("appearance"); }}
+          showDivider
+        />
+        <SettingsRow
           icon="settings"
           title={t("identity.account.title")}
           subtitle={t("identity.account.subtitle")}
@@ -293,6 +307,37 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
             title={t("settings.language.option.swedish")}
             value={language === "sv" ? t("settings.language.selected") : undefined}
             onPress={() => setLanguage("sv")}
+            showDivider
+          />
+        </SettingsSection>
+      </BottomSheet>
+
+      <BottomSheet
+        title={t("settings.appearance.sheetTitle")}
+        visible={activeSheet === "appearance"}
+        onShow={() => traceIdentity("appearance.presented")}
+        onClose={() => setActiveSheet(undefined)}
+      >
+        <BodyText muted>{t("settings.appearance.description")}</BodyText>
+        <SettingsSection label={t("settings.appearance.options")}>
+          <SettingsRow
+            icon="smartphone"
+            title={t("settings.appearance.option.system")}
+            value={preference === "system" ? t("settings.appearance.selected") : undefined}
+            onPress={() => setPreference("system")}
+          />
+          <SettingsRow
+            icon="sun"
+            title={t("settings.appearance.option.light")}
+            value={preference === "light" ? t("settings.appearance.selected") : undefined}
+            onPress={() => setPreference("light")}
+            showDivider
+          />
+          <SettingsRow
+            icon="moon"
+            title={t("settings.appearance.option.dark")}
+            value={preference === "dark" ? t("settings.appearance.selected") : undefined}
+            onPress={() => setPreference("dark")}
             showDivider
           />
         </SettingsSection>

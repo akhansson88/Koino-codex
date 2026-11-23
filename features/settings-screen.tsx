@@ -60,6 +60,7 @@ import { FieldLabel } from "@/ui/shadcn/input";
 import { Separator } from "@/ui/shadcn/separator";
 import { SheetFormPanel } from "@/ui/sheet-menu";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 import { AmbientBackground } from "@/ui/ambient-background";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
 import {
@@ -157,6 +158,7 @@ function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
 }
 
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
+  useTheme();
   const insets = useSafeAreaInsets();
   const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();

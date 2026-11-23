@@ -1,0 +1,137 @@
+{
+  "$schema": "https://koino.app/schemas/tokens-2.json",
+  "name": "KOINO",
+  "version": "2.0.0",
+  "status": "implemented",
+  "updated": "2026-11-21",
+  "color": {
+    "light": {
+      "canvas": "#FAF6F0",
+      "surface": "#FFFFFF",
+      "surfaceSunken": "#F3E9DE",
+      "ink": "#1D1611",
+      "body": "#3A2E26",
+      "muted": "#6A5A4C",
+      "line": "#E7DCCE",
+      "lineStrong": "#D6C7B6",
+      "ember": "#A64B21",
+      "emberPressed": "#8F3F1A",
+      "sand": "#F3E3D5",
+      "peach": "#F8D9BE",
+      "onPrimary": "#FFFDF9",
+      "primary": "#1D1611",
+      "primaryPressed": "#2E241D",
+      "secondaryPressed": "#EADCCB",
+      "outlinePressed": "#F3E9DE",
+      "danger": "#B3261E",
+      "dangerSurface": "#FEF2F2"
+    },
+    "dark": {
+      "canvas": "#14100D",
+      "surface": "#1D1813",
+      "raised": "#231C16",
+      "ink": "#F4EADF",
+      "body": "#DCCDBD",
+      "muted": "#B9A997",
+      "line": "#332A22",
+      "lineStrong": "#4A3D32",
+      "accent": "#E8A45C",
+      "accentPressed": "#F0B878",
+      "accentInk": "#2A1B10",
+      "secondaryPressed": "#2E251D",
+      "outlinePressed": "#2A211A",
+      "danger": "#F2B8B5"
+    },
+    "functional": {
+      "prayer": { "light": "#8C3A56", "dark": "#E7A8BD" },
+      "reflection": { "light": "#4B4879", "dark": "#B9B3E8" },
+      "rhythm": { "light": "#47624A", "dark": "#A9C3A9" }
+    }
+  },
+  "contrast": {
+    "ink_on_canvas": 16.6,
+    "body_on_canvas": 12.2,
+    "muted_on_canvas": 6.1,
+    "ember_on_canvas": 5.3,
+    "white_on_ember": 5.7,
+    "ink_on_sand": 14.3,
+    "parchment_on_night": 15.9,
+    "muted_on_night": 8.3,
+    "amber_on_night": 8.9,
+    "night_on_amber": 8.9,
+    "peach_on_canvas": 1.45
+  },
+  "typography": {
+    "families": {
+      "scripture": "Georgia",
+      "display": "Montserrat",
+      "body": "Inter"
+    },
+    "styles": {
+      "display": { "family": "scripture", "size": 40, "lineHeight": 46, "tracking": -0.5 },
+      "h1": { "family": "display", "weight": "SemiBold", "size": 32, "lineHeight": 38, "tracking": -0.6 },
+      "h2": { "family": "display", "weight": "SemiBold", "size": 24, "lineHeight": 30, "tracking": -0.4 },
+      "h3": { "family": "display", "weight": "SemiBold", "size": 19, "lineHeight": 26, "tracking": -0.2 },
+      "scripture": { "family": "scripture", "size": 20.5, "lineHeight": 31, "tracking": 0 },
+      "body": { "family": "body", "weight": "Regular", "size": 16, "lineHeight": 24, "tracking": 0 },
+      "bodySmall": { "family": "body", "weight": "Regular", "size": 15, "lineHeight": 22, "tracking": 0 },
+      "caption": { "family": "body", "weight": "Regular", "size": 13, "lineHeight": 20, "tracking": 0 },
+      "label": { "family": "body", "weight": "SemiBold", "size": 12, "lineHeight": 16, "tracking": 0 },
+      "micro": { "family": "body", "weight": "Medium", "size": 10, "lineHeight": 14, "tracking": 1.4 }
+    },
+    "minimums": {
+      "body": 15,
+      "caption": 13,
+      "uppercaseTracking": 10
+    }
+  },
+  "space": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "6": 24,
+    "8": 32,
+    "12": 48,
+    "16": 64,
+    "gutter": 24,
+    "cardPadding": 20,
+    "sectionGap": 32
+  },
+  "radius": {
+    "control": 8,
+    "field": 12,
+    "card": 20,
+    "sheet": 28,
+    "pill": 999
+  },
+  "size": {
+    "buttonHeight": 52,
+    "buttonHeightCompact": 44,
+    "inputHeight": 52,
+    "iconSmall": 20,
+    "iconLarge": 24,
+    "touchTarget": 44,
+    "touchGap": 8,
+    "tabBar": 72,
+    "focusRing": 2,
+    "focusOffset": 2
+  },
+  "motion": {
+    "micro": 120,
+    "enter": 200,
+    "sheet": 260,
+    "easing": "cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "reducedMotion": true
+  },
+  "elevation": {
+    "card": "0 1px 2px rgba(88,52,25,0.04), 0 6px 18px rgba(88,52,25,0.05)",
+    "sheet": "0 14px 34px rgba(88,52,25,0.08)",
+    "dark": "hairline only"
+  },
+  "directions": {
+    "default": "daylight",
+    "reading": "sanctuary",
+    "night": "vigil"
+  }
+}

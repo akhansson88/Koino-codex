@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AnimatedDockBackground, AnimatedDockTabBar, DockTabButton } from "@/ui/animated-dock-tab-bar";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
 
 const TAB_ROUTES = ["/(tabs)/bible", "/(tabs)", "/(tabs)/me", "/(tabs)/community"] as const;
@@ -41,6 +42,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useAppTranslation();
   const reducedMotion = useReducedMotion();
+  const { scheme } = useTheme();
   const pathname = usePathname();
   const rootIndex = rootTabIndex(pathname);
 
@@ -78,7 +80,7 @@ export default function TabLayout() {
         header: () => <KoinoTabHeader />,
         headerTintColor: colors.ink,
         headerShadowVisible: false,
-        tabBarActiveTintColor: colors.ink,
+        tabBarActiveTintColor: scheme === "dark" ? colors.accentWarm : colors.ink,
         tabBarInactiveTintColor: colors.muted,
         tabBarActiveBackgroundColor: "transparent",
         tabBarBackground: () => <AnimatedDockBackground />,
@@ -166,8 +168,6 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   label: {
-    fontSize: 11,
-    lineHeight: 15,
     flexShrink: 1,
     textAlign: "center",
   },

@@ -135,7 +135,7 @@ export function FilterChips<T extends string>({
         onPress={() => onChange(option.value)}
         style={({ pressed }) => ({
           alignItems: "center",
-          backgroundColor: selected ? shadcn.primary : pressed ? "#FBE7D3" : shadcn.secondary,
+          backgroundColor: selected ? shadcn.primary : pressed ? shadcn.accent : shadcn.secondary,
           borderColor: selected ? shadcn.primary : shadcn.border,
           borderCurve: "continuous",
           borderRadius: radius.md,
@@ -188,15 +188,15 @@ export function StatusPill({ status }: { status: "answered" | "open" }) {
       style={{
         alignItems: "center",
         backgroundColor: answered ? shadcn.successSoft : shadcn.warningSoft,
-        borderColor: answered ? "#BBF7D0" : "#FDE68A",
+        borderColor: answered ? shadcn.success : shadcn.warning,
         borderRadius: radius.sm,
         borderWidth: 1,
         justifyContent: "center",
-        minHeight: 24,
+        minHeight: 26,
         paddingHorizontal: 8,
       }}
     >
-      <Text style={[typography.navLabel, { color: answered ? shadcn.success : shadcn.warning, fontSize: 11 }]}>
+      <Text style={[typography.navLabel, { color: answered ? shadcn.success : shadcn.warning, fontSize: 12 }]}>
         {t(answered ? "shared.status.answered" : "shared.status.open")}
       </Text>
     </View>

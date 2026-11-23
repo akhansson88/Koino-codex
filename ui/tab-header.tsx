@@ -1,33 +1,31 @@
 import { AvatarButton, NotificationBellButton } from "@/ui/app-components";
-import { colors, shadows, shadcn, typography } from "@/ui/theme";
-import { LinearGradient } from "expo-linear-gradient";
+import { colors, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function KoinoTabHeader() {
   const insets = useSafeAreaInsets();
+  useTheme();
 
   return (
-    <LinearGradient
-      colors={["#FFFCF7", "#FFF2E4"]}
-      end={{ x: 1, y: 1 }}
-      start={{ x: 0, y: 0 }}
+    <View
       style={{
-        borderBottomColor: shadcn.border,
+        backgroundColor: colors.background,
+        borderBottomColor: colors.line,
         borderBottomWidth: 1,
         paddingBottom: 12,
-        paddingHorizontal: 18,
+        paddingHorizontal: 24,
         paddingTop: insets.top + 8,
-        ...shadows.control,
       }}
     >
       <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={[typography.title, { color: colors.textPrimary, fontFamily: "Montserrat_600SemiBold", fontSize: 22, letterSpacing: 2.4, lineHeight: 28 }]}>
+        <Text style={[typography.title, { color: colors.textPrimary, fontFamily: "Montserrat_500Medium", fontSize: 16, letterSpacing: 4.2, lineHeight: 22 }]}>
           KOINO
         </Text>
         <HeaderRightControls />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 

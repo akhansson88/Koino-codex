@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet, useWindowDimensions, type StyleProp, type TextStyle } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View, StyleSheet, type StyleProp, type TextStyle } from "react-native";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { router } from "expo-router";
 import { auth } from "@/state/store/firebase";
@@ -8,7 +7,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 import { useKoino } from "@/state/koino-store";
 import { encodeAt } from "@/state/encryption/database";
-import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, escrowAvailable, ensureEscrow, restoreWithEscrow, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
+import { crypto, session, sessionGeneration, identityRotationInProgress, lockSession, unlockExisting, draftAccount, confirmAccount, ensureEscrow, restoreWithEscrow, recoverAccount, requestDeviceApproval, approveDevice, approveGroupMember, rejectGroupJoinRequest, rotateGroup, listenRaw, type Vault, type PublicIdentity, draftRevocation, revokeDevice, type Account } from "@/state/encryption/session";
 import { personalMigrationComplete, migratePersonal, migrateOwnedGroups } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgress } from "@/state/onboarding-progress";
@@ -41,56 +40,6 @@ function Button({ label, onPress, disabled, labelStyle = styles.buttonText, allo
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: Boolean(disabled) }} disabled={disabled} onPress={onPress} style={[styles.button, disabled && { opacity: 0.5 }]}><Text allowFontScaling={allowFontScaling} style={labelStyle}>{label}</Text></Pressable>;
 }
 
-function RecoveryKeySetup({ recoveryKey, confirmation, onConfirmation, onConfirm, onSignOut, busy, error }: {
-  recoveryKey: string;
-  confirmation: string;
-  onConfirmation: (value: string) => void;
-  onConfirm: () => void;
-  onSignOut: () => void;
-  busy: boolean;
-  error: string;
-}) {
-  const w = useWords();
-  const insets = useSafeAreaInsets();
-  const { fontScale } = useWindowDimensions();
-  const ios = Platform.OS === "ios";
-  // Apply the live iOS preference to this screen's layout as well as its text.
-  // Disable native multiplication here so that the preference is applied once.
-  const scale = ios ? fontScale : 1;
-  const scaled = (style: TextStyle & { fontSize: number; lineHeight: number }) => ({
-    ...style,
-    fontSize: style.fontSize * scale,
-    lineHeight: style.lineHeight * scale,
-  });
-  const body = [scaled(typography.body), { color: colors.ink }];
-  const buttonLabel: StyleProp<TextStyle> = [scaled(typography.button), { alignSelf: "stretch", color: colors.white, textAlign: "center" }];
-
-  return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }}
-      automaticallyAdjustKeyboardInsets={ios}
-      contentInsetAdjustmentBehavior="never"
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={{ alignSelf: "center", width: "100%", maxWidth: 430, gap: 18 }}>
-        <Text accessibilityRole="header" allowFontScaling={!ios} style={[scaled(typography.screenTitle), { color: colors.ink }]}>
-          {w("Protect your KOINO account", "Skydda ditt KOINO-konto")}
-        </Text>
-        <Text allowFontScaling={!ios} style={body}>{w("Your personal and community content will be encrypted before upload. Automatic recovery is unavailable right now, so save this recovery code somewhere private. It restores your content if you lose every device.", "Ditt personliga innehåll och innehållet i gemenskapen krypteras före uppladdning. Automatisk återställning är inte tillgänglig just nu, så spara återställningskoden på en privat plats. Den återställer innehållet om du förlorar alla enheter.")}</Text>
-        <View style={styles.card}>
-          <Text selectable allowFontScaling={!ios} style={body}>{recoveryKey}</Text>
-        </View>
-        <Text allowFontScaling={!ios} style={[scaled(typography.label), { color: colors.ink }]}>{w("Enter the last six characters to confirm you saved the code.", "Skriv de sista sex tecknen för att bekräfta att du sparat koden.")}</Text>
-        <TextInput accessibilityLabel={w("Recovery code confirmation", "Bekräftelse av återställningskod")} allowFontScaling={!ios} autoCapitalize="none" autoCorrect={false} value={confirmation} onChangeText={onConfirmation} style={[styles.input, body, { minHeight: 52 }]} />
-        <Button label={w("Enable encryption", "Aktivera kryptering")} labelStyle={buttonLabel} allowFontScaling={!ios} disabled={busy || confirmation !== recoveryKey.slice(-6)} onPress={onConfirm} />
-        {error ? <Text accessibilityRole="alert" allowFontScaling={!ios} style={[scaled(typography.body), { color: colors.danger }]}>{error}</Text> : null}
-        <Button label={w("Sign out", "Logga ut")} labelStyle={buttonLabel} allowFontScaling={!ios} disabled={busy} onPress={onSignOut} />
-      </View>
-    </ScrollView>
-  );
-}
-
 type ActiveOnboarding = {
   userId: string;
   generation: number;
@@ -101,10 +50,9 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   const w = useWords();
   const authRevision = useRef(0);
   const [user, setUser] = useState<User | null>(null);
-  const [phase, setPhase] = useState<"loading" | "signedOut" | "setup" | "restoring" | "recovery" | "migrating" | "ready" | "error">("loading");
-  const [draft, setDraft] = useState<Vault>();
+  const [phase, setPhase] = useState<"loading" | "signedOut" | "restoring" | "recovery" | "migrating" | "ready" | "error">("loading");
   const [code, setCode] = useState("");
-  const [savedCode, setSavedCode] = useState("");
+  const [codeEntry, setCodeEntry] = useState(false);
   const [fingerprint, setFingerprint] = useState("");
   const [revoked, setRevoked] = useState(false);
   const [error, setError] = useState("");
@@ -130,31 +78,25 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     }
     const nextDraft = await draftAccount(uid);
     if (!isCurrent()) return;
-    const automatic = await escrowAvailable(uid).catch(() => false);
-    if (!isCurrent()) return;
-    if (automatic) {
-      try {
-        await confirmAccount(nextDraft, { requireEscrow: true });
-        if (!isCurrent()) return;
-        setDraft(undefined); await finish();
-        return;
-      } catch (problem) {
-        if (!isCurrent()) return;
-        setError(problem instanceof Error ? problem.message : "");
-        // A committed setup whose unlock was interrupted can continue without
-        // showing a second key-confirmation screen.
-        const result = await unlockExisting(uid).catch(() => undefined);
-        if (!isCurrent()) return;
-        if (result === "ready") { setDraft(undefined); await finish(); return; }
-        if (result === "revoked") { setRevoked(true); setPhase("recovery"); return; }
-        if (result === "recovery") { setPhase("recovery"); return; }
-        // Automatic recovery was available, so a transient setup failure should
-        // not expose a recovery code. Retry replays the silent setup path.
-        setPhase("error");
-        return;
-      }
+    // Device-only encryption: the vault is generated and kept on this device,
+    // so onboarding never shows a recovery key. A replacement device is
+    // unlocked by approving it from an existing device.
+    try {
+      await confirmAccount(nextDraft);
+      if (!isCurrent()) return;
+      await finish();
+    } catch (problem) {
+      if (!isCurrent()) return;
+      setError(problem instanceof Error ? problem.message : "");
+      // A committed setup whose unlock was interrupted can continue without
+      // replaying account creation.
+      const result = await unlockExisting(uid).catch(() => undefined);
+      if (!isCurrent()) return;
+      if (result === "ready") { await finish(); return; }
+      if (result === "revoked") { setRevoked(true); setPhase("recovery"); return; }
+      if (result === "recovery") { setPhase("recovery"); return; }
+      setPhase("error");
     }
-    setDraft(nextDraft); setPhase("setup");
   }
   async function finish() {
     const uid = session().uid, token = sessionGeneration();
@@ -215,7 +157,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       const request = ++authRevision.current;
       lockSession(); clearEncryptedImages();
       setOnboarding(undefined);
-      setUser(next); setDraft(undefined); setCode(""); setSavedCode(""); setFingerprint(""); setRevoked(false); setError(""); setBusy(false);
+      setUser(next); setCode(""); setCodeEntry(false); setFingerprint(""); setRevoked(false); setError(""); setBusy(false);
       if (!next) { setPhase("signedOut"); return; }
       const isCurrent = () => active && authRevision.current === request && auth.currentUser?.uid === next.uid;
       setPhase("loading");
@@ -281,26 +223,12 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
     <ActivityIndicator accessibilityLabel={w("Restoring encrypted data", "Återställer krypterade data")} color={colors.ink} />
     <Text style={[styles.body, { textAlign: "center", maxWidth: 360 }]}>{w("Restoring your encrypted data. Keep the app open.", "Återställer dina krypterade data. Håll appen öppen.")}</Text>
   </View>;
-  if (phase === "setup" && draft) return <RecoveryKeySetup
-    recoveryKey={draft.recoveryKey}
-    confirmation={savedCode}
-    onConfirmation={setSavedCode}
-    busy={busy}
-    error={error}
-    onConfirm={() => void work(async (isCurrent) => {
-      if (!isCurrent()) return;
-      await confirmAccount(draft);
-      if (!isCurrent()) return;
-      setDraft(undefined); setSavedCode(""); await finish();
-    })}
-    onSignOut={() => void work(async () => { await signOut(auth); })}
-  />;
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <Text style={styles.title}>{phase === "migrating" ? w("Encrypting your history", "Krypterar din historik") : w("Restore this device", "Återställ den här enheten")}</Text>
     {phase === "recovery" && user ? <>
       <Text style={styles.body}>{revoked
-        ? w("This device was removed from your KOINO account. Enter your recovery code or approve this device from another signed-in device to use it again. Resetting your login password does not recover encrypted history.", "Den här enheten har tagits bort från ditt KOINO-konto. Ange återställningskoden eller godkänn enheten från en annan inloggad enhet för att använda den igen. En återställning av inloggningslösenordet återställer inte krypterad historik.")
-        : w("We couldn't restore this device automatically. Try again, approve this device from another signed-in device, or enter your recovery code. Resetting your login password does not recover encrypted history.", "Vi kunde inte återställa den här enheten automatiskt. Försök igen, godkänn enheten från en annan inloggad enhet eller ange återställningskoden. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
+        ? w("This device was removed from your KOINO account. Approve this device from another signed-in device, or enter a recovery code if you saved one. Resetting your login password does not recover encrypted history.", "Den här enheten har tagits bort från ditt KOINO-konto. Godkänn den här enheten från en annan inloggad enhet, eller ange en återställningskod om du sparat en. En återställning av inloggningslösenordet återställer inte krypterad historik.")
+        : w("Your encrypted history lives only on the device where you created it. Approve this device from your old phone, or enter a recovery code if you saved one. Resetting your login password does not recover encrypted history.", "Din krypterade historik finns bara på enheten där du skapade kontot. Godkänn den här enheten från din gamla telefon, eller ange en återställningskod om du sparat en. En återställning av inloggningslösenordet återställer inte krypterad historik.")}</Text>
       {revoked ? null : <Button label={w("Try automatic restore again", "Försök återställa automatiskt igen")} disabled={busy} onPress={() => void work(async (isCurrent) => {
         if (!isCurrent()) return;
         setPhase("restoring");
@@ -314,12 +242,6 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
           throw problem;
         }
       })} />}
-      <TextInput accessibilityLabel={w("Recovery code", "Återställningskod")} secureTextEntry autoCapitalize="none" autoCorrect={false} value={code} onChangeText={setCode} style={styles.input} />
-      <Button label={w("Recover content", "Återställ innehåll")} disabled={busy || !code} onPress={() => void work(async (isCurrent) => {
-        if (!isCurrent()) return;
-        await recoverAccount(user.uid, code);
-        if (isCurrent()) { setCode(""); await finish(); }
-      })} />
       <Button label={w("Request device approval", "Begär godkännande av enheten")} disabled={busy} onPress={() => void work(async (isCurrent) => {
         if (!isCurrent()) return;
         const next = await requestDeviceApproval(user.uid);
@@ -333,6 +255,14 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
         if (result !== "ready") throw new Error(w("This device is still waiting for approval.", "Enheten väntar fortfarande på godkännande."));
         await finish();
       })} />
+      {revoked || codeEntry ? <>
+        <TextInput accessibilityLabel={w("Recovery code", "Återställningskod")} secureTextEntry autoCapitalize="none" autoCorrect={false} value={code} onChangeText={setCode} style={styles.input} />
+        <Button label={w("Recover content", "Återställ innehåll")} disabled={busy || !code} onPress={() => void work(async (isCurrent) => {
+          if (!isCurrent()) return;
+          await recoverAccount(user.uid, code);
+          if (isCurrent()) { setCode(""); await finish(); }
+        })} />
+      </> : <Button label={w("I have a recovery code", "Jag har en återställningskod")} disabled={busy} onPress={() => setCodeEntry(true)} />}
     </> : null}
     {phase === "migrating" ? <><ActivityIndicator color={colors.ink} /><Text style={styles.body}>{w("Encrypting your existing history. Keep the app open; interrupted migrations resume safely.", "Krypterar din befintliga historik. Håll appen öppen; avbrutna migreringar kan återupptas.")}</Text>{progress ? <Text style={styles.body}>{progress}</Text> : null}</> : null}
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}

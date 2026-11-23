@@ -1,20 +1,39 @@
 import { readerSurface } from "@/ui/theme";
+import { type ColorScheme } from "@/ui/theme";
 import { type ReaderPalette } from "@/features/bible-reader/types";
 
-export function readerPaletteFor(): ReaderPalette {
+export function readerPaletteFor(scheme: ColorScheme = "light"): ReaderPalette {
+  if (scheme === "dark") {
+    return {
+      accent: "#E8A45C",
+      background: "#14100D",
+      buttonText: "#2A1B10",
+      danger: "#F2B8B5",
+      dim: "rgba(244, 234, 223, 0.30)",
+      input: "#1D1813",
+      line: "#332A22",
+      muted: "#B9A997",
+      peach: "#2A211A",
+      shadow: "#000000",
+      sheet: "#1D1813",
+      surface: "#1D1813",
+      text: "#F4EADF",
+    };
+  }
+
   return {
-    accent: "#A9571F",
+    accent: "#A64B21",
     background: readerSurface,
-    buttonText: "#2A1B10",
-    danger: "#DC2626",
-    dim: "rgba(43, 29, 18, 0.34)",
+    buttonText: "#FFFDF9",
+    danger: "#B3261E",
+    dim: "rgba(29, 22, 17, 0.34)",
     input: "#FFFFFF",
-    line: "#EADCD0",
-    muted: "#7A6758",
-    peach: "#FFE2C7",
-    shadow: "#3C2A1C",
-    sheet: "#FFFDFA",
+    line: "#E7DCCE",
+    muted: "#6A5A4C",
+    peach: "#F3E3D5",
+    shadow: "#1D1611",
+    sheet: "#FFFDF9",
     surface: "#FFFFFF",
-    text: "#231A13",
+    text: "#1D1611",
   };
 }

@@ -1,12 +1,19 @@
 import { Platform, type TextStyle, type ViewStyle } from "react-native";
 
 /**
- * KOINO design tokens.
+ * KOINO design tokens — brand 2.0.
  *
- * The surface language follows shadcn/ui: near-white canvas, white cards,
- * hairline borders, ink primary actions, compact corner radii and dense,
- * calm typography. KOINO's warm brand accent is kept for highlights only.
+ * Light is "Daylight": warm off-white canvas, white cards, ink primary
+ * actions and a single ember accent. Peach is illustration only.
+ * Dark is "Vigil": near-black canvas, parchment text and amber actions.
+ *
+ * `colors` and `shadcn` are mutable on purpose: the theme provider applies a
+ * scheme in place so the many inline style reads across the app update without
+ * a context hook in every component. Call `applyColorScheme` only from
+ * `ThemeProvider`.
  */
+export type ColorScheme = "light" | "dark";
+
 type ThemeColors = {
   background: string;
   surface: string;
@@ -51,89 +58,155 @@ type ThemeColors = {
   white: string;
 };
 
-/**
- * Raw brand swatches. These are intentionally soft: they are used for
- * decorative fills that sit behind dark ink text.
- */
+/** Raw brand swatches. Soft tones are decorative fills behind dark ink. */
 export const brandPalette = {
-  deepNavy: "#231A13",
-  warmPersika: "#FFC79A",
-  warmCanvas: "#FFF9F2",
-  blushRosa: "#F6BFA8",
-  lavenderHaze: "#F7D3BC",
-  softCyan: "#FBE6D5",
+  deepNavy: "#1D1611",
+  warmPersika: "#F8D9BE",
+  warmCanvas: "#FAF6F0",
+  blushRosa: "#F3E3D5",
+  lavenderHaze: "#EFE2D6",
+  softCyan: "#F3E9DE",
   surfaceWhite: "#FFFFFF",
-  softBorder: "#EFDECE",
-  stone: "#7A6758",
-  mutedNavy: "#4A382C",
-  paperOffWhite: "#FFF4E9",
+  softBorder: "#E7DCCE",
+  stone: "#6A5A4C",
+  mutedNavy: "#3A2E26",
+  paperOffWhite: "#FBF7F1",
 } as const;
 
-/** The Bible reader deliberately keeps a neutral paper surface. */
-export const readerSurface = "#FAFAF9";
+/** Neutral paper used by the Bible reader in the light theme. */
+export const readerSurface = "#FAF6F0";
 
-/** The warm peach wash that sits behind app content. */
+/** The quiet wash behind app content (kept flat in 2.0). */
 export const ambientTheme = {
-  baseTop: "#FFFCF7",
-  baseMiddle: "#FFF5E9",
-  baseBottom: "#FFEAD8",
-  peach: "#FFC79A",
-  apricot: "#FFD9BA",
-  cream: "#FFF0E1",
+  baseTop: "#FAF6F0",
+  baseMiddle: "#FAF6F0",
+  baseBottom: "#FAF6F0",
+  peach: "#F8D9BE",
+  apricot: "#F5E3D3",
+  cream: "#F3E9DE",
 } as const;
 
-/** shadcn/ui semantic palette, tuned to KOINO's peach-light surface. */
-export const shadcn = {
-  background: "#FFF9F2",
-  foreground: "#231A13",
+export type ShadcnPalette = {
+  background: string;
+  foreground: string;
+  card: string;
+  cardForeground: string;
+  popover: string;
+  popoverForeground: string;
+  primary: string;
+  primaryForeground: string;
+  primaryPressed: string;
+  secondaryPressed: string;
+  outlinePressed: string;
+  secondary: string;
+  secondaryForeground: string;
+  muted: string;
+  mutedForeground: string;
+  accent: string;
+  accentForeground: string;
+  brand: string;
+  brandForeground: string;
+  brandSoft: string;
+  destructive: string;
+  destructiveForeground: string;
+  border: string;
+  input: string;
+  ring: string;
+  success: string;
+  successSoft: string;
+  warning: string;
+  warningSoft: string;
+};
+
+const lightShadcn: ShadcnPalette = {
+  background: "#FAF6F0",
+  foreground: "#1D1611",
   card: "#FFFFFF",
-  cardForeground: "#231A13",
+  cardForeground: "#1D1611",
   popover: "#FFFFFF",
-  popoverForeground: "#231A13",
-  primary: "#FFC79A",
-  primaryForeground: "#2A1B10",
-  secondary: "#FFF4E9",
-  secondaryForeground: "#3A2A1E",
-  muted: "#FAEFE4",
-  mutedForeground: "#6E5B4B",
-  accent: "#FFF0E0",
-  accentForeground: "#2A1D13",
-  brand: "#A9571F",
-  brandForeground: "#FFFBF7",
-  brandSoft: "#FFEBD8",
-  destructive: "#DC2626",
+  popoverForeground: "#1D1611",
+  primary: "#1D1611",
+  primaryForeground: "#FFFDF9",
+  primaryPressed: "#2E241D",
+  secondaryPressed: "#EADCCB",
+  outlinePressed: "#F3E9DE",
+  secondary: "#F3E9DE",
+  secondaryForeground: "#3A2E26",
+  muted: "#F3E9DE",
+  mutedForeground: "#6A5A4C",
+  accent: "#F3E3D5",
+  accentForeground: "#1D1611",
+  brand: "#A64B21",
+  brandForeground: "#FFFDF9",
+  brandSoft: "#F7E7D8",
+  destructive: "#B3261E",
   destructiveForeground: "#FFFFFF",
-  border: "#EFDECE",
+  border: "#E7DCCE",
   input: "#FFFFFF",
-  ring: "#E9A56C",
+  ring: "#A64B21",
   success: "#15803D",
   successSoft: "#F0FDF4",
   warning: "#B45309",
   warningSoft: "#FFFBEB",
-} as const;
+};
+
+const darkShadcn: ShadcnPalette = {
+  background: "#14100D",
+  foreground: "#F4EADF",
+  card: "#1D1813",
+  cardForeground: "#F4EADF",
+  popover: "#231C16",
+  popoverForeground: "#F4EADF",
+  primary: "#E8A45C",
+  primaryForeground: "#2A1B10",
+  primaryPressed: "#F0B878",
+  secondaryPressed: "#2E251D",
+  outlinePressed: "#2A211A",
+  secondary: "#231C16",
+  secondaryForeground: "#DCCDBD",
+  muted: "#231C16",
+  mutedForeground: "#B9A997",
+  accent: "#2A211A",
+  accentForeground: "#F4EADF",
+  brand: "#E8A45C",
+  brandForeground: "#2A1B10",
+  brandSoft: "#3A2C1F",
+  destructive: "#F2B8B5",
+  destructiveForeground: "#2A1010",
+  border: "#332A22",
+  input: "#1D1813",
+  ring: "#E8A45C",
+  success: "#A9C3A9",
+  successSoft: "#1E2A20",
+  warning: "#E8C07A",
+  warningSoft: "#2C2418",
+};
+
+/** shadcn/ui semantic palette, tuned to the KOINO surface. Mutable. */
+export const shadcn: ShadcnPalette = { ...lightShadcn };
 
 export const softTints = {
-  warmSoft: "rgba(180, 85, 45, 0.09)",
-  prayerSoft: "rgba(178, 66, 112, 0.09)",
-  blushSoft: "rgba(178, 66, 112, 0.12)",
-  reflectionSoft: "rgba(109, 91, 168, 0.10)",
-  lavenderSoft: "rgba(109, 91, 168, 0.13)",
-  rhythmSoft: "rgba(35, 128, 122, 0.10)",
-  cyanSoft: "rgba(35, 128, 122, 0.13)",
+  warmSoft: "rgba(166, 75, 33, 0.09)",
+  prayerSoft: "rgba(140, 58, 86, 0.09)",
+  blushSoft: "rgba(140, 58, 86, 0.12)",
+  reflectionSoft: "rgba(75, 72, 121, 0.10)",
+  lavenderSoft: "rgba(75, 72, 121, 0.13)",
+  rhythmSoft: "rgba(71, 98, 74, 0.10)",
+  cyanSoft: "rgba(71, 98, 74, 0.13)",
 } as const;
 
-export const colors: ThemeColors = {
-  background: shadcn.background,
-  surface: shadcn.card,
-  textPrimary: shadcn.foreground,
-  textSecondary: shadcn.mutedForeground,
-  textMuted: shadcn.secondaryForeground,
-  border: shadcn.border,
-  accentWarm: shadcn.brand,
-  accentPrayer: "#B24270",
-  accentReflection: "#6D5BA8",
-  accentRhythm: "#23807A",
-  accentScripture: shadcn.brand,
+const lightColors: ThemeColors = {
+  background: lightShadcn.background,
+  surface: lightShadcn.card,
+  textPrimary: lightShadcn.foreground,
+  textSecondary: "#3A2E26",
+  textMuted: lightShadcn.mutedForeground,
+  border: lightShadcn.border,
+  accentWarm: lightShadcn.brand,
+  accentPrayer: "#8C3A56",
+  accentReflection: "#4B4879",
+  accentRhythm: "#47624A",
+  accentScripture: lightShadcn.brand,
   cardPaper: brandPalette.paperOffWhite,
   warmSoft: softTints.warmSoft,
   prayerSoft: softTints.prayerSoft,
@@ -142,29 +215,90 @@ export const colors: ThemeColors = {
   lavenderSoft: softTints.lavenderSoft,
   rhythmSoft: softTints.rhythmSoft,
   cyanSoft: softTints.cyanSoft,
-  cream: shadcn.background,
-  paper: shadcn.card,
-  elevated: shadcn.secondary,
-  input: shadcn.input,
-  ink: shadcn.foreground,
-  muted: shadcn.mutedForeground,
-  olive: "#33241A",
-  moss: shadcn.success,
-  clay: "#5F5147",
-  gold: shadcn.brand,
-  line: shadcn.border,
-  rose: "#B24270",
+  cream: lightShadcn.background,
+  paper: lightShadcn.card,
+  elevated: lightShadcn.secondary,
+  input: lightShadcn.input,
+  ink: lightShadcn.foreground,
+  muted: lightShadcn.mutedForeground,
+  olive: "#5A4A3E",
+  moss: lightShadcn.success,
+  clay: "#6A5A4C",
+  gold: lightShadcn.brand,
+  line: lightShadcn.border,
+  rose: "#8C3A56",
   roseSurface: softTints.prayerSoft,
   mossSurface: softTints.rhythmSoft,
-  accentSubtle: shadcn.brandSoft,
-  danger: shadcn.destructive,
-  dangerBorder: "#FCA5A5",
+  accentSubtle: lightShadcn.brandSoft,
+  danger: lightShadcn.destructive,
+  dangerBorder: "#F0B4AE",
   dangerSurface: "#FEF2F2",
-  disabled: "#F7EDE3",
-  disabledText: "#B4A496",
+  disabled: "#EFE5D9",
+  disabledText: "#8A7A6B",
   onAccent: "#FFFFFF",
-  white: shadcn.card,
+  white: lightShadcn.card,
 };
+
+const darkColors: ThemeColors = {
+  background: darkShadcn.background,
+  surface: darkShadcn.card,
+  textPrimary: darkShadcn.foreground,
+  textSecondary: "#DCCDBD",
+  textMuted: darkShadcn.mutedForeground,
+  border: darkShadcn.border,
+  accentWarm: darkShadcn.brand,
+  accentPrayer: "#E7A8BD",
+  accentReflection: "#B9B3E8",
+  accentRhythm: "#A9C3A9",
+  accentScripture: darkShadcn.brand,
+  cardPaper: darkShadcn.card,
+  warmSoft: "rgba(232, 164, 92, 0.12)",
+  prayerSoft: "rgba(231, 168, 189, 0.12)",
+  blushSoft: "rgba(231, 168, 189, 0.16)",
+  reflectionSoft: "rgba(185, 179, 232, 0.13)",
+  lavenderSoft: "rgba(185, 179, 232, 0.17)",
+  rhythmSoft: "rgba(169, 195, 169, 0.13)",
+  cyanSoft: "rgba(169, 195, 169, 0.17)",
+  cream: darkShadcn.background,
+  paper: darkShadcn.card,
+  elevated: darkShadcn.secondary,
+  input: darkShadcn.input,
+  ink: darkShadcn.foreground,
+  muted: darkShadcn.mutedForeground,
+  olive: "#C8B49F",
+  moss: "#A9C3A9",
+  clay: "#B9A997",
+  gold: darkShadcn.brand,
+  line: darkShadcn.border,
+  rose: "#E7A8BD",
+  roseSurface: "rgba(231, 168, 189, 0.12)",
+  mossSurface: "rgba(169, 195, 169, 0.13)",
+  accentSubtle: darkShadcn.brandSoft,
+  danger: darkShadcn.destructive,
+  dangerBorder: "#6B3A36",
+  dangerSurface: "#3A1D1B",
+  disabled: "#2A211A",
+  disabledText: "#8E7E6E",
+  onAccent: "#2A1B10",
+  white: darkShadcn.card,
+};
+
+/** Active semantic colours. Mutable; applied by the theme provider. */
+export const colors: ThemeColors = { ...lightColors };
+
+let activeScheme: ColorScheme = "light";
+
+export function getColorScheme(): ColorScheme {
+  return activeScheme;
+}
+
+export function applyColorScheme(scheme: ColorScheme) {
+  const next = scheme === "dark" ? darkColors : lightColors;
+  const nextShadcn = scheme === "dark" ? darkShadcn : lightShadcn;
+  Object.assign(colors, next);
+  Object.assign(shadcn, nextShadcn);
+  activeScheme = scheme;
+}
 
 export const fontFamilies = {
   headingLight: "Montserrat_300Light",
@@ -175,30 +309,34 @@ export const fontFamilies = {
   bodyMedium: "Inter_500Medium",
 } as const;
 
+/**
+ * Type scale 2.0. Body starts at 16, captions at 13, labels at 12.
+ * Section labels are sentence case — no tracked uppercase under 10px.
+ */
 export const typography = {
   display: {
     fontFamily: fontFamilies.headingSemiBold,
-    fontSize: 33,
+    fontSize: 32,
     letterSpacing: -0.6,
-    lineHeight: 39,
+    lineHeight: 38,
   },
   screenTitle: {
     fontFamily: fontFamilies.headingSemiBold,
-    fontSize: 28,
-    letterSpacing: -0.5,
-    lineHeight: 34,
+    fontSize: 30,
+    letterSpacing: -0.6,
+    lineHeight: 36,
   },
   heading: {
     fontFamily: fontFamilies.headingSemiBold,
-    fontSize: 22,
-    letterSpacing: -0.3,
-    lineHeight: 28,
+    fontSize: 24,
+    letterSpacing: -0.4,
+    lineHeight: 30,
   },
   title: {
     fontFamily: fontFamilies.headingMedium,
-    fontSize: 18,
-    letterSpacing: -0.15,
-    lineHeight: 24,
+    fontSize: 19,
+    letterSpacing: -0.2,
+    lineHeight: 26,
   },
   cardTitle: {
     fontFamily: fontFamilies.bodyMedium,
@@ -208,40 +346,40 @@ export const typography = {
   },
   subtitle: {
     fontFamily: fontFamilies.bodyRegular,
-    fontSize: 14,
+    fontSize: 15,
     letterSpacing: 0,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   sectionLabel: {
-    fontFamily: fontFamilies.bodyMedium,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    lineHeight: 16,
-    textTransform: "uppercase",
-  },
-  body: {
-    fontFamily: fontFamilies.bodyRegular,
-    fontSize: 15,
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
-  bodyMedium: {
-    fontFamily: fontFamilies.bodyMedium,
-    fontSize: 15,
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
-  caption: {
-    fontFamily: fontFamilies.bodyRegular,
-    fontSize: 12,
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  label: {
     fontFamily: fontFamilies.bodyMedium,
     fontSize: 13,
     letterSpacing: 0,
     lineHeight: 18,
+    textTransform: "none",
+  },
+  body: {
+    fontFamily: fontFamilies.bodyRegular,
+    fontSize: 16,
+    letterSpacing: 0,
+    lineHeight: 24,
+  },
+  bodyMedium: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 16,
+    letterSpacing: 0,
+    lineHeight: 24,
+  },
+  caption: {
+    fontFamily: fontFamilies.bodyRegular,
+    fontSize: 13,
+    letterSpacing: 0,
+    lineHeight: 20,
+  },
+  label: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 12,
+    letterSpacing: 0,
+    lineHeight: 16,
   },
   button: {
     fontFamily: fontFamilies.bodyMedium,
@@ -251,19 +389,34 @@ export const typography = {
   },
   navLabel: {
     fontFamily: fontFamilies.bodyMedium,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
-    lineHeight: 14,
+    lineHeight: 16,
   },
 } satisfies Record<string, TextStyle>;
 
-/** shadcn's radius scale, expressed in density-independent pixels. */
+/** 8pt spacing scale. */
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+  xxxl: 48,
+  huge: 64,
+  gutter: 24,
+  cardPadding: 20,
+  sectionGap: 32,
+} as const;
+
+/** 8 control · 10 chip · 12 field/button · 20 card · 28 sheet. */
 export const radius = {
-  sm: 6,
-  md: 8,
-  lg: 10,
-  xl: 12,
-  xxl: 20,
+  sm: 8,
+  md: 10,
+  lg: 12,
+  xl: 20,
+  xxl: 28,
 };
 
 export const copy = {
@@ -276,7 +429,7 @@ export function platformShadow({
   color = brandPalette.deepNavy,
   elevation,
   opacity,
-  radius,
+  radius: shadowRadius,
   offset,
 }: {
   boxShadow: string;
@@ -295,45 +448,42 @@ export function platformShadow({
     shadowColor: color,
     shadowOffset: offset,
     shadowOpacity: opacity,
-    shadowRadius: radius,
+    shadowRadius: shadowRadius,
   };
 }
 
-/**
- * Warm, shallow elevation. Cards sit just above the peach wash while floating
- * controls get a tighter shadow and primary actions a faint amber glow.
- */
+/** Shallow paper elevation. Dark surfaces rely on hairlines instead. */
 export const shadows = {
   card: platformShadow({
-    boxShadow: "0 1px 2px rgba(88, 52, 25, 0.04), 0 6px 18px rgba(88, 52, 25, 0.05)",
-    color: "#583419",
+    boxShadow: "0 1px 2px rgba(29, 22, 17, 0.04), 0 8px 24px rgba(29, 22, 17, 0.05)",
+    color: "#1D1611",
     elevation: 1,
     offset: { width: 0, height: 4 },
-    opacity: 0.06,
-    radius: 12,
+    opacity: 0.05,
+    radius: 14,
   }),
   control: platformShadow({
-    boxShadow: "0 1px 2px rgba(88, 52, 25, 0.05)",
-    color: "#583419",
+    boxShadow: "0 1px 2px rgba(29, 22, 17, 0.05)",
+    color: "#1D1611",
     elevation: 1,
     offset: { width: 0, height: 1 },
     opacity: 0.05,
     radius: 4,
   }),
   primary: platformShadow({
-    boxShadow: "0 4px 12px rgba(201, 106, 46, 0.18)",
-    color: "#9A4F1F",
+    boxShadow: "0 2px 8px rgba(29, 22, 17, 0.14)",
+    color: "#1D1611",
     elevation: 2,
-    offset: { width: 0, height: 3 },
-    opacity: 0.16,
+    offset: { width: 0, height: 2 },
+    opacity: 0.12,
     radius: 8,
   }),
   raised: platformShadow({
-    boxShadow: "0 2px 4px rgba(88, 52, 25, 0.05), 0 14px 34px rgba(88, 52, 25, 0.08)",
-    color: "#583419",
+    boxShadow: "0 2px 4px rgba(29, 22, 17, 0.05), 0 16px 40px rgba(29, 22, 17, 0.08)",
+    color: "#1D1611",
     elevation: 3,
-    offset: { width: 0, height: 8 },
+    offset: { width: 0, height: 10 },
     opacity: 0.08,
-    radius: 20,
+    radius: 22,
   }),
 } as const;

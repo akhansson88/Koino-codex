@@ -7,6 +7,7 @@ import { I18nManager, Platform, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import { colors, platformShadow, readerSurface } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 
 type DockState = {
   activeIndex: number;
@@ -43,8 +44,10 @@ export function AnimatedDockTabBar({ reducedMotion, ...props }: BottomTabBarProp
 
 export function AnimatedDockBackground() {
   const { activeIndex, count, insets, reducedMotion } = useDockState();
+  const { scheme } = useTheme();
   const pathname = usePathname();
   const bibleSurface = pathname.startsWith("/bible");
+  const dark = scheme === "dark";
   const [barWidth, setBarWidth] = useState(0);
   const markerX = useSharedValue(0);
   const previousGeometry = useRef<string | null>(null);
@@ -75,11 +78,37 @@ export function AnimatedDockBackground() {
         const width = event.nativeEvent.layout.width;
         setBarWidth((previous) => previous === width ? previous : width);
       }}
-      style={[StyleSheet.absoluteFill, styles.background, bibleSurface ? { backgroundColor: readerSurface } : null]}
+      style={[StyleSheet.absoluteFill, styles.background, bibleSurface ? { backgroundColor: dark ? colors.background : readerSurface } : null]}
     >
-      <View style={[styles.dock, { bottom: Math.max(insets.bottom, 8) }]} />
+      <View
+        style={[
+          styles.dock,
+          {
+            backgroundColor: dark ? colors.surface : "#FFFFFF",
+            borderColor: colors.line,
+            bottom: Math.max(insets.bottom, 8),
+            ...(dark ? {} : platformShadow({
+              boxShadow: "0 2px 4px rgba(29, 22, 17, 0.05), 0 14px 34px rgba(29, 22, 17, 0.10)",
+              elevation: 4,
+              offset: { width: 0, height: 8 },
+              opacity: 0.1,
+              radius: 20,
+            })),
+          },
+        ]}
+      />
       {markerWidth > 0 ? (
-        <Animated.View style={[styles.marker, { width: markerWidth }, markerStyle]} />
+        <Animated.View
+          style={[
+            styles.marker,
+            markerStyle,
+            {
+              backgroundColor: dark ? "rgba(232, 164, 92, 0.16)" : "#F3E3D5",
+              borderColor: dark ? colors.line : "#E7DCCE",
+              width: markerWidth,
+            },
+          ]}
+        />
       ) : null}
     </View>
   );
@@ -127,30 +156,19 @@ const styles = StyleSheet.create({
   },
   dock: {
     ...StyleSheet.absoluteFillObject,
-    left: 12,
-    right: 12,
-    backgroundColor: "#FFFDFA",
-    borderColor: colors.line,
+    left: 16,
+    right: 16,
     borderCurve: "continuous",
-    borderRadius: 20,
+    borderRadius: 26,
     borderWidth: 1,
-    ...platformShadow({
-      boxShadow: "0 2px 4px rgba(90, 53, 26, 0.05), 0 14px 34px rgba(90, 53, 26, 0.12)",
-      elevation: 4,
-      offset: { width: 0, height: 8 },
-      opacity: 0.12,
-      radius: 20,
-    }),
   },
   marker: {
     position: "absolute",
     top: MARKER_TOP,
     left: 0,
     height: MARKER_HEIGHT,
-    backgroundColor: "#FFE8D3",
-    borderColor: "#F6D2B2",
     borderCurve: "continuous",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   button: {

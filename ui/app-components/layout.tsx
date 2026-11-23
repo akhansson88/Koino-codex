@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { FullScreenModalHost } from "@/ui/full-screen-modal-host";
-import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
+import { colors, getColorScheme, radius, shadows, shadcn, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 import { type FeatherName } from "@/ui/app-components/types";
 import { Avatar } from "@/ui/app-components/avatars";
 
@@ -34,6 +35,7 @@ export function AppScreen({
   topInset?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
+  useTheme();
   const [ambientActive, setAmbientActive] = useState(true);
   useFocusEffect(useCallback(() => {
     setAmbientActive(true);
@@ -42,7 +44,7 @@ export function AppScreen({
 
   if (!scroll) {
     return (
-      <View style={{ backgroundColor: colors.cream, flex: 1, paddingTop: topInset ? insets.top : 0 }}>
+      <View style={{ backgroundColor: colors.background, flex: 1, paddingTop: topInset ? insets.top : 0 }}>
         <AmbientBackground active={ambientActive} />
         {children}
       </View>
@@ -50,7 +52,7 @@ export function AppScreen({
   }
 
   return (
-    <View style={{ backgroundColor: colors.cream, flex: 1 }}>
+    <View style={{ backgroundColor: colors.background, flex: 1 }}>
       <AmbientBackground active={ambientActive} />
       <ScrollView
         contentInsetAdjustmentBehavior="never"
@@ -62,7 +64,7 @@ export function AppScreen({
         scrollEventThrottle={scrollEventThrottle}
         showsVerticalScrollIndicator={false}
         style={{ backgroundColor: "transparent" }}
-        contentContainerStyle={{ gap: 16, padding: 18, paddingBottom: tabContentClearance(insets.bottom), paddingTop: (topInset ? insets.top : 0) + 18 }}
+        contentContainerStyle={{ gap: 16, padding: 24, paddingBottom: tabContentClearance(insets.bottom), paddingTop: (topInset ? insets.top : 0) + 24 }}
       >
         {children}
       </ScrollView>
@@ -102,8 +104,8 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
           borderRadius: radius.xl,
           borderWidth: 1,
           gap: 14,
-          padding: 16,
-          ...shadows.card,
+          padding: 20,
+          ...(getColorScheme() === "dark" ? {} : shadows.card),
         },
         style,
       ]}
@@ -137,7 +139,7 @@ export function HeartPromptCard({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: pressed ? "#FFF7ED" : shadcn.card,
+        backgroundColor: pressed ? shadcn.accent : shadcn.card,
         borderColor: shadcn.border,
         borderCurve: "continuous",
         borderRadius: radius.xl,

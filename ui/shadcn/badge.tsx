@@ -4,15 +4,24 @@ import { radius, shadcn, typography } from "@/ui/theme";
 
 export type BadgeVariant = "default" | "secondary" | "outline" | "brand" | "success" | "warning" | "danger";
 
-const variants: Record<BadgeVariant, { background: string; border: string; foreground: string }> = {
-  default: { background: shadcn.primary, border: shadcn.primary, foreground: shadcn.primaryForeground },
-  secondary: { background: shadcn.secondary, border: shadcn.secondary, foreground: shadcn.secondaryForeground },
-  outline: { background: "transparent", border: shadcn.border, foreground: shadcn.foreground },
-  brand: { background: shadcn.brandSoft, border: "transparent", foreground: shadcn.brand },
-  success: { background: shadcn.successSoft, border: "#BBF7D0", foreground: shadcn.success },
-  warning: { background: shadcn.warningSoft, border: "#FDE68A", foreground: shadcn.warning },
-  danger: { background: "#FEF2F2", border: "#FECACA", foreground: shadcn.destructive },
-};
+function toneFor(variant: BadgeVariant): { background: string; border: string; foreground: string } {
+  switch (variant) {
+    case "default":
+      return { background: shadcn.primary, border: shadcn.primary, foreground: shadcn.primaryForeground };
+    case "secondary":
+      return { background: shadcn.secondary, border: shadcn.secondary, foreground: shadcn.secondaryForeground };
+    case "outline":
+      return { background: "transparent", border: shadcn.border, foreground: shadcn.foreground };
+    case "brand":
+      return { background: shadcn.brandSoft, border: "transparent", foreground: shadcn.brand };
+    case "success":
+      return { background: shadcn.successSoft, border: shadcn.success, foreground: shadcn.success };
+    case "warning":
+      return { background: shadcn.warningSoft, border: shadcn.warning, foreground: shadcn.warning };
+    case "danger":
+      return { background: shadcn.card, border: shadcn.destructive, foreground: shadcn.destructive };
+  }
+}
 
 export function Badge({
   children,
@@ -23,7 +32,7 @@ export function Badge({
   style?: StyleProp<ViewStyle>;
   variant?: BadgeVariant;
 }) {
-  const tone = variants[variant];
+  const tone = toneFor(variant);
   return (
     <View
       style={[
@@ -35,13 +44,13 @@ export function Badge({
           borderRadius: radius.sm,
           borderWidth: 1,
           justifyContent: "center",
-          minHeight: 24,
-          paddingHorizontal: 8,
+          minHeight: 26,
+          paddingHorizontal: 9,
         },
         style,
       ]}
     >
-      <Text style={[typography.navLabel, { color: tone.foreground, fontSize: 11, lineHeight: 14 }]}>{children}</Text>
+      <Text style={[typography.navLabel, { color: tone.foreground, fontSize: 12, lineHeight: 16 }]}>{children}</Text>
     </View>
   );
 }

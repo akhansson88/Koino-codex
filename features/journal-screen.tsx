@@ -17,6 +17,7 @@ import { SharedComposer } from "@/ui/shared-composer";
 import { Button } from "@/ui/shadcn/button";
 import { Separator } from "@/ui/shadcn/separator";
 import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 
 function journalTypeForKind(kind: EntryKind): JournalEntryType {
   if (kind === "prayer_request" || kind === "prayer_moment") return "prayer";
@@ -66,6 +67,7 @@ export function JournalScreen() {
 function JournalContent({ state }: { state: Pick<KoinoState, typeof journalFields[number]> }) {
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
+  useTheme();
   const params = useLocalSearchParams<{ newEntry?: string }>();
   const [draft, setDraft] = useState<symbol>();
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");

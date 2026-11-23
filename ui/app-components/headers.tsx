@@ -12,7 +12,7 @@ import { RoomImage, Avatar } from "@/ui/app-components/avatars";
 
 function Wordmark() {
   return (
-    <Text style={[typography.title, { color: colors.ink, fontFamily: "Montserrat_600SemiBold", fontSize: 22, letterSpacing: 2.4, lineHeight: 28 }]}>
+    <Text style={[typography.title, { color: colors.ink, fontFamily: "Montserrat_500Medium", fontSize: 16, letterSpacing: 4.2, lineHeight: 22 }]}>
       KOINO
     </Text>
   );

@@ -22,6 +22,7 @@ import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
 import { EmulatorBadge } from "@/ui/emulator-badge";
 import { colors } from "@/ui/theme";
+import { ThemeProvider, useTheme } from "@/ui/theme-provider";
 import { EncryptionBoundary } from "@/ui/encryption";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
 
@@ -38,19 +39,20 @@ export default function RootLayout() {
   });
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}><AppLanguageProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}><ThemeProvider><AppLanguageProvider>
       <EncryptionBoundary><KoinoProvider>
         <BibleDatabaseProvider>
           <BibleAudioProvider><RootNavigator /></BibleAudioProvider>
         </BibleDatabaseProvider>
       </KoinoProvider></EncryptionBoundary><EmulatorBadge />
-    </AppLanguageProvider></GestureHandlerRootView>
+    </AppLanguageProvider></ThemeProvider></GestureHandlerRootView>
   );
 }
 
 function RootNavigator() {
   const reducedMotion = useReducedMotion();
   const onboarding = useOnboardingProgress();
+  const { scheme } = useTheme();
   const { authReady, currentUserId } = useKoinoFields(["authReady", "currentUserId"]);
   // The encryption boundary has resolved Firebase before mounting this stack.
   const userId = authReady ? currentUserId : auth.currentUser?.uid;
@@ -61,18 +63,18 @@ function RootNavigator() {
   return (
     <>
       {!onboarding.pending ? <NotificationRuntime /> : null}
-      <StatusBar style="dark" backgroundColor={colors.cream} />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} backgroundColor={colors.background} />
       <Stack
         // Leave only index for one commit so every previous route is removed,
         // including on a direct account replacement. Index redirects after pruning.
         screenLayout={pruningPreviousSession ? () => <></> : undefined}
         screenOptions={{
           animation: pruningPreviousSession || reducedMotion ? "none" : "default",
-          headerStyle: { backgroundColor: colors.cream },
+          headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.ink,
           headerShadowVisible: false,
           headerTitleStyle: { color: colors.ink, fontWeight: "700" },
-          contentStyle: { backgroundColor: colors.cream },
+          contentStyle: { backgroundColor: colors.background },
           gestureEnabled: enableNativeBackGesture,
         }}
       >

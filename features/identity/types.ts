@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 export type FeatherName = ComponentProps<typeof Feather>["name"];
 
-export type IdentitySheet = "profile" | "language" | "account" | "help" | "security" | "privacy" | "terms";
+export type IdentitySheet = "profile" | "language" | "appearance" | "account" | "help" | "security" | "privacy" | "terms";
 
 export type IdentityPresentation = "screen" | "sheet";
 

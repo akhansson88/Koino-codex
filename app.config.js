@@ -15,10 +15,10 @@ const baseConfig = {
   orientation: "portrait",
   scheme: "koino",
   icon: "./koino-logo.png",
-  userInterfaceStyle: "light",
+  userInterfaceStyle: "automatic",
   newArchEnabled: true,
   splash: {
-    backgroundColor: "#F7EFE4",
+    backgroundColor: "#FAF6F0",
   },
   ios: {
     supportsTablet: false,
@@ -37,7 +37,7 @@ const baseConfig = {
     googleServicesFile: "./google-services.json",
     adaptiveIcon: {
       foregroundImage: "./koino-logo.png",
-      backgroundColor: "#F7EFE4",
+      backgroundColor: "#FAF6F0",
     },
     package: "com.akhansson.koinomvp",
     versionCode: 21,

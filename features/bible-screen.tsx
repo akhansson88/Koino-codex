@@ -90,6 +90,7 @@ import {
   type StoredBibleReaderPreferences,
 } from "@/features/bible-reader/preferences-sync";
 import { readerPaletteFor } from "@/features/bible-reader/palette";
+import { useTheme } from "@/ui/theme-provider";
 import {
   selectedVerseRangesFor,
   selectedVerseReferenceLabel,
@@ -153,6 +154,7 @@ export function BibleScreen() {
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { scheme } = useTheme();
   const { height, width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const readerViewportRef = useRef<View>(null);
@@ -274,7 +276,7 @@ export function BibleScreen() {
 
   const storageKey = useMemo(() => readerStorageKey(state.currentUserId), [state.currentUserId]);
   const bibleVersion = bibleVersionFor(bibleVersionId);
-  const readerPalette = useMemo(() => readerPaletteFor(), []);
+  const readerPalette = useMemo(() => readerPaletteFor(scheme), [scheme]);
   const audio = useBibleAudio();
   const [audioVisible, setAudioVisible] = useState(false);
   const [followAudio, setFollowAudio] = useState(true);

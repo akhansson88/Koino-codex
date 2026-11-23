@@ -20,7 +20,6 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
 }, ref) {
   const [focused, setFocused] = useState(false);
   const borderColor = invalid ? shadcn.destructive : focused ? shadcn.ring : shadcn.border;
-
   return (
     <View style={containerStyle}>
       <TextInput
@@ -42,11 +41,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input({
             borderColor,
             borderCurve: "continuous",
             borderRadius: radius.lg,
-            borderWidth: 1,
+            borderWidth: focused || invalid ? 2 : 1,
             color: shadcn.foreground,
-            fontSize: 15,
-            minHeight: props.multiline ? 112 : 48,
-            paddingHorizontal: 14,
+            fontSize: 16,
+            minHeight: props.multiline ? 112 : 52,
+            paddingHorizontal: 16,
             paddingVertical: props.multiline ? 12 : 0,
             textAlignVertical: props.multiline ? "top" : "center",
           },

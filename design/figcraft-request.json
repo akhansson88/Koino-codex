@@ -1,5 +1,3 @@
 [
-  { "tool": "run_command", "args": { "command": "page.delete", "params": { "id": 69867 } } },
-  { "tool": "run_command", "args": { "command": "page.delete", "params": { "id": 81895 } } },
-  { "tool": "save_file", "args": { "path": "C:/Users/alexh/Downloads/Koino-codex/design/bible-plan-covers.figcraft" } }
+  { "tool": "run_command", "args": { "command": "page.list", "params": {} } }
 ]

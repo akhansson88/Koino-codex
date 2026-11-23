@@ -1,5 +1,21 @@
 # Encryption implementation and rollout
 
+## Device-only onboarding (2026-11-22)
+
+New accounts no longer show a recovery code during onboarding. The vault is
+generated on the device and sealed to that device only; the client still writes
+the encrypted `recovery` record because the Functions API requires one, but the
+key that opens it never leaves the device.
+
+On a new install the account therefore cannot read its old history. The restore
+screen explains that and offers, in order: approve the new device from an
+existing signed-in device, try automatic restore again (if escrow exists), or
+enter a recovery code for accounts created before this change.
+
+Escrow is unchanged: when a project has `KOINO_RECOVERY_SEED`, `confirmAccount`
+still writes the silent escrow, so those accounts keep automatic restore and
+also never see a code. Only the no-escrow fallback changed.
+
 ## Retired access-request repair (2026-10-17)
 
 `e2eePendingGroups` was written only by legacy member migration; preserving its

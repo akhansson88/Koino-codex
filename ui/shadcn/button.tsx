@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View, type PressableProps, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
-import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
+import { colors, getColorScheme, radius, shadows, shadcn, typography } from "@/ui/theme";
 
 type FeatherName = ComponentProps<typeof Feather>["name"];
 
@@ -21,22 +21,30 @@ export type ButtonProps = Omit<PressableProps, "style" | "children"> & {
   variant?: ButtonVariant;
 };
 
-const variants: Record<ButtonVariant, { background: string; border: string; foreground: string; pressed: string }> = {
-  default: { background: shadcn.primary, border: shadcn.primary, foreground: shadcn.primaryForeground, pressed: "#F3B47D" },
-  secondary: { background: shadcn.secondary, border: shadcn.secondary, foreground: shadcn.secondaryForeground, pressed: "#FBE6D2" },
-  outline: { background: shadcn.card, border: shadcn.border, foreground: shadcn.foreground, pressed: "#FFF1E2" },
-  ghost: { background: "transparent", border: "transparent", foreground: shadcn.foreground, pressed: "#FFF1E2" },
-  destructive: { background: shadcn.destructive, border: shadcn.destructive, foreground: shadcn.destructiveForeground, pressed: "#B91C1C" },
-  link: { background: "transparent", border: "transparent", foreground: shadcn.foreground, pressed: "transparent" },
-};
-
 const sizes: Record<ButtonSize, { minHeight: number; paddingHorizontal: number; gap: number; icon: number; fontSize: number; lineHeight: number }> = {
   sm: { minHeight: 40, paddingHorizontal: 14, gap: 6, icon: 16, fontSize: 14, lineHeight: 18 },
   md: { minHeight: 48, paddingHorizontal: 18, gap: 8, icon: 18, fontSize: 15, lineHeight: 20 },
-  lg: { minHeight: 54, paddingHorizontal: 22, gap: 9, icon: 20, fontSize: 16, lineHeight: 22 },
+  lg: { minHeight: 52, paddingHorizontal: 22, gap: 9, icon: 20, fontSize: 16, lineHeight: 22 },
   icon: { minHeight: 44, paddingHorizontal: 0, gap: 0, icon: 19, fontSize: 15, lineHeight: 20 },
-  "icon-sm": { minHeight: 38, paddingHorizontal: 0, gap: 0, icon: 17, fontSize: 14, lineHeight: 18 },
+  "icon-sm": { minHeight: 40, paddingHorizontal: 0, gap: 0, icon: 17, fontSize: 14, lineHeight: 18 },
 };
+
+function toneFor(variant: ButtonVariant): { background: string; border: string; foreground: string; pressed: string } {
+  switch (variant) {
+    case "secondary":
+      return { background: shadcn.secondary, border: shadcn.secondary, foreground: shadcn.secondaryForeground, pressed: shadcn.secondaryPressed };
+    case "outline":
+      return { background: shadcn.card, border: shadcn.border, foreground: shadcn.foreground, pressed: shadcn.outlinePressed };
+    case "ghost":
+      return { background: "transparent", border: "transparent", foreground: shadcn.foreground, pressed: shadcn.outlinePressed };
+    case "destructive":
+      return { background: shadcn.destructive, border: shadcn.destructive, foreground: shadcn.destructiveForeground, pressed: shadcn.destructiveForeground === "#FFFFFF" ? "#991B1B" : "#FFD1CF" };
+    case "link":
+      return { background: "transparent", border: "transparent", foreground: shadcn.brand, pressed: "transparent" };
+    default:
+      return { background: shadcn.primary, border: shadcn.primary, foreground: shadcn.primaryForeground, pressed: shadcn.primaryPressed };
+  }
+}
 
 export function Button({
   accessibilityLabel,
@@ -53,10 +61,11 @@ export function Button({
   variant = "default",
   ...props
 }: ButtonProps) {
-  const tone = variants[variant];
+  const tone = toneFor(variant);
   const metrics = sizes[size];
   const iconOnly = size === "icon" || size === "icon-sm";
   const inactive = disabled || loading;
+  const dark = getColorScheme() === "dark";
 
   return (
     <Pressable
@@ -81,7 +90,7 @@ export function Button({
           minWidth: iconOnly ? metrics.minHeight : undefined,
           opacity: inactive ? 0.48 : 1,
           paddingHorizontal: metrics.paddingHorizontal,
-          ...(inactive ? {} : variant === "default" ? shadows.primary : variant === "outline" ? shadows.control : {}),
+          ...(inactive ? {} : variant === "default" && !dark ? shadows.primary : variant === "outline" ? shadows.control : {}),
         },
         style,
       ]}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -23,7 +23,8 @@ import type { GroupImage, PrayerSessionTargetType } from "@/state/types";
 import { Avatar } from "@/ui/app-components";
 import { BrandWaveMotif } from "@/ui/brand-wave-motif";
 import { useAppTranslation } from "@/ui/app-language";
-import { brandPalette, fontFamilies, platformShadow } from "@/ui/theme";
+import { brandPalette, colors, fontFamilies, platformShadow } from "@/ui/theme";
+import { useTheme } from "@/ui/theme-provider";
 
 const AMEN_REVEAL_DELAY_MS = 1_800;
 const ENTER_DURATION_MS = 620;
@@ -57,7 +58,7 @@ function initialMotionPreference() {
   return { known: false, reduced: false };
 }
 
-function PrayerHorizonBackground() {
+function PrayerHorizonBackground({ dark }: { dark: boolean }) {
   return (
     <View
       accessibilityElementsHidden
@@ -67,31 +68,37 @@ function PrayerHorizonBackground() {
       style={StyleSheet.absoluteFillObject}
     >
       <LinearGradient
-        colors={[
-          "rgba(255, 199, 154, 0.5)",
-          "rgba(255, 217, 186, 0.22)",
-          "rgba(255, 255, 252, 0.8)",
-          "rgba(255, 248, 241, 0.99)",
-        ]}
+        colors={dark
+          ? ["rgba(232, 164, 92, 0.16)", "rgba(42, 33, 26, 0.42)", "rgba(20, 16, 13, 0.94)", "#14100D"]
+          : [
+            "rgba(255, 199, 154, 0.5)",
+            "rgba(255, 217, 186, 0.22)",
+            "rgba(255, 255, 252, 0.8)",
+            "rgba(255, 248, 241, 0.99)",
+          ]}
         locations={[0, 0.25, 0.49, 1]}
         style={StyleSheet.absoluteFillObject}
       />
       <LinearGradient
-        colors={[
-          "rgba(255, 255, 252, 0)",
-          "rgba(255, 238, 222, 0.6)",
-          "rgba(255, 255, 252, 0.6)",
-          "rgba(255, 199, 154, 0)",
-        ]}
+        colors={dark
+          ? ["rgba(20, 16, 13, 0)", "rgba(232, 164, 92, 0.08)", "rgba(20, 16, 13, 0.2)", "rgba(20, 16, 13, 0)"]
+          : [
+            "rgba(255, 255, 252, 0)",
+            "rgba(255, 238, 222, 0.6)",
+            "rgba(255, 255, 252, 0.6)",
+            "rgba(255, 199, 154, 0)",
+          ]}
         locations={[0, 0.34, 0.58, 1]}
         style={{ height: "28%", left: 0, position: "absolute", right: 0, top: "39%" }}
       />
       <LinearGradient
-        colors={[
-          "rgba(255, 199, 154, 0)",
-          "rgba(255, 199, 154, 0.16)",
-          "rgba(255, 217, 186, 0.3)",
-        ]}
+        colors={dark
+          ? ["rgba(232, 164, 92, 0)", "rgba(232, 164, 92, 0.1)", "rgba(232, 164, 92, 0.16)"]
+          : [
+            "rgba(255, 199, 154, 0)",
+            "rgba(255, 199, 154, 0.16)",
+            "rgba(255, 217, 186, 0.3)",
+          ]}
         locations={[0, 0.47, 1]}
         style={{ bottom: 0, height: "44%", left: 0, position: "absolute", right: 0 }}
       />
@@ -217,6 +224,8 @@ export function PrayerMoment({
 }) {
   const users = useKoinoSelector((state) => state.users);
   const { t } = useAppTranslation();
+  const { scheme } = useTheme();
+  const dark = scheme === "dark";
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const sceneOpacity = useRef(new Animated.Value(0)).current;
@@ -393,17 +402,17 @@ export function PrayerMoment({
       transparent
       visible={Boolean(target)}
     >
-      <StatusBar backgroundColor="transparent" style="dark" translucent />
+      <StatusBar backgroundColor="transparent" style={dark ? "light" : "dark"} translucent />
       <Animated.View
         accessibilityViewIsModal
         style={{
-          backgroundColor: brandPalette.warmCanvas,
+          backgroundColor: colors.background,
           flex: 1,
           opacity: sceneOpacity,
           transform: [{ translateY: contentTranslateY }],
         }}
       >
-        <PrayerHorizonBackground />
+        <PrayerHorizonBackground dark={dark} />
         <AmbientPrayerWaves
           active={Boolean(target)}
           compactHeight={compactHeight}
@@ -419,8 +428,8 @@ export function PrayerMoment({
           onPress={closeMoment}
           style={({ pressed }) => ({
             alignItems: "center",
-            backgroundColor: "rgba(255, 255, 252, 0.42)",
-            borderColor: "rgba(11, 18, 32, 0.08)",
+            backgroundColor: dark ? colors.surface : "rgba(255, 255, 252, 0.42)",
+            borderColor: dark ? colors.line : "rgba(11, 18, 32, 0.08)",
             borderRadius: 22,
             borderWidth: 1,
             height: 44,
@@ -433,7 +442,7 @@ export function PrayerMoment({
             zIndex: 4,
           })}
         >
-          <Ionicons color={brandPalette.deepNavy} name="chevron-back" size={25} />
+          <Feather color={colors.ink} name="chevron-left" size={25} />
         </Pressable>
 
         <View
@@ -450,7 +459,7 @@ export function PrayerMoment({
           <Text
             numberOfLines={1}
             style={{
-              color: brandPalette.deepNavy,
+              color: colors.ink,
               fontFamily: fontFamilies.headingRegular,
               fontSize: compactHeight ? 19 : 22,
               lineHeight: compactHeight ? 24 : 29,
@@ -480,8 +489,8 @@ export function PrayerMoment({
           showsVerticalScrollIndicator={false}
           style={{
             alignSelf: "center",
-            backgroundColor: "rgba(255, 255, 252, 0.9)",
-            borderColor: "rgba(255, 255, 255, 0.82)",
+            backgroundColor: dark ? colors.surface : "rgba(255, 255, 252, 0.9)",
+            borderColor: dark ? colors.line : "rgba(255, 255, 255, 0.82)",
             borderCurve: "continuous",
             borderRadius: compactHeight ? 34 : 42,
             borderWidth: 1,
@@ -490,19 +499,19 @@ export function PrayerMoment({
             position: "absolute",
             top: cardTop,
             width: cardWidth,
-            ...platformShadow({
+            ...(dark ? {} : platformShadow({
               boxShadow: "0 18px 48px rgba(39, 50, 71, 0.08)",
               elevation: 4,
               offset: { width: 0, height: 16 },
               opacity: 0.08,
               radius: 28,
-            }),
+            })),
           }}
         >
           <Text
             selectable
             style={{
-              color: brandPalette.deepNavy,
+              color: colors.ink,
               fontFamily: fontFamilies.headingMedium,
               fontSize: compactHeight ? 24 : 30,
               lineHeight: compactHeight ? 30 : 38,
@@ -526,7 +535,7 @@ export function PrayerMoment({
               selectable
               style={{
                 alignSelf: "center",
-                color: brandPalette.deepNavy,
+                color: colors.ink,
                 fontFamily: fontFamilies.bodyRegular,
                 fontSize: compactHeight ? 15 : 18,
                 lineHeight: compactHeight ? 21 : 29,
@@ -550,11 +559,11 @@ export function PrayerMoment({
           }}
         >
           <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-            <Ionicons color="#C96A2E" name="heart-outline" size={compactHeight ? 26 : 30} />
+            <Feather color={dark ? colors.accentWarm : "#C96A2E"} name="heart" size={compactHeight ? 26 : 30} />
           </View>
           <Text
             style={{
-              color: brandPalette.mutedNavy,
+              color: colors.muted,
               fontFamily: fontFamilies.bodyRegular,
               fontSize: compactHeight ? 14 : 16,
               lineHeight: compactHeight ? 19 : 22,
@@ -596,12 +605,12 @@ export function PrayerMoment({
             })}
           >
             <LinearGradient
-              colors={["rgba(255, 255, 252, 0.98)", "rgba(255, 238, 222, 0.98)"]}
+              colors={dark ? ["#E8A45C", "#F0B878"] : ["rgba(255, 255, 252, 0.98)", "rgba(255, 238, 222, 0.98)"]}
               end={{ x: 1, y: 1 }}
               start={{ x: 0, y: 0 }}
               style={{
                 alignItems: "center",
-                borderColor: "rgba(255, 255, 255, 0.82)",
+                borderColor: dark ? "#E8A45C" : "rgba(255, 255, 255, 0.82)",
                 borderRadius: 999,
                 borderWidth: 1,
                 flexDirection: "row",
@@ -611,10 +620,10 @@ export function PrayerMoment({
                 paddingHorizontal: 24,
               }}
             >
-              <Ionicons color={brandPalette.deepNavy} name="heart-outline" size={compactHeight ? 23 : 26} />
+              <Feather color={dark ? colors.onAccent : brandPalette.deepNavy} name="heart" size={compactHeight ? 23 : 26} />
               <Text
                 style={{
-                  color: brandPalette.deepNavy,
+                  color: dark ? colors.onAccent : brandPalette.deepNavy,
                   fontFamily: fontFamilies.headingMedium,
                   fontSize: compactHeight ? 19 : 22,
                   lineHeight: compactHeight ? 24 : 28,
