@@ -9,5 +9,6 @@ export type StagingFirebaseConfiguration = Readonly<{
   functionsRegion: "europe-west1";
 }>;
 
+export function assertSupportedAppConfig(config: unknown, nativeApplicationId: string | null): void;
 export function validateDevelopmentConfig(config: unknown, nativeApplicationId: string | null): StagingFirebaseConfiguration | undefined;
 export function assertStagingAppOptions(expected: FirebaseOptions, actual: FirebaseOptions): void;

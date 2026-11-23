@@ -25,11 +25,25 @@ const {emulatorEndpoints:e,compiledFunctionsDirectory}=await import(${JSON.strin
 if(process.env.PROBE_TRANSPORTS==='1'){
   await fetch(e.authURL);await fetch('http://127.0.0.1:'+e.databasePort+'/.json');await fetch('http://127.0.0.1:'+e.functionsPort+'/demo-koino/europe-west1/encryptedAccount');
   assert.equal(fetchCalls,3);
-  for(const url of ['https://example.invalid/', 'http://example.invalid:'+e.databasePort+'/', 'http://127.0.0.1:80/', 'http://user:pass@127.0.0.1:'+e.databasePort+'/']) assert.throws(()=>fetch(url));
+  const rejectedUrls=[
+    'https://example.invalid/',
+    'http://example.invalid:'+e.databasePort+'/',
+    'http://127.0.0.2:'+e.databasePort+'/',
+    'http://127.0.0.1:80/',
+    'http://user:pass@127.0.0.1:'+e.databasePort+'/',
+  ];
+  for(const url of rejectedUrls) assert.throws(()=>fetch(url));
   const wrong=e.databasePort===19001?9001:19001;assert.throws(()=>fetch('http://127.0.0.1:'+wrong+'/'));
   const socket=new Socket();socket.connect({host:'localhost',port:e.databasePort});assert.equal(socketCalls,1);assert.equal(socketArgs[0].host,'127.0.0.1');
-  socket.connect(e.authPort,'127.0.0.1');socket.connect(e.functionsPort,'127.0.0.2');assert.equal(socketCalls,3);
-  for(const target of [{host:'example.invalid',port:e.databasePort},{host:'100.100.67.44',port:e.databasePort},{host:'127.0.0.1',port:wrong},{path:'unsafe-pipe'}]) assert.throws(()=>socket.connect(target));
+  socket.connect(e.authPort,'127.0.0.1');socket.connect(e.functionsPort,'127.0.0.1');assert.equal(socketCalls,3);
+  const rejectedTargets=[
+    {host:'example.invalid',port:e.databasePort},
+    {host:'100.100.67.44',port:e.databasePort},
+    {host:'127.0.0.2',port:e.databasePort},
+    {host:'127.0.0.1',port:wrong},
+    {path:'unsafe-pipe'},
+  ];
+  for(const target of rejectedTargets) assert.throws(()=>socket.connect(target));
   assert.equal(socketCalls,3);assert.equal(fetchCalls,3);socket.destroy();
 }
 process.exit(0);
@@ -45,8 +59,8 @@ const cases = [
   ["production database URL denied", { ...isolated, FIREBASE_CONFIG: JSON.stringify({ ...config, databaseURL: "https://production-project-default-rtdb.firebaseio.com" }) }, false],
   ["external database host denied", { ...isolated, FIREBASE_DATABASE_EMULATOR_HOST: "example.invalid:19001" }, false],
   ["external Auth host denied", { ...isolated, FIREBASE_AUTH_EMULATOR_HOST: "example.invalid:19099" }, false],
-  ["mixed phone database port denied", { ...isolated, FIREBASE_DATABASE_EMULATOR_HOST: "127.0.0.1:9001" }, false],
-  ["mixed phone Auth port denied", { ...isolated, FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099" }, false],
+  ["mixed default database port denied", { ...isolated, FIREBASE_DATABASE_EMULATOR_HOST: "127.0.0.1:9001" }, false],
+  ["mixed default Auth port denied", { ...isolated, FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099" }, false],
   ["arbitrary port denied", { ...isolated, FIREBASE_DATABASE_EMULATOR_HOST: "127.0.0.1:19002" }, false],
   ["invalid selector denied", { ...isolated, KOINO_ADMISSION_TEST_MODE: "true" }, false],
   ["outside run directory denied", { ...isolated, KOINO_ADMISSION_TEST_RUN_DIR: repository }, false],

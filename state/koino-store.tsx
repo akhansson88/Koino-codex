@@ -69,7 +69,7 @@ import {
   User,
 } from "@/state/types";
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
-import { auth, database, developmentMode, emulatorMode } from "@/state/store/firebase";
+import { auth, database, developmentMode } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import { announceJoinRequestChange } from "@/state/community-join-requests";
 import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
@@ -1343,7 +1343,6 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "requestPasswordReset": {
-              if (emulatorMode) throw new Error("Password reset email is disabled in KOINO Emulator. / E-post för lösenordsåterställning är avstängd i KOINO Emulator.");
               if (developmentMode) throw new Error("Password reset email is disabled in KOINO Dev. / E-post för lösenordsåterställning är avstängd i KOINO Dev.");
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");

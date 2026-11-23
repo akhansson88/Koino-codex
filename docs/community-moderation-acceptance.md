@@ -33,11 +33,11 @@ A = the separate admission regression uses actual app session/profile/database-a
 
 Only demo-koino is used. Every run creates a unique ignored .codex/koino-admission-validation/<UTC timestamp-GUID>/ directory with private Functions compilation, configuration, CLI credentials/config directories, temporary hub locator, proof and exports. The launcher uses cached Java21 and Firebase CLI15.34.1. Node24.15.0 is the available runtime; the package declares Node22, so deployed Node22 execution is not claimed by this run.
 
-All services bind to 127.0.0.1: Auth19099, RTDB19001, Functions15001, Hub14400, Logging14500, Eventarc14999 and Tasks14998. Legacy mode starts only Auth/Database. Ports9099/9001/5001 and .codex/koino-emulator-device/ are not read, reset, stopped or reused by the acceptance suites. Busy ports or inherited non-demo/mixed endpoints fail preflight.
+All services bind to loopback address `127.0.0.1` on separate ports for Auth (19099), RTDB (19001), Functions (15001), Hub (14400), Logging (14500), Eventarc (14999) and Tasks (14998). Legacy mode starts only Auth and Database. Busy ports or inherited endpoints outside the fixture environment fail preflight. Keep any earlier local exports under their existing ignored paths.
 
 The real HTTP suite initializes only the isolated test policy through an emulator fixture write. Synthetic users, encrypted authority/membership grants and content are otherwise created through real Auth/callables/client writes. Fixture-owner REST reads verify hidden ciphertext and metadata; they do not grant client access. No private spiritual data or real credentials are used. Synthetic restart keys/passwords stay in ignored proof files and must not be copied into a build archive or shared as diagnostic output.
 
-The older tests previously reset their selected root and hard-coded phone ports. They now consume validated endpoints and the isolated run's compiled Functions. Legacy production migration branches run with the demo-operation selector unset, while exact demo config, loopback endpoints and fetch/TCP restrictions remain active. No production service is called. Use the commands below; do not directly invoke a destructive legacy script against phone emulator environment variables.
+The Legacy suite resets its disposable database fixture and uses validated endpoints and the isolated run's compiled Functions. Legacy production migration branches run with the demo-operation selector unset, while exact demo config, loopback endpoints and fetch/TCP restrictions remain active. Use the launcher below for these resettable fixtures.
 
 ## Repeatable Windows commands
 
@@ -56,11 +56,11 @@ node scripts/validate-encryption.mjs
 node scripts/validate-encryption-adapter.mjs
 node scripts/validate-encryption-migration.mjs
 node scripts/validate-check-in-persistence.mjs
-node scripts/validate-emulator-client.mjs
+npm.cmd run validate:development-client
 git diff --check
 ```
 
-Do not substitute the older default-port npm emulator commands while running the phone session. The new launcher owns and shuts down only its own alternate-port processes; Ctrl+C is not needed after a normal completed run.
+The launcher starts and shuts down its own alternate-port processes. The Moderation suite includes the signed HTTP callable coverage previously exercised through the device relay, including disabled external storage operations and export/import verification.
 
 Additional validation performed: 13/13 network-free guard cases, 5/5 negative launcher preflight cases, app and Functions TypeScript, 30/30 Functions unit tests, mocked signed-backend/UI tests, crypto/adapter/migration/check-in regressions, emulator client isolation, script syntax, and rules-generator parity. Generator parity wrote only an ignored temporary output and did not rewrite repository rules.
 
@@ -87,7 +87,7 @@ Root-wide REST ETag transactions still read/serialize/upload the database root. 
 
 H does not mount React Native UI, use SQLCipher/OS key stores, run on physical airplane-mode/background lifecycle, or certify deployed Node22/Firebase configuration. The actual crypto primitive and backend authorization are real; synthetic wire fixtures and restored fixture keys are not a native-vault test. Physical encrypted access/membership persistence and post/prayer/comment moderation already passed according to the developers.
 
-No additional coordinated two-device authorization/persistence matrix is necessary. A short shared-check-in UI smoke remains useful: owner removal is shown correctly, the author can still see the private journal, and Home still shows that today's check-in is completed. This can be checked asynchronously on the existing builds and is not a reason to buy another EAS build. Product UI behaviour is separate from the completed backend security matrix.
+For shared-check-in UI acceptance, use KOINO Dev with staging test accounts. Check that the owner's view shows the shared check-in removal, the author can still see the private journal, and Home still shows the day's check-in as complete. [KOINO Dev setup](../README.md#koino-dev)
 
 Recommendation: GO for a Git checkpoint and Step1B.2 automated moderation closeout. All named suites passed; no unresolved backend acceptance failure remains. This is not a production deployment approval; no commit, push, merge, deploy, paid service or mobile build was performed.
 

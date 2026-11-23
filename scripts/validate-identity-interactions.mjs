@@ -110,14 +110,13 @@ const mocks = {
   "@/features/onboarding-guide": 'export const OnboardingGuide="OnboardingGuide";',
   "@/features/startup-performance": '',
   "@/ui/notification-runtime": 'export const NotificationRuntime=()=>null;',
-  "@/ui/emulator-badge": 'export const EmulatorBadge=()=>null;',
   "@/ui/encryption": 'export const EncryptionBoundary=({children})=>children;',
   "@/ui/use-reduced-motion": 'export const useReducedMotion=()=>false;',
   "expo-image-picker": `
     export const requestMediaLibraryPermissionsAsync=async()=>{const h=globalThis.__identityInteractions;h.permissionCalls++;return{granted:h.permissionGranted};};
     export const launchImageLibraryAsync=async()=>{const h=globalThis.__identityInteractions;h.pickerCalls++;return h.pickerResult;};
   `,
-  "@/state/store/firebase": 'export const auth={get currentUser(){const uid=globalThis.__identityInteractions.sdkUid;return uid?{uid}:null;}};export let emulatorMode=false;export const developmentMode=false;export const setEmulatorMode=value=>{emulatorMode=value;};',
+  "@/state/store/firebase": 'export const auth={get currentUser(){const uid=globalThis.__identityInteractions.sdkUid;return uid?{uid}:null;}};export let developmentMode=false;export const setDevelopmentMode=value=>{developmentMode=value;};',
   "@/state/koino-store": `
     import {useSyncExternalStore} from "react";
     const h=globalThis.__identityInteractions;
@@ -179,7 +178,7 @@ try {
   const outfile = path.join(directory, "identity.cjs");
   await build({
     stdin: {
-      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {setEmulatorMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";export {default as RootLayout} from "./app/_layout";export {default as Index} from "./app/index";export {default as IdentityRoute} from "./app/identity";export {router} from "expo-router";`,
+      contents: `export {IdentitySupportScreen} from "./features/identity-support-screen";export {SettingsRow} from "./features/identity/settings-components";export {AppLanguageProvider,useAppTranslation} from "./ui/app-language";export {setDevelopmentMode} from "@/state/store/firebase";export {EncryptionSettings} from "./ui/encryption";export {AvatarButton} from "./ui/app-components/headers";export {default as RootLayout} from "./app/_layout";export {default as Index} from "./app/index";export {default as IdentityRoute} from "./app/identity";export {router} from "expo-router";`,
       resolveDir: projectRoot, loader: "tsx",
     },
     outfile, bundle: true, format: "cjs", platform: "node", jsx: "automatic",
@@ -192,7 +191,7 @@ try {
       builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "tsx", resolveDir: projectRoot }));
     } }],
   });
-  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, setEmulatorMode, EncryptionSettings, AvatarButton, RootLayout, Index, IdentityRoute, router } = require(outfile);
+  const { IdentitySupportScreen, SettingsRow, AppLanguageProvider, useAppTranslation, setDevelopmentMode, EncryptionSettings, AvatarButton, RootLayout, Index, IdentityRoute, router } = require(outfile);
   function LanguageProbe() { h.translation = useAppTranslation(); return null; }
   function MountedIdentity() {
     React.useEffect(() => { h.identityMounts++; return () => { h.identityUnmounts++; }; }, []);
@@ -218,14 +217,14 @@ try {
   const text = () => JSON.stringify(tree.toJSON());
   const closeSheet = async key => { const current = sheet(key); assert.ok(current, `Expected open sheet ${key}`); await act(() => current.props.onClose()); assert.equal(sheet(key), undefined); };
   async function unmount() { if (tree) { await act(() => tree.unmount()); tree = undefined; } }
-  async function mount(os, emulator = false, storedLanguage = "en") {
+  async function mount(os, development = false, storedLanguage = "en") {
     await unmount();
     h.os = os; h.state = freshState(); h.storage.set("koino.language", storedLanguage);
     h.storageWrites = []; h.actions = []; h.route = "/identity"; h.history = ["/home", "/identity"];
     h.identityMounts = 0; h.identityUnmounts = 0; h.identityDismissals = 0;
     h.activeRawListeners.clear();
     h.permissionCalls = 0; h.pickerCalls = 0; h.permissionGranted = true; h.pickerResult = { canceled: true, assets: [] }; h.resetFailure = false;
-    setEmulatorMode(emulator);
+    setDevelopmentMode(development);
     await act(async () => { tree = create(React.createElement(AppLanguageProvider, null, React.createElement(LanguageProbe), React.createElement(RootFixture))); });
     assert.equal(h.translation.language, storedLanguage);
     assert.equal(tree.root.findByType("IdentitySheet").props.modal, false, "The transparent native Identity route must be the sole modal host");
@@ -320,15 +319,15 @@ try {
       await act(() => h.translation.setLanguage(language));
       await pressRow("identity.profile.title");
       const choose = tree.root.findAllByType("SecondaryButton").find(node => node.props.children === t("identity.profile.chooseImage"));
-      assert.equal(choose.props.disabled, true); assert.ok(text().includes(t("identity.avatar.emulatorUnavailable")));
+      assert.equal(choose.props.disabled, true); assert.ok(text().includes(t("identity.avatar.devUnavailable")));
       await act(async () => choose.props.onPress());
       assert.equal(h.permissionCalls, 0); assert.equal(h.pickerCalls, 0);
       await closeSheet("identity.profile.title");
       await pressRow("identity.security.title");
       const reset = tree.root.findAllByType("PrimaryButton").find(node => node.props.children === t("identity.security.sendReset"));
-      assert.equal(reset.props.disabled, true); assert.ok(text().includes(t("identity.security.emulatorUnavailable")));
+      assert.equal(reset.props.disabled, true); assert.ok(text().includes(t("onboarding.account.resetUnavailableDev")));
       await act(async () => reset.props.onPress());
-      assert.equal(h.actions.length, 0, "Even direct handler calls must not dispatch disabled emulator actions");
+      assert.equal(h.actions.length, 0, "Even direct handler calls must not dispatch disabled Dev actions");
       await closeSheet("identity.security.title");
     }
   }
@@ -345,7 +344,7 @@ try {
   h.state = { ...freshState(), authReady: false, currentUserId: undefined };
   h.storage.set("koino.language", "en");
   h.actions = [];
-  setEmulatorMode(true);
+  setDevelopmentMode(true);
   h.rootViews = {
     index: () => React.createElement(Index),
     identity: () => React.createElement(React.Fragment, null, React.createElement(LanguageProbe), React.createElement(IdentityRoute)),
@@ -483,7 +482,7 @@ try {
   await unmount();
   console.log("Logout navigation passed: real Identity and root route declarations, pending/failure, iOS overlay removal, protected history, repeat login/logout and account replacement.");
 
-  console.log("Identity handler regressions passed on iOS/Android fixtures: repeated language/security/join sheets, language persistence, three complete JS history cycles through real Encryption Back and Avatar reopen, emulator restrictions and production reset/photo controls. Native Expo navigation, gestures, picker presentation and platform touch delivery still require device testing.");
+  console.log("Identity handler regressions passed on iOS/Android fixtures: repeated language/security/join sheets, language persistence, three complete JS history cycles through real Encryption Back and Avatar reopen, Dev restrictions and production reset/photo controls. Native Expo navigation, gestures, picker presentation and platform touch delivery still require device testing.");
 } finally {
   if (tree) await act(() => tree.unmount());
   delete globalThis.__identityInteractions;

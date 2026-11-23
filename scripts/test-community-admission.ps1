@@ -16,7 +16,7 @@ $preload = Join-Path $PSScriptRoot 'emulator-node-loopback.cjs'
 $source = Join-Path $repository 'functions'
 $ports = [ordered]@{ auth = 19099; database = 19001; functions = 15001; hub = 14400; logging = 14500; eventarc = 14999; tasks = 14998 }
 
-# Read-only preflight: never bind ports, edit the phone launcher, or inspect its data.
+# Read-only preflight checks environment, tooling and listener availability.
 foreach ($name in @('GCLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT', 'GCP_PROJECT')) {
   $inherited = [Environment]::GetEnvironmentVariable($name, 'Process')
   if ($inherited -and $inherited -ne $ProjectId) { throw "Refusing inherited non-demo $name. Use a clean PowerShell session." }
@@ -104,8 +104,7 @@ try {
 
   Push-Location -LiteralPath $run
   $pushed = $true
-  # Compile directly into this unique source tree; never rewrite functions/lib
-  # or .codex/koino-emulator-device/functions used by the physical phones.
+  # Compile Functions directly into this unique run's source tree.
   & $npm --prefix $source run build -- --outDir $compiled
   if ($LASTEXITCODE -ne 0) { throw 'Isolated admission Functions compilation failed.' }
   if (-not (Test-Path -LiteralPath (Join-Path $compiled 'emulator-index.js'))) { throw 'Compiled emulator-only Functions entry point is missing.' }
@@ -124,16 +123,15 @@ try {
   $firebase = [ordered]@{ database = @{ rules = 'firebase.rules.json' }; functions = @(@{ source = 'functions'; codebase = 'admission-test'; ignore = @('node_modules', '*.local', '.env*') }); emulators = $services }
   [IO.File]::WriteAllText($config, ($firebase | ConvertTo-Json -Depth 12))
 
-  # emulators:exec owns and shuts down only this invocation. Per-run TMP prevents
-  # its hub-demo-koino.json locator from colliding with the active phone suite.
+  # emulators:exec owns and shuts down only this invocation. Per-run TMP isolates
+  # its hub-demo-koino.json locator from other local emulator sessions.
   $child = 'node "' + $test + '"'
   $arguments = @($cli, 'emulators:exec', '--config', $config, '--only', $selectedServices, '--project', $ProjectId, '--non-interactive')
   Write-Output "Isolated $Suite run: $run"
-  Write-Output 'Loopback only: Auth19099 / Database19001 / Functions15001 / Hub14400 / Logging14500 / Eventarc14999 / Tasks14998. Phone services remain unchanged.'
+  Write-Output 'Loopback only: Auth19099 / Database19001 / Functions15001 / Hub14400 / Logging14500 / Eventarc14999 / Tasks14998.'
   $env:KOINO_ADMISSION_TEST_STAGE = 'initial'
   if ($Suite -eq 'Legacy') {
-    # Destructive legacy fixture suites own only these disposable alternate
-    # Auth/RTDB processes. They never launch or contact the phone Functions.
+    # The Legacy fixture suites own these disposable alternate Auth/RTDB processes.
     & $node @arguments $child
     if ($LASTEXITCODE -ne 0) { throw 'Isolated legacy emulator regression failed.' }
     Write-Output "Legacy emulator regressions passed. Isolated logs retained at $run"

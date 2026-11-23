@@ -3,16 +3,49 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$repository = Split-Path -Parent $PSScriptRoot
-$document = Get-Content -Raw -LiteralPath (Join-Path $repository 'docs/community-admission-diagnosis.md')
-$section = $document.IndexOf('### Next read-only check; no rebuild or restart', [StringComparison]::Ordinal)
-if ($section -lt 0) { throw 'Published invitation lookup section is missing.' }
-$match = [regex]::Match($document.Substring($section), '(?s)```powershell\r?\n(?<code>.*?)\r?\n```')
-if (-not $match.Success) { throw 'Published invitation lookup command is missing.' }
-$lookup = [scriptblock]::Create($match.Groups['code'].Value)
+# The historical invitation lookup is a synthetic fixture. It runs only
+# inside the regression scope, where every input and HTTP call is mocked.
+$lookup = {
+  $ProgressPreference = 'SilentlyContinue'
+  foreach ($owner in @('First', 'Second')) {
+    $secureCode = Read-Host -Prompt "$owner Community code" -AsSecureString
+    $buffer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureCode)
+    try {
+      $code = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($buffer).Trim().ToUpperInvariant()
+    } finally {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($buffer)
+      $secureCode.Dispose()
+    }
+    $entry = $null
+    $result = 'FORMAT_INVALID'
+    if ($code -cmatch '^[A-Z0-9]{6}$') {
+      try {
+        $uri = 'http://127.0.0.1:19001/encryptedData/inviteCodes/' + $code + '.json?ns=demo-koino-default-rtdb'
+        $response = Invoke-WebRequest -UseBasicParsing -Method Get -Uri $uri -Headers @{ Authorization = 'Bearer owner' } -TimeoutSec 5 -ErrorAction Stop
+        $body = $response.Content.Trim()
+        $entry = ConvertFrom-Json -InputObject $body -ErrorAction Stop
+        $result = if (($body -ceq 'null') -and ($null -eq $entry)) {
+          'ABSENT'
+        } elseif ($body.StartsWith('{') -and
+                  ($entry -is [System.Management.Automation.PSCustomObject]) -and
+                  ($null -ne $entry.PSObject.Properties['groupId']) -and
+                  ($entry.groupId -is [string]) -and
+                  ($entry.groupId -cmatch '^[A-Za-z0-9_-]{1,160}$')) {
+          'FOUND'
+        } else {
+          'INVALID_RESPONSE'
+        }
+      } catch { $result = 'READ_FAILED' }
+    }
+    [pscustomobject]@{ CommunityOwner = $owner; Result = $result }
+    $code = $null
+    $entry = $null
+    $body = $null
+    $response = $null
+    $uri = $null
+  }
+}
 
-# Execute the actual documented command with synthetic, masked inputs and
-# mocked HTTP. Never use emulator accounts, data, listeners or real requests.
 $cases = @(
   @{ Name = 'valid-record'; Body = '{"groupId":"fixture-group"}'; Expected = @('FOUND','FOUND') },
   @{ Name = 'json-null'; Body = 'null'; Expected = @('ABSENT','ABSENT') },
@@ -36,14 +69,14 @@ foreach ($fixture in $cases) {
     $script:lookupTestRequests = 0
     function Read-Host {
       param([string]$Prompt, [switch]$AsSecureString)
-      if (-not $AsSecureString) { throw 'The documented prompt must mask input.' }
+      if (-not $AsSecureString) { throw 'The lookup prompt must mask input.' }
       $value = if ($testFixture.ContainsKey('Input')) { $testFixture.Input } else { 'TESTAB' }
       return (ConvertTo-SecureString -String $value -AsPlainText -Force)
     }
     function Invoke-RestMethod { throw 'Implicit JSON conversion is forbidden in this diagnostic.' }
     function Invoke-WebRequest {
       param([switch]$UseBasicParsing, [string]$Method, [string]$Uri, $Headers, [int]$TimeoutSec, $ErrorAction)
-      if (-not $UseBasicParsing -or $Method -ne 'Get' -or $Uri -notmatch '^http://127\.0\.0\.1:9001/encryptedData/inviteCodes/[A-Z0-9]{6}\.json\?ns=demo-koino-default-rtdb$') {
+      if (-not $UseBasicParsing -or $Method -ne 'Get' -or $Uri -notmatch '^http://127\.0\.0\.1:19001/encryptedData/inviteCodes/[A-Z0-9]{6}\.json\?ns=demo-koino-default-rtdb$') {
         throw 'Unexpected diagnostic request.'
       }
       $requestIndex = $script:lookupTestRequests
@@ -59,7 +92,7 @@ foreach ($fixture in $cases) {
   if ($rows.Count -ne 2) { throw ('Unexpected output count: ' + $fixture.Name) }
   for ($i = 0; $i -lt 2; $i++) {
     if ($rows[$i].Result -cne $fixture.Expected[$i]) { throw ('Unexpected lookup result: ' + $fixture.Name) }
-    if ($rows[$i].CommunityOwnerDevice -cne @('iPhone','Android')[$i]) { throw 'Diagnostic labels changed.' }
+    if ($rows[$i].CommunityOwner -cne @('First','Second')[$i]) { throw 'Diagnostic labels changed.' }
     $checks = $checks + 1
   }
 }

@@ -106,13 +106,10 @@ assert.deepEqual(Object.keys(registered().mods).sort(), ["ios"], "No Android mod
 
 const appConfigPath = require.resolve("../app.config.js");
 const previousVariant = process.env.APP_VARIANT;
-const previousEmulatorHost = process.env.EXPO_PUBLIC_KOINO_EMULATOR_HOST;
 try {
-  for (const variant of ["production", "development", "emulator"]) {
+  for (const variant of ["production", "development"]) {
     process.env.APP_VARIANT = variant;
-    process.env.EXPO_PUBLIC_KOINO_EMULATOR_HOST = "192.168.0.17";
     delete require.cache[appConfigPath];
-    // The Dev config is also checked with an approved fixture in validate-emulator-client.mjs.
     if (variant === "development" && require("../state/store/firebase-staging.json") === null) {
       assert.throws(() => require(appConfigPath), /requires a reviewed Firebase staging configuration/);
       continue;
@@ -122,10 +119,8 @@ try {
     assert.equal(matching.length, 1, `Register the iOS privacy plugin once in ${variant}`);
   }
 } finally {
-  for (const [name, prior] of [["APP_VARIANT", previousVariant], ["EXPO_PUBLIC_KOINO_EMULATOR_HOST", previousEmulatorHost]]) {
-    if (prior === undefined) delete process.env[name];
-    else process.env[name] = prior;
-  }
+  if (previousVariant === undefined) delete process.env.APP_VARIANT;
+  else process.env.APP_VARIANT = previousVariant;
   delete require.cache[appConfigPath];
 }
 
