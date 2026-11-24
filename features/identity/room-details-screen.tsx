@@ -280,7 +280,7 @@ export function RoomDetailsScreen() {
       </AppScreen>
 
       <BottomSheet title={t("community.members.title")} visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
-        <MemberList currentUserId={state.currentUserId} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} onTransfer={ownsGroup ? handleTransferOwnership : undefined} />
+        <MemberList currentUserId={state.currentUserId} groupId={group?.id} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} onTransfer={ownsGroup ? handleTransferOwnership : undefined} />
       </BottomSheet>
 
       <BottomSheet title={t("community.management.rename")} visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
@@ -303,7 +303,7 @@ export function RoomDetailsScreen() {
       <BottomSheet title={t("community.management.transfer")} visible={activeSheet === "transfer"} onClose={() => setActiveSheet(undefined)}>
         <BodyText muted>{t("community.management.transferChoose")}</BodyText>
         {transferableMemberships.length > 0 ? (
-          <MemberList currentUserId={state.currentUserId} memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
+          <MemberList currentUserId={state.currentUserId} groupId={group?.id} memberships={transferableMemberships} onTransfer={handleTransferOwnership} />
         ) : (
           <BodyText muted>{t("community.management.transferEmpty")}</BodyText>
         )}

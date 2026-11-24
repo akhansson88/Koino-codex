@@ -150,6 +150,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         [`e2eeDepartures/${groupId}/${target}`]: true,
         [`encryptedData/groupMembers/${groupId}/${target}`]: null,
         [`encryptedData/userGroups/${target}/${groupId}`]: null,
+        [`presence/${groupId}/${target}`]: null,
         [`e2eeJoinRequestStatuses/${target}/${groupId}`]: { status: "closed", updatedAt: Date.now() },
       });
       return {};
@@ -181,6 +182,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         [`e2eeJoinRequests/${groupId}`]: null,
         [`e2eeDepartures/${groupId}`]: null,
         [`e2eeGroupLocks/${groupId}`]: null,
+        [`presence/${groupId}`]: null,
       };
       for (const [member, value] of Object.entries(current.members ?? {})) {
         updates[`encryptedData/userGroups/${member}/${groupId}`] = null;

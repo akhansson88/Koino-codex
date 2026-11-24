@@ -137,6 +137,23 @@ rules.e2eeJoinRequests = { "$groupId": { ".read": owner, "$uid": { ".read": own 
 rules.e2eeJoinRequestStatuses = { "$uid": { ".read": own, ".write": false, "$groupId": { ".read": own, ".write": false } } };
 rules.e2eeDepartures = { "$groupId": { ".read": member, ".write": false } };
 rules.e2eeGroupLocks = { "$groupId": { ".read": member, ".write": false } };
+// Live presence is one short-lived session record per device. Members may read
+// their community's presence; a device may only write its own member record.
+// The server clears the online state through onDisconnect, so no client polling
+// or background heartbeats are required.
+rules.presence = {
+  "$groupId": {
+    ".read": member,
+    "$uid": {
+      ".write": `${member} && auth.uid == $uid`,
+      "sessions": {
+        "$deviceId": {
+          ".validate": "newData.val() == null || (newData.child('state').isString() && (newData.child('state').val() == 'online' || newData.child('state').val() == 'away' || newData.child('state').val() == 'offline' || newData.child('state').val() == 'hidden') && newData.child('at').isNumber() && (!newData.child('platform').exists() || newData.child('platform').isString()))",
+        },
+      },
+    },
+  },
+};
 // Server-only deletion state. Clients never read or write these nodes.
 rules.accountDeletionJobs = { "$uid": { ".read": false, ".write": false } };
 rules.accountDeletionLedger = { "$hash": { ".read": false, ".write": false } };
