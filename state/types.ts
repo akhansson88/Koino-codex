@@ -171,6 +171,36 @@ export type EntryKind = "reflection" | "prayer_request" | "prayer_moment" | "pra
 export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
 export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
 
+export type GroupEventKind = "prayer_meeting" | "bible_study" | "community_event" | "other";
+export type EventRsvpStatus = "going" | "maybe" | "declined";
+
+export type GroupEvent = {
+  id: Id;
+  groupId: Id;
+  userId: Id;
+  kind: GroupEventKind;
+  title: string;
+  description?: string;
+  startAt: string;
+  endAt: string;
+  timeZone?: string;
+  location?: string;
+  meetingUrl?: string;
+  reminderMinutes: number[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EventRsvp = {
+  id: Id;
+  userId: Id;
+  groupId: Id;
+  eventId: Id;
+  status: EventRsvpStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CheckIn = {
   id: Id;
   userId: Id;
@@ -255,6 +285,7 @@ export type NotificationPreferences = {
   mentions: boolean;
   followedDiscussions: boolean;
   prayerActivity: boolean;
+  eventReminders: boolean;
 };
 
 export type PrayerReaction = {
@@ -370,6 +401,9 @@ export type KoinoState = {
   prayerNotifications: PrayerNotification[];
   activityNotifications: ActivityNotification[];
   notificationPreferences: NotificationPreferences;
+  groupEvents: GroupEvent[];
+  eventRsvps: EventRsvp[];
+  groupEventsReady: boolean;
   prayerReactions: PrayerReaction[];
   postReactions: PostReaction[];
   replies: Reply[];

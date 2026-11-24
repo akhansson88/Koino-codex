@@ -23,6 +23,7 @@ Notifications?.setNotificationHandler({
 });
 
 type NotificationData = {
+  eventId?: unknown;
   groupId?: unknown;
   targetType?: unknown;
   targetId?: unknown;
@@ -84,6 +85,10 @@ export function NotificationRuntime() {
             name: "Prayer activity",
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 150, 250],
+          });
+          await Notifications.setNotificationChannelAsync("event-reminders", {
+            name: "Event reminders",
+            importance: Notifications.AndroidImportance.HIGH,
           });
         }
 
@@ -152,7 +157,9 @@ export function NotificationRuntime() {
             ? () => dispatch({ type: "markActivityNotificationRead", id: data.notificationId as string })
             : undefined;
       const navigate = () => {
-        if (validTargetType(data.targetType) && typeof data.targetId === "string") {
+        if (typeof data.eventId === "string" && data.eventId) {
+          router.push({ pathname: "/event-details", params: { eventId: data.eventId } } as never);
+        } else if (validTargetType(data.targetType) && typeof data.targetId === "string") {
           router.push({
           pathname: "/feed/[targetType]/[id]",
           params: {

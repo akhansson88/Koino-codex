@@ -118,6 +118,13 @@ export default function NotificationSettingsScreen() {
             title={t("notifications.preferences.prayerActivity")}
             subtitle={t("notifications.preferences.prayerActivityBody")}
           />
+          <View style={{ backgroundColor: colors.line, height: 1 }} />
+          <PreferenceRow
+            disabled={pushDisabled}
+            preferenceKey="eventReminders"
+            title={t("notifications.preferences.eventReminders")}
+            subtitle={t("notifications.preferences.eventRemindersBody")}
+          />
         </Card>
         <BodyText muted>{t("notifications.preferences.inboxNote")}</BodyText>
       </View>

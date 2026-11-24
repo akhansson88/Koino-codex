@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { checkInExistsForDay } from "@/state/check-ins";
+import { formatEventDay, formatEventTime, nextUpcomingEvent } from "@/state/events";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { Action, CommunitySubmissionOutcome, CommunitySubmissionRequest } from "@/state/store/types";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -160,9 +161,9 @@ function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   useTheme();
   const insets = useSafeAreaInsets();
-  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
+  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps", "groupEvents", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const navigation = useNavigation();
   const roomsFocused = useIsFocused();
   const { prayerMomentId, communityRecentRequest } = useLocalSearchParams<{ prayerMomentId?: string; communityRecentRequest?: string }>();
@@ -374,6 +375,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const group = state.groups.find((item) => item.id === state.currentGroupId);
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
+  const nextEvent = useMemo(() => nextUpcomingEvent(state.groupEvents), [state.groupEvents]);
   const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 1);
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
@@ -1709,6 +1711,47 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   </Pressable>
                 ))}
               </View>
+
+              <Pressable
+                accessibilityLabel={nextEvent
+                  ? `${t("community.events.title")}. ${nextEvent.title}. ${formatEventDay(nextEvent.startAt, language)} ${formatEventTime(nextEvent.startAt, language)}`
+                  : t("community.events.title")}
+                accessibilityRole="button"
+                onPress={() => router.push("/events" as never)}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  backgroundColor: pressed ? shadcn.secondary : shadcn.card,
+                  borderColor: shadcn.border,
+                  borderRadius: radius.lg,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  gap: 12,
+                  minHeight: 74,
+                  padding: 14,
+                })}
+              >
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: shadcn.brandSoft,
+                    borderRadius: radius.md,
+                    height: 40,
+                    justifyContent: "center",
+                    width: 40,
+                  }}
+                >
+                  <Feather color={shadcn.brand} name="calendar" size={19} />
+                </View>
+                <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+                  <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.events.title")}</Text>
+                  <Text numberOfLines={2} style={[typography.caption, { color: colors.muted }]}>
+                    {nextEvent
+                      ? `${nextEvent.title} · ${formatEventDay(nextEvent.startAt, language, { month: "short", day: "numeric" })} ${formatEventTime(nextEvent.startAt, language)}`
+                      : t("community.events.empty")}
+                  </Text>
+                </View>
+                <Feather color={colors.disabledText} name="chevron-right" size={17} />
+              </Pressable>
 
               <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
                 <View style={{ flex: 1, minWidth: 148 }}>
