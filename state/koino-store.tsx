@@ -1398,6 +1398,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
               try {
                 await AsyncStorage.clearAll();
+              } catch {
+                // Local cleanup is best-effort; the server account is already gone.
               } finally {
                 lockSession();
                 clearEncryptedImages();
@@ -1492,6 +1494,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupToLeave = groups.find((item) => item.id === action.id);
               if (!groupToLeave || groupToLeave.ownerId === firebaseUser.uid) return;
 
+              // Clear this device's live presence while membership still allows it.
+              await FirebaseDatabase.remove(FirebaseDatabase.ref(database, `presence/${action.id}/${firebaseUser.uid}`)).catch(() => undefined);
               await leaveEncryptedGroup(action.id);
               return;
             }
