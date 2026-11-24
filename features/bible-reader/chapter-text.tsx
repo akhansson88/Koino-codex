@@ -31,10 +31,12 @@ const bibleVerseWebInteractionStyle =
 
 export const BibleText = memo(function BibleText({
   chapterHeading,
+  copyLabel,
   spokenVerse,
   chapterHighlightByVerse,
   highlightedPosition,
   onFootnotePress,
+  onVerseCopy,
   onVersePress,
   onVersePressIn,
   onVerseLayout,
@@ -53,10 +55,12 @@ export const BibleText = memo(function BibleText({
   verses,
 }: {
   chapterHeading?: string;
+  copyLabel: string;
   spokenVerse?: number;
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   highlightedPosition?: BiblePosition;
   onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number) => void;
+  onVerseCopy: (verse: number) => void;
   onVersePress: (verse: number) => void;
   onVersePressIn: () => void;
   onVerseLayout: (verse: number, offset: number, height?: number) => void;
@@ -135,6 +139,7 @@ export const BibleText = memo(function BibleText({
       {flowingParagraphText ? paragraphs.map((items, index) => (
         <BibleParagraph
           key={items[0].reference}
+          copyLabel={copyLabel}
           verses={items}
           chapterNumber={index === 0 ? position.chapter : undefined}
           position={position}
@@ -144,6 +149,7 @@ export const BibleText = memo(function BibleText({
           selectedVerseNumbers={selectedVerseNumbers}
           spokenVerse={spokenVerse}
           onFootnotePress={onFootnotePress}
+          onVerseCopy={onVerseCopy}
           onVersePress={onVersePress}
           onVersePressIn={onVersePressIn}
           onVerseLongPress={onVerseLongPress}
@@ -170,7 +176,9 @@ export const BibleText = memo(function BibleText({
           temporarySelected={highlighted || actionSelected || selectedVerseNumbers.includes(item.verse)}
           persistedHighlightColor={chapterHighlightByVerse[item.verse]}
           spoken={item.verse === spokenVerse}
+          copyLabel={copyLabel}
           onFootnotePress={onFootnotePress}
+          onVerseCopy={onVerseCopy}
           onVersePress={onVersePress}
           onVersePressIn={onVersePressIn}
           onVerseLongPress={onVerseLongPress}
@@ -190,17 +198,18 @@ export const BibleText = memo(function BibleText({
 
 type ParagraphProps = Pick<Parameters<typeof BibleText>[0],
   "position" | "chapterHighlightByVerse" | "highlightedPosition" | "selectedVersePosition" | "selectedVerseNumbers" | "spokenVerse"
-  | "verses" | "onFootnotePress" | "onVersePress" | "onVersePressIn" | "onVerseLongPress" | "onVerseRef"
+  | "verses" | "onFootnotePress" | "onVerseCopy" | "onVersePress" | "onVersePressIn" | "onVerseLongPress" | "onVerseRef"
   | "palette" | "readerLineHeight" | "readerTextStyle" | "showVerseNumbers"
 > & Pick<VerseRowProps, "subtitlesBefore" | "markersBefore" | "markersAfter"> & {
   chapterNumber?: number;
+  copyLabel: string;
   verseNumberStyle: TextStyle;
   onRowLayout: (verse: number, offset: number, height: number) => void;
 };
 
 const BibleParagraph = memo(function BibleParagraph({
-  verses, chapterNumber, position, chapterHighlightByVerse, highlightedPosition, selectedVersePosition,
-  selectedVerseNumbers, spokenVerse, onFootnotePress, onVersePress, onVersePressIn, onVerseLongPress,
+  verses, chapterNumber, copyLabel, position, chapterHighlightByVerse, highlightedPosition, selectedVersePosition,
+  selectedVerseNumbers, spokenVerse, onFootnotePress, onVerseCopy, onVersePress, onVersePressIn, onVerseLongPress,
   onVerseRef, onRowLayout, palette, readerLineHeight, readerTextStyle, verseNumberStyle, showVerseNumbers,
   subtitlesBefore, markersBefore, markersAfter,
 }: ParagraphProps) {
@@ -277,8 +286,12 @@ const BibleParagraph = memo(function BibleParagraph({
       return <Text key={item.reference}>
         {fragment.before}
         {fragment.showNumber || fragment.textEnd > fragment.textStart ? <Text
+          accessibilityActions={measuring ? undefined : [{ name: "copy", label: copyLabel }]}
           accessibilityLabel={measuring ? undefined : reference} accessibilityRole={measuring ? undefined : "button"}
           accessibilityState={measuring ? undefined : { selected: selected || Boolean(color) }}
+          onAccessibilityAction={measuring ? undefined : (event) => {
+            if (event.nativeEvent.actionName === "copy") onVerseCopy(item.verse);
+          }}
           onPress={measuring ? undefined : () => onVersePress(item.verse)} onPressIn={measuring ? undefined : onVersePressIn}
           onLongPress={measuring ? undefined : () => onVerseLongPress(item.verse)}
           style={measuring ? undefined : { backgroundColor: selected || item.verse === spokenVerse ? palette.peach : color ? highlightColorWithOpacity(color, 0.16) : undefined }}>
@@ -293,7 +306,7 @@ const BibleParagraph = memo(function BibleParagraph({
       </Text>;
     })
   ), [projection, verseByNumber, position, highlightedPosition, selectedVersePosition, selectedVerseNumbers, chapterHighlightByVerse,
-    bookLanguage, onVersePress, onVersePressIn, onVerseLongPress, spokenVerse, palette, verseNumberStyle, readerLineHeight,
+    bookLanguage, copyLabel, onVerseCopy, onVersePress, onVersePressIn, onVerseLongPress, spokenVerse, palette, verseNumberStyle, readerLineHeight,
     numberWidths, measureNumberWidth, onFootnotePress, readerTextStyle]);
   return (
     <View ref={containerRef} collapsable={false} onLayout={event => {
@@ -393,8 +406,9 @@ const BibleVerseNumber = memo(function BibleVerseNumber({ verse, style, highligh
 });
 
 type VerseRowProps = Pick<Parameters<typeof BibleText>[0],
-  "onFootnotePress" | "onVersePress" | "onVersePressIn" | "onVerseLongPress" | "onVerseRef" | "palette" | "readerLineHeight" | "readerTextStyle" | "showVerseNumbers"
+  "onFootnotePress" | "onVerseCopy" | "onVersePress" | "onVersePressIn" | "onVerseLongPress" | "onVerseRef" | "palette" | "readerLineHeight" | "readerTextStyle" | "showVerseNumbers"
 > & {
+  copyLabel: string;
   item: BibleChapterVerse;
   chapterNumber: number;
   reference: string;
@@ -410,8 +424,8 @@ type VerseRowProps = Pick<Parameters<typeof BibleText>[0],
 };
 
 const BibleVerseRow = memo(function BibleVerseRow({
-  item, chapterNumber, reference, isFirstVerse, temporarySelected, persistedHighlightColor, spoken,
-  onFootnotePress, onVersePress, onVersePressIn, onVerseLongPress, onVerseRef, onRowLayout,
+  item, chapterNumber, copyLabel, reference, isFirstVerse, temporarySelected, persistedHighlightColor, spoken,
+  onFootnotePress, onVerseCopy, onVersePress, onVersePressIn, onVerseLongPress, onVerseRef, onRowLayout,
   palette, readerLineHeight, readerTextStyle, verseNumberStyle, showVerseNumbers,
   subtitlesBefore, markersBefore, markersAfter,
 }: VerseRowProps) {
@@ -462,9 +476,13 @@ const BibleVerseRow = memo(function BibleVerseRow({
     <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
   ))}
   <NativePressable
+    accessibilityActions={[{ name: "copy", label: copyLabel }]}
     accessibilityLabel={reference}
     accessibilityRole="button"
     accessibilityState={{ selected }}
+    onAccessibilityAction={(event) => {
+      if (event.nativeEvent.actionName === "copy") onVerseCopy(item.verse);
+    }}
     onLongPress={() => onVerseLongPress(item.verse)}
     onPress={() => onVersePress(item.verse)}
     onPressIn={onVersePressIn}

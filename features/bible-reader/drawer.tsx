@@ -46,6 +46,7 @@ export function BibleDrawer({
   initialPosition,
   journalEntries,
   onClose,
+  onCopySavedVerse,
   onOpenPlans: openPlans,
   onOpenReflection: openReflection,
   onRemoveSavedVerse,
@@ -62,6 +63,7 @@ export function BibleDrawer({
   initialPosition: BiblePosition;
   journalEntries: JournalEntry[];
   onClose: () => void;
+  onCopySavedVerse: (verse: SavedVerse) => void;
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
   onRemoveSavedVerse: (id: string) => Promise<void>;
@@ -489,6 +491,7 @@ export function BibleDrawer({
 
       <SavedVerseActionSheet
         onClose={() => setSavedVerseMenu(undefined)}
+        onCopy={onCopySavedVerse}
         onOpen={openSavedVerse}
         onRemove={removeSavedVerse}
         palette={palette}
