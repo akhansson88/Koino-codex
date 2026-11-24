@@ -108,7 +108,7 @@ export function MembersPanel({
             name="search"
             size={16}
             color={colors.muted}
-            style={{ left: 14, position: "absolute", zIndex: 1 }}
+            style={{ left: 14, position: "absolute", top: 14, zIndex: 1 }}
           />
           <TextInput
             accessibilityLabel={t("presence.search.placeholder")}
@@ -139,7 +139,7 @@ export function MembersPanel({
               accessibilityRole="button"
               hitSlop={8}
               onPress={() => setQuery("")}
-              style={{ padding: 10, position: "absolute", right: 2 }}
+              style={{ padding: 10, position: "absolute", right: 2, top: 2 }}
             >
               <Feather name="x" size={16} color={colors.muted} />
             </Pressable>
