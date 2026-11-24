@@ -556,6 +556,21 @@ export async function pendingDeletionJobs(): Promise<string[]> {
   return pending;
 }
 
+export async function purgeOldDeletionJobs(): Promise<number> {
+  const jobs = await read(JOB_COLLECTION);
+  if (!jobs) return 0;
+  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const updates: Record<string, null> = {};
+  for (const [uid, value] of Object.entries(jobs)) {
+    if (!isObject(value)) continue;
+    const completedAt = typeof value.completedAt === "string" ? Date.parse(value.completedAt) : 0;
+    if (completedAt && completedAt < cutoff) updates[`${JOB_COLLECTION}/${uid}`] = null;
+  }
+  if (!Object.keys(updates).length) return 0;
+  await db().ref().update(updates);
+  return Object.keys(updates).length;
+}
+
 export async function purgeOldFinancialRecords(): Promise<number> {
   if (emulatorTestConfiguration() || process.env.FIREBASE_DATABASE_EMULATOR_HOST) return 0;
   const cutoff = new Date();

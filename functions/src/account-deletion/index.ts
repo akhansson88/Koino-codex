@@ -7,6 +7,7 @@ import {
   assertDeletionPhrase,
   assertRecentAuthentication,
   pendingDeletionJobs,
+  purgeOldDeletionJobs,
   purgeOldFinancialRecords,
   runAccountDeletion,
 } from "./service";
@@ -81,7 +82,8 @@ export const koinoDeletionRetentionPurge = onSchedule(
   async () => {
     try {
       const removed = await purgeOldFinancialRecords();
-      logger.info("KOINO financial retention purge", { removed });
+      const jobs = await purgeOldDeletionJobs();
+      logger.info("KOINO retention purge", { removed, jobs });
     } catch (error) {
       logger.error("KOINO financial retention purge failed", {
         code: (error as { code?: string }).code ?? "UNKNOWN",
