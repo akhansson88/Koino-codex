@@ -61,6 +61,23 @@ async function pepper() {
   return value;
 }
 
+function normalizeValue(type, value) {
+  if (type === "email") {
+    const trimmed = value.trim().toLowerCase();
+    const at = trimmed.lastIndexOf("@");
+    if (at <= 0) return trimmed;
+    let local = trimmed.slice(0, at);
+    let domain = trimmed.slice(at + 1);
+    if (domain === "googlemail.com") domain = "gmail.com";
+    const plus = local.indexOf("+");
+    if (plus > 0) local = local.slice(0, plus);
+    if (domain === "gmail.com") local = local.replace(/\./g, "");
+    return `${local}@${domain}`;
+  }
+  if (type === "domain") return value.trim().toLowerCase();
+  return value.trim();
+}
+
 async function hash(value) {
   return createHmac("sha256", await pepper()).update(value).digest("hex");
 }
@@ -102,7 +119,7 @@ if (command === "config") {
   if (!type || !value) throw new Error("Usage: block --type ip|subnet|email|domain --value <value> [--hours 24] [--reason ...]");
   if (!["ip", "subnet", "email", "domain"].includes(type)) throw new Error("Unknown block type.");
   const hours = Math.max(1, Number(values.hours) || 24);
-  const valueHash = await hash(value);
+  const valueHash = await hash(normalizeValue(type, value));
   await write(`signupGuard/blocklist/${type}_${valueHash}`, {
     type,
     valueHash,
@@ -116,7 +133,7 @@ if (command === "config") {
   const type = values.type;
   const value = values.value;
   if (!type || !value) throw new Error("Usage: unblock --type ip|subnet|email|domain --value <value>");
-  await remove(`signupGuard/blocklist/${type}_${await hash(value)}`);
+  await remove(`signupGuard/blocklist/${type}_${await hash(normalizeValue(type, value))}`);
   console.log(`unblocked ${type}`);
 } else if (command === "list") {
   const blocklist = (await read("signupGuard/blocklist")) ?? {};
