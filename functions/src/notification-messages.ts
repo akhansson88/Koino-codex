@@ -40,3 +40,40 @@ export function buildPrayerPushMessage(_actorName: string, notificationId: strin
     data: { prayerNotificationId: notificationId },
   };
 }
+
+export function buildEventPushMessage(input: {
+  eventId: string;
+  groupId: string;
+  minutes: number;
+  startAt: string;
+  timeZone?: string;
+  title: string;
+}): ExpoPushMessage {
+  const lead = input.minutes >= 1440
+    ? "Tomorrow"
+    : input.minutes >= 60
+      ? `In ${Math.round(input.minutes / 60)} hour${input.minutes >= 120 ? "s" : ""}`
+      : `In ${input.minutes} minutes`;
+  let time = "";
+  try {
+    time = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: input.timeZone || "Europe/Stockholm",
+    }).format(new Date(input.startAt));
+  } catch {
+    time = "";
+  }
+  return {
+    title: input.title,
+    body: [lead, time].filter(Boolean).join(" · "),
+    sound: "default",
+    priority: "high",
+    channelId: "event-reminders",
+    data: {
+      eventId: input.eventId,
+      groupId: input.groupId,
+      eventStartAt: input.startAt,
+    },
+  };
+}

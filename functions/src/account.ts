@@ -187,7 +187,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         updates[`e2eeJoinRequestStatuses/${member}/${groupId}`] = null;
         if ((value as Obj)?.role === "owner") updates[`encryptedData/userGroups/${member}`] = null;
       }
-      for (const collection of ["groups", "groupMembers", "checkIns", "posts", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupBiblePlanParticipation", "discussionFollowers", "legacyGroupArchives"]) updates[`encryptedData/${collection}/${groupId}`] = null;
+      for (const collection of ["groups", "groupMembers", "checkIns", "posts", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupBiblePlanParticipation", "groupEvents", "eventRsvps", "discussionFollowers", "legacyGroupArchives"]) updates[`encryptedData/${collection}/${groupId}`] = null;
       if (info?.inviteCode) updates[`encryptedData/inviteCodes/${info.inviteCode}`] = null;
       await db().ref().update(updates);
       return {};

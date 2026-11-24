@@ -8,7 +8,7 @@ const EXPO_SEND_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 const EXPO_BATCH_SIZE = 100;
 
-export type PushCategory = "ownContent" | "mentions" | "followedDiscussions" | "prayerActivity";
+export type PushCategory = "ownContent" | "mentions" | "followedDiscussions" | "prayerActivity" | "eventReminders";
 
 export type ExpoPushMessage = {
   title: string;
@@ -16,7 +16,7 @@ export type ExpoPushMessage = {
   sound: "default";
   badge?: number;
   priority: "default" | "high";
-  channelId: "comments" | "mentions" | "prayer-activity";
+  channelId: "comments" | "mentions" | "prayer-activity" | "event-reminders";
   data: Record<string, string | boolean>;
 };
 
@@ -55,6 +55,7 @@ type NotificationPreferences = {
   mentions?: boolean;
   followedDiscussions?: boolean;
   prayerActivity?: boolean;
+  eventReminders?: boolean;
 };
 
 function tokenHash(token: string) {
