@@ -110,7 +110,9 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
   const [pending, setPending] = useState<"auth" | "reset">();
   const running = useRef(false);
   const signingUp = mode === "signUp";
-  const canSubmit = email.trim().includes("@") && password.length >= 10 && (!signingUp || name.trim().length > 1);
+  const canSubmit = email.trim().includes("@")
+    && (signingUp ? password.length >= 10 : password.length > 0)
+    && (!signingUp || name.trim().length > 1);
   const submitLabel = signingUp ? "onboarding.account.signUp" : "onboarding.account.signIn";
 
   async function submit(resetting = false) {
