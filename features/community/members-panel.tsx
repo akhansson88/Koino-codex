@@ -28,6 +28,7 @@ export function MembersPanel({
   latestCheckInByUser,
   memberCount,
   members,
+  offline,
   onInvite,
   onManage,
   onSwitchRoom,
@@ -37,6 +38,7 @@ export function MembersPanel({
   latestCheckInByUser: Map<Id, Extract<FeedItem, { type: "check_in" }>>;
   memberCount: number;
   members: Member[];
+  offline?: boolean;
   onInvite: () => void;
   onManage: () => void;
   onSwitchRoom: () => void;
@@ -179,6 +181,10 @@ export function MembersPanel({
           );
         })}
       </View>
+
+      {offline ? (
+        <Text style={[typography.caption, { color: colors.muted }]}>{t("presence.offlineNotice")}</Text>
+      ) : null}
 
       {sections.length > 0 ? (
         sections.map((section) => {

@@ -1597,6 +1597,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             latestCheckInByUser={latestCheckInByUser}
             memberCount={memberCount}
             members={communityMembers}
+            offline={state.communityFeedOffline}
             onInvite={handleInvite}
             onManage={() => router.push("/room-details" as never)}
             onSwitchRoom={openRoomOverview}
