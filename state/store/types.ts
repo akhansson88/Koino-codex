@@ -33,6 +33,8 @@ export type Action =
   | { type: "signUp"; email: string; password: string; name: string }
   | { type: "signOut"; expectedUserId?: Id }
   | { type: "requestPasswordReset"; email: string }
+  | { type: "sendEmailVerification" }
+  | { type: "refreshEmailVerification" }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
   | { type: "createGroup"; name: string; expectedUserId?: Id }

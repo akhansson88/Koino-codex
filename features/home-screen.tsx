@@ -29,6 +29,7 @@ import {
   VersePreviewCard,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import { communityDefaultFeedTitle, communityFeedItemLabel, communityPrayerMomentDisplayCopy, communitySystemError } from "@/ui/community-copy";
 import { DirectPrayerResultSheet, type DirectPrayerResult } from "@/ui/direct-prayer-result-sheet";
 import { PrayerMoment, PrayerMomentTarget } from "@/ui/prayer-moment";
@@ -303,6 +304,8 @@ function HomeRhythm({ state, group, activeGroupId }: {
             <BodyText muted>{t("home.greeting.subtitle")}</BodyText>
           </View>
         )}
+
+        <EmailVerificationBanner />
 
         <HomeScripture plans={state.biblePlans} userId={state.currentUserId} date={todayKey} />
 

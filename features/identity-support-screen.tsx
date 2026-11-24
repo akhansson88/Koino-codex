@@ -18,6 +18,7 @@ import {
   SecondaryButton,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import { confirmAction } from "@/ui/confirm";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
 import { colors, typography } from "@/ui/theme";
@@ -173,6 +174,8 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           <BodyText muted>{t("identity.description")}</BodyText>
         </View>
       ) : null}
+
+      <EmailVerificationBanner />
 
       <SettingsSection label={t("identity.section.identity")}>
         <SettingsRow icon="user" title={t("identity.profile.title")} subtitle={t("identity.profile.subtitle")} onPress={() => setActiveSheet("profile")} />

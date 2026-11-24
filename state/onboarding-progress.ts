@@ -79,7 +79,10 @@ export async function registerForOnboarding(email: string, password: string, nam
     interruptedRegistrations.delete(key);
   });
   try {
-    await FirebaseAuth.createUserWithEmailAndPassword(auth, trimmedEmail, password);
+    const credential = await FirebaseAuth.createUserWithEmailAndPassword(auth, trimmedEmail, password);
+    // A failed verification email must never fail the signup itself; the app
+    // shows a resend banner for as long as the address is unverified.
+    await FirebaseAuth.sendEmailVerification(credential.user).catch(() => undefined);
   } finally {
     unsubscribe();
   }

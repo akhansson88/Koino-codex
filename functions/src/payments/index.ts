@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { ActionLimitError, assertActionAllowed } from "../signup-guard/store";
 import { SupportPaymentRepository } from "./payment-repository";
 import { getStripeServer, stripeSecretKey } from "./stripe";
 import {
@@ -18,6 +19,17 @@ export const createSupportPayment = onCall(
   async (request) => {
     try {
       const userId = requireAuthenticatedUser(request.auth);
+      if (request.auth?.token.email_verified !== true) {
+        throw new HttpsError("failed-precondition", "EMAIL_NOT_VERIFIED");
+      }
+      try {
+        await assertActionAllowed(userId, "createSupportPayment");
+      } catch (error) {
+        if (error instanceof ActionLimitError) {
+          throw new HttpsError("resource-exhausted", "ACTION_RATE_LIMITED");
+        }
+        throw error;
+      }
       const input = validateSupportPaymentRequest(request.data);
 
       // Initializes a sandbox-only server SDK instance. This pass intentionally
