@@ -1,8 +1,8 @@
 export const AUDIO_REPOSITORY = "akhansson88/reformationsbibeln-audio";
-// The AAC catalog lists every chapter and keeps MP3 entries for chapters that
-// have not been re-encoded yet. Fall back to the legacy all-MP3 catalog while
-// the first AAC chapters are being published.
-export const AUDIO_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_REPOSITORY}/main/catalog-aac.json`;
+export const AUDIO_ASSET_REPOSITORY = "akhansson88/reformationsbibeln-audio-aac";
+// AAC chapters live in a dedicated public asset repository; unconverted
+// chapters still point at the original MP3 releases.
+export const AUDIO_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_ASSET_REPOSITORY}/main/catalog-aac.json`;
 export const AUDIO_LEGACY_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_REPOSITORY}/main/catalog.json`;
 export const AUDIO_TRANSLATION = "reformationsbibeln2026";
 
@@ -23,7 +23,10 @@ function object(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function validUrl(value: unknown): value is string {
-  return typeof value === "string" && value.startsWith(`https://github.com/${AUDIO_REPOSITORY}/releases/download/audio-`) && !value.includes("..") && !/[?#]/.test(value);
+  return typeof value === "string" && (
+    value.startsWith(`https://github.com/${AUDIO_REPOSITORY}/releases/download/audio-`)
+    || value.startsWith(`https://raw.githubusercontent.com/${AUDIO_ASSET_REPOSITORY}/main/`)
+  ) && !value.includes("..") && !/[?#]/.test(value);
 }
 function validContainer(value: unknown) {
   return value === undefined || value === "mp3" || value === "m4a";
