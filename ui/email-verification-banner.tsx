@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { AppState, Text, View } from "react-native";
 
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { BodyText, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
@@ -31,6 +31,16 @@ export function EmailVerificationBanner() {
       timer.current = null;
     };
   }, [cooldown > 0]);
+
+  useEffect(() => {
+    if (!authEmail || emailVerified) return;
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        void dispatch({ type: "refreshEmailVerification" }).catch(() => undefined);
+      }
+    });
+    return () => subscription.remove();
+  }, [authEmail, emailVerified, dispatch]);
 
   if (!authEmail || emailVerified) return null;
 
