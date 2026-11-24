@@ -1,10 +1,16 @@
 export const AUDIO_REPOSITORY = "akhansson88/reformationsbibeln-audio";
-export const AUDIO_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_REPOSITORY}/main/catalog.json`;
+export const AUDIO_ASSET_REPOSITORY = "akhansson88/reformationsbibeln-audio-aac";
+// AAC chapters live in a dedicated public asset repository; unconverted
+// chapters still point at the original MP3 releases.
+export const AUDIO_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_ASSET_REPOSITORY}/main/catalog-aac.json`;
+export const AUDIO_LEGACY_CATALOG_URL = `https://raw.githubusercontent.com/${AUDIO_REPOSITORY}/main/catalog.json`;
 export const AUDIO_TRANSLATION = "reformationsbibeln2026";
 
+export type AudioContainer = "mp3" | "m4a";
 export type AudioChapterEntry = {
   bookId: number; book: string; bookName: string; chapter: number;
   revision: string; sourceHash: string; manifestUrl: string;
+  container?: AudioContainer;
 };
 export type AudioVerse = { verse: number; url: string; duration: number; sha256: string; textHash: string };
 export type AudioChapter = Omit<AudioChapterEntry, "manifestUrl"> & {
@@ -17,13 +23,20 @@ function object(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 function validUrl(value: unknown): value is string {
-  return typeof value === "string" && value.startsWith(`https://github.com/${AUDIO_REPOSITORY}/releases/download/audio-`) && !value.includes("..") && !/[?#]/.test(value);
+  return typeof value === "string" && (
+    value.startsWith(`https://github.com/${AUDIO_REPOSITORY}/releases/download/audio-`)
+    || value.startsWith(`https://raw.githubusercontent.com/${AUDIO_ASSET_REPOSITORY}/main/`)
+  ) && !value.includes("..") && !/[?#]/.test(value);
+}
+function validContainer(value: unknown) {
+  return value === undefined || value === "mp3" || value === "m4a";
 }
 function entry(value: unknown): value is AudioChapterEntry {
   return object(value) && Number.isInteger(value.bookId) && Number(value.bookId) >= 1 && Number(value.bookId) <= 66
     && Number.isInteger(value.chapter) && Number(value.chapter) > 0 && Number(value.chapter) <= 150
     && typeof value.book === "string" && typeof value.bookName === "string"
-    && typeof value.revision === "string" && typeof value.sourceHash === "string" && validUrl(value.manifestUrl);
+    && typeof value.revision === "string" && typeof value.sourceHash === "string" && validUrl(value.manifestUrl)
+    && validContainer(value.container);
 }
 export function parseCatalog(value: unknown): AudioCatalog {
   if (!object(value) || value.schemaVersion !== 1 || value.translation !== AUDIO_TRANSLATION || !object(value.chapters)) throw new Error("Invalid audio catalog");
@@ -36,6 +49,7 @@ export function parseChapter(value: unknown, expected: AudioChapterEntry): Audio
   if (!object(value) || value.schemaVersion !== 1 || value.translation !== AUDIO_TRANSLATION
     || value.bookId !== expected.bookId || value.chapter !== expected.chapter || value.book !== expected.book
     || value.revision !== expected.revision || value.sourceHash !== expected.sourceHash
+    || (value.container ?? "mp3") !== (expected.container ?? "mp3")
     || !Array.isArray(value.verses) || !Array.isArray(value.expectedVerses) || !value.verses.length
     || value.verses.length !== value.expectedVerses.length) throw new Error("Incomplete audio chapter");
   let previous = 0;

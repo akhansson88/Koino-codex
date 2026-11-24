@@ -15,6 +15,7 @@ import { RoomHeaderCard, JoinSwitchCard } from "@/features/identity/room-cards";
 import { SettingsSection, SettingsRow } from "@/features/identity/settings-components";
 import { MemberList } from "@/features/identity/members";
 import { RoomSwitcherSheet } from "@/features/identity/room-switcher";
+import { canViewGroupStatistics, groupRoleFor } from "@/features/community/roles";
 
 export function RoomDetailsScreen() {
   const { state, dispatch } = useKoino();
@@ -28,11 +29,23 @@ export function RoomDetailsScreen() {
     return () => { inviteRevision.current++; };
   }, [state.currentGroupId, state.currentUserId]);
   const [roomMessage, setRoomMessage] = useState("");
+  const [leaderMessage, setLeaderMessage] = useState("");
   const [roomImageCropSource, setRoomImageCropSource] = useState<RoomImageCropSource>();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
+  const currentMembership = state.memberships.find((membership) => membership.userId === state.currentUserId);
+  const role = groupRoleFor(group, currentMembership, state.currentUserId);
+  const ownsGroup = role === "owner";
+  const canSeeStatistics = canViewGroupStatistics(role);
   const [roomName, setRoomName] = useState(group?.name ?? "");
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
+  const leaders = useMemo(
+    () => state.memberships.filter((membership) => membership.role === "leader"),
+    [state.memberships],
+  );
+  const leaderCandidates = useMemo(
+    () => state.memberships.filter((membership) => membership.role === "member" && membership.userId !== state.currentUserId),
+    [state.currentUserId, state.memberships],
+  );
   const transferableMemberships = useMemo(
     () => state.memberships.filter((membership) => membership.userId !== state.currentUserId && membership.role !== "owner"),
     [state.currentUserId, state.memberships],
@@ -152,6 +165,35 @@ export function RoomDetailsScreen() {
     });
   }
 
+  function handleAppointLeader(membership: Membership) {
+    if (!group || !ownsGroup || membership.role !== "member") return;
+    setLeaderMessage("");
+    void dispatch({ type: "appointGroupLeader", groupId: group.id, userId: membership.userId })
+      .then(() => setLeaderMessage(t("community.leaders.appointed", { name: membership.userName })))
+      .catch(() => setLeaderMessage(t("community.leaders.appointError")));
+  }
+
+  function handleRemoveLeader(membership: Membership) {
+    if (!group || !ownsGroup || membership.role !== "leader") return;
+
+    confirmAction({
+      title: t("community.leaders.removeTitle"),
+      message: t("community.leaders.removeBody", { name: membership.userName }),
+      confirmText: t("community.leaders.remove"),
+      destructive: true,
+      onConfirm: () => {
+        void dispatch({ type: "removeGroupLeader", groupId: group.id, userId: membership.userId })
+          .then(() => setLeaderMessage(t("community.leaders.removed", { name: membership.userName })))
+          .catch(() => setLeaderMessage(t("community.leaders.removeError")));
+      },
+    });
+  }
+
+  function openLeadersSheet() {
+    setLeaderMessage("");
+    setActiveSheet("leaders");
+  }
+
   function handleTransferOwnership(membership: Membership) {
     if (!group || !ownsGroup || membership.role === "owner" || membership.userId === state.currentUserId) return;
 
@@ -217,6 +259,15 @@ export function RoomDetailsScreen() {
             <SettingsSection label={t("community.management.settingsTitle")}>
               {ownsGroup ? <SettingsRow icon="user-check" title={t("community.rooms.requestsTitle")} onPress={() => router.push("/members" as never)} /> : null}
               <SettingsRow icon="users" title={t("community.members.title")} onPress={() => setActiveSheet("members")} />
+              {canSeeStatistics ? (
+                <SettingsRow
+                  icon="bar-chart-2"
+                  title={t("community.statistics.title")}
+                  subtitle={t("community.statistics.entrySubtitle")}
+                  onPress={() => router.push("/community-statistics" as never)}
+                  showDivider
+                />
+              ) : null}
               <SettingsRow
                 icon="edit-2"
                 title={t("community.management.namePlaceholder")}
@@ -239,10 +290,18 @@ export function RoomDetailsScreen() {
             {ownsGroup ? (
               <SettingsSection label={t("community.roomDetails.ownerSettings")}>
                 <SettingsRow
+                  icon="award"
+                  title={t("community.leaders.title")}
+                  subtitle={t("community.leaders.manageHint")}
+                  value={leaders.length > 0 ? String(leaders.length) : undefined}
+                  onPress={openLeadersSheet}
+                />
+                <SettingsRow
                   icon="user-check"
                   title={t("community.management.transfer")}
                   subtitle={t("community.management.transferHint")}
                   onPress={() => setActiveSheet("transfer")}
+                  showDivider
                 />
                 <SettingsRow
                   icon="trash-2"
@@ -281,6 +340,33 @@ export function RoomDetailsScreen() {
 
       <BottomSheet title={t("community.members.title")} visible={activeSheet === "members"} onClose={() => setActiveSheet(undefined)}>
         <MemberList currentUserId={state.currentUserId} groupId={group?.id} memberships={state.memberships} onRemove={ownsGroup ? handleRemoveMember : undefined} onTransfer={ownsGroup ? handleTransferOwnership : undefined} />
+      </BottomSheet>
+
+      <BottomSheet title={t("community.leaders.title")} visible={activeSheet === "leaders"} onClose={() => setActiveSheet(undefined)}>
+        <BodyText muted>{t("community.leaders.body")}</BodyText>
+        {leaderMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{leaderMessage}</Text> : null}
+        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("community.leaders.current")}</Text>
+        {leaders.length > 0 ? (
+          <MemberList
+            currentUserId={state.currentUserId}
+            groupId={group?.id}
+            memberships={leaders}
+            onRemoveLeader={ownsGroup ? handleRemoveLeader : undefined}
+          />
+        ) : (
+          <BodyText muted>{t("community.leaders.empty")}</BodyText>
+        )}
+        <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("community.leaders.addTitle")}</Text>
+        {leaderCandidates.length > 0 ? (
+          <MemberList
+            currentUserId={state.currentUserId}
+            groupId={group?.id}
+            memberships={leaderCandidates}
+            onAppointLeader={ownsGroup ? handleAppointLeader : undefined}
+          />
+        ) : (
+          <BodyText muted>{t("community.leaders.addEmpty")}</BodyText>
+        )}
       </BottomSheet>
 
       <BottomSheet title={t("community.management.rename")} visible={activeSheet === "rename"} onClose={() => setActiveSheet(undefined)}>
