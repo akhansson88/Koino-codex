@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
+import type { PresenceStatus } from "@/state/presence-model";
 import { developmentMode } from "@/state/store/firebase";
 import type { GroupImage } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
+import { presenceStatusColor } from "@/ui/presence-copy";
 import { colors, typography } from "@/ui/theme";
 
 export function initials(name?: string) {
@@ -19,11 +21,13 @@ export function Avatar({
   image,
   name,
   size = 42,
+  status,
   tone = "orange",
 }: {
   image?: GroupImage;
   name?: string;
   size?: number;
+  status?: PresenceStatus;
   tone?: "orange" | "green" | "pink" | "blue";
 }) {
   const [failed, setFailed] = useState(false);
@@ -39,30 +43,49 @@ export function Avatar({
   }, [image?.url]);
 
   return (
-    <View
-      style={{
-        alignItems: "center",
-        backgroundColor: palette[0],
-        borderColor: colors.line,
-        borderRadius: 999,
-        borderWidth: 1,
-        height: size,
-        justifyContent: "center",
-        overflow: "hidden",
-        width: size,
-      }}
-    >
-      {!developmentMode && image?.url && !failed ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          onError={() => setFailed(true)}
-          resizeMode="cover"
-          source={{ uri: image.url }}
-          style={{ height: "100%", width: "100%" }}
+    <View style={{ height: size, width: size }}>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette[0],
+          borderColor: colors.line,
+          borderRadius: 999,
+          borderWidth: 1,
+          height: size,
+          justifyContent: "center",
+          overflow: "hidden",
+          width: size,
+        }}
+      >
+        {!developmentMode && image?.url && !failed ? (
+          <Image
+            accessibilityIgnoresInvertColors
+            onError={() => setFailed(true)}
+            resizeMode="cover"
+            source={{ uri: image.url }}
+            style={{ height: "100%", width: "100%" }}
+          />
+        ) : (
+          <Text style={[typography.label, { color: palette[1], fontSize: Math.max(12, size * 0.36), lineHeight: Math.max(14, size * 0.42) }]}>{initials(name)}</Text>
+        )}
+      </View>
+      {status ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          pointerEvents="none"
+          style={{
+            borderColor: presenceStatusColor(status),
+            borderRadius: 999,
+            borderWidth: 2,
+            bottom: -3,
+            left: -3,
+            position: "absolute",
+            right: -3,
+            top: -3,
+          }}
         />
-      ) : (
-        <Text style={[typography.label, { color: palette[1], fontSize: Math.max(12, size * 0.36), lineHeight: Math.max(14, size * 0.42) }]}>{initials(name)}</Text>
-      )}
+      ) : null}
     </View>
   );
 }

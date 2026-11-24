@@ -21,6 +21,7 @@ import { auth } from "@/state/store/firebase";
 import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
+import { PresenceRuntime } from "@/ui/presence-runtime";
 import { colors } from "@/ui/theme";
 import { ThemeProvider, useTheme } from "@/ui/theme-provider";
 import { EncryptionBoundary } from "@/ui/encryption";
@@ -63,6 +64,7 @@ function RootNavigator() {
   return (
     <>
       {!onboarding.pending ? <NotificationRuntime /> : null}
+      {!onboarding.pending ? <PresenceRuntime /> : null}
       {!onboarding.pending ? <EventReminderRuntime /> : null}
       <StatusBar style={scheme === "dark" ? "light" : "dark"} backgroundColor={colors.background} />
       <Stack

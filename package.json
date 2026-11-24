@@ -54,6 +54,8 @@
     "validate:selective-state": "node scripts/validate-selective-state.mjs",
     "validate:notification-navigation": "node scripts/validate-notification-navigation.mjs",
     "validate:community-navigation": "node scripts/validate-community-navigation.mjs",
+    "validate:presence": "node scripts/validate-presence.mjs",
+    "validate:presence-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-presence-emulator.mjs\"",
     "postinstall": "node scripts/patch-track-player.cjs && node scripts/patch-libsodium.cjs && node scripts/patch-onnx-runtime.cjs",
     "bible:search:build": "node scripts/hybrid-search/run.mjs",
     "bible:search:prototypes": "node scripts/hybrid-search/build-query-prototypes.mjs",
