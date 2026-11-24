@@ -394,6 +394,7 @@ export function useKoinoFields<const Keys extends readonly (keyof KoinoState)[]>
 
 export function KoinoProvider({ children }: PropsWithChildren) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [signOutIncomplete, setSignOutIncomplete] = useState(false);
   const signOutPending = useRef(false);
@@ -552,6 +553,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
       previousUserId = user?.uid;
       setFirebaseUser(user);
+      setEmailVerified(user?.emailVerified ?? false);
       setAuthReady(true);
       setSignOutIncomplete(false);
       markStartupMilestone("authReady", user ? "signed-in" : "signed-out");
@@ -1170,6 +1172,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       currentGroupId: profile?.currentGroupId ?? undefined,
       journalShareGroupId,
       authEmail: firebaseUser?.email ?? profile?.email ?? undefined,
+      emailVerified,
       authError,
       communityFeedError,
       communityFeedGroupId,
@@ -1418,15 +1421,29 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               });
               return;
             }
+            case "sendEmailVerification": {
+              const current = auth.currentUser;
+              if (!current) throw new Error("Sign in again before requesting a verification email.");
+              await FirebaseAuth.sendEmailVerification(current);
+              return;
+            }
+            case "refreshEmailVerification": {
+              const current = auth.currentUser;
+              if (!current) return;
+              await current.reload();
+              await current.getIdToken(true);
+              setEmailVerified(current.emailVerified);
+              return;
+            }
             case "confirmPasswordReset":
               if (developmentMode) throw new Error("Password reset links are disabled in KOINO Dev.");
               if (!action.oobCode.trim()) throw new Error("Open the reset link from your email again.");
-              if (action.newPassword.length < 6) throw new Error("Use a password with at least 6 characters.");
+              if (action.newPassword.length < 10) throw new Error("Use a password with at least 10 characters.");
               await FirebaseAuth.confirmPasswordReset(auth, action.oobCode, action.newPassword);
               return;
             case "changePassword": {
               if (!firebaseUser?.email) throw new Error("Sign in again before changing your password.");
-              if (action.newPassword.length < 6) throw new Error("Use a password with at least 6 characters.");
+              if (action.newPassword.length < 10) throw new Error("Use a password with at least 10 characters.");
 
               const credential = FirebaseAuth.EmailAuthProvider.credential(firebaseUser.email, action.currentPassword);
               await FirebaseAuth.reauthenticateWithCredential(firebaseUser, credential);

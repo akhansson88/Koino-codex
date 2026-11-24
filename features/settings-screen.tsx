@@ -42,6 +42,7 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import type { TranslationKey } from "@/ui/localization";
 import {
   communityMemberCount,
@@ -1843,6 +1844,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
             <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>{t("community.page.community")}</Text>
             <BodyText muted>{t("community.page.description")}</BodyText>
           </View>
+
+      <EmailVerificationBanner />
 
       <View style={{ gap: 10 }}>
         <SectionHeading>{t("community.rooms.current")}</SectionHeading>

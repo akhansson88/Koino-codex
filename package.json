@@ -49,6 +49,7 @@
     "validate:database-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-database-emulator.mjs\"",
     "test:donations": "node --test scripts/donation-api.test.cjs",
     "typecheck": "tsc --noEmit",
+    "validate:signup-rules": "node scripts/validate-signup-rules.mjs",
     "typecheck:functions": "npm --prefix functions run build",
     "test:functions": "npm --prefix functions test",
     "validate:interactions": "node scripts/validate-native-interactions.mjs",

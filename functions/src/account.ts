@@ -4,6 +4,7 @@ import { adminApp } from "./firebase-admin";
 import { canViewGroupStatistics, communityRole, leaderRoleUpdate } from "./community-roles";
 import { loadGroupStatistics } from "./community-statistics-data";
 import type { GroupStatisticsDays } from "./community-statistics";
+import { ActionLimitError, assertActionAllowed } from "./signup-guard/store";
 
 // Plaintext account and community operations. Content itself is written by the
 // app and guarded by database rules; this callable exists for the writes that
@@ -36,11 +37,28 @@ function membership(groupId: string, userId: string, role: "owner" | "member", n
 export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   const uid = request.auth.uid;
+  const requireVerifiedEmail = () => {
+    if (request.auth?.token.email_verified !== true) {
+      throw new HttpsError("failed-precondition", "EMAIL_NOT_VERIFIED");
+    }
+  };
+  const enforceActionLimit = async (action: "createGroup" | "joinGroup") => {
+    try {
+      await assertActionAllowed(uid, action);
+    } catch (error) {
+      if (error instanceof ActionLimitError) {
+        throw new HttpsError("resource-exhausted", "ACTION_RATE_LIMITED");
+      }
+      throw error;
+    }
+  };
   const payload = request.data as { operation?: unknown; data?: Obj };
   const operation = typeof payload?.operation === "string" ? payload.operation : invalid();
   const data = payload.data && typeof payload.data === "object" ? payload.data : {};
   switch (operation) {
     case "createGroup": {
+      requireVerifiedEmail();
+      await enforceActionLimit("createGroup");
       const groupId = id(data.groupId);
       const record = data.group as Obj;
       const ownerMembership = data.membership as Obj;
@@ -66,6 +84,8 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "joinGroup": {
+      requireVerifiedEmail();
+      await enforceActionLimit("joinGroup");
       const code = id(String(data.code ?? "").trim().toUpperCase());
       const invite = (await db().ref(`encryptedData/inviteCodes/${code}`).get()).val() as Obj | null;
       if (!invite?.groupId) missing("No community uses that invite code.");
@@ -102,6 +122,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return { requests: Object.entries(requests ?? {}).map(([userId, value]) => ({ userId, name: typeof value?.name === "string" ? value.name : "KOINO member", requestedAt: typeof value?.requestedAt === "number" ? value.requestedAt : 0 })) };
     }
     case "approveJoin": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId), userId = id(data.userId);
       await requireGroup(groupId, uid, true);
       const request = (await db().ref(`e2eeJoinRequests/${groupId}/${userId}`).get()).val() as Obj | null;
@@ -137,6 +158,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "rejectJoin": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId), userId = id(data.userId);
       await requireGroup(groupId, uid, true);
       await db().ref().update({
@@ -146,6 +168,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "appointGroupLeader": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId);
       const targetUserId = id(data.userId);
       const current = await requireGroup(groupId, uid, true);
@@ -171,6 +194,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "removeGroupLeader": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId);
       const targetUserId = id(data.userId);
       const current = await requireGroup(groupId, uid, true);
@@ -202,6 +226,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
     }
     case "leaveGroup":
     case "removeMember": {
+      if (operation === "removeMember") requireVerifiedEmail();
       const groupId = id(data.groupId);
       const target = operation === "leaveGroup" ? uid : id(data.userId);
       const current = await requireGroup(groupId, uid, target !== uid);
@@ -217,6 +242,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "transferOwnership": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId), next = id(data.userId);
       const current = await requireGroup(groupId, uid, true);
       if (!current.members?.[next] || next === uid) invalid("Choose another current member.");
@@ -235,6 +261,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "deleteGroup": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId);
       const current = await requireGroup(groupId, uid, true);
       const info = (await db().ref(`encryptedData/groups/${groupId}`).get()).val() as Obj | null;
@@ -245,10 +272,9 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         [`e2eeGroupLocks/${groupId}`]: null,
         [`presence/${groupId}`]: null,
       };
-      for (const [member, value] of Object.entries(current.members ?? {})) {
+      for (const member of Object.keys(current.members ?? {})) {
         updates[`encryptedData/userGroups/${member}/${groupId}`] = null;
         updates[`e2eeJoinRequestStatuses/${member}/${groupId}`] = null;
-        if ((value as Obj)?.role === "owner") updates[`encryptedData/userGroups/${member}`] = null;
       }
       for (const collection of ["groups", "groupMembers", "checkIns", "posts", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupBiblePlanParticipation", "groupEvents", "eventRsvps", "discussionFollowers", "legacyGroupArchives"]) updates[`encryptedData/${collection}/${groupId}`] = null;
       if (info?.inviteCode) updates[`encryptedData/inviteCodes/${info.inviteCode}`] = null;
@@ -256,6 +282,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       return {};
     }
     case "removeCommunityContent": {
+      requireVerifiedEmail();
       const groupId = id(data.groupId);
       const targetType = data.targetType;
       const targetId = id(data.targetId);

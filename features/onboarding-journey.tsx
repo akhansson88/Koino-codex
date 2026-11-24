@@ -3,10 +3,11 @@ import { Text, View } from "react-native";
 
 import { OnboardingPage } from "@/features/onboarding-screen";
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
-import { useKoinoActions } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { OnboardingChoice } from "@/state/onboarding-progress";
 import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import { Field } from "@/ui/components";
 import type { TranslationKey } from "@/ui/localization";
 import { useOnboardingProgress } from "@/ui/onboarding-progress";
@@ -28,6 +29,7 @@ const stepCopy = {
 export function OnboardingJourney({ userId }: { userId: string }) {
   const { t } = useAppTranslation();
   const { dispatch } = useKoinoActions();
+  const { emailVerified } = useKoinoFields(["emailVerified"] as const);
   const { chooseJourney } = useOnboardingProgress();
   const [step, setStep] = useState<JourneyStep>("choice");
   const [value, setValue] = useState("");
@@ -40,6 +42,10 @@ export function OnboardingJourney({ userId }: { userId: string }) {
 
   function changeStep(next: JourneyStep) {
     if (running.current) return;
+    if ((next === "join" || next === "create") && !emailVerified) {
+      setError("onboarding.account.emailNotVerified");
+      return;
+    }
     setError(undefined);
     setValue("");
     setStep(next);
@@ -68,6 +74,10 @@ export function OnboardingJourney({ userId }: { userId: string }) {
 
   function submitCommunity() {
     if ((step !== "join" && step !== "create") || !canSubmit) return;
+    if (!emailVerified) {
+      setError("onboarding.account.emailNotVerified");
+      return;
+    }
     void run(async () => {
       let receipt: JoinRequestReceipt | undefined;
       try {
@@ -77,6 +87,15 @@ export function OnboardingJourney({ userId }: { userId: string }) {
         if (isJoin && !receipt) throw new Error("The community access request could not be confirmed.");
       } catch (problem) {
         const code = problem && typeof problem === "object" && "code" in problem ? problem.code : undefined;
+        const message = problem instanceof Error ? problem.message : "";
+        if (message.includes("EMAIL_NOT_VERIFIED")) {
+          setError("onboarding.account.emailNotVerified");
+          return;
+        }
+        if (message.includes("ACTION_RATE_LIMITED")) {
+          setError("onboarding.account.actionRateLimited");
+          return;
+        }
         setError(isJoin
           ? (code === "functions/not-found" ? "community.error.inviteNotFound" : "onboarding.journey.joinFailed")
           : "onboarding.journey.createFailed");
@@ -112,6 +131,7 @@ export function OnboardingJourney({ userId }: { userId: string }) {
         <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>{t(title)}</Text>
         <Text style={[typography.body, { color: colors.muted }]}>{t(body)}</Text>
       </View>
+      <EmailVerificationBanner />
       {step === "choice" ? (
         <>
           <PrimaryButton disabled={busy} icon="lock" onPress={() => void run(() => continueOnboarding("private"))}>

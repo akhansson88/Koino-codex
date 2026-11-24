@@ -18,6 +18,15 @@ type AuthMode = "signIn" | "signUp";
 
 function accountError(error: unknown, resetting: boolean): TranslationKey {
   const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("SIGNUP_BLOCKED")) {
+    return message.includes("disposable_email") ? "onboarding.account.disposableEmail" : "onboarding.account.signupBlocked";
+  }
+  if (message.includes("EMAIL_NOT_VERIFIED")) return "onboarding.account.emailNotVerified";
+  if (message.includes("ACTION_RATE_LIMITED")) return "onboarding.account.actionRateLimited";
+  // Firebase Auth surfaces a blocking-function rejection as a backend error
+  // instead of a readable code. Treat that specific backend error as blocked.
+  if (message.includes("Error code: 47")) return "onboarding.account.signupBlocked";
   switch (code) {
     case "auth/email-already-in-use": return "onboarding.account.emailInUse";
     case "auth/invalid-email": return "onboarding.account.invalidEmail";
@@ -101,7 +110,7 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
   const [pending, setPending] = useState<"auth" | "reset">();
   const running = useRef(false);
   const signingUp = mode === "signUp";
-  const canSubmit = email.trim().includes("@") && password.length >= 6 && (!signingUp || name.trim().length > 1);
+  const canSubmit = email.trim().includes("@") && password.length >= 10 && (!signingUp || name.trim().length > 1);
   const submitLabel = signingUp ? "onboarding.account.signUp" : "onboarding.account.signIn";
 
   async function submit(resetting = false) {
