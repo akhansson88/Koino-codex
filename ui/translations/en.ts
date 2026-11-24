@@ -915,6 +915,7 @@ export const englishTranslations = {
   "presence.search.placeholder": "Search members",
   "presence.search.clear": "Clear search",
   "presence.you": "You",
+  "presence.offlineNotice": "You are offline — statuses may be out of date.",
   "presence.empty.filter": "No members match this filter.",
   "community.overview.prayerRequests": "Prayer requests",
   "community.overview.prayTogether": "Pray together",

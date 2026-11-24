@@ -917,6 +917,7 @@ export const swedishTranslations: TranslationDictionary = {
   "presence.search.placeholder": "Sök medlem",
   "presence.search.clear": "Rensa sökning",
   "presence.you": "Du",
+  "presence.offlineNotice": "Du är offline – statusar kan vara gamla.",
   "presence.empty.filter": "Inga medlemmar matchar filtret.",
   "community.overview.prayerRequests": "Böneämnen",
   "community.overview.prayTogether": "Be tillsammans",

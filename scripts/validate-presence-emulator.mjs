@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { initializeApp, deleteApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
-import { connectDatabaseEmulator, get, getDatabase, ref, remove, set } from "firebase/database";
+import { connectDatabaseEmulator, get, getDatabase, goOffline, onDisconnect, ref, remove, set, serverTimestamp } from "firebase/database";
 
 const projectId = "demo-koino";
 const namespace = "demo-koino-default-rtdb";
@@ -44,7 +44,7 @@ async function main() {
   const peer = await client("presence-peer");
   const outsider = await client("presence-outsider");
   const groupId = "group-presence";
-  const session = (state, at = Date.now()) => ({ state, at, platform: "android" });
+  const session = (state) => ({ state, at: serverTimestamp(), platform: "android" });
 
   await getAdminDatabase(admin).ref("/").set({
     e2eeGroups: {
@@ -78,13 +78,30 @@ async function main() {
   await denied(() => set(ref(member.database, ownPath), { state: "online", at: "now" }));
   await denied(() => set(ref(member.database, ownPath), { state: "online" }));
 
-  // Hidden and away are valid states.
+  // Hidden and away are valid states, and server timestamps resolve to numbers.
   await set(ref(member.database, ownPath), session("hidden"));
   await set(ref(member.database, ownPath), session("away"));
+  assert.equal(typeof (await get(ref(member.database, ownPath))).val().at, "number");
 
   // A member can clear their own session (leaving the screen or signing out).
   await remove(ref(member.database, ownPath));
   assert.equal((await get(ref(peer.database, `presence/${groupId}/${member.uid}`))).exists(), false);
+
+  // When the app disappears, the server writes the offline stamp itself.
+  await set(ref(member.database, ownPath), session("online"));
+  await onDisconnect(ref(member.database, ownPath)).set({
+    state: "offline",
+    at: serverTimestamp(),
+    platform: "android",
+  });
+  goOffline(member.database);
+  let disconnected;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    disconnected = (await get(ref(peer.database, ownPath))).val()?.state;
+    if (disconnected === "offline") break;
+  }
+  assert.equal(disconnected, "offline", "onDisconnect must mark the session offline");
 }
 
 main()
