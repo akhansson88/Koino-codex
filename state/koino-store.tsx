@@ -1342,6 +1342,28 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
               return;
             }
+            case "accountDeleted": {
+              // The server has already removed the Auth user. Clear every
+              // local trace without expecting a working Firebase session.
+              try {
+                await import("@/features/bible-audio/engine").then((engine) => engine.stop());
+              } catch {
+                // Audio is best-effort during account deletion.
+              }
+              try {
+                await AsyncStorage.clearAll();
+              } finally {
+                lockSession();
+                clearEncryptedImages();
+                clearUserSession();
+              }
+              try {
+                await FirebaseAuth.signOut(auth);
+              } catch {
+                // The Auth user may already be gone.
+              }
+              return;
+            }
             case "requestPasswordReset": {
               if (developmentMode) throw new Error("Password reset email is disabled in KOINO Dev. / E-post för lösenordsåterställning är avstängd i KOINO Dev.");
               const resetEmail = action.email.trim();

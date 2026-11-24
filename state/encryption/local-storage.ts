@@ -52,6 +52,14 @@ const encryptedStorage = {
     const db = await database();
     await db.runAsync("DELETE FROM private_kv WHERE key NOT LIKE 'firebase:%' AND key NOT LIKE 'e2ee.%'");
   },
+  // Account deletion is irreversible. Remove every app-owned key, including
+  // Firebase persistence and any retired encryption metadata, then clear the
+  // plain AsyncStorage namespace used by language, theme and drafts.
+  async clearAll() {
+    const db = await database();
+    await db.runAsync("DELETE FROM private_kv");
+    await AsyncStorage.clear();
+  },
   async clearLegacyCommunities() {
     const matches = (key: string) => key.startsWith("e2ee.legacy-group.") || key.startsWith("e2ee.legacy-communities.") || key.startsWith("e2ee.image-migration.");
     const db = await database();

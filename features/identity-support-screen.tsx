@@ -237,6 +237,16 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         />
       </SettingsSection>
 
+      <SettingsSection label={t("identity.deleteAccount.section")}>
+        <SettingsRow
+          icon="trash-2"
+          title={t("identity.deleteAccount.title")}
+          subtitle={t("identity.deleteAccount.rowSubtitle")}
+          tone="danger"
+          onPress={() => router.push("/delete-account" as never)}
+        />
+      </SettingsSection>
+
       <SupportKoinoCard onPress={() => navigateFromIdentity("/donation-amount")} />
     </>
   );
@@ -345,6 +355,16 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         />
         <SecondaryButton disabled={loggingOut} icon="log-out" onPress={handleLogOut}>
           {t(loggingOut ? "identity.account.loggingOut" : "common.logOut")}
+        </SecondaryButton>
+        <SecondaryButton
+          icon="trash-2"
+          tone="danger"
+          onPress={() => {
+            setActiveSheet(undefined);
+            router.push("/delete-account" as never);
+          }}
+        >
+          {t("identity.deleteAccount.title")}
         </SecondaryButton>
         {logoutFailed ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: colors.danger }}>{t("identity.account.logoutError")}</BodyText> : null}
       </BottomSheet>

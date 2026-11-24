@@ -32,6 +32,7 @@ export type Action =
   | { type: "signIn"; email: string; password: string }
   | { type: "signUp"; email: string; password: string; name: string }
   | { type: "signOut"; expectedUserId?: Id }
+  | { type: "accountDeleted" }
   | { type: "requestPasswordReset"; email: string }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }

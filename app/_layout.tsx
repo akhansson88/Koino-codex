@@ -97,6 +97,7 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen name="room-details" options={{ headerShown: false }} />
+          <Stack.Screen name="delete-account" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="bible-plans" options={{ headerShown: false }} />
           <Stack.Screen name="donation-amount" options={{ headerShown: false }} />
           <Stack.Screen name="donation-confirm" options={{ headerShown: false }} />

@@ -71,7 +71,9 @@
     "validate:encryption-adapter": "node scripts/validate-encryption-adapter.mjs",
     "validate:encryption-migration": "node scripts/validate-encryption-migration.mjs",
     "encryption:recovery-seed": "node scripts/generate-recovery-seed.mjs",
-    "validate:development-client": "node scripts/validate-development-client.mjs"
+    "validate:development-client": "node scripts/validate-development-client.mjs",
+    "validate:account-deletion": "node scripts/validate-account-deletion-manifest.mjs",
+    "validate:account-deletion-emulator": "npx firebase-tools emulators:exec --config firebase.account-deletion-test.json --only auth,database --project demo-koino \"node scripts/validate-account-deletion-emulator.mjs\""
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

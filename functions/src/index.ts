@@ -1,3 +1,4 @@
 export { createSupportPayment } from "./payments";
 export { checkPushReceipts, createCommentNotification, sendPrayerNotification } from "./activity-notifications";
 export { koinoAccount } from "./account";
+export { koinoDeleteAccount, koinoAccountDeletionSweep, koinoDeletionRetentionPurge } from "./account-deletion";

@@ -98,7 +98,11 @@ for (const [collection, p] of Object.entries(policies)) {
   if (p.depth >= 3 && !["checkInDailyClaims", "discussionFollowers", "groupBiblePlanParticipantIds"].includes(collection)) {
     let parent = target;
     for (const variable of vars.slice(0, -1)) parent = parent[variable];
-    parent[".indexOn"] = ["createdAt", "targetId", "readAt"];
+    const indexes = ["createdAt", "targetId", "readAt"];
+    if (["posts", "checkIns", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements"].includes(collection)) indexes.push("userId");
+    if (collection === "activityNotifications") indexes.push("actorUserId");
+    if (collection === "prayerNotifications") indexes.push("userId");
+    parent[".indexOn"] = indexes;
   }
   if (p.scope === "routing") {
     if (collection === "groupBiblePlanParticipantIds") node[".validate"] = "newData.isString() && newData.val().length <= 160";
@@ -127,5 +131,11 @@ rules.e2eeJoinRequests = { "$groupId": { ".read": owner, "$uid": { ".read": own 
 rules.e2eeJoinRequestStatuses = { "$uid": { ".read": own, ".write": false, "$groupId": { ".read": own, ".write": false } } };
 rules.e2eeDepartures = { "$groupId": { ".read": member, ".write": false } };
 rules.e2eeGroupLocks = { "$groupId": { ".read": member, ".write": false } };
+// Server-only deletion state. Clients never read or write these nodes.
+rules.accountDeletionJobs = { "$uid": { ".read": false, ".write": false } };
+rules.accountDeletionLedger = { "$hash": { ".read": false, ".write": false } };
+// Admin-only push receipts. The index lets the deletion service find a
+// recipient's pending receipts without scanning the whole node.
+rules.pendingExpoPushReceipts = { ".read": false, ".write": false, ".indexOn": "recipientUserId" };
 writeFileSync("firebase.rules.json", JSON.stringify({ rules }) + "\n");
 console.log("Generated plaintext community rules from the shared collection policies.");
