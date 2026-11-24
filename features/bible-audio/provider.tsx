@@ -1,8 +1,19 @@
 import AsyncStorage from "@/state/encryption/local-storage";
 import { AppState } from "react-native";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type PropsWithChildren } from "react";
-import { AUDIO_CATALOG_URL, fetchAudioJson, parseCatalog, type AudioCatalog } from "./catalog";
+import { AUDIO_CATALOG_URL, AUDIO_LEGACY_CATALOG_URL, fetchAudioJson, parseCatalog, type AudioCatalog } from "./catalog";
 import * as engine from "./engine";
+
+const CATALOG_CACHE_KEY = "koino.audio.catalog.v2";
+const LEGACY_CATALOG_CACHE_KEY = "koino.audio.catalog.v1";
+
+async function fetchCatalog(): Promise<AudioCatalog> {
+  let problem: unknown;
+  for (const url of [AUDIO_CATALOG_URL, AUDIO_LEGACY_CATALOG_URL]) {
+    try { return parseCatalog(await fetchAudioJson(url)); } catch (error) { problem = error; }
+  }
+  throw problem;
+}
 
 function useController() {
   const playback = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
@@ -10,9 +21,9 @@ function useController() {
   const [catalogState, setCatalogState] = useState<"loading" | "ready" | "error">("loading");
   const refresh = useCallback(async () => {
     try {
-      const value = parseCatalog(await fetchAudioJson(AUDIO_CATALOG_URL));
+      const value = await fetchCatalog();
       setCatalog(value); await engine.applyAudioCatalog(value); setCatalogState("ready");
-      await AsyncStorage.setItem("koino.audio.catalog.v1", JSON.stringify(value));
+      await AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(value));
       return value;
     } catch { setCatalogState("error"); }
   }, []);
@@ -28,7 +39,7 @@ function useController() {
       await engine.loadTopicPreferences();
       let available: AudioCatalog | undefined;
       try {
-        const cached = await AsyncStorage.getItem("koino.audio.catalog.v1");
+        const cached = await AsyncStorage.getItem(CATALOG_CACHE_KEY) ?? await AsyncStorage.getItem(LEGACY_CATALOG_CACHE_KEY);
         if (cached && mounted) { const value = parseCatalog(JSON.parse(cached)); available = value; setCatalog(value); engine.setAudioCatalog(value); }
       } catch { /* Replace malformed cache from network. */ }
       if (mounted) available = await refresh() ?? available;
