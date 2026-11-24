@@ -98,7 +98,7 @@ import {
   profileAndMembershipImageUpdates,
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
-import { leaveEncryptedGroup, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration } from "@/state/encryption/session";
+import { appointGroupLeader, leaveEncryptedGroup, removeGroupLeader, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration } from "@/state/encryption/session";
 import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
@@ -1424,6 +1424,36 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await rotateGroup(action.groupId, action.userId);
               return;
             }
+            case "appointGroupLeader": {
+              if (!firebaseUser || action.userId === firebaseUser.uid) return;
+              const groupToUpdate = groups.find((item) => item.id === action.groupId);
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
+                throw new Error("Only the community host can appoint group leaders.");
+              }
+
+              const membership = memberships.find((item) => item.groupId === action.groupId && item.userId === action.userId);
+              if (!membership || membership.role !== "member") {
+                throw new Error("Choose a current member of this community.");
+              }
+
+              await appointGroupLeader(action.groupId, action.userId);
+              return;
+            }
+            case "removeGroupLeader": {
+              if (!firebaseUser) return;
+              const groupToUpdate = groups.find((item) => item.id === action.groupId);
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) {
+                throw new Error("Only the community host can remove group leaders.");
+              }
+
+              const membership = memberships.find((item) => item.groupId === action.groupId && item.userId === action.userId);
+              if (!membership || membership.role !== "leader") {
+                throw new Error("That member is not a group leader.");
+              }
+
+              await removeGroupLeader(action.groupId, action.userId);
+              return;
+            }
             case "transferGroupOwnership": {
               if (!firebaseUser || action.userId === firebaseUser.uid) return;
 
@@ -2742,6 +2772,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "createGroup" ||
           action.type === "joinGroup" ||
           action.type === "removeGroupMember" ||
+          action.type === "appointGroupLeader" ||
+          action.type === "removeGroupLeader" ||
           action.type === "transferGroupOwnership" ||
           action.type === "uploadGroupImage" ||
           action.type === "deleteGroupImage" ||

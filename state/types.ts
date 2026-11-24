@@ -34,14 +34,104 @@ export type Group = {
   migrationAwaitingApproval?: boolean;
 };
 
+export type GroupRole = "owner" | "leader" | "member";
+
 export type Membership = {
   id: Id;
   userId: Id;
   groupId: Id;
-  role: "owner" | "member";
+  role: GroupRole;
   userName: string;
   image?: ProfileImage;
   createdAt: string;
+};
+
+export type GroupStatisticsDays = 7 | 30 | 90;
+
+export type GroupStatisticsMoodBucket = {
+  mood: number;
+  count: number;
+};
+
+export type GroupStatisticsTrendPoint = {
+  start: string;
+  checkIns: number;
+  posts: number;
+  replies: number;
+  prayers: number;
+};
+
+export type GroupStatisticsMember = {
+  userId: Id;
+  name: string;
+  role: GroupRole;
+  lastActiveAt: string | null;
+  checkIns: number;
+  posts: number;
+  replies: number;
+  prayers: number;
+};
+
+export type GroupStatisticsPlan = {
+  id: Id;
+  title: string;
+  participants: number;
+  completionRate: number;
+};
+
+export type GroupStatistics = {
+  version: number;
+  generatedAt: string;
+  range: {
+    days: GroupStatisticsDays;
+    from: string;
+    to: string;
+    timeZone: string;
+  };
+  members: {
+    total: number;
+    leaders: number;
+    active: number;
+    joinedInRange: number;
+  };
+  checkIns: {
+    total: number;
+    uniqueMembers: number;
+    rate: number;
+    readTodayRate: number;
+    mood: {
+      average: number | null;
+      distribution: GroupStatisticsMoodBucket[];
+    };
+  };
+  posts: {
+    total: number;
+    uniqueAuthors: number;
+    byKind: Record<string, number>;
+  };
+  replies: {
+    total: number;
+    uniqueAuthors: number;
+  };
+  prayers: {
+    requests: number;
+    answered: number;
+    answeredRate: number;
+    offered: number;
+    uniqueMembers: number;
+  };
+  biblePlans: {
+    active: number;
+    participants: number;
+    completionRate: number;
+    plans: GroupStatisticsPlan[];
+  };
+  trend: {
+    bucket: "day" | "week";
+    points: GroupStatisticsTrendPoint[];
+  };
+  memberActivity: GroupStatisticsMember[];
+  truncated: boolean;
 };
 
 export type ScriptureReference = {

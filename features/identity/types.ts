@@ -7,4 +7,4 @@ export type IdentitySheet = "profile" | "language" | "appearance" | "account" | 
 
 export type IdentityPresentation = "screen" | "sheet";
 
-export type RoomSheet = "members" | "rename" | "transfer";
+export type RoomSheet = "members" | "rename" | "transfer" | "leaders";

@@ -1,10 +1,12 @@
+import { Feather } from "@expo/vector-icons";
 import { Text, View } from "react-native";
-import type { FeedItem, Group, GroupImage, Id } from "@/state/types";
+import type { FeedItem, Group, GroupImage, GroupRole, Id } from "@/state/types";
 import { Avatar, Card, PrimaryButton, RoomImage, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount, communityMoodScaleLabel } from "@/ui/community-copy";
 import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { colors, typography } from "@/ui/theme";
+import { groupRoleIcon, groupRoleLabelKey, groupRoleTone } from "@/features/community/roles";
 
 export function MembersPanel({
   group,
@@ -18,7 +20,7 @@ export function MembersPanel({
   group: Group;
   latestCheckInByUser: Map<Id, Extract<FeedItem, { type: "check_in" }>>;
   memberCount: number;
-  members: { id: Id; image?: GroupImage; name: string; role: "owner" | "member" }[];
+  members: { id: Id; image?: GroupImage; name: string; role: GroupRole }[];
   onInvite: () => void;
   onManage: () => void;
   onSwitchRoom: () => void;
@@ -48,11 +50,20 @@ export function MembersPanel({
                 padding: 14,
               }}
             >
-              <Avatar image={member.image} name={member.name} size={38} tone={member.role === "owner" ? "orange" : "green"} />
+              <Avatar image={member.image} name={member.name} size={38} tone={groupRoleTone(member.role)} />
               <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{member.name}</Text>
-                <Text style={[typography.caption, { color: colors.muted }]}>
-                  {t(member.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+                  <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, flexShrink: 1, fontSize: 14 }]}>{member.name}</Text>
+                  {groupRoleIcon(member.role) ? (
+                    <Feather
+                      name={groupRoleIcon(member.role)!}
+                      size={13}
+                      color={member.role === "leader" ? colors.rose : colors.muted}
+                    />
+                  ) : null}
+                </View>
+                <Text style={[typography.caption, { color: member.role === "leader" ? colors.ink : colors.muted }]}>
+                  {t(groupRoleLabelKey(member.role))}
                 </Text>
                 {checkIn ? (
                   <Text style={[typography.caption, { color: colors.muted, flexShrink: 1 }]}>

@@ -2,6 +2,7 @@ import { onValue, ref as rawRef } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { auth, database, functions } from "@/state/store/firebase";
 import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
+import type { GroupStatistics, GroupStatisticsDays } from "@/state/types";
 
 // KOINO accounts are ordinary Firebase accounts. There is no vault, recovery
 // key, device approval or escrow: signing in on any device shows the account's
@@ -76,3 +77,15 @@ export async function rotateGroup(groupId: string, removedUid?: string, newOwner
 
 export async function leaveEncryptedGroup(groupId: string) { await call("leaveGroup", { groupId }); }
 export async function deleteEncryptedGroup(groupId: string) { await call("deleteGroup", { groupId }); }
+
+export async function appointGroupLeader(groupId: string, userId: string) {
+  await call("appointGroupLeader", { groupId, userId });
+}
+
+export async function removeGroupLeader(groupId: string, userId: string) {
+  await call("removeGroupLeader", { groupId, userId });
+}
+
+export async function loadGroupStatistics(groupId: string, days: GroupStatisticsDays): Promise<GroupStatistics> {
+  return call<GroupStatistics>("groupStatistics", { groupId, days });
+}

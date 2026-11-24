@@ -40,6 +40,8 @@ export type Action =
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "removeGroupMember"; groupId: Id; userId: Id }
+  | { type: "appointGroupLeader"; groupId: Id; userId: Id }
+  | { type: "removeGroupLeader"; groupId: Id; userId: Id }
   | { type: "transferGroupOwnership"; groupId: Id; userId: Id }
   | { type: "updateGroup"; id: Id; name: string }
   | { type: "uploadGroupImage"; id: Id; localUri: string }

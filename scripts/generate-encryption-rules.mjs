@@ -103,11 +103,11 @@ for (const [collection, p] of Object.entries(policies)) {
   if (p.scope === "routing") {
     if (collection === "groupBiblePlanParticipantIds") node[".validate"] = "newData.isString() && newData.val().length <= 160";
     else {
-      for (const field of p.metadata) node[field] = { ".validate": field === "mentionUserIds" ? "newData.hasChildren()" : "newData.isString() || newData.isNumber() || newData.isBoolean()" };
+      for (const field of p.metadata) node[field] = { ".validate": field === "mentionUserIds" ? "newData.hasChildren()" : field === "role" && ["groupMembers", "userGroups"].includes(collection) ? "newData.isString() && (newData.val() == 'owner' || newData.val() == 'leader' || newData.val() == 'member')" : "newData.isString() || newData.isNumber() || newData.isBoolean()" };
       node.$other = plaintext;
     }
   } else {
-    for (const field of p.metadata) node[field] = { ".validate": field === "mentionUserIds" ? "newData.hasChildren()" : "newData.isString() || newData.isNumber() || newData.isBoolean()" };
+    for (const field of p.metadata) node[field] = { ".validate": field === "mentionUserIds" ? "newData.hasChildren()" : field === "role" && ["groupMembers", "userGroups"].includes(collection) ? "newData.isString() && (newData.val() == 'owner' || newData.val() == 'leader' || newData.val() == 'member')" : "newData.isString() || newData.isNumber() || newData.isBoolean()" };
     node.$field = plaintext;
   }
   if (collection === "activityNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
