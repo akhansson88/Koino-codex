@@ -259,6 +259,7 @@ export async function deleteUnverifiedSignup(uid: string): Promise<void> {
       updates[`encryptedData/groupMembers/${groupId}/${uid}`] = null;
       updates[`e2eeGroups/${groupId}/members/${uid}`] = null;
       updates[`e2eeJoinRequests/${groupId}/${uid}`] = null;
+      updates[`presence/${groupId}/${uid}`] = null;
     }
   }
   updates[`userGroups/${uid}`] = null;
