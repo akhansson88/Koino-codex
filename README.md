@@ -317,7 +317,7 @@ regenerates the manifest and quantization report. See
 held-out evaluation gates, rebuild steps and the current run status. This is a
 build-time workflow; the device only runs an accepted model and index. Five
 fine-tuned candidates have been evaluated and rejected, and fine-tuning is
-paused before the MVP pilot. The shipped search assets remain the pinned
+paused ahead of the full release. The shipped search assets remain the pinned
 upstream E5 export until a future candidate passes the locked narrative,
 full-index and app-level zero-regression gates. See the decision and
 current-status sections in `scripts/finetune/README.md`.

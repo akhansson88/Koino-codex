@@ -5,7 +5,7 @@ app ships only an accepted ONNX model and its rebuilt SQLite vector index.
 
 ## Decision (2026-11-12)
 
-Fine-tuning is **paused before the MVP pilot**. Five candidates failed the
+Fine-tuning is **paused ahead of the full release**. Five candidates failed the
 locked narrative, full-index, or hybrid zero-regression gates. Production stays
 on the original upstream E5 model and index. A future revisit should use a
 query-only adapter or an explicit old+new ensemble with a dedicated
@@ -332,7 +332,7 @@ Stephen`, `The Ascension`, `Gethsemane`, `The Parable of the Talents`, and
 
 ### Investment decision
 
-Full-encoder fine-tuning is **not justified before the MVP pilot**. Five
+Full-encoder fine-tuning is **not justified before the full release**. Five
 candidates have failed the release gates, and the latest failure is specifically
 a cross-lingual alignment regression that the current bilingual contrastive
 setup did not fix. Production remains on the upstream encoder and index.

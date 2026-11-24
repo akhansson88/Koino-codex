@@ -1,6 +1,9 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getDatabase } from "firebase-admin/database";
 import { adminApp } from "./firebase-admin";
+import { canViewGroupStatistics, communityRole, leaderRoleUpdate } from "./community-roles";
+import { loadGroupStatistics } from "./community-statistics-data";
+import type { GroupStatisticsDays } from "./community-statistics";
 
 // Plaintext account and community operations. Content itself is written by the
 // app and guarded by database rules; this callable exists for the writes that
@@ -13,7 +16,10 @@ const denied = (message = "This operation is not allowed."): never => { throw ne
 const missing = (message = "This community is no longer available."): never => { throw new HttpsError("not-found", message); };
 const id = (value: unknown): string => typeof value === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(value) ? value : invalid();
 const timestamp = () => new Date().toISOString();
-
+const statisticsDays = (value: unknown): GroupStatisticsDays => {
+  if (value === 7 || value === 30 || value === 90) return value;
+  return invalid("Choose 7, 30 or 90 days.");
+};
 async function group(groupId: string) {
   return (await db().ref(`e2eeGroups/${groupId}`).get()).val() as Obj | null;
 }
@@ -138,6 +144,61 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         [`e2eeJoinRequestStatuses/${userId}/${groupId}`]: { status: "rejected", updatedAt: Date.now() },
       });
       return {};
+    }
+    case "appointGroupLeader": {
+      const groupId = id(data.groupId);
+      const targetUserId = id(data.userId);
+      const current = await requireGroup(groupId, uid, true);
+      if (targetUserId === uid || targetUserId === current.ownerId) invalid("Choose another member.");
+      const target = current.members?.[targetUserId];
+      if (!target) invalid("Choose a current member of this community.");
+      if (target.role === "owner") invalid("The community host already has full access.");
+      if (target.role === "leader") return {};
+      const mirror = (await db().ref(`encryptedData/groupMembers/${groupId}/${targetUserId}`).get()).val() as Obj | null;
+      const profile = mirror?.userName
+        ? null
+        : (await db().ref(`encryptedData/profiles/${targetUserId}`).get()).val() as Obj | null;
+      const updatedAt = timestamp();
+      await db().ref().update(leaderRoleUpdate({
+        createdAt: typeof target.joinedAt === "string" ? target.joinedAt : updatedAt,
+        groupId,
+        mirror,
+        role: "leader",
+        targetUserId,
+        updatedAt,
+        userName: typeof profile?.name === "string" && profile.name.trim() ? profile.name : "KOINO member",
+      }));
+      return {};
+    }
+    case "removeGroupLeader": {
+      const groupId = id(data.groupId);
+      const targetUserId = id(data.userId);
+      const current = await requireGroup(groupId, uid, true);
+      if (targetUserId === current.ownerId) invalid("The community host cannot be removed as a group leader.");
+      const target = current.members?.[targetUserId];
+      if (!target) invalid("Choose a current member of this community.");
+      if (target.role !== "leader") return {};
+      const mirror = (await db().ref(`encryptedData/groupMembers/${groupId}/${targetUserId}`).get()).val() as Obj | null;
+      const updatedAt = timestamp();
+      await db().ref().update(leaderRoleUpdate({
+        createdAt: typeof target.joinedAt === "string" ? target.joinedAt : updatedAt,
+        groupId,
+        mirror,
+        role: "member",
+        targetUserId,
+        updatedAt,
+        userName: typeof mirror?.userName === "string" && mirror.userName.trim() ? mirror.userName : "KOINO member",
+      }));
+      return {};
+    }
+    case "groupStatistics": {
+      const groupId = id(data.groupId);
+      const days = statisticsDays(data.days);
+      const current = await requireGroup(groupId, uid);
+      if (!canViewGroupStatistics(communityRole(current, uid))) {
+        denied("Only the community host and group leaders can see statistics.");
+      }
+      return loadGroupStatistics(current, groupId, days);
     }
     case "leaveGroup":
     case "removeMember": {

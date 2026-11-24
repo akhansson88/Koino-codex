@@ -7,18 +7,23 @@ import { Avatar, BodyText } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { presenceStatusText } from "@/ui/presence-copy";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { groupRoleIcon, groupRoleLabelKey, groupRoleTone } from "@/features/community/roles";
 
 export function MemberList({
   currentUserId,
   groupId,
   memberships,
+  onAppointLeader,
   onRemove,
+  onRemoveLeader,
   onTransfer,
 }: {
   currentUserId?: Id;
   groupId?: Id;
   memberships: Membership[];
+  onAppointLeader?: (membership: Membership) => void;
   onRemove?: (membership: Membership) => void;
+  onRemoveLeader?: (membership: Membership) => void;
   onTransfer?: (membership: Membership) => void;
 }) {
   const { t } = useAppTranslation();
@@ -36,7 +41,9 @@ export function MemberList({
             info={presence[membership.userId]}
             membership={membership}
             now={now}
+            onAppointLeader={onAppointLeader}
             onRemove={onRemove}
+            onRemoveLeader={onRemoveLeader}
             onTransfer={onTransfer}
           />
         </View>
@@ -45,23 +52,65 @@ export function MemberList({
   );
 }
 
+function MemberAction({
+  accessibilityLabel,
+  icon,
+  onPress,
+  tone = "default",
+}: {
+  accessibilityLabel: string;
+  icon: "award" | "user-check" | "user-minus" | "user-x";
+  onPress: () => void;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        backgroundColor: tone === "danger" ? colors.dangerSurface : shadcn.card,
+        borderColor: tone === "danger" ? colors.dangerBorder : shadcn.border,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        height: 36,
+        justifyContent: "center",
+        opacity: pressed ? 0.75 : 1,
+        width: 36,
+      })}
+    >
+      <Feather name={icon} size={16} color={tone === "danger" ? colors.danger : colors.ink} />
+    </Pressable>
+  );
+}
+
 function RoomMemberRow({
   currentUserId,
   info,
   membership,
   now,
+  onAppointLeader,
   onRemove,
+  onRemoveLeader,
   onTransfer,
 }: {
   currentUserId?: Id;
   info?: PresenceInfo;
   membership: Membership;
   now: number;
+  onAppointLeader?: (membership: Membership) => void;
   onRemove?: (membership: Membership) => void;
+  onRemoveLeader?: (membership: Membership) => void;
   onTransfer?: (membership: Membership) => void;
 }) {
   const { t, language } = useAppTranslation();
+  const canAppointLeader = Boolean(
+    onAppointLeader && membership.role === "member" && membership.userId !== currentUserId,
+  );
   const canRemove = Boolean(onRemove && membership.role !== "owner" && membership.userId !== currentUserId);
+  const canRemoveLeader = Boolean(onRemoveLeader && membership.role === "leader");
   const canTransfer = Boolean(onTransfer && membership.role !== "owner" && membership.userId !== currentUserId);
   const status = info?.status ?? "offline";
 
@@ -83,59 +132,57 @@ function RoomMemberRow({
         name={membership.userName}
         size={38}
         status={status}
-        tone={membership.role === "owner" ? "orange" : "green"}
+        tone={groupRoleTone(membership.role)}
       />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{membership.userName}</Text>
-        <Text numberOfLines={1} style={[typography.caption, { color: colors.muted }]}>
-          {t(membership.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, flexShrink: 1, fontSize: 14 }]}>
+            {membership.userName}
+          </Text>
+          {groupRoleIcon(membership.role) ? (
+            <Feather
+              name={groupRoleIcon(membership.role)!}
+              size={13}
+              color={membership.role === "leader" ? colors.rose : colors.muted}
+            />
+          ) : null}
+        </View>
+        <Text numberOfLines={1} style={[typography.caption, { color: membership.role === "leader" ? colors.ink : colors.muted }]}>
+          {t(groupRoleLabelKey(membership.role))}
           {" · "}
           <Text style={{ color: status === "online" ? colors.moss : status === "inactive" ? colors.gold : colors.muted }}>
             {presenceStatusText(info, now, t, language)}
           </Text>
         </Text>
       </View>
+      {canAppointLeader ? (
+        <MemberAction
+          accessibilityLabel={t("community.leaders.appointTo", { name: membership.userName })}
+          icon="award"
+          onPress={() => onAppointLeader?.(membership)}
+        />
+      ) : null}
+      {canRemoveLeader ? (
+        <MemberAction
+          accessibilityLabel={t("community.leaders.removeFrom", { name: membership.userName })}
+          icon="user-minus"
+          onPress={() => onRemoveLeader?.(membership)}
+        />
+      ) : null}
       {canTransfer ? (
-        <Pressable
+        <MemberAction
           accessibilityLabel={t("community.management.transferTo", { name: membership.userName })}
-          accessibilityRole="button"
-          hitSlop={8}
+          icon="user-check"
           onPress={() => onTransfer?.(membership)}
-          style={({ pressed }) => ({
-            alignItems: "center",
-            backgroundColor: pressed ? shadcn.secondary : shadcn.card,
-            borderColor: shadcn.border,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            height: 36,
-            justifyContent: "center",
-            opacity: pressed ? 0.75 : 1,
-            width: 36,
-          })}
-        >
-          <Feather name="user-check" size={16} color={colors.ink} />
-        </Pressable>
+        />
       ) : null}
       {canRemove ? (
-        <Pressable
+        <MemberAction
           accessibilityLabel={t("community.management.removeMemberFrom", { name: membership.userName })}
-          accessibilityRole="button"
-          hitSlop={8}
+          icon="user-x"
           onPress={() => onRemove?.(membership)}
-          style={({ pressed }) => ({
-            alignItems: "center",
-            backgroundColor: colors.dangerSurface,
-            borderColor: colors.dangerBorder,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            height: 36,
-            justifyContent: "center",
-            opacity: pressed ? 0.75 : 1,
-            width: 36,
-          })}
-        >
-          <Feather name="user-x" size={16} color={colors.danger} />
-        </Pressable>
+          tone="danger"
+        />
       ) : null}
     </View>
   );

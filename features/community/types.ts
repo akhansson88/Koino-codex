@@ -1,5 +1,5 @@
 import type { prayerFilters, roomTabs } from "@/state/product";
-import type { FeedItem, GroupImage, Id } from "@/state/types";
+import type { FeedItem, GroupImage, GroupRole, Id } from "@/state/types";
 
 export type RoomView = "rooms" | "detail" | "prayer" | "prayerMomentDetail" | "checkins" | "members";
 
@@ -11,7 +11,7 @@ export type TransitionDirection = "forward" | "back";
 
 export type ComposerContext = "journal" | "room";
 
-export type CommunityMember = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
+export type CommunityMember = { id: Id; image?: GroupImage; name: string; role: GroupRole };
 
 export type CommunityPrayerAssignment = { groupId: Id; memberId: Id; weekEndsAt: string; weekStartsAt: string };
 

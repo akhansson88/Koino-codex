@@ -4,10 +4,11 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import type { PresenceInfo, PresenceStatus } from "@/state/presence-model";
 import { comparePresenceMembers, presenceCounts } from "@/state/presence-model";
 import { useCommunityPresence } from "@/state/presence";
-import type { FeedItem, Group, GroupImage, Id } from "@/state/types";
+import type { FeedItem, Group, GroupImage, GroupRole, Id } from "@/state/types";
 import { Avatar, BodyText, Card, PrimaryButton, RoomImage, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount, communityMoodScaleLabel } from "@/ui/community-copy";
+import { groupRoleIcon, groupRoleLabelKey, groupRoleTone } from "@/features/community/roles";
 import {
   presenceAccessibilityLabel,
   presenceDotColor,
@@ -18,7 +19,7 @@ import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 type PresenceFilter = "all" | Exclude<PresenceStatus, "hidden">;
 
-type Member = { id: Id; image?: GroupImage; name: string; role: "owner" | "member" };
+type Member = { id: Id; image?: GroupImage; name: string; role: GroupRole };
 
 const statusRank: Record<PresenceStatus, number> = { online: 0, inactive: 1, offline: 2, hidden: 3 };
 
@@ -262,6 +263,7 @@ function MemberRow({
 }) {
   const { t, language } = useAppTranslation();
   const status = info?.status ?? "offline";
+  const roleIcon = groupRoleIcon(member.role);
   return (
     <View
       accessibilityLabel={presenceAccessibilityLabel(member.name, info, now, t, language)}
@@ -280,21 +282,24 @@ function MemberRow({
         name={member.name}
         size={40}
         status={status}
-        tone={member.role === "owner" ? "orange" : "green"}
+        tone={groupRoleTone(member.role)}
       />
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6, minWidth: 0 }}>
           <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, flexShrink: 1, fontSize: 15 }]}>
             {member.name}
           </Text>
+          {roleIcon ? (
+            <Feather name={roleIcon} size={13} color={member.role === "leader" ? colors.rose : colors.muted} />
+          ) : null}
           {isCurrentUser ? (
             <View style={{ backgroundColor: colors.input, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 }}>
               <Text style={[typography.caption, { color: colors.muted, fontSize: 11 }]}>{t("presence.you")}</Text>
             </View>
           ) : null}
         </View>
-        <Text style={[typography.caption, { color: colors.muted }]}>
-          {t(member.role === "owner" ? "community.members.role.host" : "community.members.role.member")}
+        <Text style={[typography.caption, { color: member.role === "leader" ? colors.ink : colors.muted }]}>
+          {t(groupRoleLabelKey(member.role))}
         </Text>
         {checkIn ? (
           <Text numberOfLines={1} style={[typography.caption, { color: colors.muted }]}>

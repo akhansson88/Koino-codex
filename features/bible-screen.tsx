@@ -1242,6 +1242,14 @@ export function BibleScreen() {
   );
 
 
+  const showSavedVerseError = useCallback(() => {
+    setReaderToast({
+      detail: t("bible.saved.errorDetail"),
+      message: t("bible.saved.errorTitle"),
+      tone: "error",
+    });
+  }, [t]);
+
   const handleSaveSelectedVerses = useCallback(async () => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
 
@@ -1274,10 +1282,12 @@ export function BibleScreen() {
           : isSingleVerse ? "bible.selection.savedVerse" : "bible.selection.savedPassage"),
         tone: "success",
       });
+    } catch {
+      showSavedVerseError();
     } finally {
       setSelectionSaving(false);
     }
-  }, [dispatch, selectedPassages, selectedVerseNumbers.length, selectedVerseRanges.length, selectionSaving, state.savedVerses, t]);
+  }, [dispatch, selectedPassages, selectedVerseNumbers.length, selectedVerseRanges.length, selectionSaving, showSavedVerseError, state.savedVerses, t]);
 
   const performHighlightMutation = useCallback(async (
     action: Extract<Parameters<typeof dispatch>[0], { type: "highlightVerses" | "removeBibleHighlights" }>,
@@ -1408,12 +1418,12 @@ export function BibleScreen() {
       if (savedVerse) {
         void dispatch({ type: "removeSavedVerse", id: savedVerse.id }).then(() => {
           setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
-        });
+        }).catch(showSavedVerseError);
         return;
       }
       void dispatch({ type: "saveVerse", verse: selectedVerse }).then(() => {
         setReaderToast({ message: t("bible.actions.savedToast"), tone: "success" });
-      });
+      }).catch(showSavedVerseError);
       return;
     }
     if (action === "highlight") {
@@ -1423,7 +1433,7 @@ export function BibleScreen() {
     }
 
     setPendingVerseComposerAction({ action, verse: selectedVerse });
-  }, [dispatch, handleCopyVerse, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
+  }, [dispatch, handleCopyVerse, performHighlightMutation, selectedVersePosition, showSavedVerseError, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
 
   const handleCopySelectedVerses = useCallback(() => {
     const wanted = new Set(selectedVerseNumbers);
@@ -1877,8 +1887,13 @@ export function BibleScreen() {
         }}
         onCopySavedVerse={handleCopySavedVerse}
         onRemoveSavedVerse={async (id) => {
-          await dispatch({ type: "removeSavedVerse", id });
-          setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
+          try {
+            await dispatch({ type: "removeSavedVerse", id });
+            setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });
+          } catch (error) {
+            showSavedVerseError();
+            throw error;
+          }
         }}
         onSelect={(nextPosition, intent = "verse") => {
           setPickerVisible(false);
