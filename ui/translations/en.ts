@@ -448,6 +448,8 @@ export const englishTranslations = {
   "bible.actions.unsaveSubtitle": "Remove it from saved verses",
   "bible.actions.savedToast": "Saved to your verses",
   "bible.actions.unsavedToast": "Removed from saved verses",
+  "bible.saved.errorTitle": "Could not update saved verses",
+  "bible.saved.errorDetail": "Check your connection and try again.",
   "bible.selection.single": "{count} verse selected",
   "bible.selection.multiple": "{count} verses selected",
   "bible.selection.clear": "Clear selected verses",

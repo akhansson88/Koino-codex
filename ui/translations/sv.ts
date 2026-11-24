@@ -450,6 +450,8 @@ export const swedishTranslations: TranslationDictionary = {
   "bible.actions.unsaveSubtitle": "Ta bort den från sparade verser",
   "bible.actions.savedToast": "Sparad bland dina verser",
   "bible.actions.unsavedToast": "Borttagen från sparade verser",
+  "bible.saved.errorTitle": "Kunde inte uppdatera sparade verser",
+  "bible.saved.errorDetail": "Kontrollera anslutningen och försök igen.",
   "bible.selection.single": "{count} vers vald",
   "bible.selection.multiple": "{count} verser valda",
   "bible.selection.clear": "Rensa valda verser",

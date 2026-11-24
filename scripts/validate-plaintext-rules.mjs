@@ -55,6 +55,19 @@ try {
   await set(ref(second.database, `encryptedData/journalEntries/${second.uid}/own`), { id: "own", userId: second.uid, body: "second", source: "manual", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   assert.equal((await get(ref(second.database, `encryptedData/journalEntries/${second.uid}/own`))).exists(), true);
 
+  // Saved verses stay private to their owner and can be saved and removed.
+  const savedVerse = `encryptedData/savedVerses/${owner.uid}/passage_1`;
+  await set(ref(owner.database, savedVerse), {
+    id: "passage_1", book: "Philippians", chapter: 4, startVerse: 4, endVerse: 5,
+    reference: "Philippians 4:4-5", text: "Rejoice in the Lord always.", translation: "Reformationsbibeln 2026",
+    savedAt: "2026-01-01T00:00:00.000Z",
+  });
+  assert.equal((await get(ref(owner.database, savedVerse))).child("text").val(), "Rejoice in the Lord always.");
+  await denied(() => get(ref(second.database, savedVerse)));
+  await denied(() => set(ref(second.database, savedVerse), { id: "passage_1", reference: "Philippians 4:4-5", text: "tampered", savedAt: "2026-01-01T00:00:00.000Z" }));
+  await set(ref(owner.database, savedVerse), null);
+  assert.equal((await get(ref(owner.database, savedVerse))).exists(), false);
+
   // Community content: members read and write, non-members cannot.
   await set(ref(member.database, "encryptedData/posts/community/post_1"), {
     id: "post_1", userId: member.uid, groupId: "community", kind: "prayer_request",
