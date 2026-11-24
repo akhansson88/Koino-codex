@@ -379,11 +379,30 @@ async function deleteNotifications(uid: string, targets: Map<string, Target>): P
   return writer.commit();
 }
 
+function firestoreUnavailable(error: unknown): boolean {
+  const value = error as { code?: unknown; message?: unknown };
+  if (value?.code === 5 || value?.code === "5" || value?.code === "NOT_FOUND" || value?.code === "not-found") return true;
+  const message = typeof value?.message === "string" ? value.message : "";
+  return /Cloud Firestore API has not been used|Firestore API is disabled|database .* does not exist/i.test(message);
+}
+
 async function deletePayments(uid: string): Promise<number> {
   // Firestore is not part of the Auth/Database emulator suite. The same guard
   // also protects local runs against the real Firestore project.
   if (emulatorTestConfiguration() || process.env.FIREBASE_DATABASE_EMULATOR_HOST) return 0;
-  const snapshot = await firestore.collection("supportPayments").where("userId", "==", uid).get();
+  let snapshot;
+  try {
+    snapshot = await firestore.collection("supportPayments").where("userId", "==", uid).get();
+  } catch (error) {
+    // Donations have never been enabled on this project, so Firestore has no
+    // database yet. That is equivalent to zero payment records; real Firestore
+    // failures still stop the deletion before Auth is removed.
+    if (firestoreUnavailable(error)) {
+      logger.warn("KOINO account deletion skipped unprovisioned Firestore", { uidHash: uidHash(uid) });
+      return 0;
+    }
+    throw error;
+  }
   if (snapshot.empty) return 0;
   const batch = firestore.batch();
   let count = 0;
@@ -541,7 +560,13 @@ export async function purgeOldFinancialRecords(): Promise<number> {
   if (emulatorTestConfiguration() || process.env.FIREBASE_DATABASE_EMULATOR_HOST) return 0;
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 7);
-  const snapshot = await firestore.collection("supportPayments").where("anonymizedAt", "<=", Timestamp.fromDate(cutoff)).get();
+  let snapshot;
+  try {
+    snapshot = await firestore.collection("supportPayments").where("anonymizedAt", "<=", Timestamp.fromDate(cutoff)).get();
+  } catch (error) {
+    if (firestoreUnavailable(error)) return 0;
+    throw error;
+  }
   if (snapshot.empty) return 0;
   const batch = firestore.batch();
   for (const document of snapshot.docs) batch.delete(document.ref);
