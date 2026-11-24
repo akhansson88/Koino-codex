@@ -9,7 +9,7 @@ import { emulatorTestConfiguration } from "../emulator-safety";
 import { GROUP_AUTHORED_COLLECTIONS, USER_COLLECTIONS } from "./manifest";
 
 type Obj = Record<string, any>;
-type TargetType = "post" | "check_in" | "reply";
+type TargetType = "post" | "check_in" | "reply" | "event";
 type Target = { groupId: string; targetType: TargetType; targetId: string };
 type CommunityMember = { id: string; name: string };
 type OwnedCommunity = { id: string; name: string; members: CommunityMember[] };
@@ -204,7 +204,7 @@ function targetKey(groupId: string, targetType: string, targetId: string) {
 
 function addTarget(targets: Map<string, Target>, groupId: string, targetType: string, targetId: unknown) {
   if (typeof targetId !== "string" || !targetId) return;
-  if (targetType !== "post" && targetType !== "check_in" && targetType !== "reply") return;
+  if (targetType !== "post" && targetType !== "check_in" && targetType !== "reply" && targetType !== "event") return;
   const target: Target = { groupId, targetType, targetId };
   targets.set(targetKey(groupId, targetType, targetId), target);
 }
@@ -256,6 +256,7 @@ async function deleteGroupContent(uid: string): Promise<Map<string, Target>> {
         if (collection === "posts") addTarget(targets, groupId, "post", recordId);
         if (collection === "checkIns") addTarget(targets, groupId, "check_in", recordId);
         if (collection === "replies") addTarget(targets, groupId, "reply", recordId);
+        if (collection === "groupEvents") addTarget(targets, groupId, "event", recordId);
       }
     }
   }
@@ -289,7 +290,12 @@ async function deleteGroupContent(uid: string): Promise<Map<string, Target>> {
   for (const target of targets.values()) {
     for (const root of ROOTS) {
       const prefix = root ? `${root}/` : "";
-      writer.add(`${prefix}discussionFollowers/${target.groupId}/${target.targetType}/${target.targetId}`);
+      if (target.targetType === "event") {
+        writer.add(`${prefix}eventRsvps/${target.groupId}/${target.targetId}`);
+        writer.add(`eventReminderDeliveries/${target.groupId}/${target.targetId}`);
+      } else {
+        writer.add(`${prefix}discussionFollowers/${target.groupId}/${target.targetType}/${target.targetId}`);
+      }
     }
   }
 
@@ -362,7 +368,12 @@ async function deleteNotifications(uid: string, targets: Map<string, Target>): P
   for (const target of targets.values()) {
     for (const root of ROOTS) {
       const prefix = root ? `${root}/` : "";
-      writer.add(`${prefix}discussionFollowers/${target.groupId}/${target.targetType}/${target.targetId}`);
+      if (target.targetType === "event") {
+        writer.add(`${prefix}eventRsvps/${target.groupId}/${target.targetId}`);
+        writer.add(`eventReminderDeliveries/${target.groupId}/${target.targetId}`);
+      } else {
+        writer.add(`${prefix}discussionFollowers/${target.groupId}/${target.targetType}/${target.targetId}`);
+      }
     }
   }
   return writer.commit();

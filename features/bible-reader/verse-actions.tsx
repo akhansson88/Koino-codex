@@ -30,6 +30,7 @@ export function SelectedVerseSuggestionBar({
   highlightColors,
   maxWidth,
   onClear,
+  onCopy,
   onDeleteHighlight,
   onHeightChange,
   onHighlight,
@@ -46,6 +47,7 @@ export function SelectedVerseSuggestionBar({
   highlightColors: BibleHighlightPaletteColor[];
   maxWidth?: number;
   onClear: () => void;
+  onCopy: () => void;
   onDeleteHighlight: () => void;
   onHeightChange: (height: number) => void;
   onHighlight: (color: BibleHighlightPaletteColor) => void;
@@ -141,6 +143,27 @@ export function SelectedVerseSuggestionBar({
           </Pressable>
         </View>
         <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "center", minHeight: 38 }}>
+          <Pressable
+            accessibilityLabel={t("bible.selection.copyAccessibility", { reference })}
+            accessibilityRole="button"
+            disabled={saving}
+            onPress={onCopy}
+            style={{
+              alignItems: "center",
+              backgroundColor: palette.input,
+              borderColor: palette.line,
+              borderRadius: 999,
+              borderWidth: 1,
+              flexDirection: "row",
+              gap: 7,
+              minHeight: 34,
+              opacity: saving ? 0.58 : 1,
+              paddingHorizontal: 12,
+            }}
+          >
+            <Feather name="copy" size={14} color={palette.accent} />
+            <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.selection.copy")}</Text>
+          </Pressable>
           <Text style={{ color: palette.text, fontSize: 13, fontWeight: "900" }}>{t("bible.selection.highlight")}</Text>
           {highlightColors.slice(0, 8).map((option) => (
             <Pressable
@@ -259,7 +282,7 @@ export function VerseActionSheet({
   const sheetVerseFontSize = typeof readerTextStyle.fontSize === "number" ? Math.min(16, Math.max(14, readerTextStyle.fontSize - 2)) : 15;
   const sheetVerseLineHeight = Math.round(sheetVerseFontSize * 1.55);
   const bottomPadding = Math.max(28, insets.bottom + 20);
-  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 6 * 72 + bottomPadding;
+  const contentHeight = bibleSheetTopPadding + bibleSheetHandleHeight + 7 * 72 + bottomPadding;
   const sheetHeight = Math.min(height * 0.78, contentHeight);
 
   useEffect(() => {
@@ -279,6 +302,7 @@ export function VerseActionSheet({
                 style={{ flex: 1, minHeight: 0 }}
               >
                 <VerseSheetAction icon="book-open" onPress={() => setView("references")} palette={palette} subtitle={t("bible.actions.crossReferencesSubtitle")} title={t("bible.actions.crossReferences")} />
+                <VerseSheetAction icon="copy" onPress={() => onAction("copy")} palette={palette} subtitle={t("bible.actions.copySubtitle")} title={t("bible.actions.copy")} />
                 <VerseSheetAction
                   icon="bookmark"
                   onPress={() => onAction("save")}
@@ -354,7 +378,7 @@ function VerseSheetAction({
   title,
   tone = "default",
 }: {
-  icon: "book-open" | "bookmark" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
+  icon: "book-open" | "bookmark" | "copy" | "edit-2" | "edit-3" | "heart" | "trash-2" | "users";
   onPress: () => void;
   palette: ReaderPalette;
   subtitle: string;
@@ -367,12 +391,14 @@ function VerseSheetAction({
 
 export function SavedVerseActionSheet({
   onClose,
+  onCopy,
   onOpen,
   onRemove,
   palette,
   verse,
 }: {
   onClose: () => void;
+  onCopy: (verse: SavedVerse) => void;
   onOpen: (verse: SavedVerse) => void;
   onRemove: (verse: SavedVerse) => void;
   palette: ReaderPalette;
@@ -393,7 +419,7 @@ export function SavedVerseActionSheet({
     2 +
     titleLineHeight +
     8 +
-    2 * 72 +
+    3 * 72 +
     bottomPadding;
   const sheetHeight = Math.min(height * 0.92, contentHeight);
 
@@ -412,6 +438,13 @@ export function SavedVerseActionSheet({
                 palette={palette}
                 subtitle={t("bible.saved.actions.openSubtitle")}
                 title={t("bible.saved.actions.open")}
+              />
+              <VerseSheetAction
+                icon="copy"
+                onPress={() => sheetRef.current?.dismiss(() => onCopy(verse))}
+                palette={palette}
+                subtitle={t("bible.actions.copySubtitle")}
+                title={t("bible.actions.copy")}
               />
               <VerseSheetAction
                 icon="trash-2"

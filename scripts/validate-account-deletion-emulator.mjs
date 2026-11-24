@@ -134,6 +134,24 @@ try {
       groupBiblePlanAnnouncements: {
         shared: { announcementA: { id: "announcementA", userId: A, groupId: "shared", title: "Plan A" } },
       },
+      groupEvents: {
+        shared: {
+          eventA: { id: "eventA", userId: A, groupId: "shared", title: "Event A", startAt: "2026-12-01T18:00:00.000Z" },
+          eventB: { id: "eventB", userId: B, groupId: "shared", title: "Event B", startAt: "2026-12-02T18:00:00.000Z" },
+        },
+      },
+      eventRsvps: {
+        shared: {
+          eventA: {
+            [A]: { id: A, userId: A, groupId: "shared", eventId: "eventA", status: "going" },
+            [B]: { id: B, userId: B, groupId: "shared", eventId: "eventA", status: "maybe" },
+          },
+          eventB: {
+            [A]: { id: A, userId: A, groupId: "shared", eventId: "eventB", status: "going" },
+            [B]: { id: B, userId: B, groupId: "shared", eventId: "eventB", status: "going" },
+          },
+        },
+      },
       groupBiblePlanParticipation: {
         shared: { announcementA: { participantA: { id: "participantA", userId: A, announcementId: "announcementA" } } },
       },
@@ -159,6 +177,7 @@ try {
     e2eeJoinRequestStatuses: { [A]: { shared: { status: "approved" } } },
     e2eeDepartures: { shared: { [A]: true } },
     pendingExpoPushReceipts: { ticketA: { recipientUserId: A, tokenId: "tokenA" }, ticketB: { recipientUserId: B, tokenId: "tokenB" } },
+    eventReminderDeliveries: { shared: { eventA: { [A]: { "60": true } } } },
   });
 
   // D owns a community: deletion must stop before removing anything.
@@ -212,6 +231,10 @@ try {
     `encryptedData/moderationActions/shared/post/postA`,
     `encryptedData/groupBiblePlanAnnouncements/shared/announcementA`,
     `encryptedData/groupBiblePlanParticipation/shared/announcementA`,
+    `encryptedData/groupEvents/shared/eventA`,
+    `encryptedData/eventRsvps/shared/eventA`,
+    `encryptedData/eventRsvps/shared/eventB/${A}`,
+    `eventReminderDeliveries/shared/eventA`,
     `encryptedData/legacyUserArchives/${A}`,
     `encryptedData/legacyGroupArchives/shared/legacyA`,
     `pendingExpoPushReceipts/ticketA`,
@@ -229,6 +252,8 @@ try {
     `encryptedData/activityNotifications/${B}/notifPostB`,
     `encryptedData/prayerNotifications/${B}/keepPrayerB`,
     `encryptedData/posts/other/postC`,
+    `encryptedData/groupEvents/shared/eventB`,
+    `encryptedData/eventRsvps/shared/eventB/${B}`,
     `encryptedData/groups/shared`,
     `e2eeGroups/shared`,
     `e2eeAccounts/${D}`,

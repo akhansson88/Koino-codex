@@ -38,6 +38,7 @@ import { markStartupMilestone } from "@/features/startup-performance";
 import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bible-plan-progress";
 import { addPlanDays, isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus, todayDateKey } from "@/features/bible-plans";
+import { eventDraftProblem, isGroupEventKind, normalizeEventReminderMinutes, sortGroupEvents } from "@/state/events";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
@@ -50,8 +51,10 @@ import {
   CheckInDailyClaim,
   DiscussionFollow,
   BiblePlan,
+  EventRsvp,
   GroupBiblePlanAnnouncement,
   GroupBiblePlanParticipation,
+  GroupEvent,
   Group,
   Id,
   JournalEntry,
@@ -354,6 +357,7 @@ const defaultNotificationPreferences: NotificationPreferences = {
   mentions: true,
   followedDiscussions: true,
   prayerActivity: true,
+  eventReminders: true,
 };
 
 const KoinoContext = createContext<KoinoContextValue | null>(null);
@@ -425,6 +429,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
+  const [groupEvents, setGroupEvents] = useState<GroupEvent[]>([]);
+  const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>([]);
+  const [groupEventsReady, setGroupEventsReady] = useState(false);
   const bibleHighlightMutationsRef = useRef<ReturnType<typeof createBibleHighlightMutations> | null>(null);
   const bibleHighlightUserRef = useRef<string | undefined>(undefined);
   if (!bibleHighlightMutationsRef.current) bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
@@ -502,6 +509,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setJournalEntries([]);
     setSavedVerses([]);
     setBibleHighlights([]);
+    setGroupEvents([]);
+    setEventRsvps([]);
+    setGroupEventsReady(false);
     bibleHighlightMutationsRef.current?.dispose();
     bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
     setBibleHighlightColors([]);
@@ -963,6 +973,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     olderPostReactionsRef.current = [];
     setGroupBiblePlanAnnouncements([]);
     setGroupBiblePlanParticipations([]);
+    setGroupEvents([]);
+    setEventRsvps([]);
+    setGroupEventsReady(false);
 
     const markCommunityFeedReady = () => {
       if (
@@ -977,6 +990,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       ) return;
       setCommunityFeedGroupId(groupId);
       setCommunityFeedReady(true);
+    };
+    let eventsReady = false;
+    let rsvpsReady = false;
+    const markGroupEventsReady = () => {
+      if (active && eventsReady && rsvpsReady) setGroupEventsReady(true);
     };
     const handleCommunityFeedError = () => {
       if (!active) return;
@@ -996,6 +1014,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const postReactionsRef = ref(database, `postReactions/${groupId}`);
     const planAnnouncementsRef = ref(database, `groupBiblePlanAnnouncements/${groupId}`);
     const planParticipationsRef = ref(database, `groupBiblePlanParticipation/${groupId}`);
+    const eventsRef = ref(database, `groupEvents/${groupId}`);
+    const eventRsvpsRef = ref(database, `eventRsvps/${groupId}`);
 
     const unsubs = [
       FirebaseDatabase.onValue(FirebaseDatabase.ref(database, `moderationTombstones/${groupId}`), snapshot => {
@@ -1086,6 +1106,22 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           .sort((a, b) => Date.parse(b.updatedAt || b.joinedAt) - Date.parse(a.updatedAt || a.joinedAt));
         setGroupBiblePlanParticipations(participations);
       }),
+      onValue(eventsRef, (snapshot) => {
+        if (!active) return;
+        setGroupEvents(sortGroupEvents(asArray<GroupEvent>(snapshot.val())));
+        eventsReady = true;
+        markGroupEventsReady();
+      }, handleCommunityFeedError),
+      onValue(eventRsvpsRef, (snapshot) => {
+        if (!active) return;
+        const value = snapshot.val() as Record<string, Record<string, EventRsvp>> | null;
+        const rsvps = Object.entries(value ?? {}).flatMap(([eventId, users]) =>
+          Object.values(users && typeof users === "object" ? users : {}).map((rsvp) => ({ ...rsvp, eventId })),
+        );
+        setEventRsvps(rsvps.filter((rsvp) => rsvp && typeof rsvp.userId === "string"));
+        rsvpsReady = true;
+        markGroupEventsReady();
+      }, handleCommunityFeedError),
     ];
 
     return () => {
@@ -1159,6 +1195,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerNotifications,
       activityNotifications: visibleShared.activityNotifications,
       notificationPreferences,
+      groupEvents,
+      eventRsvps,
+      groupEventsReady,
       prayerReactions: visibleShared.prayerReactions,
       postReactions: visibleShared.postReactions,
       replies: visibleShared.replies,
@@ -1190,6 +1229,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     firebaseUser,
     groupMemberCounts,
     groups,
+    groupEvents,
+    eventRsvps,
+    groupEventsReady,
     journalShareGroupId,
     journalEntries,
     journalEntriesHasMore,
@@ -1272,6 +1314,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           "leaveGroup", "removeGroupMember", "transferGroupOwnership", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup",
           "submitCheckIn", "updateCheckIn", "deleteCheckIn", "createPost", "editPost", "deletePost", "markPrayerAnswered", "updatePrayerAnswer", "unmarkPrayerAnswered",
           "unpray", "togglePostReaction", "createReply", "deleteReply", "announceBiblePlan", "unannounceBiblePlan", "joinGroupBiblePlan", "setDiscussionFollow",
+          "createEvent", "updateEvent", "deleteEvent", "setEventRsvp",
         ];
         const explicitGroupId = action.type === "removeGroupMember" || action.type === "transferGroupOwnership" ? action.groupId
           : ["leaveGroup", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup"].includes(action.type) && "id" in action ? action.id : undefined;
@@ -1814,6 +1857,117 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await deleteFeedItemWithChildren(profile.currentGroupId, "post", action.id, firebaseUser.uid);
               setPosts((current) => current.filter((item) => item.id !== action.id));
               olderPostsRef.current = olderPostsRef.current.filter((item) => item.id !== action.id);
+              return;
+            }
+            case "createEvent": {
+              const groupId = profile?.currentGroupId;
+              if (!firebaseUser || !groupId || action.groupId !== groupId) return;
+              if (!isGroupEventKind(action.draft.kind) || eventDraftProblem(action.draft)) {
+                throw new Error("This event is not complete yet.");
+              }
+              const timestamp = now();
+              const event: GroupEvent = {
+                id: id("event"),
+                groupId,
+                userId: firebaseUser.uid,
+                kind: action.draft.kind,
+                title: action.draft.title.trim(),
+                ...(action.draft.description?.trim() ? { description: action.draft.description.trim() } : {}),
+                startAt: new Date(action.draft.startAt).toISOString(),
+                endAt: new Date(action.draft.endAt).toISOString(),
+                ...(action.draft.timeZone ? { timeZone: action.draft.timeZone } : {}),
+                ...(action.draft.location?.trim() ? { location: action.draft.location.trim() } : {}),
+                ...(action.draft.meetingUrl?.trim() ? { meetingUrl: action.draft.meetingUrl.trim() } : {}),
+                reminderMinutes: normalizeEventReminderMinutes(action.draft.reminderMinutes),
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              const rsvp: EventRsvp = {
+                id: firebaseUser.uid,
+                userId: firebaseUser.uid,
+                groupId,
+                eventId: event.id,
+                status: "going",
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `groupEvents/${groupId}/${event.id}`), event);
+              await set(ref(database, `eventRsvps/${groupId}/${event.id}/${firebaseUser.uid}`), rsvp);
+              setGroupEvents((current) => sortGroupEvents([...current.filter((item) => item.id !== event.id), event]));
+              setEventRsvps((current) => [
+                ...current.filter((item) => !(item.eventId === event.id && item.userId === firebaseUser.uid)),
+                rsvp,
+              ]);
+              return;
+            }
+            case "updateEvent": {
+              const groupId = profile?.currentGroupId;
+              if (!firebaseUser || !groupId || action.groupId !== groupId) return;
+              const existing = groupEvents.find((item) => item.id === action.id && item.groupId === groupId);
+              if (!existing || existing.userId !== firebaseUser.uid) return;
+              if (!isGroupEventKind(action.draft.kind) || eventDraftProblem(action.draft)) {
+                throw new Error("This event is not complete yet.");
+              }
+              const updated: GroupEvent = {
+                ...existing,
+                kind: action.draft.kind,
+                title: action.draft.title.trim(),
+                startAt: new Date(action.draft.startAt).toISOString(),
+                endAt: new Date(action.draft.endAt).toISOString(),
+                reminderMinutes: normalizeEventReminderMinutes(action.draft.reminderMinutes),
+                updatedAt: now(),
+              };
+              await update(ref(database, `groupEvents/${groupId}/${action.id}`), {
+                kind: updated.kind,
+                title: updated.title,
+                description: action.draft.description?.trim() || null,
+                startAt: updated.startAt,
+                endAt: updated.endAt,
+                timeZone: action.draft.timeZone || null,
+                location: action.draft.location?.trim() || null,
+                meetingUrl: action.draft.meetingUrl?.trim() || null,
+                reminderMinutes: updated.reminderMinutes,
+                updatedAt: updated.updatedAt,
+              });
+              setGroupEvents((current) => sortGroupEvents(current.map((item) => item.id === action.id ? updated : item)));
+              return;
+            }
+            case "deleteEvent": {
+              const groupId = profile?.currentGroupId;
+              if (!firebaseUser || !groupId || action.groupId !== groupId) return;
+              const existing = groupEvents.find((item) => item.id === action.id && item.groupId === groupId);
+              const ownerId = groups.find((item) => item.id === groupId)?.ownerId;
+              if (!existing || (existing.userId !== firebaseUser.uid && ownerId !== firebaseUser.uid)) return;
+              await update(ref(database), {
+                [`groupEvents/${groupId}/${action.id}`]: null,
+                [`eventRsvps/${groupId}/${action.id}/${firebaseUser.uid}`]: null,
+              });
+              setGroupEvents((current) => current.filter((item) => item.id !== action.id));
+              setEventRsvps((current) => current.filter((item) => item.eventId !== action.id));
+              return;
+            }
+            case "setEventRsvp": {
+              const groupId = profile?.currentGroupId;
+              if (!firebaseUser || !groupId || action.groupId !== groupId) return;
+              if (!groupEvents.some((item) => item.id === action.eventId && item.groupId === groupId)) return;
+              if (!["going", "maybe", "declined"].includes(action.status)) return;
+              const existing = eventRsvps.find((item) => item.eventId === action.eventId && item.userId === firebaseUser.uid);
+              if (existing?.status === action.status) return;
+              const timestamp = now();
+              const rsvp: EventRsvp = {
+                id: firebaseUser.uid,
+                userId: firebaseUser.uid,
+                groupId,
+                eventId: action.eventId,
+                status: action.status,
+                createdAt: existing?.createdAt ?? timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `eventRsvps/${groupId}/${action.eventId}/${firebaseUser.uid}`), rsvp);
+              setEventRsvps((current) => [
+                ...current.filter((item) => !(item.eventId === action.eventId && item.userId === firebaseUser.uid)),
+                rsvp,
+              ]);
               return;
             }
             case "finishPrayer": {
@@ -2775,6 +2929,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "markPrayerAnswered" ||
           action.type === "updatePrayerAnswer" ||
           action.type === "unmarkPrayerAnswered" ||
+          action.type === "createEvent" ||
+          action.type === "updateEvent" ||
+          action.type === "deleteEvent" ||
+          action.type === "setEventRsvp" ||
           (action.type === "finishPrayer" && action.throwOnError)
         ) {
           throw error;
@@ -2798,6 +2956,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       groupBiblePlanAnnouncements,
       groupBiblePlanParticipantIds,
       groupBiblePlanParticipations,
+      groupEvents,
+      eventRsvps,
       groups,
       journalEntries,
       journalEntriesHasMore,

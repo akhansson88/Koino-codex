@@ -33,6 +33,7 @@ for (const [collection, p] of Object.entries(policies)) {
   const vars = collection === "groups" ? ["$groupId"] : collection === "profiles" ? ["$uid"] :
     collection === "groupMembers" ? ["$groupId", "$uid"] : collection === "userGroups" ? ["$uid", "$groupId"] :
     collection === "groupBiblePlanParticipation" ? ["$groupId", "$announcementId", "$uid"] :
+    collection === "eventRsvps" ? ["$groupId", "$eventId", "$uid"] :
     collection === "discussionFollowers" ? ["$groupId", "$targetType", "$targetId", "$uid"] :
     collection === "userDiscussionFollows" ? ["$uid", "$groupId", "$id"] :
     collection === "checkInDailyClaims" ? ["$uid", "$groupId", "$dayKey"] :
@@ -53,6 +54,8 @@ for (const [collection, p] of Object.entries(policies)) {
   if (collection === "discussionFollowers") write = `${writableMember} && auth.uid == $uid && (!newData.exists() || newData.child('userId').val() == auth.uid)`;
   if (collection === "groupBiblePlanAnnouncements") write = owner;
   if (collection === "groupBiblePlanParticipation") write = `${writableMember} && ((!newData.exists() && data.child('userId').val() == auth.uid) || (newData.child('userId').val() == auth.uid && (!data.exists() || data.child('userId').val() == auth.uid || root.child('encryptedData').child('groupBiblePlanParticipantIds').child(auth.uid).child($announcementId).val() == $uid)))`;
+  if (collection === "eventRsvps") write = `${writableMember} && auth.uid == $uid && (!newData.exists() || (newData.child('userId').val() == auth.uid && newData.child('eventId').val() == $eventId && newData.child('groupId').val() == $groupId && root.child('encryptedData').child('groupEvents').child($groupId).child($eventId).exists()))`;
+  if (collection === "groupEvents") write = `${writableMember} && ((!newData.exists() && (data.child('userId').val() == auth.uid || root.child('e2eeGroups').child($groupId).child('ownerId').val() == auth.uid)) || (newData.exists() && newData.child('id').val() == $id && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && (!data.exists() || (data.child('userId').val() == auth.uid && data.child('groupId').val() == $groupId))))`;
   // Cross-author cascade removal in the same update as the author's parent.
   const newRoot = "newData.parent().parent().parent().parent()";
   const removedParent = (type, targetId) => {
@@ -95,11 +98,11 @@ for (const [collection, p] of Object.entries(policies)) {
     if (index === 0 && vars[index] !== "$code") node[".read"] = collection === "userGroups" ? own : read;
   }
   node[".read"] = read; node[".write"] = write;
-  if (p.depth >= 3 && !["checkInDailyClaims", "discussionFollowers", "groupBiblePlanParticipantIds"].includes(collection)) {
+  if (p.depth >= 3 && !["checkInDailyClaims", "discussionFollowers", "groupBiblePlanParticipantIds", "eventRsvps"].includes(collection)) {
     let parent = target;
     for (const variable of vars.slice(0, -1)) parent = parent[variable];
     const indexes = ["createdAt", "targetId", "readAt"];
-    if (["posts", "checkIns", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements"].includes(collection)) indexes.push("userId");
+    if (["posts", "checkIns", "replies", "prayerReactions", "postReactions", "groupBiblePlanAnnouncements", "groupEvents"].includes(collection)) indexes.push("userId");
     if (collection === "activityNotifications") indexes.push("actorUserId");
     if (collection === "prayerNotifications") indexes.push("userId");
     parent[".indexOn"] = indexes;
@@ -113,6 +116,9 @@ for (const [collection, p] of Object.entries(policies)) {
   } else {
     for (const field of p.metadata) node[field] = { ".validate": field === "mentionUserIds" ? "newData.hasChildren()" : "newData.isString() || newData.isNumber() || newData.isBoolean()" };
     node.$field = plaintext;
+  }
+  if (["groupMembers", "userGroups"].includes(collection)) {
+    node.role = { ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'leader' || newData.val() == 'member')" };
   }
   if (collection === "activityNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
   store[collection] = target;

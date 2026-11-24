@@ -6,9 +6,11 @@ import { ActivityIndicator, AppState, Pressable, Text, View } from "react-native
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
+import { EventCard } from "@/features/events/event-card";
 import { HomeScripture } from "@/features/home-scripture";
 import { markStartupMilestone } from "@/features/startup-performance";
 import { CheckInSubmissionError, checkInForDay } from "@/state/check-ins";
+import { eventRsvpFor, nextUpcomingEvent } from "@/state/events";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { id, localDayKey } from "@/state/store/helpers";
@@ -58,9 +60,9 @@ function homeGreetingPeriodAt(date: Date): HomeGreetingPeriod {
 
 const homeFields = [
   "authError", "biblePlans", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError",
-  "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "groups",
-  "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "profileReady",
-  "userGroupsReady", "users",
+  "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps",
+  "groupEvents", "groups", "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady",
+  "profileReady", "userGroupsReady", "users",
 ] as const;
 
 export function HomeScreen() {
@@ -150,6 +152,10 @@ function HomeRhythm({ state, group, activeGroupId }: {
   const openPrayer = useMemo(
     () => openPrayerRequests.find((item) => item.id === homePrayerQueueIds[0]),
     [homePrayerQueueIds, openPrayerRequests],
+  );
+  const upcomingEvent = useMemo(
+    () => (activeGroupId ? nextUpcomingEvent(state.groupEvents) : undefined),
+    [activeGroupId, state.groupEvents],
   );
   const greetingName = state.currentUserId ? firstName(userById.get(state.currentUserId)) : undefined;
   const greetingKey = homeGreetingKeys[homeGreetingPeriodAt(homeDate)][greetingName ? "named" : "default"];
@@ -345,6 +351,18 @@ function HomeRhythm({ state, group, activeGroupId }: {
               ) : null}
             </View>
           </Card>
+        ) : null}
+
+        {upcomingEvent ? (
+          <View style={{ gap: 6 }}>
+            <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("home.events.title")}</Text>
+            <EventCard
+              compact
+              event={upcomingEvent}
+              onPress={() => router.push({ pathname: "/event-details", params: { eventId: upcomingEvent.id } } as never)}
+              rsvpStatus={eventRsvpFor(state.eventRsvps, upcomingEvent.id, state.currentUserId)?.status}
+            />
+          </View>
         ) : null}
 
         {showMigration && group ? (

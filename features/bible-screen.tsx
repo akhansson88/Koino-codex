@@ -8,6 +8,7 @@ import AsyncStorage from "@/state/encryption/local-storage";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   AppState,
   BackHandler,
@@ -114,6 +115,7 @@ import { chapterSelectionHaptic } from "@/features/bible-reader/chapter-haptics"
 import { useReducedMotion } from "@/ui/use-reduced-motion";
 import { BibleBottomReadingControls } from "@/features/bible-reader/reading-controls";
 import { SelectedVerseSuggestionBar, VerseActionSheet } from "@/features/bible-reader/verse-actions";
+import { copyBibleVerses } from "@/features/bible-reader/copy";
 import { ReaderToastMessage } from "@/features/bible-reader/toast";
 import { HighlightColorManagerSheet } from "@/features/bible-reader/highlight-colors";
 import { ReadingSettingsSheet } from "@/features/bible-reader/reading-settings";
@@ -1239,6 +1241,7 @@ export function BibleScreen() {
     [bibleVersionId],
   );
 
+
   const handleSaveSelectedVerses = useCallback(async () => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
 
@@ -1363,6 +1366,32 @@ export function BibleScreen() {
     [jumpToPosition],
   );
 
+  const showCopyFeedback = useCallback((reference: string, copied: boolean) => {
+    const formattedReference = reference.replace(/(\d)-(\d)/g, "$1–$2");
+    const message = copied ? t("bible.copy.success", { reference: formattedReference }) : t("bible.copy.failed");
+    setReaderToast({ message, tone: copied ? "success" : "error" });
+    AccessibilityInfo.announceForAccessibility(message);
+  }, [t]);
+
+  const handleCopyVerse = useCallback((verse: BibleVerse) => {
+    const reference = displayBibleReference(verse.reference, bookLanguage);
+    void copyBibleVerses({
+      verses: [verse],
+      reference: verse.reference,
+      translation: verse.translation ?? bibleVersion.translation,
+      language: bookLanguage,
+    }).then((copied) => showCopyFeedback(reference, copied));
+  }, [bibleVersion.translation, bookLanguage, showCopyFeedback]);
+
+  const handleCopyVerseNumber = useCallback((verseNumber: number) => {
+    const verse = verseForPosition({
+      book: positionRef.current.book,
+      chapter: positionRef.current.chapter,
+      verse: verseNumber,
+    });
+    if (verse) handleCopyVerse(verse);
+  }, [handleCopyVerse, verseForPosition]);
+
   const handleVerseAction = useCallback((action: VerseQuickAction) => {
     const selectedVerse = verseForPosition(selectedVersePosition);
     if (!selectedVerse) {
@@ -1370,6 +1399,10 @@ export function BibleScreen() {
       return;
     }
     setSelectedVersePosition(undefined);
+    if (action === "copy") {
+      handleCopyVerse(selectedVerse);
+      return;
+    }
     if (action === "save") {
       const savedVerse = state.savedVerses.find((verse) => savedVerseIdentity(verse) === savedVerseIdentity(selectedVerse));
       if (savedVerse) {
@@ -1390,7 +1423,34 @@ export function BibleScreen() {
     }
 
     setPendingVerseComposerAction({ action, verse: selectedVerse });
-  }, [dispatch, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
+  }, [dispatch, handleCopyVerse, performHighlightMutation, selectedVersePosition, state.bibleHighlightColors, state.savedVerses, t, verseForPosition]);
+
+  const handleCopySelectedVerses = useCallback(() => {
+    const wanted = new Set(selectedVerseNumbers);
+    const verses = chapterVerses
+      .filter((verse) => wanted.has(verse.verse))
+      .map((verse) => ({ endVerse: verse.verse, startVerse: verse.verse, text: verse.text }));
+    const reference = displayBibleReference(selectedVerseReference, bookLanguage);
+    void copyBibleVerses({
+      verses,
+      reference: selectedVerseReference,
+      translation: bibleVersion.translation,
+      language: bookLanguage,
+    }).then((copied) => {
+      showCopyFeedback(reference, copied);
+      if (copied) setSelectedVerseNumbers([]);
+    });
+  }, [bibleVersion.translation, bookLanguage, chapterVerses, selectedVerseNumbers, selectedVerseReference, showCopyFeedback]);
+
+  const handleCopySavedVerse = useCallback((verse: SavedVerse) => {
+    const reference = displayBibleReference(verse.reference, bookLanguage);
+    void copyBibleVerses({
+      verses: [verse],
+      reference: verse.reference,
+      translation: verse.translation ?? bibleVersion.translation,
+      language: bookLanguage,
+    }).then((copied) => showCopyFeedback(reference, copied));
+  }, [bibleVersion.translation, bookLanguage, showCopyFeedback]);
 
   const handleVerseActionSheetClosed = useCallback(() => {
     if (!pendingVerseComposerAction) return;
@@ -1649,9 +1709,11 @@ export function BibleScreen() {
             flowingParagraphText={flowingParagraphText}
             spokenVerse={active && audioMatchesChapter ? spokenVerse : undefined}
             chapterHeading={page.chapter.heading}
+            copyLabel={t("bible.actions.copy")}
             chapterHighlightByVerse={pageHighlights[page.key]}
             highlightedPosition={active ? highlightedPosition : undefined}
             onFootnotePress={active ? handleFootnotePress : ignorePreviewEvent}
+            onVerseCopy={active ? handleCopyVerseNumber : ignorePreviewEvent}
             onVersePress={active ? handleVersePress : ignorePreviewEvent}
             onVersePressIn={active ? handleVersePressIn : ignorePreviewEvent}
             onVerseLayout={active ? handleVerseLayout : ignorePreviewEvent}
@@ -1711,6 +1773,7 @@ export function BibleScreen() {
           highlightColors={state.bibleHighlightColors}
           maxWidth={contentWidth}
           onClear={() => setSelectedVerseNumbers([])}
+          onCopy={handleCopySelectedVerses}
           onDeleteHighlight={handleDeleteSelectedHighlights}
           onHeightChange={setSelectionControlsHeight}
           onHighlight={handleHighlightWithPaletteColor}
@@ -1812,6 +1875,7 @@ export function BibleScreen() {
           setPickerVisible(false);
           router.push(`/me/${entryId}` as never);
         }}
+        onCopySavedVerse={handleCopySavedVerse}
         onRemoveSavedVerse={async (id) => {
           await dispatch({ type: "removeSavedVerse", id });
           setReaderToast({ message: t("bible.actions.unsavedToast"), tone: "success" });

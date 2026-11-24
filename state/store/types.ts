@@ -1,5 +1,6 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
-import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, EntryKind, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { EventDraft } from "@/state/events";
+import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, EntryKind, EventRsvpStatus, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -96,6 +97,10 @@ export type Action =
   | { type: "loadOlderCommunityContent" }
   | { type: "loadOlderJournalEntries" }
   | { type: "loadOlderPrayerNotifications" }
+  | { type: "createEvent"; groupId: Id; draft: EventDraft }
+  | { type: "updateEvent"; groupId: Id; id: Id; draft: EventDraft }
+  | { type: "deleteEvent"; groupId: Id; id: Id }
+  | { type: "setEventRsvp"; groupId: Id; eventId: Id; status: EventRsvpStatus }
   | { type: "markActivityNotificationRead"; id: Id }
   | { type: "markActivityDiscussionRead"; groupId: Id; targetType: "post" | "check_in"; targetId: Id }
   | { type: "markAllActivityNotificationsRead" }
