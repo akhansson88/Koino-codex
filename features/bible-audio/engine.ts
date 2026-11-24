@@ -2,7 +2,7 @@ import TrackPlayer, { AppKilledPlaybackBehavior, Capability, Event, RepeatMode, 
 import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@/state/encryption/local-storage";
 import { nextBibleChapter, previousBibleChapter } from "../bible-canon";
-import { AUDIO_TRANSLATION, fetchAudioJson, locateChapterTime, parseChapter, type AudioCatalog, type AudioChapter, type AudioChapterEntry } from "./catalog";
+import { AUDIO_TRANSLATION, fetchAudioJson, locateChapterTime, parseChapter, type AudioCatalog, type AudioChapter, type AudioChapterEntry, type AudioVerse } from "./catalog";
 import { isTopicDefinition, isTopicLoop, isTopicTrackMetadata, normalizeTopicPause, TOPIC_PAUSE_KEY, TOPIC_PREPARATION_TIMEOUT_MS, topicDefinitionKey, type TopicDefinition, type TopicItem, type TopicLoop, type TopicOptions, type TopicSession, type TopicTrackMetadata } from "./topic-playback";
 import { ensureTopicSilence } from "./topic-silence";
 
@@ -209,39 +209,73 @@ function withDeadline<T>(work: Promise<T>, milliseconds: number, onTimeout: () =
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
-// Four downloads at a time; playback starts only after every requested verse is local.
-async function downloadChapter(entry: AudioChapterEntry, token: number, passage?: AudioPassage): Promise<VerseTrack[]> {
+function audioExtension(entry: AudioChapterEntry) {
+  return entry.container === "m4a" ? "m4a" : "mp3";
+}
+function chapterDirectory(entry: AudioChapterEntry) {
+  return `${FileSystem.cacheDirectory}bible-audio/${entry.bookId}-${entry.chapter}-${entry.revision}/`;
+}
+function verseUri(entry: AudioChapterEntry, verse: AudioVerse) {
+  return `${chapterDirectory(entry)}${verse.verse}-${verse.sha256}.${audioExtension(entry)}`;
+}
+
+// Stream every verse immediately and use a local file only when this chapter was
+// downloaded before. The native player buffers upcoming tracks on its own, so a
+// chapter no longer has to be fully downloaded before the first sound.
+async function chapterTracks(entry: AudioChapterEntry, token: number, passage?: AudioPassage): Promise<VerseTrack[]> {
   const chapter = await getChapter(entry);
   const indices = passageIndices(chapter, passage);
   if (passage && indices.length !== passage.endVerse - passage.startVerse + 1) throw new UnavailablePassageError("Missing passage verses");
-  const directory = `${FileSystem.cacheDirectory}bible-audio/${entry.bookId}-${entry.chapter}-${entry.revision}/`;
-  await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
   const tracks: VerseTrack[] = new Array(indices.length);
-  let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(4, tracks.length) }, async () => {
-    while (cursor < indices.length) {
-      if (generation !== token) throw new Error("Cancelled chapter download");
-      const queueIndex = cursor++;
-      const index = indices[queueIndex];
-      const verse = chapter.verses[index];
-      const uri = `${directory}${verse.verse}-${verse.sha256}.mp3`;
+  await Promise.all(indices.map(async (index, queueIndex) => {
+    const verse = chapter.verses[index];
+    const uri = verseUri(entry, verse);
+    let cached = false;
+    try {
       const existing = await FileSystem.getInfoAsync(uri);
-      if (!existing.exists || !existing.size) {
-        const temporary = `${uri}.${token}.part`;
-        try {
-          const result = await FileSystem.downloadAsync(verse.url, temporary);
-          const info = await FileSystem.getInfoAsync(temporary);
-          if (generation !== token || result.status !== 200 || !info.exists || !info.size) throw new Error("Incomplete or cancelled verse download");
-          await FileSystem.moveAsync({ from: temporary, to: uri });
-        } catch (error) {
-          await FileSystem.deleteAsync(temporary, { idempotent: true });
-          throw error;
-        }
-      }
-      tracks[queueIndex] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: uri, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: "Reformationsbibeln", album: "Koino", duration: verse.duration, entry, verseIndex: index, passage };
-    }
+      cached = Boolean(existing.exists && existing.size);
+    } catch { /* A missing cache entry simply means the verse is streamed. */ }
+    if (generation !== token) throw new Error("Cancelled chapter preparation");
+    tracks[queueIndex] = { id: `${entry.bookId}:${entry.chapter}:${entry.revision}:${index}`, url: cached ? uri : verse.url, title: `${chapter.bookName} ${chapter.chapter}:${verse.verse}`, artist: "Reformationsbibeln", album: "Koino", duration: verse.duration, entry, verseIndex: index, passage };
   }));
   return tracks;
+}
+
+// Cache the chapter that is queued behind the one being streamed. It is not
+// played yet, so every byte is downloaded once and the next chapter is ready
+// even when the connection drops.
+async function warmChapter(entry: AudioChapterEntry, token: number, passage?: AudioPassage) {
+  try {
+    const chapter = await getChapter(entry);
+    const indices = passageIndices(chapter, passage);
+    if (!indices.length) return;
+    const directory = chapterDirectory(entry);
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, indices.length) }, async () => {
+      while (cursor < indices.length) {
+        if (generation !== token) return;
+        const index = indices[cursor++];
+        const verse = chapter.verses[index];
+        const uri = verseUri(entry, verse);
+        try {
+          const existing = await FileSystem.getInfoAsync(uri);
+          if (existing.exists && existing.size) continue;
+          const temporary = `${uri}.${token}.part`;
+          try {
+            const result = await FileSystem.downloadAsync(verse.url, temporary);
+            const info = await FileSystem.getInfoAsync(temporary);
+            if (generation !== token || result.status !== 200 || !info.exists || !info.size) throw new Error("Incomplete verse download");
+            await FileSystem.moveAsync({ from: temporary, to: uri });
+          } catch (error) {
+            await FileSystem.deleteAsync(temporary, { idempotent: true });
+            if (generation !== token) return;
+            // Keep streaming: the queued track already points at the remote file.
+          }
+        } catch { /* Cache warming never interrupts playback. */ }
+      }
+    }));
+  } catch { /* The next chapter stays streamable if its manifest cannot be read. */ }
 }
 
 async function prepareNext() {
@@ -253,10 +287,11 @@ async function prepareNext() {
   try {
     const queue = await TrackPlayer.getQueue() as VerseTrack[];
     if (queue.some((track) => track.entry?.manifestUrl === entry.manifestUrl)) return;
-    const tracks = await downloadChapter(entry, token);
+    const tracks = await chapterTracks(entry, token);
     await serial(async () => {
       if (token === generation && !pendingTopic && !snapshot.session?.passage && !snapshot.session?.topic && snapshot.continuous && snapshot.sleep !== "chapter" && catalog?.chapters[`${entry.bookId}:${entry.chapter}`]?.manifestUrl === entry.manifestUrl) await TrackPlayer.add(tracks);
     });
+    if (snapshot.continuous && !snapshot.session?.passage && !snapshot.session?.topic && (snapshot.sleep as number | "chapter") !== "chapter") void warmChapter(entry, token);
   } catch { /* The current chapter remains fully playable offline. */ }
   finally { if (appending === token) appending = undefined; }
 }
@@ -332,7 +367,7 @@ export async function start(entry: AudioChapterEntry, index?: number, offset = 0
     const requestedIndex = startVerse === undefined ? index : (await getChapter(entry)).verses.findIndex(verse => verse.verse === startVerse);
     if (token !== generation) return;
     if (requestedIndex === -1) throw new UnavailablePassageError("Verse unavailable");
-    const tracks = await downloadChapter(entry, token, request.passage);
+    const tracks = await chapterTracks(entry, token, request.passage);
     await serial(async () => {
       if (token !== generation) return;
       await TrackPlayer.reset();
@@ -558,7 +593,7 @@ async function resolveAllTopicItems(runtime: TopicRuntime, token: number) {
 function recordingKey(resolved: ResolvedTopicItem, index: number) { return resolved.chapter.verses[index].url; }
 function recordingUri(resolved: ResolvedTopicItem, index: number) {
   const verse = resolved.chapter.verses[index];
-  return `${FileSystem.cacheDirectory}bible-audio/${resolved.entry.bookId}-${resolved.entry.chapter}-${resolved.entry.revision}/${verse.verse}-${verse.sha256}.mp3`;
+  return verseUri(resolved.entry, verse);
 }
 async function rememberTopicCache(runtime: TopicRuntime, resolved: ResolvedTopicItem, index: number) {
   const uri = recordingUri(resolved, index);
