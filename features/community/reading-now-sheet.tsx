@@ -7,6 +7,7 @@ import { verseCountForChapter, type BiblePosition } from "@/features/bible-canon
 import type { BibleVersionId } from "@/features/bible-kjv";
 import type { CommunityMember } from "@/features/community/types";
 import type { ReadingEntry, ReadingStatus } from "@/state/reading-model";
+import { compareReadingEntries } from "@/state/reading-model";
 import type { ReadingShareScope } from "@/state/reading-share";
 import { AppSheet } from "@/ui/app-sheet";
 import { Avatar } from "@/ui/app-components";
@@ -60,7 +61,9 @@ export function ReadingNowSheet({
     ? entries.filter((entry) => entry.userId !== currentUserId)
     : entries;
 
-  const live = visibleEntries.filter((entry) => entry.status === "live");
+  const live = visibleEntries
+    .filter((entry) => entry.status === "live")
+    .sort((left, right) => compareReadingEntries(left, right, currentPosition));
   const sameChapter = currentPosition
     ? live.filter((entry) => entry.book === currentPosition.book && entry.chapter === currentPosition.chapter)
     : [];
