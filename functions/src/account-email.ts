@@ -16,6 +16,7 @@ const SMTP_PORT = Number(process.env.SMTP_PORT ?? "465");
 const SMTP_USER = process.env.SMTP_USER ?? "no-reply@koinolabs.com";
 const FROM = "KOINO <no-reply@koinolabs.com>";
 const CONTINUE_URL = process.env.RESET_CONTINUE_URL ?? "https://koino-codex.firebaseapp.com/reset-password";
+const RESET_LINK_BASE = process.env.RESET_LINK_BASE ?? "https://koinolabs.com/reset/";
 const THROTTLE_MS = 60_000;
 
 const text = `Hi,
@@ -47,12 +48,18 @@ export const koinoSendPasswordReset = onCall(
     if (now - previous < THROTTLE_MS) return { sent: true };
     await throttle.set(now);
 
-    let link: string;
+    let firebaseLink: string;
     try {
-      link = await getAuth(adminApp).generatePasswordResetLink(raw, { url: CONTINUE_URL, handleCodeInApp: true });
+      firebaseLink = await getAuth(adminApp).generatePasswordResetLink(raw, { url: CONTINUE_URL, handleCodeInApp: true });
     } catch {
       return { sent: true };
     }
+
+    // The emailed link goes to our own page, which hands the one-time code to
+    // the app's reset screen. Firebase's hosted action page is never shown.
+    const code = new URL(firebaseLink).searchParams.get("oobCode");
+    if (!code) return { sent: true };
+    const link = `${RESET_LINK_BASE}?oobCode=${encodeURIComponent(code)}`;
 
     const transport = nodemailer.createTransport({
       host: SMTP_HOST,
