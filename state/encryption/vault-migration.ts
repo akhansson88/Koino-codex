@@ -144,10 +144,14 @@ async function migrateCollection(vault: Vault, collection: string, scope: string
         if (personal) {
           // Keep unreadable content out of the app's lists, under the owner.
           // A top-level record (a profile or preferences) is left in place.
+          // Moving a record aside is best effort: a rule that denies the
+          // original write denies this too, and that must not abort the rest.
           if (depth >= 3) {
-            const groupNode = Math.max(2, depth - 1);
-            await Raw.update(Raw.ref(database, physical(pathParts.slice(0, groupNode).join("/"))), { [physicalId]: null });
-            await Raw.set(Raw.ref(database, physical(`legacyUndecryptable/${vault.uid}/${collection}/${physicalId}`)), { reason, record });
+            try {
+              const groupNode = Math.max(2, depth - 1);
+              await Raw.update(Raw.ref(database, physical(pathParts.slice(0, groupNode).join("/"))), { [physicalId]: null });
+              await Raw.set(Raw.ref(database, physical(`legacyUndecryptable/${vault.uid}/${collection}/${physicalId}`)), { reason, record });
+            } catch { /* the record stays where it is; the vault keeps the key */ }
           }
           report.skipped.push(pathParts.join("/"));
         } else {
@@ -222,10 +226,15 @@ export async function migrateVaultToPlaintext(progress: (message: string) => voi
     }
   }
   await storage.setItem(skippedPath(uid), JSON.stringify(report.skipped));
-  await import("./session").then(({ encryptedOperation }) => encryptedOperation("discardVault")).catch(() => undefined);
-  for (const key of [bundlePath(uid), devicePath(uid), `e2ee.draft.${uid}`, `e2ee.migration-complete.user.${uid}`]) {
-    await storage.removeItem(key);
+  if (!report.skipped.length) {
+    // Every record converted, so the retired keys have nothing left to open.
+    await import("./session").then(({ encryptedOperation }) => encryptedOperation("discardVault")).catch(() => undefined);
+    for (const key of [bundlePath(uid), devicePath(uid), `e2ee.draft.${uid}`, `e2ee.migration-complete.user.${uid}`]) {
+      await storage.removeItem(key);
+    }
   }
+  // Skipped records keep their keys on this device: the server still holds the
+  // encrypted copy, and a denied write must not become a permanent loss.
   await storage.setItem(completePath(uid), "true");
   if (report.skipped.length) console.warn("[plaintext-migration] skipped records", report.skipped);
   return report;

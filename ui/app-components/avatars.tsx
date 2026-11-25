@@ -8,7 +8,9 @@ import { presenceStatusColor } from "@/ui/presence-copy";
 import { colors, typography } from "@/ui/theme";
 
 export function initials(name?: string) {
-  return (name || "K")
+  // Legacy records can arrive as an encrypted object instead of text.
+  const text = typeof name === "string" ? name : "";
+  return (text || "K")
     .trim()
     .split(/\s+/)
     .slice(0, 2)
