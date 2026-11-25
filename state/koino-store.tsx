@@ -1,6 +1,7 @@
 import { hydrateNotification } from "@/state/encryption/notifications";
 import AsyncStorage from "@/state/encryption/local-storage";
 import * as FirebaseAuth from "@firebase/auth";
+import { httpsCallable } from "firebase/functions";
 import type { User as FirebaseUser } from "@firebase/auth";
 import * as FirebaseDatabase from "firebase/database";
 import {
@@ -72,7 +73,7 @@ import {
   User,
 } from "@/state/types";
 import { type CommunityPageAvailability, type CommunitySubmissionOutcome, type CommunitySubmissionRequest, type KoinoContextValue, type Profile, type Action } from "@/state/store/types";
-import { auth, database, developmentMode } from "@/state/store/firebase";
+import { auth, database, developmentMode, functions } from "@/state/store/firebase";
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import { announceJoinRequestChange } from "@/state/community-join-requests";
 import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
@@ -1417,10 +1418,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
 
-              await FirebaseAuth.sendPasswordResetEmail(auth, resetEmail, {
-                url: passwordResetUrl,
-                handleCodeInApp: true,
-              });
+              await httpsCallable(functions, "koinoSendPasswordReset")({ email: resetEmail });
               return;
             }
             case "sendEmailVerification": {
