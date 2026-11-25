@@ -259,7 +259,7 @@ export function BibleScreen() {
     [otherReadingEntries],
   );
   const mirror = useReadingMirror({
-    enabled: Boolean(mirrorSession),
+    enabled: Boolean(mirrorSession && mirrorSession.scope === "verse"),
     followerUserId: state.currentUserId,
     groupId: state.currentGroupId,
     targetUserId: mirrorSession?.userId,
@@ -271,7 +271,8 @@ export function BibleScreen() {
   const mirrorStatus = useMemo<MirrorBarStatus>(() => {
     if (!mirrorSession) return "ended";
     if (mirrorPaused) return "paused";
-    if (mirrorSession.scope === "chapter") {
+    const scope = mirrorEntry?.scope ?? mirrorSession.scope;
+    if (scope === "chapter") {
       if (mirrorEntry) return "live";
       return mirror.status === "connecting" ? "connecting" : "ended";
     }
@@ -1131,7 +1132,7 @@ export function BibleScreen() {
   // readers can use different fonts and devices and still see the same spot.
   useEffect(() => {
     if (!mirrorSession || mirrorPaused) return undefined;
-    if (mirrorSession.scope === "chapter") {
+    if ((mirrorEntry?.scope ?? mirrorSession.scope) === "chapter") {
       if (!mirrorEntry) return undefined;
       if (positionRef.current.book === mirrorEntry.book && positionRef.current.chapter === mirrorEntry.chapter) return undefined;
       jumpToPosition({ book: mirrorEntry.book, chapter: mirrorEntry.chapter, verse: 1 }, { fromMirror: true, scroll: false });

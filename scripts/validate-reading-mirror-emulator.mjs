@@ -156,6 +156,14 @@ try {
   const stamped = (await get(ref(follower.database, livePath))).val();
   assert.equal(typeof stamped.at, "number", "The server timestamp resolves to a number");
 
+  // Turning verse sharing off must remove the stream immediately, not leave it
+  // behind until the daily sweep.
+  await set(ref(sharer.database, `groupReading/group1/${sharer.uid}`), reading({ scope: "chapter", verse: null }));
+  await remove(ref(sharer.database, livePath));
+  assert.equal((await get(ref(sharer.database, livePath))).exists(), false, "A stopped share can remove its stream");
+  await assert.rejects(() => set(ref(sharer.database, livePath), live()), denied, "A chapter-only share cannot republish a stream");
+  await set(ref(sharer.database, `groupReading/group1/${sharer.uid}`), reading());
+
   // A frozen community stops new mirror writes but lets the sharer stop.
   await getAdminDatabase(admin).ref("e2eeGroupLocks/group1").set(true);
   await assert.rejects(() => set(ref(sharer.database, livePath), live({ verse: 14 })), denied, "A locked community rejects new streams");
