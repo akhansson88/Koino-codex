@@ -35,6 +35,7 @@ export function ReadingNowSheet({
   currentPosition,
   currentUserId,
   entries,
+  followers = 0,
   members,
   onClose,
   onFollow,
@@ -48,6 +49,7 @@ export function ReadingNowSheet({
   currentPosition?: BiblePosition;
   currentUserId?: string;
   entries: ReadingEntry[];
+  followers?: number;
   members: CommunityMember[];
   onClose: () => void;
   onFollow?: (entry: ReadingEntry) => void;
@@ -172,6 +174,14 @@ export function ReadingNowSheet({
         </View>
         <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17 }}>{t(hintKey(scope))}</Text>
         <Text style={{ color: colors.muted, fontSize: 11, lineHeight: 16, opacity: 0.9 }}>{t("reading.share.privacy")}</Text>
+        {followers > 0 ? (
+          <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+            <Feather name="eye" size={13} color={colors.ink} />
+            <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "600" }}>
+              {t("reading.mirror.followers", { count: followers })}
+            </Text>
+          </View>
+        ) : null}
         {bubbleHidden && onShowBubble ? (
           <Pressable
             accessibilityRole="button"

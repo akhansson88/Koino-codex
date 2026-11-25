@@ -31,6 +31,8 @@
     "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs && node scripts/validate-bible-plan-progress.mjs && node scripts/validate-bible-plan-library.mjs && node scripts/validate-me-bible-plans.mjs",
     "validate:events": "node scripts/validate-events.mjs",
     "validate:reading": "node scripts/validate-reading.mjs",
+    "validate:reading-mirror": "node scripts/validate-reading-mirror.mjs",
+    "validate:reading-mirror-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-events.json --only auth,database --project demo-koino \"node scripts/validate-reading-mirror-emulator.mjs\"",
     "validate:reading-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-events.json --only auth,database --project demo-koino \"node scripts/validate-reading-emulator.mjs\"",
     "validate:events-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-events.json --only auth,database --project demo-koino \"node scripts/validate-events-emulator.mjs\"",
     "validate:bible-search": "node scripts/validate-bible-search.mjs",

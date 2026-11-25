@@ -8,33 +8,71 @@ import { adminApp } from "./firebase-admin";
 // anything older than the live window, and this sweep deletes the leftovers so
 // no position outlives the day it was written.
 const retentionMs = 24 * 60 * 60 * 1000;
+// A mirror stream is refreshed every few seconds while watched; a follower
+// declaration is refreshed every five minutes. Anything older than these
+// windows is a leftover from a killed app.
+const liveRetentionMs = 10 * 60 * 1000;
+const followerRetentionMs = 60 * 60 * 1000;
 
 type StoredReading = {
   at?: unknown;
 };
 
+type StoredMember = Record<string, StoredReading | undefined>;
+
+function isStale(record: StoredReading | undefined, now: number, windowMs: number) {
+  const at = record?.at;
+  return typeof at !== "number" || !Number.isFinite(at) || now - at > windowMs;
+}
+
 export const pruneGroupReading = onSchedule(
   { schedule: "10 4 * * *", region: "europe-west1", timeZone: "Europe/Stockholm" },
   async () => {
     const database = getDatabase(adminApp);
-    const snapshot = await database.ref("groupReading").get();
-    if (!snapshot.exists()) return;
+    const [readingSnapshot, followersSnapshot, liveSnapshot] = await Promise.all([
+      database.ref("groupReading").get(),
+      database.ref("groupReadingFollowers").get(),
+      database.ref("groupReadingLive").get(),
+    ]);
 
     const now = Date.now();
     const removals: Record<string, null> = {};
-    const groups = snapshot.val() as Record<string, Record<string, StoredReading>>;
 
-    for (const [groupId, members] of Object.entries(groups ?? {})) {
-      for (const [userId, record] of Object.entries(members ?? {})) {
-        const at = record?.at;
-        if (typeof at === "number" && Number.isFinite(at) && now - at <= retentionMs) continue;
-        removals[`groupReading/${groupId}/${userId}`] = null;
+    if (readingSnapshot.exists()) {
+      const groups = readingSnapshot.val() as Record<string, StoredMember>;
+      for (const [groupId, members] of Object.entries(groups ?? {})) {
+        for (const [userId, record] of Object.entries(members ?? {})) {
+          if (!isStale(record, now, retentionMs)) continue;
+          removals[`groupReading/${groupId}/${userId}`] = null;
+        }
+      }
+    }
+
+    if (liveSnapshot.exists()) {
+      const groups = liveSnapshot.val() as Record<string, StoredMember>;
+      for (const [groupId, members] of Object.entries(groups ?? {})) {
+        for (const [userId, record] of Object.entries(members ?? {})) {
+          if (!isStale(record, now, liveRetentionMs)) continue;
+          removals[`groupReadingLive/${groupId}/${userId}`] = null;
+        }
+      }
+    }
+
+    if (followersSnapshot.exists()) {
+      const groups = followersSnapshot.val() as Record<string, Record<string, StoredMember>>;
+      for (const [groupId, targets] of Object.entries(groups ?? {})) {
+        for (const [targetUserId, followers] of Object.entries(targets ?? {})) {
+          for (const [followerUserId, record] of Object.entries(followers ?? {})) {
+            if (!isStale(record, now, followerRetentionMs)) continue;
+            removals[`groupReadingFollowers/${groupId}/${targetUserId}/${followerUserId}`] = null;
+          }
+        }
       }
     }
 
     const removed = Object.keys(removals).length;
     if (removed === 0) return;
     await database.ref().update(removals);
-    logger.info("Stale group reading positions removed", { removed });
+    logger.info("Stale group reading records removed", { removed });
   },
 );

@@ -33,10 +33,12 @@ import {
   visitBiblePosition,
   type BibleHistory,
 } from "@/features/bible-history";
+import { displayBibleBookName } from "@/features/bible-book-names";
 import {
   bibleCrossReferences,
   bibleVersionFor,
   buildBibleVerse,
+  isBibleVersionId,
   nextBibleChapter,
   normalizeBiblePosition,
   previousBibleChapter,
@@ -105,8 +107,18 @@ import {
 import { BibleReaderHeader } from "@/features/bible-reader/header";
 import { ReadingNowSheet } from "@/features/community/reading-now-sheet";
 import { ReadingBubble } from "@/features/community/reading-bubble";
+import { ReadingMirrorBar, ReadingMirrorOutline, type MirrorBarStatus } from "@/features/community/reading-mirror";
 import type { CommunityMember } from "@/features/community/types";
-import type { ReadingEntry } from "@/state/reading-model";
+import type { ReadingEntry, ReadingScope } from "@/state/reading-model";
+import {
+  mirrorHighlightsFor,
+  mirrorSelectedVerses,
+  useReadingFollowers,
+  useReadingMirror,
+  useReadingMirrorPublisher,
+  type MirrorAnchor,
+  type MirrorRecord,
+} from "@/state/reading-mirror";
 import { useGroupReading, useReadingPublisher, useReadingShareSetting } from "@/state/reading-share";
 import type { ReadingMarker } from "@/features/bible-reader/chapter-text";
 import { BibleReaderToolsSheet } from "@/features/bible-reader/tools-sheet";
@@ -136,7 +148,7 @@ import { ReaderCircleButton } from "@/features/bible-reader/header";
 const ignorePreviewEvent = () => {};
 const emptyVerseNumbers: number[] = [];
 
-type ReaderNavigationOptions = { scroll?: boolean; highlight?: boolean; fromAudio?: boolean; intent?: ReaderNavigationIntent; haptic?: boolean };
+type ReaderNavigationOptions = { scroll?: boolean; highlight?: boolean; fromAudio?: boolean; fromMirror?: boolean; intent?: ReaderNavigationIntent; haptic?: boolean };
 
 type BibleReaderPreferenceSyncStatus = {
   userId?: string;
@@ -211,6 +223,10 @@ export function BibleScreen() {
   const [moreVisible, setMoreVisible] = useState(false);
   const [readingVisible, setReadingVisible] = useState(false);
   const [readingBubbleVisible, setReadingBubbleVisible] = useState(true);
+  const [mirrorSession, setMirrorSession] = useState<{ name: string; scope: ReadingScope; userId: string }>();
+  const [mirrorPaused, setMirrorPaused] = useState(false);
+  const mirrorReturnRef = useRef<{ position: BiblePosition; versionId: BibleVersionId } | undefined>(undefined);
+  const mirrorScrollTokenRef = useRef(0);
 
   // Live group reading: the reader publishes their own position only when they
   // chose to share it, and reads the rest of the community back in one node.
@@ -233,6 +249,7 @@ export function BibleScreen() {
     scope: readingShare.scope,
   });
   const { entries: readingEntries } = useGroupReading(state.currentGroupId);
+  const mirrorFollowerCount = useReadingFollowers(state.currentGroupId, state.currentUserId);
   const otherReadingEntries = useMemo(
     () => readingEntries.filter((entry) => entry.userId !== state.currentUserId),
     [readingEntries, state.currentUserId],
@@ -241,6 +258,31 @@ export function BibleScreen() {
     () => otherReadingEntries.filter((entry) => entry.status === "live"),
     [otherReadingEntries],
   );
+  const mirror = useReadingMirror({
+    enabled: Boolean(mirrorSession),
+    followerUserId: state.currentUserId,
+    groupId: state.currentGroupId,
+    targetUserId: mirrorSession?.userId,
+  });
+  const mirrorEntry = useMemo(
+    () => mirrorSession ? otherReadingEntries.find((entry) => entry.userId === mirrorSession.userId) : undefined,
+    [mirrorSession, otherReadingEntries],
+  );
+  const mirrorStatus = useMemo<MirrorBarStatus>(() => {
+    if (!mirrorSession) return "ended";
+    if (mirrorPaused) return "paused";
+    if (mirrorSession.scope === "chapter") {
+      if (mirrorEntry) return "live";
+      return mirror.status === "connecting" ? "connecting" : "ended";
+    }
+    return mirror.status;
+  }, [mirrorEntry, mirror.status, mirrorPaused, mirrorSession]);
+  const mirrorChapterLabel = useMemo(() => {
+    const record = mirror.record;
+    if (record) return `${displayBibleBookName(record.book, bookLanguage)} ${record.chapter}:${record.anchorVerse}`;
+    if (mirrorEntry) return `${displayBibleBookName(mirrorEntry.book, bookLanguage)} ${mirrorEntry.chapter}`;
+    return "";
+  }, [bookLanguage, mirror.record, mirrorEntry]);
   const readingMarkersByVerse = useMemo(() => {
     const markers: Record<number, ReadingMarker[]> = {};
     const palette = [colors.clay, colors.moss, colors.rose, colors.gold, colors.olive];
@@ -453,6 +495,44 @@ export function BibleScreen() {
 
     return [page.key, byVerse];
   })), [bibleVersion.translation, chapterPages, state.bibleHighlights]);
+  const getMirrorAnchor = useCallback((): MirrorAnchor => {
+    const top = readerScrollOffsetRef.current + readerTopOcclusion() + 24;
+    let verse = chapterVerses[0]?.verse ?? positionRef.current.verse;
+    let verseTop: number | undefined;
+    for (const item of chapterVerses) {
+      const offset = verseOffsetsRef.current[item.verse];
+      if (typeof offset !== "number") continue;
+      if (offset <= top) {
+        verse = item.verse;
+        verseTop = offset;
+        continue;
+      }
+      break;
+    }
+    const height = verseHeightsRef.current[verse];
+    const offset = verseTop !== undefined && height && height > 0
+      ? Math.min(1, Math.max(0, (top - verseTop) / height))
+      : 0;
+    return { offset, verse };
+  }, [chapterVerses, readerTopOcclusion]);
+  const mirrorHighlights = useMemo(
+    () => mirrorHighlightsFor(mirror.record, position.book, position.chapter),
+    [mirror.record, position.book, position.chapter],
+  );
+  const mirrorSelection = useMemo(
+    () => mirrorSelectedVerses(mirror.record, position.book, position.chapter),
+    [mirror.record, position.book, position.chapter],
+  );
+  useReadingMirrorPublisher({
+    getAnchor: getMirrorAnchor,
+    groupId: state.currentGroupId,
+    highlights: pageHighlights[chapterKey],
+    position,
+    scope: readingShare.scope,
+    selection: selectedVerseNumbers,
+    userId: state.currentUserId,
+    versionId: bibleVersionId,
+  });
   const selectedHighlightIds = useMemo(() => {
     if (selectedVerseRanges.length === 0) return [];
 
@@ -484,8 +564,8 @@ export function BibleScreen() {
   const readerFontFamily = fontFamilyFor(fontId);
   const readerLineHeight = Math.round(fontSize * 1.62);
   const contentWidth = width >= 780 ? 720 : undefined;
-  const selectedVerseBarVisible = selectedVerseRanges.length > 0;
-  const chapterControlsVisible = !selectedVerseBarVisible && !(hasAudioSelection && activelyFollowingAudio);
+  const selectedVerseBarVisible = selectedVerseRanges.length > 0 && !mirrorSession;
+  const chapterControlsVisible = !mirrorSession && !selectedVerseBarVisible && !(hasAudioSelection && activelyFollowingAudio);
   const audioMiniBottom = tabBarHeight(insets.bottom);
   const floatingControlsBottom = audioMiniBottom + (hasAudioSelection ? audioMiniHeight : 0) + 16;
   const activeFloatingControlsHeight = selectedVerseBarVisible
@@ -939,8 +1019,11 @@ export function BibleScreen() {
   }, [ensureVerseVisibleAboveSelection, selectedVerseNumbers]);
 
   const jumpToPosition = useCallback(
-    (nextPosition: Partial<BiblePosition>, { scroll: shouldScroll = true, highlight: shouldHighlight = false, fromAudio = false, intent = "verse", haptic = intent === "chapter" }: ReaderNavigationOptions = {}) => {
+    (nextPosition: Partial<BiblePosition>, { scroll: shouldScroll = true, highlight: shouldHighlight = false, fromAudio = false, fromMirror = false, intent = "verse", haptic = intent === "chapter" }: ReaderNavigationOptions = {}) => {
       cancelAudioSelection();
+      // A deliberate move away from the mirrored page pauses the mirror rather
+      // than having it drag the reader back on the next update.
+      if (mirrorSession && !fromMirror && !mirrorPaused) setMirrorPaused(true);
       if (!fromAudio) { revealReaderHeader(); setFollowAudio(false); audioFollowScroll.current.cancel(); }
       const normalized = normalizeBiblePosition(nextPosition, fromAudio ? "reformationsbibeln2026" : bibleVersionId);
       const current = positionRef.current;
@@ -977,16 +1060,109 @@ export function BibleScreen() {
         showTemporaryHighlight(normalized);
       }
     },
-    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader],
+    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader, mirrorPaused, mirrorSession],
   );
 
   const followReader = useCallback((entry: ReadingEntry) => {
+    const name = memberById.get(entry.userId)?.name ?? t("common.someone");
     setReadingVisible(false);
+    setReadingBubbleVisible(false);
+    setMirrorPaused(false);
+    setFollowAudio(false);
+    audioFollowScroll.current.cancel();
+    readerScrollIntent.current.cancel();
+    if (!mirrorSession) mirrorReturnRef.current = { position: positionRef.current, versionId: bibleVersionId };
+    setMirrorSession({ name, scope: entry.scope, userId: entry.userId });
     jumpToPosition(
-      { book: entry.book, chapter: entry.chapter, verse: entry.verse ?? 1 },
-      { highlight: true },
+      { book: entry.book, chapter: entry.chapter, verse: entry.scope === "verse" ? entry.verse ?? 1 : 1 },
+      { fromMirror: true, scroll: false },
     );
-  }, [jumpToPosition]);
+    if (entry.scope === "chapter") {
+      setReaderToast({
+        detail: t("reading.mirror.toast.chapterOnly", { name }),
+        message: t("reading.follow.toast", { name }),
+        tone: "success",
+      });
+    }
+  }, [bibleVersionId, jumpToPosition, memberById, mirrorSession, t]);
+
+  const mirrorRestoreRef = useRef<{ position: BiblePosition; versionId: BibleVersionId } | undefined>(undefined);
+  const stopMirror = useCallback(() => {
+    mirrorRestoreRef.current = mirrorReturnRef.current ?? { position: positionRef.current, versionId: bibleVersionId };
+    mirrorReturnRef.current = undefined;
+    mirrorScrollTokenRef.current += 1;
+    setMirrorSession(undefined);
+    setMirrorPaused(false);
+    setReadingBubbleVisible(true);
+  }, [bibleVersionId]);
+
+  // Restore the reader's own place only after the mirror's version change, if
+  // any, has been applied; the jump must use the reader's version.
+  useEffect(() => {
+    if (mirrorSession || !mirrorRestoreRef.current) return;
+    const saved = mirrorRestoreRef.current;
+    if (saved.versionId !== bibleVersionId) {
+      setBibleVersionId(saved.versionId);
+      return;
+    }
+    mirrorRestoreRef.current = undefined;
+    jumpToPosition(saved.position, { scroll: false });
+  }, [bibleVersionId, jumpToPosition, mirrorSession]);
+
+  const scrollMirrorTo = useCallback((record: MirrorRecord) => {
+    if (!mirrorSession || mirrorPaused) return false;
+    if (positionRef.current.book !== record.book || positionRef.current.chapter !== record.chapter) return false;
+    if (layoutChapterKeyRef.current !== readerLayoutKey) return false;
+    const verseTop = verseOffsetsRef.current[record.anchorVerse];
+    if (typeof verseTop !== "number") return false;
+    const height = verseHeightsRef.current[record.anchorVerse] ?? 0;
+    const extra = height > 0 ? record.anchorOffset * height : 0;
+    programmaticTopRef.current = false;
+    programmaticScrollVerseRef.current = record.anchorVerse;
+    stopHeaderTracking();
+    scrollRef.current?.scrollTo({
+      animated: !reducedMotion,
+      y: Math.max(0, verseTop - readerTopOcclusion() - 18 + extra),
+    });
+    return true;
+  }, [mirrorPaused, mirrorSession, readerLayoutKey, readerTopOcclusion, reducedMotion, stopHeaderTracking]);
+
+  // Apply the mirrored position. Offsets are anchors, not pixels, so the two
+  // readers can use different fonts and devices and still see the same spot.
+  useEffect(() => {
+    if (!mirrorSession || mirrorPaused) return undefined;
+    if (mirrorSession.scope === "chapter") {
+      if (!mirrorEntry) return undefined;
+      if (positionRef.current.book === mirrorEntry.book && positionRef.current.chapter === mirrorEntry.chapter) return undefined;
+      jumpToPosition({ book: mirrorEntry.book, chapter: mirrorEntry.chapter, verse: 1 }, { fromMirror: true, scroll: false });
+      return undefined;
+    }
+
+    const record = mirror.record;
+    if (!record) return undefined;
+    if (record.versionId && record.versionId !== bibleVersionId && isBibleVersionId(record.versionId)) {
+      setBibleVersionId(record.versionId);
+      return undefined;
+    }
+    if (positionRef.current.book !== record.book || positionRef.current.chapter !== record.chapter) {
+      jumpToPosition({ book: record.book, chapter: record.chapter, verse: record.anchorVerse }, { fromMirror: true, scroll: false });
+      return undefined;
+    }
+
+    const token = ++mirrorScrollTokenRef.current;
+    let attempts = 0;
+    const tick = () => {
+      if (token !== mirrorScrollTokenRef.current) return;
+      if (scrollMirrorTo(record)) return;
+      if (attempts++ > 120) return;
+      requestAnimationFrame(tick);
+    };
+    const frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (mirrorScrollTokenRef.current === token) mirrorScrollTokenRef.current += 1;
+    };
+  }, [bibleVersionId, jumpToPosition, mirror.record, mirrorEntry, mirrorPaused, mirrorSession, navigationRevision, scrollMirrorTo]);
 
   const hadAudioSession = useRef(false);
   useEffect(() => {
@@ -1019,6 +1195,20 @@ export function BibleScreen() {
     const frame = requestAnimationFrame(scrollToAudioVerse);
     return () => { cancelAnimationFrame(frame); audioFollowScroll.current.cancel(); };
   }, [audioChapter?.book, audioChapter?.chapter, audio.session?.entry.manifestUrl, audioPassageKey, spokenVerse, audio.navigationRevision, audio.playWhenReady, activelyFollowingAudio, isAudioPageFocused, bibleVersionId, scrollToAudioVerse, jumpToPosition]);
+
+  useEffect(() => {
+    if (isAudioPageFocused || !mirrorSession) return;
+    mirrorScrollTokenRef.current += 1;
+    setMirrorSession(undefined);
+    setMirrorPaused(false);
+    setReadingBubbleVisible(true);
+  }, [isAudioPageFocused, mirrorSession]);
+
+  useEffect(() => {
+    mirrorScrollTokenRef.current += 1;
+    setMirrorSession(undefined);
+    setMirrorPaused(false);
+  }, [state.currentGroupId, state.currentUserId]);
 
   const travelHistory = useCallback((direction: -1 | 1) => {
     cancelAudioSelection();
@@ -1148,7 +1338,11 @@ export function BibleScreen() {
     chapterFeedbackRevisionRef.current = undefined;
     programmaticScrollVerseRef.current = undefined;
     programmaticTopRef.current = false;
-  }, []);
+    if (mirrorSession) {
+      mirrorScrollTokenRef.current += 1;
+      setMirrorPaused(true);
+    }
+  }, [mirrorSession]);
 
   const openCrossReferences = useCallback(
     (verse: number) => {
@@ -1254,6 +1448,14 @@ export function BibleScreen() {
   }, []);
 
   const handleVersePress = useCallback((verse: number) => {
+    if (mirrorSession) {
+      setReaderToast({
+        detail: t("reading.mirror.toast.viewOnly", { name: mirrorSession.name }),
+        message: t("reading.mirror.readOnly"),
+        tone: "success",
+      });
+      return;
+    }
     if (verseLongPressActiveRef.current) {
       verseLongPressActiveRef.current = false;
       return;
@@ -1273,9 +1475,17 @@ export function BibleScreen() {
 
       return [...current, verse].sort((a, b) => a - b);
     });
-  }, [bibleVersionId]);
+  }, [bibleVersionId, mirrorSession, t]);
 
   const handleVerseLongPress = useCallback((verse: number) => {
+    if (mirrorSession) {
+      setReaderToast({
+        detail: t("reading.mirror.toast.viewOnly", { name: mirrorSession.name }),
+        message: t("reading.mirror.readOnly"),
+        tone: "success",
+      });
+      return;
+    }
     pagerRef.current?.blockCurrentTouch();
     const verseNode = verseRowsRef.current[verse];
     actionReturnFocusRef.current = verseNode && "focusTarget" in verseNode ? verseNode.focusTarget : verseNode ?? null;
@@ -1293,7 +1503,7 @@ export function BibleScreen() {
     }
     setHighlightedPosition(undefined);
     setSelectedVersePosition(nextPosition);
-  }, [bibleVersionId]);
+  }, [bibleVersionId, mirrorSession, t]);
 
   const verseForPosition = useCallback(
     (target?: BiblePosition) => {
@@ -1745,7 +1955,7 @@ export function BibleScreen() {
         layoutKey={`${flowingParagraphText}:${fontId}:${fontSize}:${showVerseNumbers}:${readerHeaderHeight}`}
         navigationRevision={navigationRevision}
         reducedMotion={reducedMotion}
-        enabled={readerInteractionsEnabled}
+        enabled={readerInteractionsEnabled && !mirrorSession}
         backgroundColor={readerPalette.background}
         viewportRef={readerViewportRef}
         onLayout={() => {
@@ -1782,8 +1992,12 @@ export function BibleScreen() {
             spokenVerse={active && audioMatchesChapter ? spokenVerse : undefined}
             chapterHeading={page.chapter.heading}
             copyLabel={t("bible.actions.copy")}
-            chapterHighlightByVerse={pageHighlights[page.key]}
-            highlightedPosition={active ? highlightedPosition : undefined}
+            chapterHighlightByVerse={active && mirrorSession && mirror.record?.book === page.position.book && mirror.record?.chapter === page.position.chapter ? mirrorHighlights : pageHighlights[page.key]}
+            highlightedPosition={active
+              ? (mirrorSession && mirror.record
+                ? { book: mirror.record.book, chapter: mirror.record.chapter, verse: mirror.record.verse }
+                : highlightedPosition)
+              : undefined}
             onFootnotePress={active ? handleFootnotePress : ignorePreviewEvent}
             onVerseCopy={active ? handleCopyVerseNumber : ignorePreviewEvent}
             onVersePress={active ? handleVersePress : ignorePreviewEvent}
@@ -1798,8 +2012,8 @@ export function BibleScreen() {
             planMarkers={pagePlanMarkers[page.key] ?? []}
             readingMarkersByVerse={active ? readingMarkersByVerse : undefined}
             onReadingMarkerPress={() => setReadingVisible(true)}
-            selectedVerseNumbers={active ? selectedVerseNumbers : emptyVerseNumbers}
-            selectedVersePosition={active ? selectedVersePosition : undefined}
+            selectedVerseNumbers={active ? (mirrorSession ? mirrorSelection : selectedVerseNumbers) : emptyVerseNumbers}
+            selectedVersePosition={active && !mirrorSession ? selectedVersePosition : undefined}
             showVerseNumbers={showVerseNumbers}
             subtitles={page.chapter.subtitles}
             verses={page.chapter.verses}
@@ -1809,7 +2023,11 @@ export function BibleScreen() {
         </ChapterPageScrollView>}
       />
 
-      {readingBubbleVisible && liveOtherReaders.length > 0 ? (
+      {mirrorSession ? (
+        <ReadingMirrorOutline reducedMotion={reducedMotion} status={mirrorStatus} />
+      ) : null}
+
+      {readingBubbleVisible && !mirrorSession && liveOtherReaders.length > 0 ? (
         <ReadingBubble
           currentPosition={position}
           currentUserId={state.currentUserId}
@@ -1823,6 +2041,21 @@ export function BibleScreen() {
           }}
           onOpenSheet={() => setReadingVisible(true)}
           userId={state.currentUserId}
+        />
+      ) : null}
+
+      {mirrorSession ? (
+        <ReadingMirrorBar
+          bottom={audioMiniBottom + (hasAudioSelection ? audioMiniHeight : 0) + 14}
+          chapterLabel={mirrorChapterLabel}
+          image={memberById.get(mirrorSession.userId)?.image}
+          name={mirrorSession.name}
+          onFollowAgain={() => {
+            setMirrorPaused(false);
+            mirrorScrollTokenRef.current += 1;
+          }}
+          onStop={stopMirror}
+          status={mirrorStatus}
         />
       ) : null}
 
@@ -1934,6 +2167,7 @@ export function BibleScreen() {
         currentPosition={position}
         currentUserId={state.currentUserId}
         entries={otherReadingEntries}
+        followers={mirrorFollowerCount}
         members={communityMembers}
         onClose={() => setReadingVisible(false)}
         onFollow={followReader}
