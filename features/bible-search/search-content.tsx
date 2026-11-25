@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Keyboard, Pressable, Text, View, type ViewToken } from "react-native";
+import { ActivityIndicator, Animated, FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type ViewToken } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bibleVersionFor, type BibleVersionId } from "@/features/bible-versions";
 import { displayBibleBookName, displayBibleReference, type ScriptureSearchResult } from "@/features/bible-search";
@@ -23,6 +23,124 @@ const noAudioResults: ScriptureSearchResult[] = [];
 // Superscript glyphs keep raised numbers inside the native selectable text flow.
 function superscriptVerseNumber(verse: number) {
   return String(verse).replace(/\d/g, (digit) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[Number(digit)]);
+}
+
+function FilterPill({ active, clearLabel, icon, label, onClear, onPress, palette }: {
+  active: boolean;
+  clearLabel: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  onClear?: () => void;
+  onPress: () => void;
+  palette: ReaderPalette;
+}) {
+  const tint = active ? palette.accent : palette.text;
+  return <View style={{ alignItems: "center", backgroundColor: active ? palette.peach : palette.surface, borderColor: active ? palette.accent : palette.line,
+    borderRadius: 22, borderWidth: active ? 2 : 1, flexDirection: "row", minHeight: 44 }}>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress}
+      style={{ alignItems: "center", flexDirection: "row", gap: 6, minHeight: 44, paddingLeft: 13, paddingRight: onClear ? 6 : 13 }}>
+      <Feather name={icon} size={14} color={active ? palette.accent : palette.muted} />
+      <Text numberOfLines={1} style={{ color: tint, fontSize: 13, fontWeight: "700", maxWidth: 190 }}>{label}</Text>
+    </Pressable>
+    {onClear ? <Pressable accessibilityRole="button" accessibilityLabel={clearLabel} hitSlop={6} onPress={onClear}
+      style={{ alignItems: "center", justifyContent: "center", minHeight: 44, paddingLeft: 2, paddingRight: 11 }}>
+      <Feather name="x" size={14} color={palette.accent} />
+    </Pressable> : null}
+  </View>;
+}
+
+function FilterOption({ icon, onPress, palette, selected = false, subtitle, title, trailing }: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  onPress: () => void;
+  palette: ReaderPalette;
+  selected?: boolean;
+  subtitle?: string;
+  title: string;
+  trailing?: "chevron";
+}) {
+  return <Pressable accessibilityRole="radio" accessibilityState={{ selected }} onPress={onPress}
+    style={({ pressed }) => ({ alignItems: "center", flexDirection: "row", gap: 12, minHeight: 56, opacity: pressed ? 0.6 : 1 })}>
+    <View style={{ alignItems: "center", justifyContent: "center", width: 20 }}>
+      <Feather name={icon} size={17} color={selected ? palette.accent : palette.muted} />
+    </View>
+    <View style={{ flex: 1, gap: 2 }}>
+      <Text style={{ color: selected ? palette.accent : palette.text, fontSize: 15, fontWeight: "700" }}>{title}</Text>
+      {subtitle ? <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 17 }}>{subtitle}</Text> : null}
+    </View>
+    {selected ? <Feather name="check" size={18} color={palette.accent} />
+      : trailing === "chevron" ? <Feather name="chevron-right" size={18} color={palette.muted} /> : null}
+  </Pressable>;
+}
+
+function FilterSection({ children, label, palette }: { children: React.ReactNode; label: string; palette: ReaderPalette }) {
+  return <View style={{ gap: 2 }}>
+    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" }}>{label}</Text>
+    {children}
+  </View>;
+}
+
+/**
+ * An in-tree panel rather than a native modal: search itself is already presented
+ * in a modal, and nesting another presentation there is fragile on iOS.
+ */
+function SearchFilterSheet({
+  bibleVersionId, bookName, engine, insetsBottom, onBrowse, onClose, onEngine, onTestament, onToggleBook, palette, testament, bookOnly,
+}: {
+  bibleVersionId: BibleVersionId;
+  bookName: string;
+  bookOnly: boolean;
+  engine: "smart" | "precise";
+  insetsBottom: number;
+  onBrowse?: () => void;
+  onClose: () => void;
+  onEngine: (engine: "smart" | "precise") => void;
+  onTestament: (testament: "all" | "old" | "new") => void;
+  onToggleBook: () => void;
+  palette: ReaderPalette;
+  testament: "all" | "old" | "new";
+}) {
+  const { t } = useAppTranslation();
+  const appear = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(appear, { duration: 180, toValue: 1, useNativeDriver: true }).start();
+  }, [appear]);
+  return <View accessibilityViewIsModal style={StyleSheet.absoluteFill}>
+    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(23, 26, 20, 0.32)", opacity: appear }]}>
+      <Pressable accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" onPress={onClose} style={{ flex: 1 }} />
+    </Animated.View>
+    <Animated.View style={{ backgroundColor: palette.sheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, bottom: 0, left: 0,
+      paddingBottom: Math.max(18, insetsBottom + 10), paddingHorizontal: 20, paddingTop: 8, position: "absolute", right: 0,
+      transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }}>
+      <View style={{ alignItems: "center", paddingBottom: 6 }}><View style={{ backgroundColor: palette.line, borderRadius: 2, height: 4, width: 36 }} /></View>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12, paddingBottom: 8 }}>
+        <Text accessibilityRole="header" style={{ color: palette.text, flex: 1, fontSize: 19, fontWeight: "800" }}>{t("bible.search.filters.title")}</Text>
+        <Pressable accessibilityLabel={t("shared.sheet.close")} accessibilityRole="button" onPress={onClose}
+          style={{ alignItems: "center", borderColor: palette.line, borderRadius: 12, borderWidth: 1, height: 38, justifyContent: "center", width: 38 }}>
+          <Feather name="x" size={18} color={palette.text} />
+        </Pressable>
+      </View>
+      <FilterSection label={t("bible.search.engine.label")} palette={palette}>
+        {(["smart", "precise"] as const).map((option) => <FilterOption key={option} palette={palette}
+          icon={option === "smart" ? "zap" : "search"} selected={engine === option}
+          subtitle={t(`bible.search.engine.${option}Hint`)} title={t(`bible.search.engine.${option}`)}
+          onPress={() => { onEngine(option); onClose(); }} />)}
+      </FilterSection>
+      <FilterSection label={t("bible.search.testament.label")} palette={palette}>
+        {(["all", "old", "new"] as const).map((option) => <FilterOption key={option} palette={palette}
+          icon={option === "all" ? "book-open" : "book"} selected={!bookOnly && testament === option}
+          title={t(`bible.search.testament.${option}`)}
+          onPress={() => { onTestament(option); onClose(); }} />)}
+      </FilterSection>
+      <FilterSection label={t("bible.search.filters.book")} palette={palette}>
+        {bookName ? <FilterOption palette={palette} icon="book" selected={bookOnly} title={bookName}
+          subtitle={t(bookOnly ? "bible.search.filters.bookOnlyOn" : "bible.search.filters.bookOnlyOff")}
+          onPress={() => { onToggleBook(); onClose(); }} /> : null}
+        {onBrowse ? <FilterOption palette={palette} icon="list" title={t("bible.search.browse")} trailing="chevron"
+          onPress={() => { onBrowse(); onClose(); }} /> : null}
+      </FilterSection>
+      <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16, paddingTop: 6 }}>{bibleVersionFor(bibleVersionId).label}</Text>
+    </Animated.View>
+  </View>;
 }
 
 export function defaultScriptureSearchPalette(): ReaderPalette {
@@ -106,6 +224,7 @@ function ScriptureSearchView({
   const studyResults = !search.loading && !search.error && results.length > 0 ? (search.studyResults ?? []) : [];
   const [inputFocused, setInputFocused] = useState(false);
   const [expandedStudy, setExpandedStudy] = useState<number | undefined>(undefined);
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const synopsis = useMemo(() => buildSearchSynopsis(results, query), [query, results]);
   const suggestions = useMemo(() => inputFocused ? suggestTopics(query, 5) : [], [inputFocused, query]);
   const chooseSuggestion = (suggestion: string) => {
@@ -114,6 +233,7 @@ function ScriptureSearchView({
     Keyboard.dismiss();
   };
   const version = bibleVersionFor(bibleVersionId);
+  const currentBookName = search.currentBook ? displayBibleBookName(search.currentBook, language, bibleVersionId) : "";
   const scroll = useRef<FlatList<ScriptureSearchResult>>(null);
   const rowHeights = useRef<Record<string, number>>({});
   const searchRef = useRef(search);
@@ -232,7 +352,7 @@ function ScriptureSearchView({
   }).current;
 
   return <View style={{ flex: 1, backgroundColor: palette.background }}>
-    {showInput ? <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, gap: 12 }}>
+    {showInput ? <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, gap: 10 }}>
       <View style={{ alignItems: "center", backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, flexDirection: "row", gap: 10, paddingHorizontal: 14 }}>
         <Feather name="search" color={palette.muted} size={18} />
         <SheetTextInput accessibilityLabel={t("bible.search.placeholder")} autoCapitalize="sentences" autoCorrect={false}
@@ -243,42 +363,22 @@ function ScriptureSearchView({
           <Feather name="x" color={palette.muted} size={18} />
         </Pressable> : null}
       </View>
-      {onBrowse ? <Pressable accessibilityRole="button" onPress={onBrowse} style={{ minHeight: 40, justifyContent: "center" }}>
-        <Text style={{ color: palette.accent, fontWeight: "700" }}>{t("bible.search.browse")}</Text>
-      </Pressable> : null}
-      <View accessibilityLabel={t("bible.search.engine.label")} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        {(["smart", "precise"] as const).map((engine) => {
-          const active = search.engine === engine;
-          return <Pressable key={engine} accessibilityRole="button" accessibilityState={{ selected: active }}
-            accessibilityLabel={t(`bible.search.engine.${engine}Hint`)}
-            onPress={() => search.setEngine(engine)}
-            style={{ minHeight: 38, flexDirection: "row", alignItems: "center", gap: 6, borderColor: active ? palette.accent : palette.line,
-              borderWidth: active ? 2 : 1, borderRadius: radius.lg, backgroundColor: active ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
-            <Feather name={engine === "smart" ? "zap" : "search"} size={14} color={active ? palette.accent : palette.muted} />
-            <Text style={{ color: active ? palette.accent : palette.text, fontSize: 13, fontWeight: "700" }}>{t(`bible.search.engine.${engine}`)}</Text>
-          </Pressable>;
-        })}
-        <Text style={{ flex: 1, color: palette.muted, fontSize: 12, lineHeight: 17 }}>{t(search.engine === "smart" ? "bible.search.engine.smartHint" : "bible.search.engine.preciseHint")}</Text>
-      </View>
-      <View accessibilityLabel={t("bible.search.testament.label")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-        {(["all", "old", "new"] as const).map((testament) => {
-          const active = !search.bookOnly && search.testament === testament;
-          return <Pressable key={testament} accessibilityRole="button" accessibilityState={{ selected: active }}
-            onPress={() => { search.setBookOnly(false); search.setTestament(testament); }}
-            style={{ minHeight: 34, justifyContent: "center", borderColor: active ? palette.accent : palette.line, borderWidth: active ? 2 : 1,
-              borderRadius: 18, backgroundColor: active ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
-            <Text style={{ color: active ? palette.accent : palette.text, fontSize: 12, fontWeight: "700" }}>{t(`bible.search.testament.${testament}`)}</Text>
-          </Pressable>;
-        })}
-        {search.currentBook ? <Pressable accessibilityRole="button" accessibilityState={{ selected: search.bookOnly }}
-          onPress={() => { if (!search.bookOnly) search.setTestament("all"); search.setBookOnly(!search.bookOnly); }}
-          style={{ minHeight: 34, justifyContent: "center", borderColor: search.bookOnly ? palette.accent : palette.line, borderWidth: search.bookOnly ? 2 : 1,
-            borderRadius: 18, backgroundColor: search.bookOnly ? palette.peach : palette.surface, paddingHorizontal: 12 }}>
-          <Text style={{ color: search.bookOnly ? palette.accent : palette.text, fontSize: 12, fontWeight: "700" }}>
-            {t("bible.search.bookOnly", { book: displayBibleBookName(search.currentBook, language, bibleVersionId) })}
-          </Text>
-        </Pressable> : null}
-      </View>
+      {/* One compact row of state pills; the choices live in a sheet so results stay above the fold. */}
+      <ScrollView horizontal bounces={false} showsHorizontalScrollIndicator={false}
+        style={{ marginHorizontal: -20 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+        <FilterPill active={search.engine !== "smart"} clearLabel={t("bible.search.filters.clearOne", { filter: t("bible.search.engine.label") })}
+          icon={search.engine === "precise" ? "search" : "zap"} label={t(`bible.search.engine.${search.engine}`)} palette={palette}
+          onClear={() => search.setEngine("smart")} onPress={() => setFiltersVisible(true)} />
+        {!search.bookOnly ? <FilterPill active={search.testament !== "all"}
+          clearLabel={t("bible.search.filters.clearOne", { filter: t("bible.search.testament.label") })}
+          icon={search.testament === "all" ? "layers" : "book"} label={search.testament === "all" ? t("bible.search.filters.allScripture") : t(`bible.search.testament.${search.testament}`)} palette={palette}
+          onClear={() => search.setTestament("all")} onPress={() => setFiltersVisible(true)} /> : null}
+        <FilterPill active={search.bookOnly}
+          clearLabel={t("bible.search.filters.clearOne", { filter: t("bible.search.filters.book") })}
+          icon="book-open" label={search.bookOnly && currentBookName ? currentBookName : t("bible.search.filters.books")} palette={palette}
+          onClear={() => search.setBookOnly(false)}
+          onPress={() => { if (onBrowse) onBrowse(); else setFiltersVisible(true); }} />
+      </ScrollView>
       {suggestions.length ? <View style={{ gap: 7 }}>
         <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>{t("bible.search.suggestions")}</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
@@ -423,5 +523,12 @@ function ScriptureSearchView({
       </Pressable> : null}
       <TopicPlaybackPanel definition={activeDefinition ?? definition} playAllLabel={t("bible.search.playLoaded")} palette={palette} insets={{ bottom: insets.bottom }} />
     </> : null}
+    {filtersVisible ? <SearchFilterSheet bibleVersionId={bibleVersionId} bookName={currentBookName} bookOnly={search.bookOnly}
+      engine={search.engine} insetsBottom={insets.bottom} palette={palette} testament={search.testament}
+      onBrowse={onBrowse ? () => { setFiltersVisible(false); onBrowse(); } : undefined}
+      onClose={() => setFiltersVisible(false)}
+      onEngine={(engine) => search.setEngine(engine)}
+      onTestament={(testament) => { search.setBookOnly(false); search.setTestament(testament); }}
+      onToggleBook={() => { search.setBookOnly(!search.bookOnly); if (!search.bookOnly) search.setTestament("all"); }} /> : null}
   </View>;
 }

@@ -16,6 +16,8 @@ type SearchState = {
 };
 const CACHE_PAGE_SIZE = 20;
 const MAX_CACHED_PAGES = 7;
+// The pills show the active choice, so it must outlive one search sheet.
+const rememberedScope: { engine: SearchEngine; testament: TestamentFilter } = { engine: "smart", testament: "all" };
 type ExcerptCache = { key: string; registered: number; clock: number; stamps: Map<number, number>; visible: Set<number>; running: Set<number> };
 
 /** Keep both search surfaces consistent, and cancel obsolete model or database work. */
@@ -31,8 +33,10 @@ export function useScriptureSearch({ language, limit, query, versionId, visible,
 }) {
   const normalizedQuery = normalizeScriptureQuery(query);
   const [retry, setRetry] = useState(0);
-  const [engine, setEngine] = useState<SearchEngine>("smart");
-  const [testament, setTestament] = useState<TestamentFilter>("all");
+  const [engine, setEngineState] = useState<SearchEngine>(rememberedScope.engine);
+  const [testament, setTestamentState] = useState<TestamentFilter>(rememberedScope.testament);
+  const setEngine = useCallback((value: SearchEngine) => { rememberedScope.engine = value; setEngineState(value); }, []);
+  const setTestament = useCallback((value: TestamentFilter) => { rememberedScope.testament = value; setTestamentState(value); }, []);
   const [bookOnly, setBookOnly] = useState(false);
   const [studyResults, setStudyResults] = useState<StudyEntry[]>([]);
   const [state, setState] = useState<SearchState>();
