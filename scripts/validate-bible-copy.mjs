@@ -21,8 +21,8 @@ assert.equal(
     translation: "Reformationsbibeln 2026",
     language: "sv",
   }),
-  "Gläd er alltid i Herren.\nFilipperbrevet 4:4 (SRB26)",
-  "a single verse keeps the text first and the localized reference last",
+  "\"Gläd er alltid i Herren.\"\nFilipperbrevet 4:4 (SRB26)",
+  "a single verse is quoted, with the localized reference last",
 );
 
 assert.equal(
@@ -35,8 +35,8 @@ assert.equal(
     translation: "SRB26",
     language: "sv",
   }),
-  "4 Gläd er alltid i Herren.\n5 Låt er fördragsamhet bli känd av alla människor.\n\nFilipperbrevet 4:4–5 (SRB26)",
-  "a passage gets verse numbers, one reference and an en dash",
+  "\"4 Gläd er alltid i Herren.\n5 Låt er fördragsamhet bli känd av alla människor.\"\n\nFilipperbrevet 4:4–5 (SRB26)",
+  "a passage is quoted as one block, with verse numbers, one reference and an en dash",
 );
 
 assert.equal(
@@ -46,8 +46,8 @@ assert.equal(
     translation: "SRB26",
     language: "sv",
   }),
-  "4 Gläd er alltid i Herren.\n6 Var inte bekymrade för något.\n\nFilipperbrevet 4:4, 4:6 (SRB26)",
-  "non-contiguous verses keep their own numbers",
+  "\"4 Gläd er alltid i Herren.\n6 Var inte bekymrade för något.\"\n\nFilipperbrevet 4:4, 4:6 (SRB26)",
+  "non-contiguous verses keep their own numbers inside one quotation",
 );
 
 assert.equal(
@@ -57,8 +57,8 @@ assert.equal(
     translation: "SRB26",
     language: "en",
   }),
-  "Rejoice in the Lord always.\nPhilippians 4:4 (SRB26)",
-  "English book names stay English",
+  "\"Rejoice in the Lord always.\"\nPhilippians 4:4 (SRB26)",
+  "English book names stay English and the quotation is identical",
 );
 
 assert.equal(
@@ -68,8 +68,8 @@ assert.equal(
     translation: "SRB26",
     language: "sv",
   }),
-  "Gläd er alltid i Herren.\nFilipperbrevet 4:3–4 (SRB26)",
-  "a saved passage stays one paragraph with one reference",
+  "\"Gläd er alltid i Herren.\"\nFilipperbrevet 4:3–4 (SRB26)",
+  "a saved passage stays one quoted paragraph with one reference",
 );
 
 assert.equal(
@@ -78,7 +78,7 @@ assert.equal(
     reference: "Philippians 4:4",
     language: "sv",
   }),
-  "Gläd er alltid i Herren.\nFilipperbrevet 4:4",
+  "\"Gläd er alltid i Herren.\"\nFilipperbrevet 4:4",
   "a missing translation omits the parentheses and text is trimmed",
 );
 

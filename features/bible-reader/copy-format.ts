@@ -20,8 +20,9 @@ function verseNumberLabel(verse: BibleCopyVerse) {
 
 /**
  * Format verses for the clipboard the way people paste them into a message:
- * the text first, then one localized reference with the translation.
- * A passage gets verse numbers so the excerpt stays readable.
+ * the quoted text first, then one localized reference with the translation.
+ * A passage gets verse numbers so the excerpt stays readable, and both a
+ * single verse and a passage sit inside the same quotation marks.
  */
 export function formatBibleCopyText({ verses, reference, translation, language }: BibleCopyInput) {
   const content = verses
@@ -42,5 +43,5 @@ export function formatBibleCopyText({ verses, reference, translation, language }
   const shortTranslation = translation?.startsWith("Reformationsbibeln") ? "SRB26" : translation;
   const source = shortTranslation ? `${localizedReference} (${shortTranslation})` : localizedReference;
 
-  return `${body}${content.length > 1 ? "\n\n" : "\n"}${source}`;
+  return `"${body}"${content.length > 1 ? "\n\n" : "\n"}${source}`;
 }
