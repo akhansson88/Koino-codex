@@ -161,7 +161,27 @@ async function migrateCollection(vault: Vault, collection: string, scope: string
       await walk(childValue, [...pathParts, child]);
     }
   }
-  await walk(await raw(`${collection}/${scope}`), [collection, scope]);
+  let scoped: unknown;
+  try {
+    scoped = await raw(`${collection}/${scope}`);
+  } catch (error) {
+    // A community the account has left is no longer readable, and a change
+    // made by a newer app version can deny a collection this build still
+    // knows about. Skipping that scope must not stop the rest of the account
+    // from opening, so a denied read is recorded instead of thrown.
+    if (permissionDenied(error)) {
+      report.skipped.push(`${collection}/${scope}`);
+      return;
+    }
+    throw error;
+  }
+  await walk(scoped, [collection, scope]);
+}
+
+function permissionDenied(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code;
+  const message = error instanceof Error ? error.message : String(error);
+  return code === "PERMISSION_DENIED" || code === "permission_denied" || /permission[_ ]denied/i.test(message);
 }
 
 export async function plaintextMigrationComplete(uid: string) {
