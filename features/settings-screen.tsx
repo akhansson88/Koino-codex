@@ -99,6 +99,7 @@ import { CommunityPrayerMemberModal } from "@/features/community/prayer-actions"
 import { FocusedScreenHeader } from "@/features/community/focused-header";
 import { MembersPanel } from "@/features/community/members-panel";
 import { CommunityPresenceStrip } from "@/features/community/presence-strip";
+import { ReadingNowRow } from "@/features/community/reading-now-row";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
 import { CommunityJoinForm, useCommunityJoinForm } from "@/features/community/join-form";
 import { CommunityJoinRequests } from "@/features/community/join-requests";
@@ -1665,6 +1666,12 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 groupId={group.id}
                 members={communityMembers}
                 onPress={() => router.navigate("/(tabs)/community/members" as never)}
+              />
+
+              <ReadingNowRow
+                currentUserId={state.currentUserId}
+                groupId={group.id}
+                members={communityMembers}
               />
 
               <View style={{ alignItems: "stretch", flexDirection: "row", gap: 10 }}>

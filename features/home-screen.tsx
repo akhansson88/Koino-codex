@@ -5,6 +5,8 @@ import { ActivityIndicator, AppState, Pressable, Text, View } from "react-native
 
 import { CheckInModal, type CheckInStep, moodNumber } from "@/features/check-in-modal";
 import { CommunityEncryptionNotice } from "@/features/community/encryption-notice";
+import { ReadingNowHomeCard } from "@/features/community/reading-now-row";
+import type { CommunityMember } from "@/features/community/types";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { EventCard } from "@/features/events/event-card";
 import { HomeScripture } from "@/features/home-scripture";
@@ -118,6 +120,17 @@ function HomeRhythm({ state, group, activeGroupId }: {
     : undefined;
   const userById = useMemo(() => new Map(state.users.map((user) => [user.id, user.name])), [state.users]);
   const userImageById = useMemo(() => new Map(state.users.map((user) => [user.id, user.image])), [state.users]);
+  const readingMembers = useMemo<CommunityMember[]>(() => {
+    if (!activeGroupId) return [];
+    return state.memberships
+      .filter((membership) => membership.groupId === activeGroupId)
+      .map((membership) => ({
+        id: membership.userId,
+        image: membership.image,
+        name: userById.get(membership.userId) ?? membership.userName,
+        role: membership.role,
+      }));
+  }, [activeGroupId, state.memberships, userById]);
   const directPrayerMembers = useMemo(() => {
     if (!activeGroupId) return [];
     const memberIds = new Set(state.memberships.filter((member) => member.groupId === activeGroupId).map((member) => member.userId));
@@ -314,6 +327,14 @@ function HomeRhythm({ state, group, activeGroupId }: {
         <EmailVerificationBanner />
 
         <HomeScripture plans={state.biblePlans} userId={state.currentUserId} date={todayKey} />
+
+        {activeGroupId ? (
+          <ReadingNowHomeCard
+            currentUserId={state.currentUserId}
+            groupId={activeGroupId}
+            members={readingMembers}
+          />
+        ) : null}
 
         {state.currentUserId ? (
           <Card style={{ gap: 0, overflow: "hidden", padding: 0 }}>

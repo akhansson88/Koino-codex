@@ -12,9 +12,11 @@ export function BibleReaderToolsSheet({
   onHistoryBack,
   onHistoryForward,
   onOpenMyPlaces,
+  onOpenReading,
   onOpenSearch,
   onOpenSettings,
   palette,
+  readingCount,
   visible,
 }: {
   canGoHistoryBack: boolean;
@@ -23,9 +25,11 @@ export function BibleReaderToolsSheet({
   onHistoryBack: () => void;
   onHistoryForward: () => void;
   onOpenMyPlaces: () => void;
+  onOpenReading: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   palette: ReaderPalette;
+  readingCount: number;
   visible: boolean;
 }) {
   const sheetRef = useRef<AppSheetHandle>(null);
@@ -46,6 +50,13 @@ export function BibleReaderToolsSheet({
     <View style={{ gap: 0 }}>
       <SheetActionRow icon="search" title={t("bible.accessibility.search")} color={palette.text} onPress={() => openAfterDismiss(onOpenSearch)} />
       <SheetActionRow icon="bookmark" title={t("bible.navigator.myPlaces")} color={palette.text} onPress={() => openAfterDismiss(onOpenMyPlaces)} />
+      <SheetActionRow
+        icon="eye"
+        title={t("reading.title")}
+        subtitle={readingCount > 0 ? t("reading.pill.count", { count: readingCount }) : t("reading.share.hint.off")}
+        color={palette.text}
+        onPress={() => openAfterDismiss(onOpenReading)}
+      />
       <SheetActionRow icon="sliders" title={t("bible.settings.title")} color={palette.text} onPress={() => openAfterDismiss(onOpenSettings)} />
       <View style={{ borderTopColor: palette.line, borderTopWidth: 1, marginTop: 6, paddingTop: 16 }}>
         <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700", marginBottom: 8 }}>

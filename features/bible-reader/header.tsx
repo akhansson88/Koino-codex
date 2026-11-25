@@ -2,6 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import type { GroupImage } from "@/state/types";
+import { Avatar } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { radius, typography } from "@/ui/theme";
 import { type FeatherName, type ReaderPalette } from "@/features/bible-reader/types";
@@ -79,6 +81,7 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   nextChapterTitle,
   translationLabel,
   topInset,
+  reading,
 }: {
   canGoBack: boolean;
   canGoHistoryBack: boolean;
@@ -103,6 +106,11 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   nextChapterTitle?: string;
   translationLabel: string;
   topInset: number;
+  reading?: {
+    count: number;
+    onPress: () => void;
+    people: { image?: GroupImage; name: string }[];
+  };
 }) {
   const { t } = useAppTranslation();
   return (
@@ -134,6 +142,25 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
           </Text>}
           <Feather name="chevron-down" size={16} color={palette.muted} />
         </Pressable>
+
+        {reading && reading.count > 0 ? (
+          <Pressable
+            accessibilityLabel={`${t("reading.a11y.open")}. ${t("reading.pill.count", { count: reading.count })}`}
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={reading.onPress}
+            style={{ alignItems: "center", backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: 4, height: 40, paddingHorizontal: 7 }}
+          >
+            <View style={{ flexDirection: "row", height: 20 }}>
+              {reading.people.slice(0, 2).map((person, index) => (
+                <View key={`${person.name}-${index}`} style={{ marginLeft: index === 0 ? 0 : -7 }}>
+                  <Avatar image={person.image} name={person.name} size={20} status="online" tone={index % 2 ? "green" : "orange"} />
+                </View>
+              ))}
+            </View>
+            <Text style={{ color: palette.text, fontSize: 12, fontWeight: "600" }}>{reading.count}</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityLabel={t("bible.accessibility.chooseTranslation")}

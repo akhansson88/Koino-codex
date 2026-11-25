@@ -92,6 +92,7 @@ import {
 } from "@/features/bible-reader/preferences-sync";
 import { readerPaletteFor } from "@/features/bible-reader/palette";
 import { useTheme } from "@/ui/theme-provider";
+import { colors } from "@/ui/theme";
 import {
   selectedVerseRangesFor,
   selectedVerseReferenceLabel,
@@ -102,6 +103,11 @@ import {
   bibleVersionShortLabel,
 } from "@/features/bible-reader/verse-helpers";
 import { BibleReaderHeader } from "@/features/bible-reader/header";
+import { ReadingNowSheet } from "@/features/community/reading-now-sheet";
+import type { CommunityMember } from "@/features/community/types";
+import type { ReadingEntry } from "@/state/reading-model";
+import { useGroupReading, useReadingPublisher, useReadingShareSetting } from "@/state/reading-share";
+import type { ReadingMarker } from "@/features/bible-reader/chapter-text";
 import { BibleReaderToolsSheet } from "@/features/bible-reader/tools-sheet";
 import { BiblePlanReaderPanel } from "@/features/bible-reader/plan-panel";
 import { BibleText } from "@/features/bible-reader/chapter-text";
@@ -151,7 +157,7 @@ export function BibleScreen() {
   const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
   const handledPlanJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
-  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "savedVerses"]);
+  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "memberships", "savedVerses"]);
   const { dispatch } = useKoinoActions();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
@@ -202,6 +208,52 @@ export function BibleScreen() {
   const [versionPickerVisible, setVersionPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
+  const [readingVisible, setReadingVisible] = useState(false);
+
+  // Live group reading: the reader publishes their own position only when they
+  // chose to share it, and reads the rest of the community back in one node.
+  const communityMembers = useMemo<CommunityMember[]>(
+    () => state.memberships.map((membership) => ({
+      id: membership.userId,
+      image: membership.image,
+      name: membership.userName,
+      role: membership.role,
+    })),
+    [state.memberships],
+  );
+  const memberById = useMemo(() => new Map(communityMembers.map((member) => [member.id, member])), [communityMembers]);
+  const readingShare = useReadingShareSetting(state.currentGroupId, state.currentUserId);
+  useReadingPublisher({
+    groupId: state.currentGroupId,
+    userId: state.currentUserId,
+    position,
+    versionId: bibleVersionId,
+    scope: readingShare.scope,
+  });
+  const { entries: readingEntries } = useGroupReading(state.currentGroupId);
+  const otherReadingEntries = useMemo(
+    () => readingEntries.filter((entry) => entry.userId !== state.currentUserId),
+    [readingEntries, state.currentUserId],
+  );
+  const liveOtherReaders = useMemo(
+    () => otherReadingEntries.filter((entry) => entry.status === "live"),
+    [otherReadingEntries],
+  );
+  const readingMarkersByVerse = useMemo(() => {
+    const markers: Record<number, ReadingMarker[]> = {};
+    const palette = [colors.clay, colors.moss, colors.rose, colors.gold, colors.olive];
+    liveOtherReaders.forEach((entry, index) => {
+      if (entry.scope !== "verse" || entry.verse === undefined) return;
+      if (entry.book !== position.book || entry.chapter !== position.chapter) return;
+      const member = memberById.get(entry.userId);
+      (markers[entry.verse] ??= []).push({
+        color: palette[index % palette.length],
+        name: member?.name ?? t("common.someone"),
+        userId: entry.userId,
+      });
+    });
+    return markers;
+  }, [liveOtherReaders, memberById, position.book, position.chapter, t]);
   const [selectedVersePosition, setSelectedVersePosition] = useState<BiblePosition | undefined>();
   const [selectedVerseNumbers, setSelectedVerseNumbers] = useState<number[]>([]);
   const [reflectionText, setReflectionText] = useState("");
@@ -926,6 +978,14 @@ export function BibleScreen() {
     [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader],
   );
 
+  const followReader = useCallback((entry: ReadingEntry) => {
+    setReadingVisible(false);
+    jumpToPosition(
+      { book: entry.book, chapter: entry.chapter, verse: entry.verse ?? 1 },
+      { highlight: true },
+    );
+  }, [jumpToPosition]);
+
   const hadAudioSession = useRef(false);
   useEffect(() => {
     if (boundedAudioPending) {
@@ -1644,6 +1704,14 @@ export function BibleScreen() {
         nextChapterTitle={nextChapter ? compactChapterLabel(nextChapter, bookLanguage) : undefined}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={0}
+        reading={liveOtherReaders.length > 0 ? {
+          count: liveOtherReaders.length,
+          onPress: () => setReadingVisible(true),
+          people: liveOtherReaders.slice(0, 2).map((entry) => ({
+            image: memberById.get(entry.userId)?.image,
+            name: memberById.get(entry.userId)?.name ?? t("common.someone"),
+          })),
+        } : undefined}
       />
       </Animated.View>
 
@@ -1734,6 +1802,8 @@ export function BibleScreen() {
             readerLineHeight={readerLineHeight}
             readerTextStyle={readerTextStyle}
             planMarkers={pagePlanMarkers[page.key] ?? []}
+            readingMarkersByVerse={active ? readingMarkersByVerse : undefined}
+            onReadingMarkerPress={() => setReadingVisible(true)}
             selectedVerseNumbers={active ? selectedVerseNumbers : emptyVerseNumbers}
             selectedVersePosition={active ? selectedVersePosition : undefined}
             showVerseNumbers={showVerseNumbers}
@@ -1841,10 +1911,23 @@ export function BibleScreen() {
         onHistoryBack={headerActions.onHistoryBack}
         onHistoryForward={headerActions.onHistoryForward}
         onOpenMyPlaces={headerActions.onOpenMyPlaces}
+        onOpenReading={() => setReadingVisible(true)}
         onOpenSearch={headerActions.onOpenSearch}
         onOpenSettings={headerActions.onOpenSettings}
         palette={readerPalette}
+        readingCount={liveOtherReaders.length}
         visible={moreVisible}
+      />
+      <ReadingNowSheet
+        currentPosition={position}
+        currentUserId={state.currentUserId}
+        entries={otherReadingEntries}
+        members={communityMembers}
+        onClose={() => setReadingVisible(false)}
+        onFollow={followReader}
+        onScopeChange={readingShare.setScope}
+        scope={readingShare.scope}
+        visible={readingVisible}
       />
       <BibleVersionSheet
         bibleVersionId={bibleVersionId}

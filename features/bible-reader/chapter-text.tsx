@@ -1,7 +1,7 @@
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { NativePressable } from "@/ui/native-pressable";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, Platform, Text, type TextLayoutEventData, TextStyle, View, ViewStyle } from "react-native";
+import { type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, Platform, Pressable, Text, type TextLayoutEventData, TextStyle, View, ViewStyle } from "react-native";
 import { bibleTextSegments } from "@/features/bible-footnotes";
 import {
   type BibleChapterSubtitle,
@@ -29,6 +29,8 @@ const bibleVerseWebInteractionStyle =
       } as TextStyle & ViewStyle)
     : undefined;
 
+export type ReadingMarker = { color: string; name: string; userId: string };
+
 export const BibleText = memo(function BibleText({
   chapterHeading,
   copyLabel,
@@ -36,6 +38,7 @@ export const BibleText = memo(function BibleText({
   chapterHighlightByVerse,
   highlightedPosition,
   onFootnotePress,
+  onReadingMarkerPress,
   onVerseCopy,
   onVersePress,
   onVersePressIn,
@@ -45,6 +48,7 @@ export const BibleText = memo(function BibleText({
   palette,
   planMarkers,
   position,
+  readingMarkersByVerse,
   readerLineHeight,
   readerTextStyle,
   selectedVerseNumbers,
@@ -60,6 +64,7 @@ export const BibleText = memo(function BibleText({
   chapterHighlightByVerse: Record<number, BibleHighlightColor>;
   highlightedPosition?: BiblePosition;
   onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number) => void;
+  onReadingMarkerPress?: (userId: string) => void;
   onVerseCopy: (verse: number) => void;
   onVersePress: (verse: number) => void;
   onVersePressIn: () => void;
@@ -69,6 +74,7 @@ export const BibleText = memo(function BibleText({
   palette: ReaderPalette;
   planMarkers: BiblePlanMarker[];
   position: BiblePosition;
+  readingMarkersByVerse?: Record<number, ReadingMarker[]>;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
   selectedVerseNumbers: number[];
@@ -189,6 +195,8 @@ export const BibleText = memo(function BibleText({
           readerTextStyle={readerTextStyle}
           verseNumberStyle={verseNumberStyle}
           showVerseNumbers={showVerseNumbers}
+          readingMarkers={readingMarkersByVerse?.[item.verse]}
+          onReadingMarkerPress={onReadingMarkerPress}
           {...decorations.get(item.verse)!}
         />;
       })}
@@ -421,14 +429,17 @@ type VerseRowProps = Pick<Parameters<typeof BibleText>[0],
   subtitlesBefore: BibleChapterSubtitle[];
   markersBefore: BiblePlanMarker[];
   markersAfter: BiblePlanMarker[];
+  readingMarkers?: ReadingMarker[];
+  onReadingMarkerPress?: (userId: string) => void;
 };
 
 const BibleVerseRow = memo(function BibleVerseRow({
   item, chapterNumber, copyLabel, reference, isFirstVerse, temporarySelected, persistedHighlightColor, spoken,
   onFootnotePress, onVerseCopy, onVersePress, onVersePressIn, onVerseLongPress, onVerseRef, onRowLayout,
   palette, readerLineHeight, readerTextStyle, verseNumberStyle, showVerseNumbers,
-  subtitlesBefore, markersBefore, markersAfter,
+  subtitlesBefore, markersBefore, markersAfter, readingMarkers, onReadingMarkerPress,
 }: VerseRowProps) {
+  const { t } = useAppTranslation();
   const selected = temporarySelected || Boolean(persistedHighlightColor);
   const persistedHighlightStyle = persistedHighlightColor
     ? { backgroundColor: highlightColorWithOpacity(persistedHighlightColor, 0.16) }
@@ -528,6 +539,20 @@ const BibleVerseRow = memo(function BibleVerseRow({
       </View>
     )}
   </NativePressable>
+  {readingMarkers && readingMarkers.length > 0 ? (
+    <View pointerEvents="box-none" style={{ alignItems: "center", gap: 4, position: "absolute", right: -14, top: 12 }}>
+      {readingMarkers.slice(0, 3).map((marker) => (
+        <Pressable
+          accessibilityLabel={t("reading.a11y.marker", { name: marker.name })}
+          accessibilityRole="button"
+          hitSlop={6}
+          key={marker.userId}
+          onPress={() => onReadingMarkerPress?.(marker.userId)}
+          style={{ backgroundColor: marker.color, borderColor: palette.background, borderRadius: 999, borderWidth: 1.5, height: 9, width: 9 }}
+        />
+      ))}
+    </View>
+  ) : null}
   {markersAfter.map((marker) => (
     <BiblePlanInlineMarker key={`${marker.planId}-${marker.kind}-${marker.verse}`} kind={marker.kind} label={marker.label} palette={palette} />
   ))}
