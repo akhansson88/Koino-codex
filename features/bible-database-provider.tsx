@@ -82,7 +82,7 @@ export function BibleDatabaseProvider({ children }: PropsWithChildren) {
   // before the timer fires simply requests it sooner.
   useEffect(() => {
     if (requested) return;
-    const timer = setTimeout(() => setRequested(true), 2500);
+    const timer = setTimeout(() => setRequested(true), 1200);
     return () => clearTimeout(timer);
   }, [requested]);
 
