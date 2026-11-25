@@ -25,7 +25,6 @@ export function ReadingNowRow({
   members: CommunityMember[];
 }) {
   const { language, t } = useAppTranslation();
-  const bookLanguage = bibleBookLanguage(language);
   const { entries } = useGroupReading(groupId);
   const [visible, setVisible] = useState(false);
   const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
@@ -35,7 +34,7 @@ export function ReadingNowRow({
 
   const first = live[0];
   const firstNameLabel = memberById.get(first.userId)?.name ?? t("common.someone");
-  const label = `${firstName(firstNameLabel)} · ${displayBibleBookName(first.book, bookLanguage)} ${first.chapter}`;
+  const label = `${firstName(firstNameLabel)} · ${displayBibleBookName(first.book, bibleBookLanguage(language, first.versionId))} ${first.chapter}`;
 
   return <>
     <Pressable
@@ -102,7 +101,6 @@ export function ReadingNowHomeCard({
   members: CommunityMember[];
 }) {
   const { language, t } = useAppTranslation();
-  const bookLanguage = bibleBookLanguage(language);
   const { entries } = useGroupReading(groupId);
   const [visible, setVisible] = useState(false);
   const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
@@ -111,7 +109,7 @@ export function ReadingNowHomeCard({
   if (!groupId || live.length < 2) return null;
 
   const preview = live.slice(0, 2)
-    .map((entry) => `${firstName(memberById.get(entry.userId)?.name ?? t("common.someone"))} ${displayBibleBookName(entry.book, bookLanguage)} ${entry.chapter}`)
+    .map((entry) => `${firstName(memberById.get(entry.userId)?.name ?? t("common.someone"))} ${displayBibleBookName(entry.book, bibleBookLanguage(language, entry.versionId))} ${entry.chapter}`)
     .join(" · ");
 
   return <>

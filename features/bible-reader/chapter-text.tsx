@@ -505,6 +505,9 @@ const BibleVerseRow = memo(function BibleVerseRow({
       borderWidth: 1,
       marginHorizontal: -10,
       paddingHorizontal: 10,
+      // Live readers get their own lane inside the row, so the dots are never
+      // clipped by the text column.
+      paddingRight: readingMarkers && readingMarkers.length > 0 ? 24 : 10,
       paddingVertical: 8,
     }}
   >
@@ -540,7 +543,7 @@ const BibleVerseRow = memo(function BibleVerseRow({
     )}
   </NativePressable>
   {readingMarkers && readingMarkers.length > 0 ? (
-    <View pointerEvents="box-none" style={{ alignItems: "center", gap: 4, position: "absolute", right: -14, top: 12 }}>
+    <View pointerEvents="box-none" style={{ alignItems: "center", gap: 4, position: "absolute", right: 3, top: 10 }}>
       {readingMarkers.slice(0, 3).map((marker) => (
         <Pressable
           accessibilityLabel={t("reading.a11y.marker", { name: marker.name })}

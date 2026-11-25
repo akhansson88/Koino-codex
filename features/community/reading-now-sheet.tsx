@@ -31,6 +31,7 @@ function hintKey(scope: ReadingShareScope) {
 }
 
 export function ReadingNowSheet({
+  bubbleHidden,
   currentPosition,
   currentUserId,
   entries,
@@ -38,10 +39,12 @@ export function ReadingNowSheet({
   onClose,
   onFollow,
   onScopeChange,
+  onShowBubble,
   scope,
   showShare = true,
   visible,
 }: {
+  bubbleHidden?: boolean;
   currentPosition?: BiblePosition;
   currentUserId?: string;
   entries: ReadingEntry[];
@@ -49,12 +52,12 @@ export function ReadingNowSheet({
   onClose: () => void;
   onFollow?: (entry: ReadingEntry) => void;
   onScopeChange?: (scope: ReadingShareScope) => void;
+  onShowBubble?: () => void;
   scope?: ReadingShareScope;
   showShare?: boolean;
   visible: boolean;
 }) {
   const { language, t } = useAppTranslation();
-  const bookLanguage = bibleBookLanguage(language);
   const memberById = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
   // The member's own row is never shown; the footer states what they share.
   const visibleEntries = currentUserId
@@ -78,7 +81,7 @@ export function ReadingNowSheet({
       image={member?.image}
       name={member?.name ?? t("common.someone")}
       tone={avatarTones[index % avatarTones.length]}
-      bookName={displayBibleBookName(entry.book, bookLanguage)}
+      bookName={displayBibleBookName(entry.book, bibleBookLanguage(language, entry.versionId))}
       onFollow={onFollow && entry.status === "live" ? () => onFollow(entry) : undefined}
     />;
   });
@@ -119,7 +122,7 @@ export function ReadingNowSheet({
         {elsewhere.length > 0 ? (
           <View style={{ gap: 10 }}>
             <Text style={[typography.sectionLabel, { color: colors.muted }]}>
-              {sameChapter.length > 0 ? t("reading.sheet.others") : t("reading.title")}
+              {sameChapter.length > 0 ? t("reading.sheet.others") : t("reading.sheet.inCommunity")}
             </Text>
             <View style={{ gap: 4 }}>{renderRows(elsewhere)}</View>
           </View>
@@ -169,6 +172,16 @@ export function ReadingNowSheet({
         </View>
         <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17 }}>{t(hintKey(scope))}</Text>
         <Text style={{ color: colors.muted, fontSize: 11, lineHeight: 16, opacity: 0.9 }}>{t("reading.share.privacy")}</Text>
+        {bubbleHidden && onShowBubble ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onShowBubble}
+            style={({ pressed }) => ({ alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 6, minHeight: 38, opacity: pressed ? 0.65 : 1 })}
+          >
+            <Feather name="circle" size={12} color={colors.muted} />
+            <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "600" }}>{t("reading.bubble.show")}</Text>
+          </Pressable>
+        ) : null}
       </View>
     ) : null}
   </AppSheet>;

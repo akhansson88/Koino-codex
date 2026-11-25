@@ -10,7 +10,7 @@ Status: implemented on 25 November 2026. No client build has been shipped yet.
 | --- | --- |
 | Freshness model, parsing, ordering, margin markers | `state/reading-model.ts` |
 | Share setting, publisher, group listener | `state/reading-share.ts` |
-| Reader pill, markers, follow, sheet wiring | `features/bible-screen.tsx`, `features/bible-reader/header.tsx`, `features/bible-reader/chapter-text.tsx`, `features/bible-reader/tools-sheet.tsx` |
+| Reader bubble, markers, follow, sheet wiring | `features/bible-screen.tsx`, `features/community/reading-bubble.tsx`, `features/bible-reader/chapter-text.tsx`, `features/bible-reader/tools-sheet.tsx` |
 | Sheet with live/recent lists and the share control | `features/community/reading-now-sheet.tsx` |
 | Community strip and Home card | `features/community/reading-now-row.tsx`, `features/settings-screen.tsx`, `features/home-screen.tsx` |
 | Rules | `firebase.rules.json` → `groupReading` |
@@ -119,17 +119,15 @@ Combining `at` with presence means: app killed → present goes `offline` at onc
 
 Four surfaces, in order of how much they interrupt:
 
-### 4.1 Reader header — one pill
+### 4.1 Reader bubble
 
-A compact pill next to the chapter title, only when at least one other member is live in the same book:
+A chat-head style bubble floats over the text: a 52 dp circle with two avatars and a live count. It takes no layout space and never reflows the chapter.
 
-```
-( •• )  3 läser nu        ›
-```
-
-- Avatar stack (max 3, then `+N`), using the existing `Avatar` + presence dot.
-- Tap → sheet 4.3. Long press → "Läs privat" (turns sharing off for this group in one tap).
-- If nobody else is live: nothing is shown. No empty state in the reading chrome.
+- Drag it anywhere; it snaps to the nearest side and remembers its spot per member and community, across restarts.
+- Tap → a compact panel listing live readers (same chapter first), each row follows that reader, plus a link to the full sheet and sharing control.
+- Minimize folds the panel back to the bubble. Close ("Dölj bubblan") removes the bubble; the reader menu's **Läser nu** row and its "Show the bubble" action bring it back.
+- The panel closes by itself after 12 s and whenever the chapter changes, so it never sits in the way.
+- No bubble when nobody else is live. No empty state in the reading chrome.
 
 ### 4.2 In the text — verse markers
 

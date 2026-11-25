@@ -104,6 +104,7 @@ import {
 } from "@/features/bible-reader/verse-helpers";
 import { BibleReaderHeader } from "@/features/bible-reader/header";
 import { ReadingNowSheet } from "@/features/community/reading-now-sheet";
+import { ReadingBubble } from "@/features/community/reading-bubble";
 import type { CommunityMember } from "@/features/community/types";
 import type { ReadingEntry } from "@/state/reading-model";
 import { useGroupReading, useReadingPublisher, useReadingShareSetting } from "@/state/reading-share";
@@ -209,6 +210,7 @@ export function BibleScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
   const [readingVisible, setReadingVisible] = useState(false);
+  const [readingBubbleVisible, setReadingBubbleVisible] = useState(true);
 
   // Live group reading: the reader publishes their own position only when they
   // chose to share it, and reads the rest of the community back in one node.
@@ -1704,14 +1706,6 @@ export function BibleScreen() {
         nextChapterTitle={nextChapter ? compactChapterLabel(nextChapter, bookLanguage) : undefined}
         translationLabel={bibleVersionShortLabel(bibleVersionId)}
         topInset={0}
-        reading={liveOtherReaders.length > 0 ? {
-          count: liveOtherReaders.length,
-          onPress: () => setReadingVisible(true),
-          people: liveOtherReaders.slice(0, 2).map((entry) => ({
-            image: memberById.get(entry.userId)?.image,
-            name: memberById.get(entry.userId)?.name ?? t("common.someone"),
-          })),
-        } : undefined}
       />
       </Animated.View>
 
@@ -1814,6 +1808,23 @@ export function BibleScreen() {
           </Pressable> : <ActivityIndicator color={readerPalette.text} style={{ minHeight: 180 }} />}
         </ChapterPageScrollView>}
       />
+
+      {readingBubbleVisible && liveOtherReaders.length > 0 ? (
+        <ReadingBubble
+          currentPosition={position}
+          currentUserId={state.currentUserId}
+          entries={liveOtherReaders}
+          groupId={state.currentGroupId}
+          members={communityMembers}
+          onFollow={followReader}
+          onHide={() => {
+            setReadingBubbleVisible(false);
+            setReaderToast({ message: t("reading.bubble.dismissed"), tone: "success" });
+          }}
+          onOpenSheet={() => setReadingVisible(true)}
+          userId={state.currentUserId}
+        />
+      ) : null}
 
       <BibleAudioPlayer visible={audioVisible} onClose={() => setAudioVisible(false)} onOpen={() => setAudioVisible(true)}
         onMiniHeightChange={setAudioMiniHeight}
@@ -1919,6 +1930,7 @@ export function BibleScreen() {
         visible={moreVisible}
       />
       <ReadingNowSheet
+        bubbleHidden={!readingBubbleVisible}
         currentPosition={position}
         currentUserId={state.currentUserId}
         entries={otherReadingEntries}
@@ -1926,6 +1938,7 @@ export function BibleScreen() {
         onClose={() => setReadingVisible(false)}
         onFollow={followReader}
         onScopeChange={readingShare.setScope}
+        onShowBubble={() => setReadingBubbleVisible(true)}
         scope={readingShare.scope}
         visible={readingVisible}
       />
