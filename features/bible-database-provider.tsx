@@ -76,6 +76,16 @@ export function BibleDatabaseProvider({ children }: PropsWithChildren) {
     return () => { active = false; };
   }, [requested]);
 
+  // Opening the bundled SQLCipher database costs a few seconds of file work on
+  // a cold start. Pay that in the background once the first screen is settled,
+  // so tapping Bible finds an open connection instead of a spinner. A tap
+  // before the timer fires simply requests it sooner.
+  useEffect(() => {
+    if (requested) return;
+    const timer = setTimeout(() => setRequested(true), 2500);
+    return () => clearTimeout(timer);
+  }, [requested]);
+
   // Load the Bible asset only when a reader or picker requests it. Once opened,
   // keep the connection above the routes so dismissing a picker cannot close
   // active queries. Home never imports or opens this large database.
