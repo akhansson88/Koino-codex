@@ -7,6 +7,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { adminApp } from "./firebase-admin";
 import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-messages";
+import { currentHistoryGeneration } from "./notification-policy";
 import { activityUnreadCount, prayerUnreadCount, processExpoReceipts, pushAllowed, sendExpoPush, type PushCategory } from "./push-delivery";
 
 type Reply = {
@@ -52,7 +53,7 @@ export const createCommentNotification = onValueCreated(
 
     const database = getDatabase(adminApp);
     const policy = (await database.ref("e2eePolicy").get()).val();
-    if (policy?.sharedWritesFrozen || policy?.historyGeneration && reply.historyGeneration !== policy.historyGeneration) return;
+    if (!currentHistoryGeneration(reply.historyGeneration, policy)) return;
     if (!(await database.ref(`encryptedData/replies/${groupId}/${replyId}`).get()).exists()) return;
     if ((await database.ref(`e2eeMigrations/group/${groupId}/importedEventIds/${replyId}`).get()).exists()) return;
     const targetCollection = reply.targetType === "post" ? "posts" : "checkIns";
@@ -152,7 +153,7 @@ export const sendPrayerNotification = onValueCreated(
 
     const database = getDatabase(adminApp);
     const policy = (await database.ref("e2eePolicy").get()).val();
-    if (policy?.sharedWritesFrozen || policy?.historyGeneration && notification.historyGeneration !== policy.historyGeneration) return;
+    if (!currentHistoryGeneration(notification.historyGeneration, policy)) return;
     if (!(await database.ref(`encryptedData/prayerNotifications/${recipientUserId}/${notificationId}`).get()).exists()) return;
     if ((await database.ref(`e2eeMigrations/user/${recipientUserId}/importedEventIds/${notificationId}`).get()).exists()) return;
     if (!(await pushAllowed(database, recipientUserId, "prayerActivity"))) return;

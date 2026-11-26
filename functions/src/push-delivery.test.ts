@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-messages";
+import { currentHistoryGeneration } from "./notification-policy";
 import { activityUnreadCount, isDeviceNotRegistered, preferenceAllows } from "./push-delivery";
 import type { Database } from "firebase-admin/database";
 
@@ -87,6 +88,13 @@ test("prayer messages use the prayer channel", () => {
   const direct = buildPrayerPushMessage({ actorName: "", notificationId: "prayer-2" });
   assert.equal(direct.body, "Someone prayed for you");
   assert.deepEqual(direct.data, { prayerNotificationId: "prayer-2" });
+});
+
+test("new records without a generation are current, an explicit old one is stale", () => {
+  assert.equal(currentHistoryGeneration(undefined, { historyGeneration: 1 }), true);
+  assert.equal(currentHistoryGeneration(1, { historyGeneration: 1 }), true);
+  assert.equal(currentHistoryGeneration(2, { historyGeneration: 1 }), false);
+  assert.equal(currentHistoryGeneration(undefined, { sharedWritesFrozen: true }), false);
 });
 
 test("only DeviceNotRegistered errors authorize token cleanup", () => {
