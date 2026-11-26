@@ -4,8 +4,6 @@ import { httpsCallable } from "firebase/functions";
 import {
   AUDIO_MAX_BYTES,
   AUDIO_MIME,
-  audioDurationSeconds,
-  estimatedAudioBytes,
   newAudioClipId,
   type AudioScope,
 } from "@/state/audio";
@@ -208,6 +206,3 @@ export async function prepareAudioClip(clip: AudioClip) {
   return cacheClip(clip);
 }
 
-export function audioPlaybackHint(clip: AudioClip) {
-  return `${clip.id}:${clip.bytes}:${estimatedAudioBytes(clip.durationMs)}:${audioDurationSeconds(clip.durationMs).toFixed(1)}`;
-}

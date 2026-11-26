@@ -41,7 +41,7 @@ function translation(value: string) {
   return value as TranslationKey;
 }
 
-export function AudioRecorderSheet({
+function AudioRecorderSheetContent({
   communityName,
   groupId,
   onClose,
@@ -479,3 +479,9 @@ export function AudioRecorderSheet({
     </Modal>
   );
 }
+
+/** Mounts the recorder only while it is open, so a closed composer never polls the microphone. */
+export function AudioRecorderSheet(props: Parameters<typeof AudioRecorderSheetContent>[0]) {
+  return props.visible ? <AudioRecorderSheetContent {...props} /> : null;
+}
+
