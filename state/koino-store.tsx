@@ -2112,6 +2112,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   ? action.targetType
                   : undefined;
 
+              // Praying again for a request the member already prayed for keeps
+              // the original reaction but is still a prayer the owner should see.
+              const notifyRequestPrayerAgain = async () => {
+                if (action.status !== "completed" || reactionTargetType !== "post") return;
+                await leavePrayerNotification({
+                  targetType: "post",
+                  targetId: action.targetId,
+                  recipientUserId: action.recipientUserId,
+                  startedAt: action.startedAt,
+                  completedAt,
+                  durationSeconds,
+                  requestTitle: prayerRequestTitle(action.targetId),
+                });
+              };
+
               if (reactionTargetType && profile?.currentGroupId) {
                 const groupId = profile.currentGroupId;
                 const reactionId = prayerReactionId(firebaseUser.uid, reactionTargetType, action.targetId);
@@ -2128,6 +2143,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                       prayerSessionFromReaction(existingLocalReaction, action.recipientUserId),
                     );
                   }
+                  await notifyRequestPrayerAgain();
                   return;
                 }
 
@@ -2176,6 +2192,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                         prayerSessionFromReaction(persistedReaction, action.recipientUserId),
                       );
                     }
+                    await notifyRequestPrayerAgain();
                     return;
                   }
 
@@ -2193,6 +2210,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                         ref(database, `prayerSessions/${firebaseUser.uid}/${reactionId}`),
                         prayerSessionFromReaction(existingTransactionReaction, action.recipientUserId),
                       );
+                      await notifyRequestPrayerAgain();
                       return;
                     }
                     setPrayerReactions((current) =>
