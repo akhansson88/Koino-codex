@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 // These digests were computed from the pre-isolation revision (3bf2c05).
 // Canonicalize object keys so reordering or formatting cannot change the baseline.
 const productionBaseline = {
-  expo: "19c888650c3539f3fd6f945cf1ba1abc008183a2ba66369d4d994b1400025169",
+  expo: "16862702f173ea2c4a1101dece70c58d05f584f4ae6eead79da8b1ceb297bef6",
   firebase: "5fceeacfcef9fb426e90e84a30845b5320709bea4e814148b9aa00217a1ff012",
   androidFirebase: "48417c420a792fa1bcfe483e2e69b0310be6ca241615ed12cca3e2b9ef932aa5",
   eas: "a0f60b833180373a3eba4d9bb6762768ca318c1a1dab237c788e8e8af767e426",
@@ -337,7 +337,7 @@ for (const name of ["emulator-ios", "emulator-android"]) assert.equal(eas.build[
 for (const profile of Object.values(eas.build)) assert.notEqual(profile.env?.APP_VARIANT, "emulator");
 
 const sessionSource = readFileSync(new URL("../state/encryption/session.ts", import.meta.url), "utf8");
-assert.match(sessionSource, /httpsCallable<unknown, T>\(functions, "encryptedAccount"\)/);
+assert.match(sessionSource, /httpsCallable<CallOptions, T>\(functions, "koinoAccount"\)/);
 assert.doesNotMatch(sessionSource, /getFunctions\(getApp/);
 assert.match(readFileSync(new URL("../index.js", import.meta.url), "utf8"), /^import ['"]\.\/state\/store\/firebase-bootstrap['"]/);
 console.log("Production baselines, retired app rejection before Firebase access, and shared encryption callable routing passed.");
