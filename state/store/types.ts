@@ -80,6 +80,10 @@ export type Action =
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string; journalScope?: JournalScope }
   | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string; journalScope?: JournalScope }
   | { type: "deleteJournalEntry"; id: Id }
+  | { type: "startFast"; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }
+  | { type: "updateFast"; id: Id; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }
+  | { type: "endFast"; id: Id }
+  | { type: "acknowledgeFast"; id: Id }
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }
   | { type: "highlightVerses"; color: BibleHighlightColor; colorId?: Id; verses: BibleVerse[] }

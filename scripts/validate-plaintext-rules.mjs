@@ -55,6 +55,26 @@ try {
   await set(ref(second.database, `encryptedData/journalEntries/${second.uid}/own`), { id: "own", userId: second.uid, body: "second", source: "manual", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   assert.equal((await get(ref(second.database, `encryptedData/journalEntries/${second.uid}/own`))).exists(), true);
 
+  // Fasts are account-private: only the owner can read or write them.
+  const fastPath = `encryptedData/fasts/${owner.uid}/fast_1`;
+  await set(ref(owner.database, fastPath), {
+    id: "fast_1", userId: owner.uid, startDate: "2026-11-23", durationDays: 7,
+    timeZone: "Europe/Stockholm", startAt: "2026-11-22T23:00:00.000Z", endAt: "2026-11-29T23:00:00.000Z",
+    status: "active", alertEnabled: true, createdAt: "2026-11-23T00:00:00.000Z", updatedAt: "2026-11-23T00:00:00.000Z",
+  });
+  assert.equal((await get(ref(owner.database, fastPath))).child("durationDays").val(), 7);
+  await denied(() => get(ref(second.database, fastPath)));
+  await denied(() => set(ref(second.database, `${fastPath}/status`), "ended"));
+  await denied(() => get(ref(second.database, `encryptedData/fasts/${owner.uid}`)));
+  await set(ref(second.database, `encryptedData/fasts/${second.uid}/own`), {
+    id: "own", userId: second.uid, startDate: "2026-11-24", durationDays: 1,
+    timeZone: "Europe/Stockholm", startAt: "2026-11-23T23:00:00.000Z", endAt: "2026-11-24T23:00:00.000Z",
+    status: "active", alertEnabled: false, createdAt: "2026-11-24T00:00:00.000Z", updatedAt: "2026-11-24T00:00:00.000Z",
+  });
+  await denied(() => get(ref(owner.database, `encryptedData/fasts/${second.uid}/own`)));
+  await set(ref(owner.database, fastPath), null);
+  assert.equal((await get(ref(owner.database, fastPath))).exists(), false);
+
   // Saved verses stay private to their owner and can be saved and removed.
   const savedVerse = `encryptedData/savedVerses/${owner.uid}/passage_1`;
   await set(ref(owner.database, savedVerse), {

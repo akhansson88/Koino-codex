@@ -1,5 +1,6 @@
 import { BibleAudioProvider } from "@/features/bible-audio/provider";
 import { EventReminderRuntime } from "@/features/events/reminder-runtime";
+import { FastingReminderRuntime } from "@/features/fasting/reminder-runtime";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
 import "@/features/startup-performance";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -66,6 +67,7 @@ function RootNavigator() {
       {!onboarding.pending ? <NotificationRuntime /> : null}
       {!onboarding.pending ? <PresenceRuntime /> : null}
       {!onboarding.pending ? <EventReminderRuntime /> : null}
+      {!onboarding.pending ? <FastingReminderRuntime /> : null}
       <StatusBar style={scheme === "dark" ? "light" : "dark"} backgroundColor={colors.background} />
       <Stack
         // Leave only index for one commit so every previous route is removed,
@@ -106,6 +108,7 @@ function RootNavigator() {
           <Stack.Screen name="event-details" options={{ headerShown: false }} />
           <Stack.Screen name="community-statistics" options={{ headerShown: false }} />
           <Stack.Screen name="bible-plans" options={{ headerShown: false }} />
+          <Stack.Screen name="fasting" options={{ headerShown: false }} />
           <Stack.Screen name="donation-amount" options={{ headerShown: false }} />
           <Stack.Screen name="donation-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="donation-thank-you" options={{ headerShown: false }} />

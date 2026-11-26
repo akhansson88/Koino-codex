@@ -4,6 +4,9 @@ functions/.secret.local
 .expo/
 /android/
 /ios/
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/
 .codex-remote-attachments/
 dist/
 *.apk

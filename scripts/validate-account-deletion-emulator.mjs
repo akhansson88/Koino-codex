@@ -155,6 +155,16 @@ try {
       groupBiblePlanParticipation: {
         shared: { announcementA: { participantA: { id: "participantA", userId: A, announcementId: "announcementA" } } },
       },
+      fasts: {
+        [A]: {
+          fastA: {
+            id: "fastA", userId: A, startDate: "2026-11-23", durationDays: 7,
+            timeZone: "Europe/Stockholm", startAt: "2026-11-22T23:00:00.000Z", endAt: "2026-11-29T23:00:00.000Z",
+            status: "active", alertEnabled: true, createdAt: "2026-11-23T00:00:00.000Z", updatedAt: "2026-11-23T00:00:00.000Z",
+          },
+        },
+        [B]: { fastB: { id: "fastB", userId: B, startDate: "2026-11-24", durationDays: 1, status: "active" } },
+      },
       legacyUserArchives: { [A]: { legacyA: { sourceCollection: "journalEntries" } } },
       legacyGroupArchives: { shared: { legacyA: { userId: A, sourceCollection: "posts" } } },
     },
@@ -176,6 +186,7 @@ try {
     e2eeJoinRequests: { shared: { [A]: { userId: A, name: "Delete Me" } } },
     e2eeJoinRequestStatuses: { [A]: { shared: { status: "approved" } } },
     e2eeDepartures: { shared: { [A]: true } },
+    presence: { shared: { [A]: { sessions: { deviceA: { state: "online", at: 1 } } } } },
     pendingExpoPushReceipts: { ticketA: { recipientUserId: A, tokenId: "tokenA" }, ticketB: { recipientUserId: B, tokenId: "tokenB" } },
     eventReminderDeliveries: { shared: { eventA: { [A]: { "60": true } } } },
   });
@@ -193,6 +204,7 @@ try {
     `encryptedData/profiles/${A}`,
     `encryptedData/journalEntries/${A}`,
     `journalEntries/${A}`,
+    `encryptedData/fasts/${A}`,
     `encryptedData/privateCheckIns/${A}`,
     `encryptedData/prayerSessions/${A}`,
     `encryptedData/savedVerses/${A}`,
@@ -213,6 +225,7 @@ try {
     `e2eeJoinRequests/shared/${A}`,
     `e2eeJoinRequestStatuses/${A}`,
     `e2eeDepartures/shared/${A}`,
+    `presence/shared/${A}`,
     `e2eeAccounts/${A}`,
     `e2eeSigners/${signatureA}`,
     `e2eeEscrow/${A}`,
@@ -244,6 +257,7 @@ try {
   const kept = [
     `profiles/${B}`,
     `encryptedData/journalEntries/${B}`,
+    `encryptedData/fasts/${B}`,
     `encryptedData/pushTokens/${B}`,
     `encryptedData/posts/shared/postB`,
     `encryptedData/checkIns/shared/sharedCheckB`,

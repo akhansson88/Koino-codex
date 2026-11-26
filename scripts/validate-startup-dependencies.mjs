@@ -30,7 +30,7 @@ const result = await build({
   bundle: true,
   entryPoints: [path.join(projectRoot, "features", "home-screen.tsx")],
   format: "esm",
-  loader: { ".db": "file", ".onnx": "file", ".tokenizer": "file" },
+  loader: { ".db": "file", ".onnx": "file", ".tokenizer": "file", ".jpg": "file", ".png": "file" },
   logLevel: "silent",
   metafile: true,
   outdir: "out",

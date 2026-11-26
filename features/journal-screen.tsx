@@ -1,4 +1,5 @@
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
+import { FastingCard } from "@/features/fasting/fasting-card";
 import { MeBiblePlans } from "@/features/me-bible-plans";
 import { MePrayers } from "@/features/me-prayers";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
@@ -197,6 +198,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
         completed={Boolean(todaysReflection)}
         onPress={() => todaysReflection ? openEntry(todaysReflection) : beginEntry()}
       />
+      <FastingCard />
       {saved ? (
         <BodyText accessibilityRole="alert" accessibilityLiveRegion="polite">
           {saved.community ? t("me.journey.composer.shared", { community: saved.community }) : t("me.journey.composer.savedPrivate")}

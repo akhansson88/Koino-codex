@@ -10,8 +10,13 @@ import { setNotificationRegistrationState, useNotificationRegistrationRetryVersi
 import { navigateThenMarkRead } from "@/ui/notification-navigation";
 
 // Importing expo-notifications can retry a persisted Expo push registration.
-const Notifications: typeof import("expo-notifications") | undefined =
-  developmentMode ? undefined : require("expo-notifications");
+// Local notifications (fasting completion, event reminders) still work in Dev.
+let Notifications: typeof import("expo-notifications") | undefined;
+try {
+  Notifications = require("expo-notifications");
+} catch {
+  Notifications = undefined;
+}
 
 Notifications?.setNotificationHandler({
   handleNotification: async () => ({
@@ -30,6 +35,8 @@ type NotificationData = {
   notificationId?: unknown;
   bundled?: unknown;
   prayerNotificationId?: unknown;
+  koinoFast?: unknown;
+  fastId?: unknown;
 };
 
 function validTargetType(value: unknown): value is "post" | "check_in" {
@@ -67,6 +74,10 @@ export function NotificationRuntime() {
     let registering = false;
     let lastAttemptAt = 0;
     const refreshCooldownMs = 60_000;
+    if (developmentMode) {
+      setNotificationRegistrationState({ status: "idle" });
+      return;
+    }
     const register = async () => {
       if (registering) return;
       registering = true;
@@ -91,6 +102,13 @@ export function NotificationRuntime() {
           await Notifications.setNotificationChannelAsync("event-reminders", {
             name: "Event reminders",
             importance: Notifications.AndroidImportance.HIGH,
+          });
+          await Notifications.setNotificationChannelAsync("fasting-complete", {
+            name: "Fasting",
+            importance: Notifications.AndroidImportance.MAX,
+            sound: "default",
+            vibrationPattern: [0, 500, 250, 500],
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
           });
         }
 
@@ -144,6 +162,10 @@ export function NotificationRuntime() {
       if (!response || handledResponseId.current === response.notification.request.identifier) return;
       handledResponseId.current = response.notification.request.identifier;
       const data = response.notification.request.content.data as NotificationData;
+      if (data.koinoFast === true) {
+        router.push("/fasting" as never);
+        return;
+      }
       const markRead =
         data.bundled === true &&
         typeof data.groupId === "string" &&

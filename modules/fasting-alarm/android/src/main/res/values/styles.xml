@@ -1,0 +1,10 @@
+<resources>
+  <style name="FastingAlarmTheme" parent="android:Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@color/fasting_alarm_background</item>
+    <item name="android:statusBarColor">@color/fasting_alarm_background</item>
+    <item name="android:navigationBarColor">@color/fasting_alarm_background</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowLightNavigationBar">false</item>
+    <item name="android:windowShowWallpaper">false</item>
+  </style>
+</resources>

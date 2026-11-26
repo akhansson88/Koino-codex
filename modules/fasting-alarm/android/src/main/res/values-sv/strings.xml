@@ -1,0 +1,9 @@
+<resources>
+  <string name="fasting_alarm_title">Du har fullföljt fastan</string>
+  <string name="fasting_alarm_body">Din fasta är klar.</string>
+  <string name="fasting_alarm_autostop">Larmet stoppas automatiskt efter 5 minuter.</string>
+  <string name="fasting_alarm_stop">Stoppa larmet</string>
+  <string name="fasting_alarm_channel">Fasta klar</string>
+  <string name="fasting_alarm_notification_title">KOINO</string>
+  <string name="fasting_alarm_notification_body">Din fasta är klar.</string>
+</resources>

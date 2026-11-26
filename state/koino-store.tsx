@@ -40,6 +40,7 @@ import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bib
 import { addPlanDays, isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus, todayDateKey } from "@/features/bible-plans";
 import { eventDraftProblem, isGroupEventKind, normalizeEventReminderMinutes, sortGroupEvents } from "@/state/events";
+import { fastDurationDays, fastEndAt, fastPhase, fastStartAt, openFast } from "@/state/fasting";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
@@ -53,6 +54,7 @@ import {
   DiscussionFollow,
   BiblePlan,
   EventRsvp,
+  Fast,
   GroupBiblePlanAnnouncement,
   GroupBiblePlanParticipation,
   GroupEvent,
@@ -464,6 +466,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [discussionFollows, setDiscussionFollows] = useState<DiscussionFollow[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
+  const [fasts, setFasts] = useState<Fast[]>([]);
+  const [fastsReady, setFastsReady] = useState(false);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
   const [groupEvents, setGroupEvents] = useState<GroupEvent[]>([]);
   const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>([]);
@@ -544,6 +548,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setDiscussionFollows([]);
     setJournalEntries([]);
     setSavedVerses([]);
+    setFasts([]);
+    setFastsReady(true);
     setBibleHighlights([]);
     setGroupEvents([]);
     setEventRsvps([]);
@@ -846,6 +852,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const activityNotificationsRef = ref(database, `activityNotifications/${firebaseUser.uid}`);
     const notificationPreferencesRef = ref(database, `notificationPreferences/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
+    const fastsRef = ref(database, `fasts/${firebaseUser.uid}`);
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     bibleHighlightMutationsRef.current?.dispose();
     const highlightMutations = createBibleHighlightMutations(setBibleHighlights);
@@ -913,6 +920,19 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(bibleHighlightsRef, (snapshot) => {
         if (active && auth.currentUser?.uid === firebaseUser.uid) highlightMutations.receive(asArray<BibleHighlight>(snapshot.val()));
       }, (error) => { if (active && auth.currentUser?.uid === firebaseUser.uid) setAuthError(authMessage(error)); }),
+      onValue(fastsRef, (snapshot) => {
+        if (!active) return;
+        setFasts(
+          asArray<Fast>(snapshot.val()).sort((left, right) =>
+            Date.parse(right.startAt) - Date.parse(left.startAt) || Date.parse(right.createdAt) - Date.parse(left.createdAt),
+          ),
+        );
+        setFastsReady(true);
+      }, (error) => {
+        if (!active) return;
+        setFastsReady(true);
+        setAuthError(authMessage(error));
+      }),
       onValue(bibleHighlightColorsRef, async (snapshot) => {
         if (snapshot.exists()) {
           setBibleHighlightColors(asArray<BibleHighlightPaletteColor>(snapshot.val()).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.label.localeCompare(b.label)));
@@ -1242,6 +1262,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       discussionFollows: visibleShared.discussionFollows,
       journalEntries,
       savedVerses,
+      fasts,
+      fastsReady,
       bibleHighlights,
       bibleHighlightColors,
       biblePlans,
@@ -1294,6 +1316,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     replies,
     discussionFollows,
     savedVerses,
+    fasts,
+    fastsReady,
     bibleHighlights,
     bibleHighlightColors,
     biblePlans,
@@ -2490,6 +2514,89 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
               return;
             }
+            case "startFast": {
+              if (!firebaseUser) return;
+              const durationDays = fastDurationDays(action.durationDays);
+              const startAt = fastStartAt(action.startDate);
+              const endAt = durationDays ? fastEndAt(action.startDate, durationDays) : undefined;
+              if (!durationDays || !startAt || !endAt || !action.timeZone.trim()) {
+                throw new Error("Enter a start date and a duration from 1 to 365 days.");
+              }
+              if (openFast(fasts)) throw new Error("Finish or end your current fast before starting another.");
+              const timestamp = now();
+              const fast: Fast = {
+                id: id("fast"),
+                userId: firebaseUser.uid,
+                startDate: action.startDate,
+                durationDays,
+                timeZone: action.timeZone,
+                startAt: startAt.toISOString(),
+                endAt: endAt.toISOString(),
+                status: "active",
+                alertEnabled: action.alertEnabled,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await set(
+                ref(database, `fasts/${firebaseUser.uid}/${fast.id}`),
+                fast,
+                () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
+              );
+              return;
+            }
+            case "updateFast": {
+              if (!firebaseUser) return;
+              const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
+              if (!current) throw new Error("This fast is no longer available.");
+              if (current.status === "ended" || fastPhase(current) === "complete") {
+                throw new Error("This fast has already ended.");
+              }
+              const durationDays = fastDurationDays(action.durationDays);
+              const startAt = fastStartAt(action.startDate);
+              const endAt = durationDays ? fastEndAt(action.startDate, durationDays) : undefined;
+              if (!durationDays || !startAt || !endAt || !action.timeZone.trim()) {
+                throw new Error("Enter a start date and a duration from 1 to 365 days.");
+              }
+              const updatedAt = now();
+              await update(
+                ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
+                {
+                  startDate: action.startDate,
+                  durationDays,
+                  timeZone: action.timeZone,
+                  startAt: startAt.toISOString(),
+                  endAt: endAt.toISOString(),
+                  alertEnabled: action.alertEnabled,
+                  updatedAt,
+                },
+                () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
+              );
+              return;
+            }
+            case "endFast": {
+              if (!firebaseUser) return;
+              const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
+              if (!current || current.status === "ended") return;
+              const endedAt = now();
+              await update(
+                ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
+                { status: "ended", endedAt, updatedAt: endedAt },
+                () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
+              );
+              return;
+            }
+            case "acknowledgeFast": {
+              if (!firebaseUser) return;
+              const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
+              if (!current || current.acknowledgedAt || fastPhase(current) !== "complete") return;
+              const acknowledgedAt = now();
+              await update(
+                ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
+                { acknowledgedAt, updatedAt: acknowledgedAt },
+                () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
+              );
+              return;
+            }
             case "saveVerse": {
               if (!firebaseUser) return;
               const identity = savedVerseIdentity(action.verse);
@@ -3075,6 +3182,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         if (!highlightAction || (auth.currentUser?.uid === firebaseUser?.uid && sessionGeneration() === generation)) setAuthError(authMessage(error));
         if (
           highlightAction ||
+          action.type === "startFast" ||
+          action.type === "updateFast" ||
+          action.type === "endFast" ||
+          action.type === "acknowledgeFast" ||
           action.type === "signIn" ||
           action.type === "signUp" ||
           action.type === "createBiblePlan" ||
@@ -3133,6 +3244,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       journalEntries,
       journalEntriesHasMore,
       journalEntriesLoadingMore,
+      fasts,
       memberships,
       posts,
       postReactions,

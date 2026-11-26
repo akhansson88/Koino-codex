@@ -1,0 +1,9 @@
+<resources>
+  <string name="fasting_alarm_title">You completed fasting</string>
+  <string name="fasting_alarm_body">Your fast has ended.</string>
+  <string name="fasting_alarm_autostop">The alarm stops automatically after 5 minutes.</string>
+  <string name="fasting_alarm_stop">Stop alarm</string>
+  <string name="fasting_alarm_channel">Fasting completion</string>
+  <string name="fasting_alarm_notification_title">KOINO</string>
+  <string name="fasting_alarm_notification_body">Your fast is complete.</string>
+</resources>

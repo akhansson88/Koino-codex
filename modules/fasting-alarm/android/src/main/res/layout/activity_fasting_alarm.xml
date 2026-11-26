@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fasting_alarm_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp">
+
+  <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFamily="sans-serif-medium"
+      android:letterSpacing="0.18"
+      android:text="KOINO"
+      android:textColor="@color/fasting_alarm_accent"
+      android:textSize="14sp" />
+
+  <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="28dp"
+      android:fontFamily="sans-serif-medium"
+      android:gravity="center"
+      android:text="@string/fasting_alarm_title"
+      android:textColor="@color/fasting_alarm_text"
+      android:textSize="34sp" />
+
+  <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="14dp"
+      android:gravity="center"
+      android:text="@string/fasting_alarm_body"
+      android:textColor="@color/fasting_alarm_muted"
+      android:textSize="17sp" />
+
+  <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="10dp"
+      android:gravity="center"
+      android:text="@string/fasting_alarm_autostop"
+      android:textColor="@color/fasting_alarm_muted"
+      android:textSize="13sp" />
+
+  <Button
+      android:id="@+id/fasting_alarm_stop"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="44dp"
+      android:background="@drawable/fasting_alarm_button"
+      android:fontFamily="sans-serif-medium"
+      android:minHeight="64dp"
+      android:text="@string/fasting_alarm_stop"
+      android:textAllCaps="false"
+      android:textColor="@color/fasting_alarm_ink"
+      android:textSize="20sp" />
+</LinearLayout>

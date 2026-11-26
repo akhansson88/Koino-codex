@@ -344,6 +344,7 @@ async function deleteMemberships(uid: string): Promise<number> {
     writer.add(`e2eeJoinRequests/${groupId}/${uid}`);
     writer.add(`e2eeDepartures/${groupId}/${uid}`);
     writer.add(`e2eeGroups/${groupId}/members/${uid}`);
+    writer.add(`presence/${groupId}/${uid}`);
   }
   return writer.commit();
 }

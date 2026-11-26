@@ -18,6 +18,7 @@ export const policies: Record<string, CollectionPolicy> = {
   groupEvents: { depth: 3, scope: "group", metadata: [...routing, "kind", "startAt", "endAt"] },
   eventRsvps: { depth: 4, scope: "group", metadata: [...routing, "eventId", "status"] },
   journalEntries: { depth: 3, scope: "user", metadata: routing },
+  fasts: { depth: 3, scope: "user", metadata: [...routing, "startDate", "durationDays", "timeZone", "startAt", "endAt", "status", "alertEnabled"] },
   privateCheckIns: { depth: 3, scope: "user", metadata: [...routing, "dayKey", "visibility"] },
   prayerSessions: { depth: 3, scope: "user", metadata: routing },
   prayerNotifications: { depth: 3, scope: "user", metadata: routing },

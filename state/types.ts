@@ -461,6 +461,25 @@ export type SupportIntent = {
   createdAt: string;
 };
 
+export type FastPhase = "scheduled" | "active" | "complete" | "ended";
+
+/** One account-private fast. Only the owner can read or write the record. */
+export type Fast = {
+  id: Id;
+  userId: Id;
+  startDate: string;
+  durationDays: number;
+  timeZone: string;
+  startAt: string;
+  endAt: string;
+  status: "active" | "ended";
+  alertEnabled: boolean;
+  endedAt?: string;
+  acknowledgedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type KoinoState = {
   authReady: boolean;
   signOutIncomplete: boolean;
@@ -505,6 +524,8 @@ export type KoinoState = {
   discussionFollows: DiscussionFollow[];
   journalEntries: JournalEntry[];
   savedVerses: SavedVerse[];
+  fasts: Fast[];
+  fastsReady: boolean;
   bibleHighlights: BibleHighlight[];
   bibleHighlightColors: BibleHighlightPaletteColor[];
   biblePlans: BiblePlan[];

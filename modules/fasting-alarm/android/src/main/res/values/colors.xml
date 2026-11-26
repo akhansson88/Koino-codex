@@ -1,0 +1,7 @@
+<resources>
+  <color name="fasting_alarm_background">#1D1611</color>
+  <color name="fasting_alarm_text">#FBF7F1</color>
+  <color name="fasting_alarm_muted">#E7DCCE</color>
+  <color name="fasting_alarm_accent">#F8D9BE</color>
+  <color name="fasting_alarm_ink">#1D1611</color>
+</resources>
