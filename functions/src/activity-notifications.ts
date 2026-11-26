@@ -131,7 +131,7 @@ export const createCommentNotification = onValueCreated(
       const notificationRef = database.ref(`encryptedData/activityNotifications/${recipientUserId}/${replyId}`);
       if (!(await notificationRef.get()).exists() || !(await pushAllowed(database, recipientUserId, categoryForReason(reason)))) return;
       await sendExpoPush(database, recipientUserId, `comment:${replyId}`, buildCommentPushMessage({
-        actorName: "",
+        actorName: membersById[reply.userId]?.name ?? "",
         body: "",
         hasAudio: Boolean(reply.audio?.path),
         groupId,
