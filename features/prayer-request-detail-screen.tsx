@@ -7,7 +7,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, Vie
 import { useKoino } from "@/state/koino-store";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
 import { normalizeEntryKind } from "@/state/product";
-import type { GroupImage, Id, Post } from "@/state/types";
+import type { AudioClip, GroupImage, Id, Post } from "@/state/types";
 import {
 AppScreen,
 Avatar,
@@ -34,6 +34,7 @@ import { Separator } from "@/ui/shadcn/separator";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { AudioCard } from "@/features/audio/audio-card";
 
 const MAX_ANSWERED_UPDATE_LENGTH = 280;
 
@@ -49,6 +50,7 @@ export type PrayerRequestEncouragement = {
   authorImage?: GroupImage;
   authorId?: string;
   authorName: string;
+  audio?: AudioClip;
   body: string;
   canDelete: boolean;
   createdAt: string;
@@ -60,6 +62,7 @@ export type PrayerRequestDetailScreenProps = {
   answered: boolean;
   authorImage?: GroupImage;
   authorName: string;
+  communityName?: string;
   encouragementDraft: string;
   encouragements: PrayerRequestEncouragement[];
   item: PrayerRequestDetailItem;
@@ -68,7 +71,7 @@ export type PrayerRequestDetailScreenProps = {
   onDeleteEncouragement: (id: Id) => void;
   onOpenOwnerActions: () => void;
   onPray: () => void;
-  onSendEncouragement: (body: string, replyId: string) => Promise<void>;
+  onSendEncouragement: (body: string, replyId: string, audio?: AudioClip) => Promise<void>;
   onToggleDiscussionFollow: () => void;
   ownsItem: boolean;
   prayer: PrayerRequestDetailPrayerState;
@@ -209,6 +212,7 @@ export function PrayerRequestDetailScreen({
   answered,
   authorImage,
   authorName,
+  communityName,
   encouragementDraft,
   encouragements,
   item,
@@ -241,16 +245,21 @@ export function PrayerRequestDetailScreen({
         <Text style={[typography.heading, { color: colors.ink, textAlign: "center" }]}>
           {item.title || t("community.defaultTitle.prayerRequest")}
         </Text>
-        <LinkPreviewContent text={item.body}>
-          {({ hiddenUrl, preview }) => (
-            <>
-              <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>
-                {item.body || t("community.card.noWords")}
-              </BodyText>
-              {preview}
-            </>
-          )}
-        </LinkPreviewContent>
+        {item.audio ? <AudioCard clip={item.audio} /> : null}
+        {item.body ? (
+          <LinkPreviewContent text={item.body}>
+            {({ hiddenUrl, preview }) => (
+              <>
+                <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: 16, lineHeight: 24, textAlign: "center" }}>
+                  {item.body}
+                </BodyText>
+                {preview}
+              </>
+            )}
+          </LinkPreviewContent>
+        ) : item.audio ? null : (
+          <BodyText style={{ textAlign: "center" }}>{t("community.card.noWords")}</BodyText>
+        )}
       </View>
       <VerseList verse={item.verse} verses={item.verses} />
       <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 14 }}>
@@ -326,14 +335,17 @@ export function PrayerRequestDetailScreen({
                       </Pressable>
                     ) : encouragement.authorId ? <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={encouragement.id} authorId={encouragement.authorId} /> : null}
                   </View>
-                  <LinkPreviewContent text={encouragement.body}>
-                    {({ hiddenUrl, preview }) => (
-                      <>
-                        <BodyText hiddenUrl={hiddenUrl}>{encouragement.body}</BodyText>
-                        {preview}
-                      </>
-                    )}
-                  </LinkPreviewContent>
+                  {encouragement.audio ? <AudioCard clip={encouragement.audio} /> : null}
+                  {encouragement.body ? (
+                    <LinkPreviewContent text={encouragement.body}>
+                      {({ hiddenUrl, preview }) => (
+                        <>
+                          <BodyText hiddenUrl={hiddenUrl}>{encouragement.body}</BodyText>
+                          {preview}
+                        </>
+                      )}
+                    </LinkPreviewContent>
+                  ) : null}
                 </View>
                 {index < encouragements.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
               </View>
@@ -342,6 +354,8 @@ export function PrayerRequestDetailScreen({
         </View>
       ) : null}
       <WrittenEncouragementComposer
+        communityName={communityName}
+        groupId={item.groupId}
         onChangeText={onChangeEncouragement}
         onSend={onSendEncouragement}
         placeholder={t("community.reply.encouragementPlaceholder")}
@@ -460,6 +474,7 @@ export function PrayerRequestDetailRouteScreen() {
               id: reply.id,
               authorImage: userImageById.get(reply.userId),
               authorName: userById.get(reply.userId) ?? t("common.someone"),
+              audio: reply.audio,
               body: reply.body,
               canDelete: reply.userId === state.currentUserId,
               authorId: reply.userId,
@@ -540,6 +555,7 @@ export function PrayerRequestDetailRouteScreen() {
         answered={answered}
         authorImage={authorImage}
         authorName={authorName}
+        communityName={state.groups.find((group) => group.id === activePrayerRequest.groupId)?.name}
         encouragementDraft={encouragementDraft}
         encouragements={encouragements}
         item={activePrayerRequest}
@@ -562,14 +578,15 @@ export function PrayerRequestDetailRouteScreen() {
             recipientImage: authorImage,
           });
         }}
-        onSendEncouragement={async (body, replyId) => {
+        onSendEncouragement={async (body, replyId, audio) => {
           const trimmedBody = body.trim();
-          if (!trimmedBody) return;
+          if (!trimmedBody && !audio) return;
           await dispatch({
             type: "createReply",
             targetType: "post",
             targetId: activePrayerRequest.id,
             body: trimmedBody,
+            ...(audio ? { audio } : {}),
             replyId,
           });
           setEncouragementDraft("");

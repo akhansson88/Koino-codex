@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { displayBibleReference } from "@/features/bible-book-names";
 import { normalizeBibleVerses } from "@/features/bible-verse-utils";
+import { formatAudioDuration } from "@/state/audio";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import type { JournalEntry } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
@@ -59,6 +60,14 @@ export function JournalEntryPreview({
         <Text numberOfLines={2} style={[typography.title, { color: colors.ink }]}>
           {title}
         </Text>
+      ) : null}
+      {entry.audio ? (
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          <Feather color={colors.accentPrayer} name="mic" size={13} />
+          <Text style={[typography.caption, { color: colors.accentPrayer }]}>
+            {t("audio.badge.voiceJournal")} · {formatAudioDuration(entry.audio.durationMs)}
+          </Text>
+        </View>
       ) : null}
       {body ? (
         <Text numberOfLines={isJourney ? 2 : 3} style={[typography.body, { color: colors.textSecondary }]}>

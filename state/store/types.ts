@@ -1,6 +1,6 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import type { EventDraft } from "@/state/events";
-import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { AudioClip, BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -58,8 +58,8 @@ export type Action =
   | { type: "submitCheckIn"; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; expectedScope?: AccountGroupScope }
   | { type: "updateCheckIn"; id: Id; mood: number; readToday: boolean; reflectionText: string; visibility: CheckIn["visibility"]; verse?: BibleVerse; verses?: BibleVerse[] }
   | { type: "deleteCheckIn"; id: Id }
-  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest; expectedScope?: AccountGroupScope }
-  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; communitySubmission?: CommunitySubmissionRequest }
+  | { type: "createPost"; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip; communitySubmission?: CommunitySubmissionRequest; expectedScope?: AccountGroupScope }
+  | { type: "editPost"; id: Id; body: string; kind: CreatePostKind; title?: string; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip | null; communitySubmission?: CommunitySubmissionRequest }
   | { type: "deletePost"; id: Id }
   | { type: "markPrayerAnswered"; id: Id; answeredUpdate?: string }
   | { type: "updatePrayerAnswer"; id: Id; answeredUpdate?: string }
@@ -76,11 +76,11 @@ export type Action =
     }
   | { type: "unpray"; targetType: PrayerReaction["targetType"]; targetId: Id }
   | { type: "togglePostReaction"; targetType: PostReaction["targetType"]; targetId: Id; kind: PostReactionKind; mode?: "ensure" | "toggle" }
-  | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; replyId?: Id }
+  | { type: "createReply"; targetType: "post" | "check_in"; targetId: Id; body: string; audio?: AudioClip; replyId?: Id }
   | { type: "deleteReply"; id: Id }
 
-  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; shareWithGroup?: boolean; title?: string; journalScope?: JournalScope }
-  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; sharedPostId?: Id; title?: string; journalScope?: JournalScope }
+  | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip; shareWithGroup?: boolean; title?: string; journalScope?: JournalScope }
+  | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip | null; sharedPostId?: Id; title?: string; journalScope?: JournalScope }
   | { type: "deleteJournalEntry"; id: Id }
   | { type: "startFast"; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }
   | { type: "updateFast"; id: Id; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }

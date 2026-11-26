@@ -16,6 +16,7 @@ type Reply = {
   userId: string;
   targetType: "post" | "check_in";
   targetId: string;
+  audio?: { path?: string };
   mentionUserIds?: string[];
   createdAt: string;
 };
@@ -132,6 +133,7 @@ export const createCommentNotification = onValueCreated(
       await sendExpoPush(database, recipientUserId, `comment:${replyId}`, buildCommentPushMessage({
         actorName: "",
         body: "",
+        hasAudio: Boolean(reply.audio?.path),
         groupId,
         label: "",
         notificationId: replyId,

@@ -21,6 +21,21 @@ export type GroupImage = {
 
 export type ProfileImage = GroupImage;
 
+/**
+ * A recorded prayer or journal clip. The audio bytes live in a private Storage
+ * bucket; only this small descriptor is written to Realtime Database.
+ */
+export type AudioClip = {
+  id: string;
+  path: string;
+  durationMs: number;
+  bytes: number;
+  mime: "audio/mp4";
+  /** 48 peak values as 96 lowercase hex characters. */
+  peaks: string;
+  createdAt: string;
+};
+
 export type Group = {
   id: Id;
   name: string;
@@ -334,6 +349,7 @@ export type Post = {
   verse?: BibleVerse;
   verses?: BibleVerse[];
   images?: string[];
+  audio?: AudioClip;
   answeredAt?: string;
   answeredMarkedAt?: string;
   answeredUpdate?: string;
@@ -428,6 +444,7 @@ export type Reply = {
   targetType: ReplyTargetType;
   targetId: Id;
   body: string;
+  audio?: AudioClip;
   createdAt: string;
 };
 
@@ -446,6 +463,7 @@ export type JournalEntry = {
   title?: string;
   body: string;
   images?: string[];
+  audio?: AudioClip;
   source: "manual" | "private_check_in";
   entryKind?: EntryKind;
   mood?: number;
@@ -566,6 +584,7 @@ export type FeedItem =
       verse?: BibleVerse;
       verses?: BibleVerse[];
       images?: string[];
+      audio?: AudioClip;
       answeredAt?: string;
       answeredMarkedAt?: string;
       answeredUpdate?: string;

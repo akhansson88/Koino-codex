@@ -20,6 +20,7 @@ import {
   selectPrayerRequests,
 } from "@/state/selectors/community-content";
 import type {
+  AudioClip,
   BibleVerse,
   EntryKind,
   FeedItem,
@@ -136,6 +137,7 @@ type CommunityComposerDraft = {
   title: string;
   body: string;
   verses: BibleVerse[];
+  audio?: AudioClip | null;
   editingPost?: Extract<FeedItem, { type: "post" }>;
 };
 type CommunityComposerAttempt = {
@@ -703,25 +705,36 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setEditingPost(undefined);
   }
 
-  async function submitComposer() {
+  async function submitComposer(audio: AudioClip | null) {
     if (!composerVisible || composerOwnerRef.current !== composerOwner || currentComposerOwnerRef.current !== composerOwner
       || renderedComposerVersion !== composerViewVersionRef.current) return;
-    const canSubmit = composerContext === "room" && composerKind === "scripture" ? composerVerses.length > 0 : Boolean(composerBody.trim());
+    const canSubmit = composerContext === "room" && composerKind === "scripture"
+      ? composerVerses.length > 0
+      : Boolean(composerBody.trim()) || Boolean(audio);
     if (!canSubmit) return;
     if (composerContext === "room" && !editingPost && composerKind === "update") return;
     if (composerContext === "room") {
       let attempt = composerAttemptRef.current;
       if (attempt?.inFlight) return;
       if (!attempt) {
-        const draft = JSON.parse(JSON.stringify({ kind: composerKind, title: composerTitle, body: composerBody, verses: composerVerses, editingPost })) as CommunityComposerDraft;
+        const draft = JSON.parse(JSON.stringify({ kind: composerKind, title: composerTitle, body: composerBody, verses: composerVerses, audio, editingPost })) as CommunityComposerDraft;
         const titleFreeKind = draft.kind === "reflection" || draft.kind === "praise" || draft.kind === "scripture";
-        const content = { kind: draft.kind, ...(titleFreeKind ? {} : { title: draft.title }), body: draft.body, verse: primaryBibleVerse(draft.verses), verses: draft.verses };
+        const content = {
+          kind: draft.kind,
+          ...(titleFreeKind ? {} : { title: draft.title }),
+          body: draft.body,
+          verse: primaryBibleVerse(draft.verses),
+          verses: draft.verses,
+        };
+        const action: CommunityComposerAttempt["action"] = draft.editingPost
+          ? { type: "editPost", id: draft.editingPost.id, ...content, audio: draft.audio ?? null }
+          : { type: "createPost", ...content, ...(draft.audio ? { audio: draft.audio } : {}) };
         attempt = {
           owner: composerOwner,
           attachedView: composerViewIdentityRef.current,
           viewVersion: composerViewVersionRef.current,
           draft,
-          action: draft.editingPost ? { type: "editPost", id: draft.editingPost.id, ...content } : { type: "createPost", ...content },
+          action,
           request: {
             attemptId: `post_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`,
             createdAt: new Date().toISOString(),
@@ -777,7 +790,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
     const title = titleFreeKind ? {} : { title: composerTitle };
     if (editingPost) {
-      await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+      await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, audio });
     } else if (composerContext === "journal") {
       const userId = state.currentUserId;
       const shareWithGroup = composerVisibility === visibility.room;
@@ -795,6 +808,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           body: composerBody,
           verse: primaryBibleVerse(composerVerses),
           verses: composerVerses,
+          ...(audio ? { audio } : {}),
           shareWithGroup,
           journalScope: { userId, ...(groupId ? { groupId } : {}) },
         });
@@ -809,9 +823,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         if (journalPendingViewRef.current === renderedComposerVersion) journalPendingViewRef.current = undefined;
       }
     } else if (composerVisibility === visibility.private) {
-      await dispatch({ type: "createJournalEntry", entryKind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, shareWithGroup: false });
+      await dispatch({ type: "createJournalEntry", entryKind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, ...(audio ? { audio } : {}), shareWithGroup: false });
     } else {
-      await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses });
+      await dispatch({ type: "createPost", kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, ...(audio ? { audio } : {}) });
     }
     // An old completion cannot clear a newer composer session.
     if (!composerMountedRef.current || currentComposerOwnerRef.current !== composerOwner
@@ -1544,6 +1558,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
+          initialAudio={editingPost?.audio}
+          audioGroupId={group.id}
           roomName={group.name}
           roomImage={group.image}
         />
@@ -1828,6 +1844,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
+          initialAudio={editingPost?.audio}
+          audioGroupId={group.id}
           roomName={group.name}
           roomImage={group.image}
         />

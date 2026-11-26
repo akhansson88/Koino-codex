@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getAuth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
+import { getStorage } from "firebase-admin/storage";
 import { Timestamp } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
@@ -132,6 +133,38 @@ class DeletionWriter {
     }
     return removed;
   }
+}
+
+const audioBucketByProject: Record<string, string> = {
+  "koino-codex": "koino-codex-audio-181081151239",
+  "koino-dev": "koino-dev-audio-97611993234",
+};
+
+/**
+ * Removes the account's own recordings and every group recording it authored.
+ * The prefix sweep catches clips whose post was already deleted; the record
+ * scan catches group clips that live under the community's prefix.
+ */
+async function deleteAudioObjects(uid: string): Promise<number> {
+  const project = process.env.GCLOUD_PROJECT ?? "";
+  const bucketName = audioBucketByProject[project];
+  if (!bucketName) return 0;
+  const bucket = getStorage(adminApp).bucket(bucketName);
+  const paths = new Set<string>();
+
+  for (const root of ROOTS) {
+    for (const collection of ["posts", "replies", "journalEntries"]) {
+      const base = root ? `${root}/${collection}` : collection;
+      const matches = await collectMatches(base, (record) =>
+        record.userId === uid && typeof record.audio?.path === "string");
+      for (const match of matches) paths.add(match.record.audio.path);
+    }
+  }
+
+  const [ownFiles] = await bucket.getFiles({ prefix: `audio/users/${uid}/` });
+  await Promise.all(ownFiles.map((file) => file.delete({ ignoreNotFound: true })));
+  await Promise.all([...paths].map((path) => bucket.file(path).delete({ ignoreNotFound: true })));
+  return ownFiles.length + paths.size;
 }
 
 async function groupIds(): Promise<string[]> {
@@ -495,6 +528,7 @@ export async function runAccountDeletion(uid: string): Promise<void> {
     } catch (error) {
       if ((error as { code?: string }).code !== "auth/user-not-found") throw error;
     }
+    await runStep(uid, "audio", () => deleteAudioObjects(uid));
     await runStep(uid, "privateData", () => deletePrivateData(uid));
     const targets = await runStep(uid, "groupContent", () => deleteGroupContent(uid)) as Map<string, Target>;
     await runStep(uid, "membership", () => deleteMemberships(uid));

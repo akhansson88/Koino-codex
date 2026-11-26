@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 
+import { deleteAudioClip } from "@/state/audio-storage";
+import type { AudioClip } from "@/state/types";
 import { TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { Button } from "@/ui/shadcn/button";
 import { colors, typography } from "@/ui/theme";
+import { VoiceNoteField } from "@/features/audio/voice-note-field";
 
 export const MAX_WRITTEN_ENCOURAGEMENT_LENGTH = 500;
 
@@ -14,6 +17,8 @@ function writtenEncouragementId() {
 
 export function WrittenEncouragementComposer({
   autoFocus = false,
+  communityName,
+  groupId,
   onChangeText,
   onDismiss,
   onSend,
@@ -22,21 +27,29 @@ export function WrittenEncouragementComposer({
   variant = "inline",
 }: {
   autoFocus?: boolean;
+  communityName?: string;
+  groupId?: string;
   onChangeText: (value: string) => void;
   onDismiss?: () => void;
-  onSend: (body: string, replyId: string) => Promise<void>;
+  onSend: (body: string, replyId: string, audio?: AudioClip) => Promise<void>;
   placeholder?: string;
   value: string;
   variant?: "inline" | "sheet";
 }) {
   const { t } = useAppTranslation();
+  const [audio, setAudio] = useState<AudioClip>();
   const [submitting, setSubmitting] = useState(false);
   const [submissionFailed, setSubmissionFailed] = useState(false);
   const submittingRef = useRef(false);
   const replyIdRef = useRef<string | undefined>(undefined);
   const trimmedValue = value.trim();
-  const sendDisabled = !trimmedValue || submitting;
+  const sendDisabled = (!trimmedValue && !audio) || submitting;
   const resolvedPlaceholder = placeholder ?? t("community.encouragement.placeholder");
+
+  function changeAudio(next: AudioClip | undefined) {
+    if (audio && audio.id !== next?.id) void deleteAudioClip(audio);
+    setAudio(next);
+  }
 
   function changeText(nextValue: string) {
     if (submittingRef.current) return;
@@ -46,7 +59,7 @@ export function WrittenEncouragementComposer({
   }
 
   async function send() {
-    if (!trimmedValue || submittingRef.current) return;
+    if ((!trimmedValue && !audio) || submittingRef.current) return;
 
     const replyId = replyIdRef.current ?? writtenEncouragementId();
     replyIdRef.current = replyId;
@@ -55,8 +68,9 @@ export function WrittenEncouragementComposer({
     setSubmissionFailed(false);
 
     try {
-      await onSend(trimmedValue, replyId);
+      await onSend(trimmedValue, replyId, audio);
       replyIdRef.current = undefined;
+      setAudio(undefined);
     } catch {
       setSubmissionFailed(true);
     } finally {
@@ -91,6 +105,18 @@ export function WrittenEncouragementComposer({
     return (
       <View style={{ gap: 12 }}>
         {input}
+        {groupId ? (
+          <VoiceNoteField
+            clip={audio}
+            communityName={communityName}
+            disabled={submitting}
+            groupId={groupId}
+            label={t("audio.field.addPrayer")}
+            onClip={changeAudio}
+            purpose="reply"
+            scope="group"
+          />
+        ) : null}
         {error}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <Button disabled={submitting} onPress={onDismiss} style={{ flex: 1 }} variant="outline">
@@ -117,6 +143,18 @@ export function WrittenEncouragementComposer({
           size="icon"
         />
       </View>
+      {groupId ? (
+        <VoiceNoteField
+          clip={audio}
+          communityName={communityName}
+          disabled={submitting}
+          groupId={groupId}
+          label={t("audio.field.addPrayer")}
+          onClip={changeAudio}
+          purpose="reply"
+          scope="group"
+        />
+      ) : null}
       {error}
     </View>
   );

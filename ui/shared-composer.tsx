@@ -4,7 +4,9 @@ import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, ScrollView, 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
-import type { BibleVerse, EntryKind, GroupImage } from "@/state/types";
+import { deleteAudioClip } from "@/state/audio-storage";
+import type { AudioPurpose, AudioScope } from "@/state/audio";
+import type { AudioClip, BibleVerse, EntryKind, GroupImage } from "@/state/types";
 import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, TextInputField } from "@/ui/app-components";
 import { AmbientBackground } from "@/ui/ambient-background";
 import { BibleVerseField } from "@/ui/bible-verse-field";
@@ -13,6 +15,7 @@ import type { TranslationKey } from "@/ui/localization";
 import { tabContentClearance } from "@/ui/navigation-layout";
 import { FieldLabel } from "@/ui/shadcn";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { VoiceNoteField } from "@/features/audio/voice-note-field";
 
 const MAX_BODY_LENGTH = 500;
 
@@ -174,6 +177,10 @@ function CommunityTypeSelector({
 }
 
 export function SharedComposer({
+  audioGroupId,
+  audioPurpose,
+  audioReadOnly = false,
+  audioScope,
   audienceLocked = false,
   bibleIntent,
   body,
@@ -181,6 +188,7 @@ export function SharedComposer({
   context,
   editing = false,
   entryVisibility,
+  initialAudio,
   kind,
   onBody,
   onClose,
@@ -198,6 +206,10 @@ export function SharedComposer({
   verses,
   visible,
 }: {
+  audioGroupId?: string;
+  audioPurpose?: AudioPurpose;
+  audioReadOnly?: boolean;
+  audioScope?: AudioScope;
   audienceLocked?: boolean;
   bibleIntent?: BibleComposerIntent;
   body: string;
@@ -205,12 +217,13 @@ export function SharedComposer({
   context: "journal" | "today" | "room";
   editing?: boolean;
   entryVisibility: EntryVisibility;
+  initialAudio?: AudioClip;
   kind: EntryKind;
   onBody: (value: string) => void;
   onClose: () => void;
   onKind: (kind: EntryKind) => void;
   onOpenVerseInBible?: (verse: BibleVerse) => void;
-  onSubmit: () => void;
+  onSubmit: (audio: AudioClip | null) => void;
   onTitle: (value: string) => void;
   onVerses: (verses: BibleVerse[]) => void;
   onVisibility: (value: EntryVisibility) => void;
@@ -225,6 +238,11 @@ export function SharedComposer({
   const { t } = useAppTranslation();
   const { width: viewportWidth, fontScale } = useWindowDimensions();
   const [attemptedKind, setAttemptedKind] = useState<EntryKind | undefined>(undefined);
+  const [audio, setAudio] = useState<AudioClip | undefined>(initialAudio);
+  const audioRef = useRef<AudioClip | undefined>(audio);
+  const initialAudioId = useRef<string | undefined>(initialAudio?.id);
+  const submittedAudioId = useRef<string | undefined>(undefined);
+  audioRef.current = audio;
   const lastAnnouncement = useRef<string | undefined>(undefined);
   const locked = Boolean(submission && (submission.inFlight || submission.status === "pending" || submission.status === "unknown"));
   const feedbackKey = submissionFeedback ?? (submission?.status === "unknown"
@@ -241,7 +259,7 @@ export function SharedComposer({
   const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
   const scriptureRequired = isCommunityShare && kind === "scripture";
   const roomAvailable = Boolean(roomName);
-  const hasRequiredContent = scriptureRequired ? verses.length > 0 : Boolean(body.trim());
+  const hasRequiredContent = scriptureRequired ? verses.length > 0 : Boolean(body.trim()) || Boolean(audio);
   const audienceAvailable = editing || entryVisibility !== visibility.room || communityAudienceAvailable;
   const canSubmit = hasRequiredContent && audienceAvailable && (!isCommunityShare || roomAvailable);
   const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
@@ -276,6 +294,28 @@ export function SharedComposer({
   }, [kind, visible]);
 
   useEffect(() => {
+    if (!visible) return;
+    setAudio(initialAudio);
+    initialAudioId.current = initialAudio?.id;
+    submittedAudioId.current = undefined;
+  }, [visible, initialAudio?.id]);
+
+  useEffect(() => {
+    if (visible) return;
+    const current = audioRef.current;
+    if (current && current.id !== initialAudioId.current && current.id !== submittedAudioId.current) {
+      void deleteAudioClip(current);
+    }
+  }, [visible]);
+
+  useEffect(() => () => {
+    const current = audioRef.current;
+    if (current && current.id !== initialAudioId.current && current.id !== submittedAudioId.current) {
+      void deleteAudioClip(current);
+    }
+  }, []);
+
+  useEffect(() => {
     const message = announcementKey ? t(announcementKey) : undefined;
     // iOS does not support live regions. Use one announcement path per platform,
     // without moving focus or replaying the same status on every draft render.
@@ -294,11 +334,20 @@ export function SharedComposer({
   function submit() {
     setAttemptedKind(kind);
     if (!canSubmit || submission?.inFlight) return;
-    return onSubmit();
+    submittedAudioId.current = audio?.id;
+    return onSubmit(audio ?? null);
   }
 
   function close() {
     if (!locked) onClose();
+  }
+
+  function changeAudio(next: AudioClip | undefined) {
+    const previous = audio;
+    if (previous && previous.id !== next?.id && previous.id !== initialAudioId.current) {
+      void deleteAudioClip(previous);
+    }
+    setAudio(next);
   }
 
   const titleField = (
@@ -451,6 +500,20 @@ export function SharedComposer({
             </View>
             <Text style={[typography.bodyMedium, { color: colors.ink, flex: 1, minWidth: 0 }]}>{communityAudience}</Text>
           </Card>
+        ) : null}
+
+        {context !== "today" ? (
+          <VoiceNoteField
+            clip={audio}
+            communityName={roomName}
+            disabled={locked}
+            groupId={audioGroupId}
+            label={t(context === "journal" ? "audio.field.add" : "audio.field.addPrayer")}
+            onClip={changeAudio}
+            purpose={audioPurpose ?? (context === "journal" ? "journal" : "prayer")}
+            readOnly={audioReadOnly}
+            scope={audioScope ?? (context === "room" ? "group" : "user")}
+          />
         ) : null}
 
         {showTitle ? isCommunityShare ? (

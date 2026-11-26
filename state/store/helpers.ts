@@ -1,5 +1,6 @@
 import { FirebaseError } from "firebase/app";
 import {
+  AudioClip,
   BibleHighlightColor,
   BibleHighlightPaletteColor,
   BibleVerse,
@@ -70,7 +71,8 @@ export function postSupportsTitle(kind: CreatePostKind) {
   return kind === "prayer_request" || kind === "prayer_moment" || kind === "update";
 }
 
-export function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse[]) {
+export function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse[], audio?: AudioClip) {
+  if (audio) return true;
   return kind === "scripture" ? verses.length > 0 : Boolean(body.trim());
 }
 

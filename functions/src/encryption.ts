@@ -4,6 +4,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import { getDatabase } from "firebase-admin/database";
+import { getStorage } from "firebase-admin/storage";
 import { adminApp } from "./firebase-admin";
 import { storageHeadersFor } from "./storage-auth";
 import { productionExternalServicesEnabled } from "./production-external-services";
@@ -660,6 +661,12 @@ export const encryptedAccount = onCall({ region: "europe-west1", secrets: [...(s
       if (paths.length) {
         const response = await fetch(`${storageUrl}/storage/v1/object/room-images`, { method: "DELETE", headers: { ...storageHeaders(), "content-type": "application/json" }, body: JSON.stringify({ prefixes: paths }) });
         if (!response.ok) throw new HttpsError("unavailable", "Community images could not be removed. Retry deletion.");
+      }
+      const audioBucket = process.env.GCLOUD_PROJECT === "koino-codex"
+        ? "koino-codex-audio-181081151239"
+        : process.env.GCLOUD_PROJECT === "koino-dev" ? "koino-dev-audio-97611993234" : undefined;
+      if (audioBucket) {
+        await getStorage(adminApp).bucket(audioBucket).deleteFiles({ prefix: `audio/groups/${groupId}/` });
       }
       const info = (await db().ref(`encryptedData/groups/${groupId}`).get()).val();
       const updates: Obj = { [`e2eeImageObjects/room-images/${groupId}`]: null, [`e2eeGroupLocks/${groupId}`]: null, [`e2eeGroups/${groupId}`]: null, [`e2eeJoinRequests/${groupId}`]: null, [`e2eeDepartures/${groupId}`]: null };

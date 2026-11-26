@@ -32,6 +32,7 @@ import {
   communityResponseNoun,
 } from "@/ui/community-copy";
 import { LinkPreviewContent } from "@/ui/link-preview";
+import { AudioCard } from "@/features/audio/audio-card";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
@@ -597,7 +598,23 @@ export function PostCard({
       }
       authorImage={authorImage}
       authorName={authorName}
-      bodyContent={itemKind !== "scripture" || hasPersonalNote ? (
+      bodyContent={item.type === "post" && item.audio ? (
+        <View style={{ gap: 10 }}>
+          <AudioCard clip={item.audio} kind={itemKind === "prayer_request" || itemKind === "prayer_moment" ? "prayer" : "journal"} />
+          {displayCopy.body ? (
+            <LinkPreviewContent text={displayCopy.body}>
+              {({ hiddenUrl, preview }) => (
+                <>
+                  <ExpandableBodyText actionMinHeight={44} collapsedLines={FEED_BODY_PREVIEW_LINES} hiddenUrl={hiddenUrl}>
+                    {displayCopy.body}
+                  </ExpandableBodyText>
+                  {preview}
+                </>
+              )}
+            </LinkPreviewContent>
+          ) : null}
+        </View>
+      ) : itemKind !== "scripture" || hasPersonalNote ? (
         <LinkPreviewContent text={displayCopy.body}>
           {({ hiddenUrl, preview }) => (
             <>

@@ -1,3 +1,4 @@
+import { AudioPlaybackProvider } from "@/features/audio/playback-provider";
 import { BibleAudioProvider } from "@/features/bible-audio/provider";
 import { EventReminderRuntime } from "@/features/events/reminder-runtime";
 import { FastingReminderRuntime } from "@/features/fasting/reminder-runtime";
@@ -44,7 +45,9 @@ export default function RootLayout() {  useFonts({
     <GestureHandlerRootView style={{ flex: 1 }}><ThemeProvider><AppLanguageProvider>
       <EncryptionBoundary><KoinoProvider>
         <BibleDatabaseProvider>
-          <BibleAudioProvider><RootNavigator /></BibleAudioProvider>
+          <BibleAudioProvider>
+            <AudioPlaybackProvider><RootNavigator /></AudioPlaybackProvider>
+          </BibleAudioProvider>
         </BibleDatabaseProvider>
       </KoinoProvider></EncryptionBoundary>
     </AppLanguageProvider></ThemeProvider></GestureHandlerRootView>

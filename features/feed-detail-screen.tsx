@@ -40,6 +40,7 @@ import {
 } from "@/ui/community-copy";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import { CommunityCardAction, CommunityCheckInMood, CommunityContentTypeLabel } from "@/ui/post-card";
+import { AudioCard } from "@/features/audio/audio-card";
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
@@ -249,8 +250,8 @@ export function FeedDetailScreen() {
     setReplyDraft("");
   }
 
-  async function sendWrittenEncouragement(body: string, replyId: string) {
-    if (!item || !targetType) return;
+  async function sendWrittenEncouragement(body: string, replyId: string, audio?: import("@/state/types").AudioClip) {
+    if (!item || !targetType || (!body.trim() && !audio)) return;
     if (reaction) {
       await dispatch({
         type: "togglePostReaction",
@@ -260,7 +261,7 @@ export function FeedDetailScreen() {
         mode: "ensure",
       });
     }
-    await dispatch({ type: "createReply", targetType, targetId: item.id, body, replyId });
+    await dispatch({ type: "createReply", targetType, targetId: item.id, body, audio, replyId });
     setReplyDraft("");
   }
 
@@ -337,7 +338,7 @@ export function FeedDetailScreen() {
     setReflectionVerses([]);
   }
 
-  async function submitScriptureReflection() {
+  async function submitScriptureReflection(audio: import("@/state/types").AudioClip | null) {
     if (!reflectionIsCurrent() || !reflectionScope || reflectionScope.inFlight) return;
     const currentItem = item;
     if (editingPost && currentItem?.type === "post") {
@@ -350,6 +351,7 @@ export function FeedDetailScreen() {
         body: reflectionBody,
         verse: primaryBibleVerse(reflectionVerses),
         verses: reflectionVerses,
+        audio,
       });
       closeScriptureReflection();
       return;
@@ -357,7 +359,7 @@ export function FeedDetailScreen() {
     const userId = state.currentUserId;
     const shareWithGroup = reflectionVisibility === visibility.room;
     const groupId = reflectionScope.groupId;
-    if (!userId || !reflectionBody.trim() || shareWithGroup !== Boolean(groupId)
+    if (!userId || (!reflectionBody.trim() && !audio) || shareWithGroup !== Boolean(groupId)
       || (groupId && groupId !== liveReflectionRef.current.shareGroupId)) return;
     reflectionScope.inFlight = true;
     setReflectionSubmission({ status: "pending", inFlight: true });
@@ -370,6 +372,7 @@ export function FeedDetailScreen() {
         body: reflectionBody,
         verse: primaryBibleVerse(reflectionVerses),
         verses: reflectionVerses,
+        ...(audio ? { audio } : {}),
         shareWithGroup,
         journalScope: { userId, ...(groupId ? { groupId } : {}) },
       });
@@ -441,14 +444,17 @@ export function FeedDetailScreen() {
                 </Pressable>
               ) : <CommunityRemovalMenu groupId={item.groupId} targetType="reply" targetId={reply.id} authorId={reply.userId} />}
             </View>
-            <LinkPreviewContent text={reply.body}>
-              {({ hiddenUrl, preview }) => (
-                <>
-                  <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
-                  {preview}
-                </>
-              )}
-            </LinkPreviewContent>
+            {reply.audio ? <AudioCard clip={reply.audio} /> : null}
+            {reply.body ? (
+              <LinkPreviewContent text={reply.body}>
+                {({ hiddenUrl, preview }) => (
+                  <>
+                    <BodyText hiddenUrl={hiddenUrl}>{reply.body}</BodyText>
+                    {preview}
+                  </>
+                )}
+              </LinkPreviewContent>
+            ) : null}
           </View>
           {index < replies.length - 1 ? <Separator style={{ marginHorizontal: 14 }} /> : null}
         </View>
@@ -458,6 +464,8 @@ export function FeedDetailScreen() {
 
   const encouragementInput = isWrittenEncouragement ? (
     <WrittenEncouragementComposer
+      communityName={group?.name}
+      groupId={item?.groupId}
       onChangeText={setReplyDraft}
       onSend={sendWrittenEncouragement}
       placeholder={t("community.reply.encouragementPlaceholder")}
@@ -533,23 +541,28 @@ export function FeedDetailScreen() {
             </View>
           </>
         )}
-        {!isScripture || hasPersonalNote ? (
+        {!isScripture || hasPersonalNote || (item.type === "post" && Boolean(item.audio)) ? (
           <View style={{ gap: 12 }}>
             {!isExpandedFeedCard && !isScripture && !isPraise ? (
               <Text style={[typography.heading, { color: colors.ink }]}>
                 {displayCopy.title || communityDefaultFeedTitle(item, t)}
               </Text>
             ) : null}
-            <LinkPreviewContent text={displayCopy.body}>
-              {({ hiddenUrl, preview }) => (
-                <>
-                  <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: usesAlignedDetailFrame ? 16 : 17, lineHeight: usesAlignedDetailFrame ? 24 : 25 }}>
-                    {displayCopy.body || t("community.card.noWords")}
-                  </BodyText>
-                  {preview}
-                </>
-              )}
-            </LinkPreviewContent>
+            {item.type === "post" && item.audio ? <AudioCard clip={item.audio} /> : null}
+            {displayCopy.body ? (
+              <LinkPreviewContent text={displayCopy.body}>
+                {({ hiddenUrl, preview }) => (
+                  <>
+                    <BodyText hiddenUrl={hiddenUrl} style={{ fontSize: usesAlignedDetailFrame ? 16 : 17, lineHeight: usesAlignedDetailFrame ? 24 : 25 }}>
+                      {displayCopy.body}
+                    </BodyText>
+                    {preview}
+                  </>
+                )}
+              </LinkPreviewContent>
+            ) : item.type === "post" && item.audio ? null : (
+              <BodyText>{t("community.card.noWords")}</BodyText>
+            )}
           </View>
         ) : null}
         {item.type === "check_in" ? <CommunityCheckInMood mood={item.mood} /> : null}
@@ -745,6 +758,8 @@ export function FeedDetailScreen() {
         onVerses={(value) => changeReflectionDraft(() => setReflectionVerses(value))}
         onClose={closeScriptureReflection}
         onSubmit={submitScriptureReflection}
+        initialAudio={editingPost && item?.type === "post" ? item.audio : undefined}
+        audioGroupId={state.currentGroupId ?? undefined}
         roomName={group?.name}
         roomImage={group?.image}
       />

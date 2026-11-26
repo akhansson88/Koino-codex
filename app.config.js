@@ -55,7 +55,10 @@ const baseConfig = {
   },
   plugins: [
     "expo-router",
-    ["expo-audio", { microphonePermission: false, recordAudioAndroid: false }],
+    ["expo-audio", {
+      microphonePermission: "KOINO använder mikrofonen bara för att spela in de böner och dagboksanteckningar du väljer att spara.",
+      recordAudioAndroid: true,
+    }],
     "expo-asset",
     [
       "expo-image-picker",

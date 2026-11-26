@@ -12,6 +12,7 @@ import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, Secondar
 import { useAppTranslation } from "@/ui/app-language";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import { journalEntryHasSharedCopy, journalEntryPresentation, presentedJournalEntryType } from "@/ui/journal-presentation";
+import { AudioCard } from "@/features/audio/audio-card";
 import { LinkPreview } from "@/ui/link-preview";
 import { Button } from "@/ui/shadcn/button";
 import { SharedComposer } from "@/ui/shared-composer";
@@ -125,9 +126,9 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
     setDraft(undefined);
   }
 
-  async function submitEdit() {
+  async function submitEdit(audio: import("@/state/types").AudioClip | null) {
     const userId = state.currentUserId;
-    if (!userId || !draft || draftRef.current !== draft || pending.current || !body.trim()) return;
+    if (!userId || !draft || draftRef.current !== draft || pending.current || (!body.trim() && !audio)) return;
     pending.current = true;
     setSaving(true);
     setSaveFailed(false);
@@ -141,6 +142,7 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         title,
         verse: primaryBibleVerse(verses),
         verses,
+        audio,
         ...(audienceLocked ? { heartMood: currentEntry.heartMood } : {}),
         sharedPostId: currentEntry.sharedPostId,
         journalScope: { userId },
@@ -198,6 +200,7 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         {presentation.title ? (
           <Text style={[typography.screenTitle, { color: colors.ink, fontSize: 25, lineHeight: 31 }]}>{presentation.title}</Text>
         ) : null}
+        {currentEntry.audio ? <AudioCard clip={currentEntry.audio} kind="journal" /> : null}
         {presentation.body ? <BodyText style={{ fontSize: 17, lineHeight: 25 }}>{presentation.body}</BodyText> : null}
         {presentation.body ? <LinkPreview text={presentation.body} /> : null}
       </View>
@@ -236,6 +239,8 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         title={title}
         body={body}
         verses={verses}
+        initialAudio={currentEntry.audio}
+        audioScope="user"
         audienceLocked={audienceLocked}
         editing
         onKind={(kind) => {

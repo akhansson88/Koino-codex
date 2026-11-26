@@ -28,6 +28,9 @@ import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
 import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { VoiceNoteField } from "@/features/audio/voice-note-field";
+import { deleteAudioClip } from "@/state/audio-storage";
+import type { AudioClip } from "@/state/types";
 
 type PrayerRequestItem = Extract<FeedItem, { type: "post" }>;
 type PrayerQueueSession = { key: string; requestIds: Id[] };
@@ -164,21 +167,54 @@ function PrayerRequestStep({
 function PrayerCompletionStep({
   authorImage,
   authorName,
+  communityName,
+  groupId,
   messageSent,
   onAddMessage,
   onBack,
   onDone,
   onNext,
+  onSendVoice,
 }: {
   authorImage?: GroupImage;
   authorName: string;
+  communityName?: string;
+  groupId?: string;
   messageSent: boolean;
   onAddMessage: () => void;
   onBack: () => void;
   onDone: () => void;
   onNext: () => void;
+  onSendVoice: (audio: AudioClip, replyId: string) => Promise<void>;
 }) {
   const { t } = useAppTranslation();
+  const [voiceClip, setVoiceClip] = useState<AudioClip>();
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const [voiceError, setVoiceError] = useState(false);
+  const voiceReplyId = useRef<string | undefined>(undefined);
+
+  function changeVoiceClip(next: AudioClip | undefined) {
+    if (voiceClip && voiceClip.id !== next?.id) void deleteAudioClip(voiceClip);
+    setVoiceClip(next);
+  }
+
+  async function sendVoice() {
+    if (!voiceClip || !groupId || sendingVoice) return;
+    setSendingVoice(true);
+    setVoiceError(false);
+    const replyId = voiceReplyId.current ?? `reply_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    voiceReplyId.current = replyId;
+    try {
+      await onSendVoice(voiceClip, replyId);
+      setVoiceClip(undefined);
+      voiceReplyId.current = undefined;
+    } catch {
+      setVoiceError(true);
+    } finally {
+      setSendingVoice(false);
+    }
+  }
+
   return (
     <AppScreen>
       <HomePrayerFlowHeader onBack={onBack} />
@@ -199,13 +235,40 @@ function PrayerCompletionStep({
           <BodyText>{t("home.prayerFlow.messageSent")}</BodyText>
         </Card>
       ) : (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 10 }}>
           <BodyText muted style={{ textAlign: "center" }}>
             {t("home.prayerFlow.addMessageOptional")}
           </BodyText>
           <PrimaryButton accessibilityHint={t("home.prayerFlow.addMessageHint")} icon="message-circle" onPress={onAddMessage}>
             {t("home.prayerFlow.addMessage")}
           </PrimaryButton>
+          {groupId ? (
+            <>
+              <BodyText muted style={{ textAlign: "center" }}>
+                {t("home.prayerFlow.voiceHint", { name: authorName })}
+              </BodyText>
+              <VoiceNoteField
+                clip={voiceClip}
+                communityName={communityName}
+                disabled={sendingVoice}
+                groupId={groupId}
+                label={t("home.prayerFlow.addVoice")}
+                onClip={changeVoiceClip}
+                purpose="reply"
+                scope="group"
+              />
+              {voiceClip ? (
+                <PrimaryButton disabled={sendingVoice} icon="mic" loading={sendingVoice} onPress={sendVoice}>
+                  {t("home.prayerFlow.sendVoice")}
+                </PrimaryButton>
+              ) : null}
+              {voiceError ? (
+                <BodyText accessibilityRole="alert" style={{ color: colors.danger, textAlign: "center" }}>
+                  {t("home.prayerFlow.voiceError")}
+                </BodyText>
+              ) : null}
+            </>
+          ) : null}
         </View>
       )}
       <View style={{ gap: 10 }}>
@@ -412,11 +475,26 @@ function HomePrayerFlowSession({ groupId, session }: { groupId?: Id; session: Re
         <PrayerCompletionStep
           authorImage={authorImage}
           authorName={authorName}
+          communityName={state.groups.find((item) => item.id === activeRequest.groupId)?.name}
+          groupId={activeRequest.groupId}
           messageSent={messageSentRequestId === activeRequest.id}
           onAddMessage={() => setMessageComposerVisible(true)}
           onBack={returnHome}
           onDone={returnHome}
           onNext={advanceToNextRequest}
+          onSendVoice={async (audio, replyId) => {
+            if (!mounted.current) return;
+            await dispatch({
+              type: "createReply",
+              targetType: "post",
+              targetId: activeRequest.id,
+              body: "",
+              audio,
+              replyId,
+            });
+            if (!mounted.current) return;
+            setMessageSentRequestId(activeRequest.id);
+          }}
         />
       ) : (
         <PrayerRequestStep

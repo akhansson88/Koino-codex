@@ -1781,12 +1781,17 @@ export function BibleScreen() {
     });
   }
 
-  async function submitScriptureComposer() {
+  async function submitScriptureComposer(audio: import("@/state/types").AudioClip | null) {
     const canSubmit = scriptureComposerContext === "room" && scriptureComposerKind === "scripture"
       ? scriptureComposerVerses.length > 0
-      : Boolean(scriptureComposerBody.trim());
+      : Boolean(scriptureComposerBody.trim()) || Boolean(audio);
     if (!canSubmit) return;
     const verse = scriptureComposerVerses[0];
+    // A journal recording is owned by the user; a post shared to a community
+    // needs its own copy so members can play it without access to the journal.
+    const postAudio = audio && audio.path.startsWith("audio/users/") && scriptureComposerVisibility === visibility.room && group?.id
+      ? await import("@/state/audio-storage").then((module) => module.copyAudioForShare(audio, group.id))
+      : audio;
     const action: Action = scriptureComposerVisibility === visibility.room
       ? {
         type: "createPost",
@@ -1795,6 +1800,7 @@ export function BibleScreen() {
         ...(scriptureComposerKind === "prayer_request" ? { title: scriptureComposerTitle } : {}),
         verse,
         verses: scriptureComposerVerses,
+        ...(postAudio ? { audio: postAudio } : {}),
       } : {
         type: "createJournalEntry",
         body: scriptureComposerBody,
@@ -1803,6 +1809,7 @@ export function BibleScreen() {
         title: scriptureComposerTitle,
         verse,
         verses: scriptureComposerVerses,
+        ...(audio ? { audio } : {}),
         shareWithGroup: false,
       };
     if (scriptureComposerContext === "room") {
@@ -2287,6 +2294,7 @@ export function BibleScreen() {
         onVerses={(verses) => changeScriptureDraft(() => setScriptureComposerVerses(verses))}
         onClose={closeScriptureComposer}
         onSubmit={submitScriptureComposer}
+        audioGroupId={group?.id}
         roomName={group?.name}
         roomImage={group?.image}
       />

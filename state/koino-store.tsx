@@ -47,6 +47,7 @@ import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/sta
 import { roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
 import {
   ActivityNotification,
+  AudioClip,
   BibleHighlight,
   BibleHighlightPaletteColor,
   CheckIn,
@@ -112,6 +113,7 @@ import { displayableText } from "@/state/display-values";
 import { isPlaintextCheckIn, isPlaintextJournalEntry, isPlaintextPost, isPlaintextReply } from "@/state/content-values";
 import { normalizePrayerNotification, normalizePrayerNotifications } from "@/state/prayer-notifications";
 import { clearEncryptedImages } from "@/state/supabase-storage";
+import { clearAudioCache, copyAudioForShare, deleteAudioClip } from "@/state/audio-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
 
 // Legacy records can still carry a retired encrypted object where an image URL
@@ -178,12 +180,13 @@ export async function runCommunityPostSubmission(
     body: post.body,
     verse: post.verse ?? null,
     verses: actionVerses(post),
+    audio: post.audio ?? null,
   });
   const validId = (value: string) => /^[A-Za-z0-9_-]{1,160}$/.test(value);
   const verses = actionVerses(action).map((verse) => ({ ...verse }));
   if (!validId(request.attemptId) || !validId(request.groupId) || !request.userId
     || request.userId !== dependencies.userId || request.groupId !== dependencies.groupId
-    || !Number.isFinite(Date.parse(request.createdAt)) || !validPostContent(action.kind, action.body, verses)) {
+    || !Number.isFinite(Date.parse(request.createdAt)) || !validPostContent(action.kind, action.body, verses, action.audio ?? request.baseline?.audio)) {
     return failed("precondition");
   }
   if (!dependencies.isCurrent()) return failed("session");
@@ -200,6 +203,7 @@ export async function runCommunityPostSubmission(
     kind: action.kind,
     body: action.body.trim(),
     ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
+    ...(action.type === "createPost" && action.audio ? { audio: action.audio } : {}),
     ...(verses[0] ? { verse: verses[0], verses } : {}),
     createdAt: action.type === "editPost" ? baseline!.createdAt : request.createdAt,
   };
@@ -227,6 +231,10 @@ export async function runCommunityPostSubmission(
       }
       const next = action.type === "createPost" ? desired : { ...current, kind: desired.kind, body: desired.body };
       if (action.type === "editPost") {
+        if (action.audio !== undefined) {
+          if (action.audio) next.audio = action.audio;
+          else delete next.audio;
+        }
         if (postSupportsTitle(action.kind) && action.title !== undefined) {
           if (desired.title) next.title = desired.title;
           else delete next.title;
@@ -253,7 +261,12 @@ export async function runCommunityPostSubmission(
       return undefined;
     });
     if (sessionChanged || !dependencies.isCurrent()) return { status: "unknown", reason: "session" };
-    if (result.committed && proposed && !conflict) return { status: "success" };
+    if (result.committed && proposed && !conflict) {
+      if (action.type === "editPost" && action.audio === null && baseline?.audio) {
+        void deleteAudioClip(baseline.audio);
+      }
+      return { status: "success" };
+    }
     return failed("conflict");
   } catch (error) {
     if (sessionChanged || !dependencies.isCurrent()) return { status: "unknown", reason: "session" };
@@ -1463,6 +1476,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   await import("@/features/bible-audio/engine").then((engine) => engine.stop());
                   if (auth.currentUser !== startingUser) return;
                   clearEncryptedImages();
+                  await clearAudioCache();
                   await AsyncStorage.clearContent();
                   if (auth.currentUser !== startingUser) return;
                 }
@@ -1493,6 +1507,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 // Audio is best-effort during account deletion.
               }
               try {
+                await clearAudioCache();
                 await AsyncStorage.clearAll();
               } catch {
                 // Local cleanup is best-effort; the server account is already gone.
@@ -1883,7 +1898,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                const verses = actionVerses(action);
                const groupId = scopedPost ? scopedPost.groupId : profile?.currentGroupId;
                const canPublish = scopedPost ? () => canShareJournal(scopedPost.groupId) : undefined;
-               if (!firebaseUser || !groupId || !validPostContent(action.kind, action.body, verses) || (canPublish && !canPublish())) {
+               if (!firebaseUser || !groupId || !validPostContent(action.kind, action.body, verses, action.audio) || (canPublish && !canPublish())) {
                  if (scopedPost) throw new Error("The selected community is no longer available.");
                  return;
                }
@@ -1894,6 +1909,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  kind: action.kind,
                  ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                  body: action.body.trim(),
+                 ...(action.audio ? { audio: action.audio } : {}),
                  ...(verses[0] ? { verse: verses[0], verses } : {}),
                  createdAt: now(),
                };
@@ -1905,10 +1921,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
                if (!post || post.userId !== firebaseUser.uid) return;
                const verses = actionVerses(action);
-               if (!validPostContent(action.kind, action.body, verses)) return;
+               if (!validPostContent(action.kind, action.body, verses, action.audio ?? post.audio)) return;
                await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                  body: action.body.trim(),
                  kind: action.kind,
+                 ...(action.audio !== undefined ? { audio: action.audio } : {}),
                  ...(postSupportsTitle(action.kind) && action.title !== undefined ? { title: action.title.trim() || null } : {}),
                  verse: verses[0] ?? null,
                  verses: verses.length ? verses : null,
@@ -1931,6 +1948,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  verse: verses[0],
                  verses: verses.length ? verses : undefined,
                } : item);
+               if (action.audio === null && post.audio) void deleteAudioClip(post.audio);
                return;
              }
              case "markPrayerAnswered": {
@@ -2012,7 +2030,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser || !profile?.currentGroupId) return;
               const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
               if (!post || post.userId !== firebaseUser.uid) return;
+              const replyAudio = replies
+                .filter((item) => item.targetType === "post" && item.targetId === action.id)
+                .map((item) => item.audio);
               await deleteFeedItemWithChildren(profile.currentGroupId, "post", action.id, firebaseUser.uid);
+              await Promise.all([deleteAudioClip(post.audio), ...replyAudio.map((audio) => deleteAudioClip(audio))]);
               setPosts((current) => current.filter((item) => item.id !== action.id));
               olderPostsRef.current = olderPostsRef.current.filter((item) => item.id !== action.id);
               return;
@@ -2366,13 +2388,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createReply": {
-              if (!firebaseUser || !profile?.currentGroupId || !action.body.trim()) return;
+              if (!firebaseUser || !profile?.currentGroupId || (!action.body.trim() && !action.audio)) return;
               const reply: Reply = {
                 id: action.replyId ?? id("reply"),
                 userId: firebaseUser.uid,
                 targetType: action.targetType,
                 targetId: action.targetId,
                 body: action.body.trim().slice(0, 500),
+                ...(action.audio ? { audio: action.audio } : {}),
                 mentionUserIds: resolveMentionIds(action.body, memberships),
                 createdAt: now(),
               };
@@ -2393,6 +2416,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 ...reactionDeletes,
                 [`replies/${profile.currentGroupId}/${action.id}`]: null,
               });
+              await deleteAudioClip(reply.audio);
               setReplies((current) => current.filter((item) => item.id !== action.id));
               setPrayerReactions((current) => current.filter((reaction) => reaction.targetType !== "reply" || reaction.targetId !== action.id));
               olderRepliesRef.current = olderRepliesRef.current.filter((item) => item.id !== action.id);
@@ -2400,7 +2424,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createJournalEntry": {
-              if (!firebaseUser || !action.body.trim()) {
+              if (!firebaseUser || (!action.body.trim() && !action.audio)) {
                 if (journalScope || sharedJournalMutation) throw new Error("The journal entry could not be saved.");
                 return;
               }
@@ -2408,6 +2432,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const groupId = action.shareWithGroup ? journalScope?.groupId : undefined;
               const canShare = () => canShareJournal(groupId);
               if (action.shareWithGroup && !canShare()) throw new Error("The selected community is no longer available.");
+              const sharedAudio = action.audio && groupId ? await copyAudioForShare(action.audio, groupId) : undefined;
+              if (!journalAccountIsCurrent()) throw new Error("The journal account changed.");
               const timestamp = now();
               const postId = groupId ? id("post") : undefined;
               const verses = actionVerses(action);
@@ -2417,6 +2443,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 journalType: action.journalType ?? (action.entryKind === "prayer_request" || action.entryKind === "prayer_moment" ? "prayer" : action.entryKind === "praise" ? "answered_prayer" : action.entryKind === "scripture" ? "scripture_note" : "reflection"),
                 ...(action.title?.trim() ? { title: action.title.trim() } : {}),
                 body: action.body.trim(),
+                ...(action.audio ? { audio: action.audio } : {}),
                 source: "manual",
                 entryKind: action.entryKind ?? "reflection",
                 ...(action.heartMood ? { heartMood: action.heartMood } : {}),
@@ -2435,6 +2462,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                   kind: postKind,
                   ...(postSupportsTitle(postKind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                   body: action.body.trim(),
+                  ...(sharedAudio ? { audio: sharedAudio } : {}),
                   ...(verses[0] ? { verse: verses[0], verses } : {}),
                   createdAt: timestamp,
                 };
@@ -2453,6 +2481,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 return;
               }
               const updatedAt = now();
+              const previousEntry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
                 title: action.title?.trim() || null,
@@ -2461,11 +2490,13 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 heartMood: action.heartMood ?? null,
                 verse: actionVerses(action)[0] ?? null,
                 verses: actionVerses(action).length ? actionVerses(action) : null,
+                ...(action.audio !== undefined ? { audio: action.audio } : {}),
                 ...(journalScope ? {} : { sharedPostId: action.sharedPostId ?? null }),
                 images: null,
                 updatedAt,
               }, journalAccountIsCurrent);
               if (!journalAccountIsCurrent()) return;
+              if (action.audio === null && previousEntry?.audio) void deleteAudioClip(previousEntry.audio);
               setJournalEntries((current) => current.map((entry) => entry.id === action.id ? {
                 ...entry,
                 body: action.body.trim(),
@@ -2514,6 +2545,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               }
 
               await update(ref(database), updates);
+              await deleteAudioClip(entry?.audio);
               setJournalEntries((current) => current.filter((item) => item.id !== action.id));
               olderJournalEntriesRef.current = olderJournalEntriesRef.current.filter((item) => item.id !== action.id);
               if (entry?.source === "private_check_in") {

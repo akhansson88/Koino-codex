@@ -4,6 +4,7 @@ type CommentMessageInput = {
   actorName: string;
   body: string;
   groupId: string;
+  hasAudio?: boolean;
   label: string;
   notificationId: string;
   reason: "owner" | "participant" | "mention";
@@ -13,9 +14,13 @@ type CommentMessageInput = {
 };
 
 export function buildCommentPushMessage(input: CommentMessageInput): ExpoPushMessage {
+  const title = input.hasAudio ? "New voice prayer" : "KOINO";
+  const body = input.hasAudio
+    ? `${input.actorName || "Someone"} shared a voice prayer.`
+    : "New activity in KOINO.";
   return {
-    title: "KOINO",
-    body: "New activity in KOINO.",
+    title,
+    body,
     sound: "default",
     badge: input.badge,
     priority: input.reason === "mention" ? "high" : "default",

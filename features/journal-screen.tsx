@@ -145,9 +145,9 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     setFeedback(undefined);
   }
 
-  async function submitEntry() {
+  async function submitEntry(audio: import("@/state/types").AudioClip | null) {
     const userId = state.currentUserId;
-    if (!userId || !draft || draftRef.current !== draft || pending.current || !body.trim()) return;
+    if (!userId || !draft || draftRef.current !== draft || pending.current || (!body.trim() && !audio)) return;
     // A captured Share action cannot become a private save or select a new room.
     if (audienceRef.current !== audience || (audience && liveShareTarget.current !== audience)) return;
     const destination = audience ? group : undefined;
@@ -165,6 +165,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
         title,
         verse: primaryBibleVerse(verses),
         verses,
+        ...(audio ? { audio } : {}),
         shareWithGroup: Boolean(destination),
         journalScope: destination ? { userId, groupId: destination.id } : { userId },
       });
@@ -291,6 +292,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
         onVerses={setVerses}
         onClose={() => { if (draft && draftRef.current === draft && !pending.current) clearDraft(); }}
         onSubmit={submitEntry}
+        audioScope="user"
         roomName={group?.name}
         roomImage={group?.image}
       />
