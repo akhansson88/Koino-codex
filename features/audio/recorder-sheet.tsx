@@ -184,7 +184,9 @@ function AudioRecorderSheetContent({
     try {
       await recorder.stop();
       const uri = recorder.uri;
-      const durationMs = Math.round(Math.max(state.durationMillis, recorder.currentTime * 1000));
+      // Native auto-stop can land a few milliseconds past the limit; clamp so
+      // the stored descriptor always passes the clip validator.
+      const durationMs = Math.min(maxMs, Math.round(Math.max(state.durationMillis, recorder.currentTime * 1000)));
       if (!uri || durationMs < AUDIO_MIN_MS) {
         if (uri) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
         setErrorKey("audio.record.tooShort");
