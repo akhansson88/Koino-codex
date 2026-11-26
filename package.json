@@ -59,6 +59,8 @@
     "validate:interactions": "node scripts/validate-native-interactions.mjs",
     "validate:selective-state": "node scripts/validate-selective-state.mjs",
     "validate:notification-navigation": "node scripts/validate-notification-navigation.mjs",
+    "validate:prayers": "node scripts/validate-prayer-notifications.mjs",
+    "validate:legacy-records": "node scripts/validate-legacy-records.mjs",
     "validate:community-navigation": "node scripts/validate-community-navigation.mjs",
     "validate:presence": "node scripts/validate-presence.mjs",
     "validate:presence-emulator": "npx firebase-tools emulators:exec --config firebase.emulator-test.json --only auth,database --project demo-koino \"node scripts/validate-presence-emulator.mjs\"",

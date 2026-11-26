@@ -121,6 +121,7 @@ for (const [collection, p] of Object.entries(policies)) {
     node.role = { ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'leader' || newData.val() == 'member')" };
   }
   if (collection === "activityNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
+  if (collection === "prayerNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
   store[collection] = target;
 }
 rules.encryptedData = store;

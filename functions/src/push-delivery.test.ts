@@ -65,10 +65,28 @@ test("comment messages are immediate and preserve deep-link data", () => {
 });
 
 test("prayer messages use the prayer channel", () => {
-  const message = buildPrayerPushMessage("Sam", "prayer-1");
+  const message = buildPrayerPushMessage({
+    actorName: "Sam",
+    notificationId: "prayer-1",
+    targetType: "post",
+    targetId: "post-1",
+    groupId: "group-1",
+    badge: 3,
+  });
   assert.equal(message.title, "KOINO");
   assert.equal(message.channelId, "prayer-activity");
-  assert.deepEqual(message.data, { prayerNotificationId: "prayer-1" });
+  assert.equal(message.body, "Sam prayed for your prayer request");
+  assert.equal(message.badge, 3);
+  assert.deepEqual(message.data, {
+    prayerNotificationId: "prayer-1",
+    targetType: "post",
+    targetId: "post-1",
+    groupId: "group-1",
+  });
+
+  const direct = buildPrayerPushMessage({ actorName: "", notificationId: "prayer-2" });
+  assert.equal(direct.body, "Someone prayed for you");
+  assert.deepEqual(direct.data, { prayerNotificationId: "prayer-2" });
 });
 
 test("only DeviceNotRegistered errors authorize token cleanup", () => {

@@ -145,10 +145,11 @@ export function AvatarButton({ size = 38 }: { size?: number }) {
 }
 
 export function NotificationBellButton() {
-  const state = useKoinoFields(["activityNotifications", "currentUserId"]);
+  const state = useKoinoFields(["activityNotifications", "prayerNotifications", "currentUserId"]);
   const { t } = useAppTranslation();
   const pathname = usePathname();
-  const unreadCount = state.activityNotifications.filter((item) => !item.readAt).length;
+  const unreadCount = state.activityNotifications.filter((item) => !item.readAt).length
+    + state.prayerNotifications.filter((item) => !item.readAt).length;
 
   if (!state.currentUserId) return null;
 

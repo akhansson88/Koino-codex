@@ -106,6 +106,8 @@ export type Action =
   | { type: "deleteEvent"; groupId: Id; id: Id }
   | { type: "setEventRsvp"; groupId: Id; eventId: Id; status: EventRsvpStatus }
   | { type: "markActivityNotificationRead"; id: Id }
+  | { type: "markPrayerNotificationRead"; id: Id }
+  | { type: "markAllPrayerNotificationsRead" }
   | { type: "markActivityDiscussionRead"; groupId: Id; targetType: "post" | "check_in"; targetId: Id }
   | { type: "markAllActivityNotificationsRead" }
   | { type: "registerPushToken"; token: string; platform: "android" | "ios" }

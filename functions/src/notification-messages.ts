@@ -30,14 +30,32 @@ export function buildCommentPushMessage(input: CommentMessageInput): ExpoPushMes
   };
 }
 
-export function buildPrayerPushMessage(_actorName: string, notificationId: string): ExpoPushMessage {
+export function buildPrayerPushMessage(input: {
+  actorName: string;
+  notificationId: string;
+  targetType?: string;
+  targetId?: string;
+  groupId?: string;
+  badge?: number;
+}): ExpoPushMessage {
+  const forRequest = input.targetType === "post";
+  const name = input.actorName.trim();
+  const body = forRequest
+    ? name ? `${name} prayed for your prayer request` : "Someone prayed for your prayer request"
+    : name ? `${name} prayed for you` : "Someone prayed for you";
   return {
     title: "KOINO",
-    body: "New activity in KOINO.",
+    body,
     sound: "default",
     priority: "high",
     channelId: "prayer-activity",
-    data: { prayerNotificationId: notificationId },
+    ...(input.badge !== undefined ? { badge: input.badge } : {}),
+    data: {
+      prayerNotificationId: input.notificationId,
+      ...(input.targetType ? { targetType: input.targetType } : {}),
+      ...(input.targetId ? { targetId: input.targetId } : {}),
+      ...(input.groupId ? { groupId: input.groupId } : {}),
+    },
   };
 }
 

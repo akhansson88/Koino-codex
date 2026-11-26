@@ -101,6 +101,12 @@ export async function activityUnreadCount(database: Database, recipientUserId: s
   return snapshot.numChildren();
 }
 
+export async function prayerUnreadCount(database: Database, recipientUserId: string) {
+  const snapshot = await database.ref(`encryptedData/prayerNotifications/${recipientUserId}`)
+    .orderByChild("readAt").equalTo(null).get();
+  return snapshot.numChildren();
+}
+
 export async function sendExpoPush(
   database: Database,
   recipientUserId: string,

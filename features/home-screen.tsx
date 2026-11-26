@@ -41,7 +41,9 @@ import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { useTheme } from "@/ui/theme-provider";
 
 function firstName(name?: string) {
-  return name?.trim().split(/\s+/)[0];
+  // A legacy account can still arrive with a ciphertext object where its name
+  // used to be; treat anything that is not text as no name.
+  return typeof name === "string" ? name.trim().split(/\s+/)[0] : undefined;
 }
 
 type HomeGreetingPeriod = "morning" | "afternoon" | "evening" | "fallback";

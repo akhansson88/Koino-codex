@@ -1,5 +1,6 @@
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
 import { MeBiblePlans } from "@/features/me-bible-plans";
+import { MePrayers } from "@/features/me-prayers";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
@@ -54,7 +55,7 @@ function useLocalJournalDay() {
   return day;
 }
 
-const journalFields = ["authError", "biblePlans", "currentUserId", "groups", "journalEntries", "journalShareGroupId"] as const;
+const journalFields = ["authError", "biblePlans", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "prayerNotifications", "users"] as const;
 
 type DraftAudience = { groupId: string };
 type DraftFeedback = "me.journey.composer.communityChanged" | "me.journey.composer.saveFailed" | "me.journey.composer.shareUnconfirmed";
@@ -68,6 +69,10 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
   const { dispatch } = useKoinoActions();
   const { t } = useAppTranslation();
   useTheme();
+  useEffect(() => {
+    if (!state.prayerNotifications.some((item) => !item.readAt)) return;
+    void dispatch({ type: "markAllPrayerNotificationsRead" }).catch(() => undefined);
+  }, [dispatch, state.prayerNotifications]);
   const params = useLocalSearchParams<{ newEntry?: string }>();
   const [draft, setDraft] = useState<symbol>();
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
@@ -257,6 +262,8 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
       </View>
 
       <MeBiblePlans plans={state.biblePlans} userId={state.currentUserId} />
+
+      <MePrayers notifications={state.prayerNotifications} users={state.users} />
 
       {state.authError ? (
         <Card>

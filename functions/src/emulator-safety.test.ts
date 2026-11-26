@@ -95,7 +95,7 @@ test("emulator push and receipt delivery do nothing before database or external 
   await withIsolatedEnvironment(async () => {
     const database = { ref() { throw new Error("Must not read tokens, diagnostics or receipts."); } } as unknown as Database;
     const unexpectedFetch: typeof fetch = async () => { throw new Error("Must not contact Expo."); };
-    assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), unexpectedFetch), { accepted: 0, devices: 0 });
+    assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage({ actorName: "", notificationId: "test" }), unexpectedFetch), { accepted: 0, devices: 0 });
     assert.deepEqual(await processExpoReceipts(database, unexpectedFetch), { processed: 0 });
   });
 });
@@ -154,7 +154,7 @@ test("push and receipt delivery skip every token/database and transport call out
         app: { options },
         ref() { throw new Error("Must not read tokens, diagnostics or receipts."); },
       } as unknown as Database;
-      assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), unexpectedFetch), { accepted: 0, devices: 0 });
+      assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage({ actorName: "", notificationId: "test" }), unexpectedFetch), { accepted: 0, devices: 0 });
       assert.deepEqual(await processExpoReceipts(database, unexpectedFetch), { processed: 0 });
     }
   } finally {
@@ -196,7 +196,7 @@ test("production push and receipt delivery still reach the mocked Expo transport
       assert.deepEqual(body, { ids: ["fixture-ticket"] });
       return Response.json({ data: { "fixture-ticket": { status: "ok" } } });
     };
-    assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage("", "test"), mockedFetch), { accepted: 1, devices: 1 });
+    assert.deepEqual(await sendExpoPush(database, "member", "prayer:test", buildPrayerPushMessage({ actorName: "", notificationId: "test" }), mockedFetch), { accepted: 1, devices: 1 });
     assert.equal(receipts.size, 1);
     assert.deepEqual(await processExpoReceipts(database, mockedFetch), { processed: 1 });
     assert.equal(receipts.size, 0);

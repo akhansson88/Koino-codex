@@ -342,10 +342,14 @@ export type PrayerNotification = {
   id: Id;
   userId: Id;
   recipientUserId: Id;
+  targetType?: PrayerSessionTargetType;
+  targetId?: Id;
+  requestTitle?: string;
   startedAt: string;
   completedAt: string;
   durationSeconds: number;
   createdAt: string;
+  readAt?: string;
 };
 
 export type ActivityNotification = {

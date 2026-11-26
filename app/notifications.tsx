@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
-import type { ActivityNotification } from "@/state/types";
+import type { ActivityNotification, PrayerNotification } from "@/state/types";
 import { AppScreen, Avatar, IconButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { formatRelativeTime } from "@/ui/relative-time";
@@ -21,6 +21,10 @@ const swedishContentLabels: Record<ActivityNotification["contentLabel"], string>
   "scripture reflection": "bibelreflektion",
 };
 
+type NotificationRow =
+  | { kind: "activity"; createdAt: string; activity: ActivityNotification }
+  | { kind: "prayer"; createdAt: string; prayer: PrayerNotification };
+
 function ownerNotificationKey(content: ActivityNotification["contentLabel"]) {
   if (content === "reflection") return "notifications.owner.reflection" as const;
   if (content === "prayer request") return "notifications.owner.prayerRequest" as const;
@@ -35,14 +39,23 @@ function ownerNotificationKey(content: ActivityNotification["contentLabel"]) {
 export default function NotificationsScreen() {
   const { state, dispatch } = useKoino();
   const { language, t } = useAppTranslation();
-  const notifications = [...state.activityNotifications].sort(
-    (a, b) =>
-      Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
-      Number(b.priority === "high") - Number(a.priority === "high"),
-  );
-  const hasUnread = notifications.some((item) => !item.readAt);
+  const rows: NotificationRow[] = [
+    ...state.activityNotifications.map((activity): NotificationRow => ({
+      kind: "activity",
+      createdAt: activity.createdAt,
+      activity,
+    })),
+    ...state.prayerNotifications.map((prayer): NotificationRow => ({
+      kind: "prayer",
+      createdAt: prayer.completedAt,
+      prayer,
+    })),
+  ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const hasUnread = state.activityNotifications.some((item) => !item.readAt)
+    || state.prayerNotifications.some((item) => !item.readAt);
+  const userById = new Map(state.users.map((user) => [user.id, user]));
 
-  const openNotification = (notification: ActivityNotification) => {
+  const openActivity = (notification: ActivityNotification) => {
     navigateThenMarkRead(() => router.push({
       pathname: "/feed/[targetType]/[id]",
       params: {
@@ -55,6 +68,28 @@ export default function NotificationsScreen() {
     (error) => console.error("[notifications] Could not mark notification read", error));
   };
 
+  const openPrayer = (notification: PrayerNotification) => {
+    const open = () => {
+      if (notification.targetType === "post" && notification.targetId && notification.groupId) {
+        router.push({
+          pathname: "/feed/[targetType]/[id]",
+          params: {
+            targetType: "post",
+            id: notification.targetId,
+            groupId: notification.groupId,
+          },
+        } as never);
+        return;
+      }
+      router.navigate("/(tabs)/me" as never);
+    };
+    navigateThenMarkRead(
+      open,
+      () => dispatch({ type: "markPrayerNotificationRead", id: notification.id }),
+      (error) => console.error("[notifications] Could not mark prayer notification read", error),
+    );
+  };
+
   return (
     <AppScreen>
       <View style={{ gap: 22, paddingBottom: 40 }}>
@@ -65,7 +100,13 @@ export default function NotificationsScreen() {
           </View>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
             {hasUnread ? (
-              <Pressable hitSlop={8} onPress={() => void dispatch({ type: "markAllActivityNotificationsRead" })}>
+              <Pressable
+                hitSlop={8}
+                onPress={() => {
+                  void dispatch({ type: "markAllActivityNotificationsRead" });
+                  void dispatch({ type: "markAllPrayerNotificationsRead" });
+                }}
+              >
                 <Text style={[typography.label, { color: colors.olive }]}>{t("notifications.markAllRead")}</Text>
               </Pressable>
             ) : null}
@@ -77,7 +118,7 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
-        {notifications.length === 0 ? (
+        {rows.length === 0 ? (
           <View style={{ alignItems: "center", gap: 10, paddingHorizontal: 28, paddingVertical: 72 }}>
             <View style={{ alignItems: "center", backgroundColor: colors.lavenderSoft, borderRadius: 28, height: 56, justifyContent: "center", width: 56 }}>
               <Feather color={colors.olive} name="bell" size={24} />
@@ -87,16 +128,56 @@ export default function NotificationsScreen() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            {notifications.map((notification) => {
+            {rows.map((row) => {
+              if (row.kind === "prayer") {
+                const giver = userById.get(row.prayer.userId);
+                const name = giver?.name?.trim() || t("common.someone");
+                const isUnread = !row.prayer.readAt;
+                const requestTitle = row.prayer.targetType === "post" ? row.prayer.requestTitle?.trim() : undefined;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={`prayer-${row.prayer.id}`}
+                    onPress={() => openPrayer(row.prayer)}
+                    style={{
+                      alignItems: "flex-start",
+                      backgroundColor: isUnread ? colors.prayerSoft : colors.paper,
+                      borderColor: colors.line,
+                      borderRadius: radius.lg,
+                      borderWidth: 1,
+                      flexDirection: "row",
+                      gap: 12,
+                      padding: 14,
+                    }}
+                  >
+                    <Avatar image={giver?.image} name={name} size={44} tone="pink" />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={[typography.body, { color: colors.textPrimary }]}>
+                        {t(row.prayer.targetType === "post" ? "notifications.prayerForRequest" : "notifications.prayerForYou", { name })}
+                      </Text>
+                      {requestTitle ? (
+                        <Text numberOfLines={2} style={[typography.body, { color: colors.textSecondary }]}>
+                          “{requestTitle}”
+                        </Text>
+                      ) : null}
+                      <Text style={[typography.label, { color: colors.muted }]}>
+                        {formatRelativeTime(row.prayer.completedAt, language)}
+                      </Text>
+                    </View>
+                    {isUnread ? <View style={{ backgroundColor: colors.rose, borderRadius: 5, height: 10, marginTop: 5, width: 10 }} /> : null}
+                  </Pressable>
+                );
+              }
+              const notification = row.activity;
               const actor = state.users.find((user) => user.id === notification.actorUserId);
-              const name = actor?.name ?? notification.actorName ?? "Someone";
+              const name = actor?.name ?? notification.actorName ?? t("common.someone");
               const content = language === "sv" ? swedishContentLabels[notification.contentLabel] : notification.contentLabel;
               const isUnread = !notification.readAt;
               return (
                 <Pressable
                   accessibilityRole="button"
                   key={notification.id}
-                  onPress={() => void openNotification(notification)}
+                  onPress={() => void openActivity(notification)}
                   style={{
                     alignItems: "flex-start",
                     backgroundColor: !isUnread

@@ -39,6 +39,7 @@ function validTargetType(value: unknown): value is "post" | "check_in" {
 export function NotificationRuntime() {
   const currentUserId = useKoinoSelector((state) => state.currentUserId);
   const activityNotifications = useKoinoSelector((state) => state.activityNotifications);
+  const prayerNotifications = useKoinoSelector((state) => state.prayerNotifications);
   const { dispatch } = useKoinoActions();
   const handledResponseId = useRef<string | undefined>(undefined);
   const dispatchRef = useRef(dispatch);
@@ -50,9 +51,10 @@ export function NotificationRuntime() {
 
   useEffect(() => {
     if (!Notifications || Platform.OS === "web") return;
-    const unreadCount = activityNotifications.filter((item) => !item.readAt).length;
+    const unreadCount = activityNotifications.filter((item) => !item.readAt).length
+      + prayerNotifications.filter((item) => !item.readAt).length;
     void Notifications.setBadgeCountAsync(unreadCount).catch(() => undefined);
-  }, [activityNotifications]);
+  }, [activityNotifications, prayerNotifications]);
 
   useEffect(() => {
     if (!Notifications || Platform.OS === "web") return;
@@ -155,7 +157,9 @@ export function NotificationRuntime() {
         })
           : typeof data.notificationId === "string"
             ? () => dispatch({ type: "markActivityNotificationRead", id: data.notificationId as string })
-            : undefined;
+            : typeof data.prayerNotificationId === "string"
+              ? () => dispatch({ type: "markPrayerNotificationRead", id: data.prayerNotificationId as string })
+              : undefined;
       const navigate = () => {
         if (typeof data.eventId === "string" && data.eventId) {
           router.push({ pathname: "/event-details", params: { eventId: data.eventId } } as never);
@@ -169,7 +173,7 @@ export function NotificationRuntime() {
           },
           } as never);
         } else if (typeof data.prayerNotificationId === "string") {
-          router.replace("/(tabs)" as never);
+          router.navigate("/(tabs)/me" as never);
         }
       };
       if (markRead) navigateThenMarkRead(navigate, markRead,
