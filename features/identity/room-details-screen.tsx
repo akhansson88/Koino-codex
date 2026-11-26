@@ -12,6 +12,7 @@ import { colors, typography } from "@/ui/theme";
 import { type RoomSheet } from "@/features/identity/types";
 import { roomMemberCount, shareRoomInvite, selectedImageSize } from "@/features/identity/room-helpers";
 import { RoomHeaderCard, JoinSwitchCard } from "@/features/identity/room-cards";
+import { JoinPolicySheet } from "@/features/identity/join-policy-sheet";
 import { SettingsSection, SettingsRow } from "@/features/identity/settings-components";
 import { MemberList } from "@/features/identity/members";
 import { RoomSwitcherSheet } from "@/features/identity/room-switcher";
@@ -21,6 +22,7 @@ export function RoomDetailsScreen() {
   const { state, dispatch } = useKoino();
   const { t } = useAppTranslation();
   const [activeSheet, setActiveSheet] = useState<RoomSheet>();
+  const [policyVisible, setPolicyVisible] = useState(false);
   const [switcherVisible, setSwitcherVisible] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
   const inviteRevision = useRef(0);
@@ -233,7 +235,7 @@ export function RoomDetailsScreen() {
 
         {group ? (
           <>
-            <RoomHeaderCard group={group} memberCount={memberCount} inviteMessage={inviteMessage} onInvite={handleInvite} />
+            <RoomHeaderCard group={group} memberCount={memberCount} inviteMessage={inviteMessage} onInvite={handleInvite} onShowQr={() => router.push("/group-invite" as never)} />
 
             <SettingsSection label={t("community.page.community")}>
               <SettingsRow
@@ -295,6 +297,14 @@ export function RoomDetailsScreen() {
                   subtitle={t("community.leaders.manageHint")}
                   value={leaders.length > 0 ? String(leaders.length) : undefined}
                   onPress={openLeadersSheet}
+                />
+                <SettingsRow
+                  icon={group.joinPolicy === "open" ? "unlock" : "lock"}
+                  title={t("community.join.policyTitle")}
+                  subtitle={t(group.joinPolicy === "open" ? "community.join.policyOpenHint" : "community.join.policyApprovalHint")}
+                  value={t(group.joinPolicy === "open" ? "community.join.policyOpen" : "community.join.policyApproval")}
+                  onPress={() => setPolicyVisible(true)}
+                  showDivider
                 />
                 <SettingsRow
                   icon="user-check"
@@ -396,6 +406,15 @@ export function RoomDetailsScreen() {
       </BottomSheet>
 
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
+      {group ? (
+        <JoinPolicySheet
+          groupId={group.id}
+          groupName={group.name}
+          onClose={() => setPolicyVisible(false)}
+          policy={group.joinPolicy === "open" ? "open" : "approval"}
+          visible={policyVisible}
+        />
+      ) : null}
       <RoomImageCropper
         source={roomImageCropSource}
         title={t("community.management.cropImage")}

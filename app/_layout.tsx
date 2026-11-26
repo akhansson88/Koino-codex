@@ -12,13 +12,14 @@ import { Montserrat_400Regular } from "@expo-google-fonts/montserrat/400Regular"
 import { Montserrat_500Medium } from "@expo-google-fonts/montserrat/500Medium";
 import { Montserrat_600SemiBold } from "@expo-google-fonts/montserrat/600SemiBold";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 import { useEffect, useState } from "react";
 
 import { KoinoProvider, useKoinoFields } from "@/state/koino-store";
 import { auth } from "@/state/store/firebase";
+import { takePendingJoinCode } from "@/state/pending-join";
 import { BibleDatabaseProvider } from "@/features/bible-database-provider";
 import { AppLanguageProvider } from "@/ui/app-language";
 import { NotificationRuntime } from "@/ui/notification-runtime";
@@ -30,8 +31,7 @@ import { useOnboardingProgress } from "@/ui/onboarding-progress";
 
 const enableNativeBackGesture = Platform.OS === "ios";
 
-export default function RootLayout() {
-  useFonts({
+export default function RootLayout() {  useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Montserrat_300Light,
@@ -68,6 +68,7 @@ function RootNavigator() {
       {!onboarding.pending ? <PresenceRuntime /> : null}
       {!onboarding.pending ? <EventReminderRuntime /> : null}
       {!onboarding.pending ? <FastingReminderRuntime /> : null}
+      <PendingJoinRuntime />
       <StatusBar style={scheme === "dark" ? "light" : "dark"} backgroundColor={colors.background} />
       <Stack
         // Leave only index for one commit so every previous route is removed,
@@ -84,6 +85,7 @@ function RootNavigator() {
         }}
       >
         <Stack.Screen name="index" options={{ gestureEnabled: false, headerShown: false }} />
+        <Stack.Screen name="join" options={{ headerShown: false }} />
         <Stack.Protected guard={!pruningPreviousSession}>
           <Stack.Screen name="reset-password" options={{ gestureEnabled: false, headerShown: false }} />
           <Stack.Screen name="native-search-check" />
@@ -103,6 +105,8 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen name="room-details" options={{ headerShown: false }} />
+          <Stack.Screen name="group-invite" options={{ headerShown: false }} />
+          <Stack.Screen name="join-scan" options={{ headerShown: false }} />
           <Stack.Screen name="delete-account" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="events" options={{ headerShown: false }} />
           <Stack.Screen name="event-details" options={{ headerShown: false }} />
@@ -125,5 +129,24 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+/**
+ * A join deep link that arrived while signed out or mid-onboarding is resumed
+ * here once the account can actually resolve the code.
+ */
+function PendingJoinRuntime() {
+  const router = useRouter();
+  const onboarding = useOnboardingProgress();
+  const { currentUserId } = useKoinoFields(["currentUserId"]);
+
+  useEffect(() => {
+    if (!currentUserId || onboarding.pending) return;
+    const code = takePendingJoinCode();
+    if (!code) return;
+    router.push(`/join?code=${encodeURIComponent(code)}` as never);
+  }, [currentUserId, onboarding.pending, router]);
+
+  return null;
 }
 

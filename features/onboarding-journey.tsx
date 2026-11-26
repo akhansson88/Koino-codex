@@ -1,11 +1,14 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
+import { JoinPreviewCard, useJoinPreview } from "@/features/community/join-preview";
+import { JoinScanner } from "@/features/community/join-scanner";
+import { ManualCodeEntry } from "@/features/community/join-manual-code";
 import { OnboardingPage } from "@/features/onboarding-screen";
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { OnboardingChoice } from "@/state/onboarding-progress";
-import { Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
+import { BottomSheet, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import { Field } from "@/ui/components";
@@ -35,6 +38,10 @@ export function OnboardingJourney({ userId }: { userId: string }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<TranslationKey>();
   const [busy, setBusy] = useState(false);
+  const [scanVisible, setScanVisible] = useState(false);
+  const [scannedCode, setScannedCode] = useState<string>();
+  const scanPreview = useJoinPreview(scannedCode, scanVisible);
+  const handledReceipt = useRef<JoinRequestReceipt | undefined>(undefined);
   const running = useRef(false);
   const isJoin = step === "join";
   const canSubmit = value.trim().length >= (isJoin ? 3 : 1);
@@ -71,6 +78,19 @@ export function OnboardingJourney({ userId }: { userId: string }) {
       setError("onboarding.journey.continueFailed");
     }
   }
+
+  // A scanned join during onboarding moves the journey on exactly like a typed code.
+  useEffect(() => {
+    const receipt = scanPreview.receipt;
+    if (!receipt || receipt.status === "rejected" || handledReceipt.current === receipt) return;
+    handledReceipt.current = receipt;
+    const nextStep = receipt.joined ? "approved" : "requested";
+    setScanVisible(false);
+    setScannedCode(undefined);
+    setStep(nextStep);
+    void continueOnboarding(receiptChoices[nextStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanPreview.receipt]);
 
   function submitCommunity() {
     if ((step !== "join" && step !== "create") || !canSubmit) return;
@@ -165,6 +185,11 @@ export function OnboardingJourney({ userId }: { userId: string }) {
           <PrimaryButton disabled={busy || !canSubmit} onPress={submitCommunity}>
             {t(busy ? "onboarding.journey.working" : isJoin ? "onboarding.journey.request" : "onboarding.journey.create")}
           </PrimaryButton>
+          {isJoin ? (
+            <SecondaryButton disabled={busy} icon="camera" onPress={() => { setScannedCode(undefined); setScanVisible(true); }}>
+              {t("community.join.scan")}
+            </SecondaryButton>
+          ) : null}
           <SecondaryButton disabled={busy} onPress={() => changeStep("choice")}>{t("common.cancel")}</SecondaryButton>
         </>
       ) : (
@@ -178,6 +203,22 @@ export function OnboardingJourney({ userId }: { userId: string }) {
         </Text>
       ) : null}
       <SecondaryButton disabled={busy} icon="log-out" onPress={signOut}>{t("onboarding.journey.signOut")}</SecondaryButton>
+
+      <BottomSheet
+        title={t("community.join.scanTitle")}
+        visible={scanVisible}
+        onClose={() => { setScanVisible(false); setScannedCode(undefined); }}
+        dismissible={!scanPreview.busy}
+      >
+        {scannedCode ? (
+          <JoinPreviewCard preview={scanPreview} onCancel={() => setScannedCode(undefined)} />
+        ) : (
+          <>
+            <JoinScanner onCode={setScannedCode} />
+            <ManualCodeEntry onSubmit={setScannedCode} />
+          </>
+        )}
+      </BottomSheet>
     </OnboardingPage>
   );
 }

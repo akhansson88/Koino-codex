@@ -29,12 +29,26 @@ export type Group = {
   image?: GroupImage;
   createdAt: string;
   updatedAt: string;
+  joinPolicy?: GroupJoinPolicy;
   migrationPending?: boolean;
   migrationOwnerName?: string;
   migrationAwaitingApproval?: boolean;
 };
 
 export type GroupRole = "owner" | "leader" | "member";
+
+/** Who may join by scanning the community QR. Absent means "approval". */
+export type GroupJoinPolicy = "approval" | "open";
+
+/** The narrow preview the server returns for a scanned invite code. */
+export type CommunityInvitePreview = {
+  groupId: Id;
+  name: string;
+  joinPolicy: GroupJoinPolicy;
+  memberCount: number;
+  alreadyMember: boolean;
+  requestStatus?: "pending" | "approved" | "rejected" | "closed";
+};
 
 export type Membership = {
   id: Id;

@@ -1,10 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Keyboard, Text, View } from "react-native";
+import { router } from "expo-router";
 
 import { CommunityJoinFingerprint } from "@/features/community/join-requests";
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import { useKoinoActions } from "@/state/koino-store";
-import { PrimaryButton, TextInputField } from "@/ui/app-components";
+import { PrimaryButton, SecondaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
 import { FieldLabel } from "@/ui/shadcn/input";
@@ -88,6 +89,9 @@ export function CommunityJoinForm({ form }: { form: ReturnType<typeof useCommuni
   const label = t("community.rooms.code");
   return (
     <View style={{ gap: 8 }}>
+      <SecondaryButton disabled={form.busy} icon="camera" onPress={() => router.push("/join-scan" as never)}>
+        {t("community.join.scan")}
+      </SecondaryButton>
       <FieldLabel>{t("community.rooms.enterCode")}</FieldLabel>
       <TextInputField
         accessibilityLabel={label}

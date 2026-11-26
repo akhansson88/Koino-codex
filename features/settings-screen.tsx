@@ -1656,7 +1656,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
                   <Text style={[typography.caption, { color: colors.muted }]}>
-                      {communityMemberCount(memberCount, t)} · {t("common.private")}
+                      {communityMemberCount(memberCount, t)} · {t(group.joinPolicy === "open" ? "community.join.openBadge" : "community.join.approvalBadge")}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={17} color={colors.muted} />
@@ -1880,6 +1880,9 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
               </View>
               <SecondaryButton icon="message-circle" onPress={() => navigateToRoomView("detail", "back")}>
                 {t("community.rooms.open")}
+              </SecondaryButton>
+              <SecondaryButton icon="grid" onPress={() => router.push("/group-invite" as never)}>
+                {t("community.join.showQr")}
               </SecondaryButton>
               {inviteMessage ? <Text accessibilityLiveRegion="polite" style={[typography.caption, { color: colors.muted }]}>{inviteMessage}</Text> : null}
               </>}

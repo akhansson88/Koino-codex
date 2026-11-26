@@ -105,7 +105,7 @@ import {
   profileAndMembershipImageUpdates,
   deleteUserAvatarStoragePath,
 } from "@/state/store/image-operations";
-import { appointGroupLeader, leaveEncryptedGroup, removeGroupLeader, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration } from "@/state/encryption/session";
+import { appointGroupLeader, forgetResolvedInvite, leaveEncryptedGroup, removeGroupLeader, resolveCommunityInvite, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration, setGroupJoinPolicy } from "@/state/encryption/session";
 import { listenLegacyCommunities } from "@/state/encryption/migration";
 import { displayableImage } from "@/state/image-values";
 import { displayableText } from "@/state/display-values";
@@ -1574,8 +1574,22 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (auth.currentUser?.uid !== firebaseUser.uid || sessionGeneration() !== generation || signOutPending.current) {
                 throw new Error("The account changed while joining a community.");
               }
+              forgetResolvedInvite(action.inviteCode);
               action.report?.(receipt);
               announceJoinRequestChange(firebaseUser.uid);
+              return;
+            }
+            case "resolveInvite": {
+              if (!firebaseUser) throw new Error("Sign in to join a community.");
+              const invite = await resolveCommunityInvite(action.code);
+              action.report?.(invite);
+              return;
+            }
+            case "setJoinPolicy": {
+              if (!firebaseUser) throw new Error("Sign in to change who can join.");
+              const groupToUpdate = groups.find((item) => item.id === action.id);
+              if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) return;
+              await setGroupJoinPolicy(action.id, action.joinPolicy);
               return;
             }
             case "switchGroup":
@@ -3197,6 +3211,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           action.type === "changePassword" ||
           action.type === "createGroup" ||
           action.type === "joinGroup" ||
+          action.type === "resolveInvite" ||
+          action.type === "setJoinPolicy" ||
           action.type === "removeGroupMember" ||
           action.type === "appointGroupLeader" ||
           action.type === "removeGroupLeader" ||

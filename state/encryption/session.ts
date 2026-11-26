@@ -2,7 +2,7 @@ import { onValue, ref as rawRef } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { auth, database, functions } from "@/state/store/firebase";
 import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
-import type { GroupStatistics, GroupStatisticsDays } from "@/state/types";
+import type { CommunityInvitePreview, GroupJoinPolicy, GroupStatistics, GroupStatisticsDays } from "@/state/types";
 
 // KOINO accounts are ordinary Firebase accounts. There is no vault, recovery
 // key, device approval or escrow: signing in on any device shows the account's
@@ -44,6 +44,35 @@ export async function groupJoinRequest(code: string, name: string): Promise<Join
   }
   return result;
 }
+
+// A scanner may read the same code several times per second. The preview is
+// cached briefly so re-reading frames does not spend the join rate limit.
+const inviteCache = new Map<string, { value: CommunityInvitePreview; at: number }>();
+const inviteCacheMs = 60_000;
+
+export async function resolveCommunityInvite(code: string): Promise<CommunityInvitePreview> {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) throw new Error("Scan a KOINO invite code first.");
+  const cached = inviteCache.get(normalized);
+  if (cached && Date.now() - cached.at < inviteCacheMs) return cached.value;
+  const result = await call<CommunityInvitePreview>("resolveInvite", { code: normalized });
+  if (!result?.groupId || (result.joinPolicy !== "approval" && result.joinPolicy !== "open")) {
+    throw new Error("The community invite could not be read.");
+  }
+  inviteCache.set(normalized, { value: result, at: Date.now() });
+  return result;
+}
+
+export function forgetResolvedInvite(code?: string) {
+  if (code) inviteCache.delete(code.trim().toUpperCase());
+  else inviteCache.clear();
+}
+
+export async function setGroupJoinPolicy(groupId: string, joinPolicy: GroupJoinPolicy) {
+  await call("setJoinPolicy", { groupId, joinPolicy });
+  inviteCache.clear();
+}
+
 
 export async function listCommunityJoinRequests(userId: string) {
   if (session().uid !== userId) throw new Error("The account changed while opening community requests.");

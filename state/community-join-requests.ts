@@ -1,6 +1,8 @@
 export type JoinRequestReceipt = {
   groupId: string;
   status: "pending" | "approved" | "rejected";
+  /** True when this scan left the caller able to enter the community. */
+  joined?: boolean;
 };
 
 export type CommunityJoinRequest = Omit<JoinRequestReceipt, "status"> & {

@@ -4,6 +4,14 @@ import { adminApp } from "./firebase-admin";
 import { canViewGroupStatistics, communityRole, leaderRoleUpdate } from "./community-roles";
 import { loadGroupStatistics } from "./community-statistics-data";
 import type { GroupStatisticsDays } from "./community-statistics";
+import {
+  communityMemberCount,
+  decideJoin,
+  joinPolicyOrDefault,
+  normalizeInviteCode,
+  parseJoinPolicy,
+  requestStatusOf,
+} from "./group-join";
 import { ActionLimitError, assertActionAllowed } from "./signup-guard/store";
 
 // Plaintext account and community operations. Content itself is written by the
@@ -69,14 +77,18 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       if (!userMembership || userMembership.userId !== uid || userMembership.groupId !== groupId || userMembership.role !== "owner") invalid();
       const inviteOwner = (await db().ref(`encryptedData/inviteCodes/${code}/groupId`).get()).val();
       if (inviteOwner && inviteOwner !== groupId) invalid("That invite code is already in use.");
+      if (record.joinPolicy !== undefined && !parseJoinPolicy(record.joinPolicy)) {
+        invalid("Choose a valid join policy.");
+      }
+      const joinPolicy = joinPolicyOrDefault(record.joinPolicy);
       const created = await db().ref(`e2eeGroups/${groupId}`).transaction((value) => value ? undefined : {
-        id: groupId, ownerId: uid, revision: 1, epoch: 1, status: "ready",
+        id: groupId, ownerId: uid, revision: 1, epoch: 1, status: "ready", joinPolicy,
         members: { [uid]: { id: uid, userId: uid, role: "owner", joinedAt: record.createdAt ?? timestamp() } },
         createdAt: record.createdAt ?? timestamp(),
       });
       if (!created.committed) throw new HttpsError("already-exists", "That community already exists.");
       await db().ref().update({
-        [`encryptedData/groups/${groupId}`]: record,
+        [`encryptedData/groups/${groupId}`]: { ...record, joinPolicy },
         [`encryptedData/groupMembers/${groupId}/${uid}`]: ownerMembership,
         [`encryptedData/userGroups/${uid}/${groupId}`]: userMembership,
         [`encryptedData/inviteCodes/${code}`]: { groupId, createdAt: record.createdAt ?? timestamp() },
@@ -86,24 +98,97 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
     case "joinGroup": {
       requireVerifiedEmail();
       await enforceActionLimit("joinGroup");
-      const code = id(String(data.code ?? "").trim().toUpperCase());
+      const code = id(normalizeInviteCode(data.code));
       const invite = (await db().ref(`encryptedData/inviteCodes/${code}`).get()).val() as Obj | null;
       if (!invite?.groupId) missing("No community uses that invite code.");
       const groupId = id(invite!.groupId);
       const current = await group(groupId);
       if (!current) missing("No community uses that invite code.");
       const statusPath = `e2eeJoinRequestStatuses/${uid}/${groupId}`;
-      const previous = (await db().ref(statusPath).get()).val() as Obj | null;
-      if (current!.members?.[uid]) {
-        await db().ref(statusPath).set({ status: "approved", inviteHint: code.slice(-2), updatedAt: Date.now() });
-        await db().ref(`e2eeJoinRequests/${groupId}/${uid}`).remove();
-        return { groupId, status: "approved" };
+      const [previousSnapshot, departedSnapshot] = await Promise.all([
+        db().ref(statusPath).get(),
+        db().ref(`e2eeDepartures/${groupId}/${uid}`).get(),
+      ]);
+      const previous = previousSnapshot.val() as Obj | null;
+      const decision = decideJoin({
+        isMember: Boolean(current!.members?.[uid]),
+        previousStatus: typeof previous?.status === "string" ? previous.status : undefined,
+        joinPolicy: current!.joinPolicy,
+        hasDeparted: Boolean(departedSnapshot.val()),
+        memberCount: communityMemberCount(current),
+      });
+      if (decision === "already-member") {
+        // Scanning a code for a community you are already in is a no-op join.
+        await db().ref().update({
+          [statusPath]: { status: "approved", inviteHint: code.slice(-2), updatedAt: Date.now() },
+          [`e2eeJoinRequests/${groupId}/${uid}`]: null,
+        });
+        return { groupId, status: "approved", joined: true };
       }
-      if (previous?.status === "rejected") return { groupId, status: "rejected" };
+      if (decision === "rejected") return { groupId, status: "rejected" };
+      if (decision === "full") {
+        throw new HttpsError("failed-precondition", "GROUP_FULL");
+      }
       const name = typeof data.name === "string" && data.name.trim() ? data.name.trim().slice(0, 120) : "KOINO member";
+      const createdAt = timestamp();
+      if (decision === "open-join") {
+        const record = membership(groupId, uid, "member", name, createdAt);
+        // One atomic update after a fresh read: a policy flip or a removal can
+        // never leave membership and its mirrors out of step.
+        await db().ref().update({
+          [`e2eeGroups/${groupId}/members/${uid}`]: { id: uid, userId: uid, role: "member", joinedAt: createdAt },
+          [`encryptedData/groupMembers/${groupId}/${uid}`]: record,
+          [`encryptedData/userGroups/${uid}/${groupId}`]: record,
+          [`e2eeJoinRequests/${groupId}/${uid}`]: null,
+          [`e2eeDepartures/${groupId}/${uid}`]: null,
+          [statusPath]: { status: "approved", inviteHint: code.slice(-2), updatedAt: Date.now() },
+        });
+        return { groupId, status: "approved", joined: true };
+      }
       await db().ref(`e2eeJoinRequests/${groupId}/${uid}`).set({ userId: uid, name, requestedAt: Date.now() });
       await db().ref(statusPath).set({ status: "pending", inviteHint: code.slice(-2), updatedAt: Date.now() });
       return { groupId, status: "pending" };
+    }
+    case "resolveInvite": {
+      // The code is the credential: return only what the join preview shows.
+      const code = id(normalizeInviteCode(data.code));
+      const invite = (await db().ref(`encryptedData/inviteCodes/${code}`).get()).val() as Obj | null;
+      if (!invite?.groupId) missing("No community uses that invite code.");
+      const groupId = id(invite!.groupId);
+      const current = await group(groupId);
+      if (!current) missing("No community uses that invite code.");
+      const [infoSnapshot, statusSnapshot] = await Promise.all([
+        db().ref(`encryptedData/groups/${groupId}`).get(),
+        db().ref(`e2eeJoinRequestStatuses/${uid}/${groupId}`).get(),
+      ]);
+      const info = infoSnapshot.val() as Obj | null;
+      const requestStatus = requestStatusOf(statusSnapshot.val());
+      return {
+        groupId,
+        name: typeof info?.name === "string" ? info.name.slice(0, 120) : "",
+        joinPolicy: joinPolicyOrDefault(current!.joinPolicy),
+        memberCount: communityMemberCount(current),
+        alreadyMember: Boolean(current!.members?.[uid]),
+        ...(requestStatus ? { requestStatus } : {}),
+      };
+    }
+    case "setJoinPolicy": {
+      requireVerifiedEmail();
+      const groupId = id(data.groupId);
+      const joinPolicy = parseJoinPolicy(data.joinPolicy);
+      if (!joinPolicy) invalid("Choose a valid join policy.");
+      const current = await requireGroup(groupId, uid, true);
+      const info = (await db().ref(`encryptedData/groups/${groupId}`).get()).val() as Obj | null;
+      const stored = joinPolicyOrDefault(current.joinPolicy);
+      const mirrored = joinPolicyOrDefault(info?.joinPolicy);
+      if (stored === joinPolicy && mirrored === joinPolicy) return {};
+      const createdAt = timestamp();
+      await db().ref().update({
+        [`e2eeGroups/${groupId}/joinPolicy`]: joinPolicy,
+        [`encryptedData/groups/${groupId}/joinPolicy`]: joinPolicy,
+        [`encryptedData/groups/${groupId}/updatedAt`]: createdAt,
+      });
+      return { joinPolicy };
     }
     case "listJoinRequests": {
       const index = (await db().ref(`e2eeJoinRequestStatuses/${uid}`).get()).val() as Obj | null;

@@ -8,7 +8,7 @@ import { RoomCodeCopy } from "@/ui/room-code-copy";
 import { Separator } from "@/ui/shadcn";
 import { colors, typography } from "@/ui/theme";
 
-export function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Group; memberCount: number; onDetails: () => void }) {
+export function RoomSummaryCard({ group, memberCount, onDetails, onShowQr }: { group?: Group; memberCount: number; onDetails: () => void; onShowQr?: () => void }) {
   const { t } = useAppTranslation();
   return (
     <Card style={{ gap: 14, padding: 16 }}>
@@ -32,6 +32,11 @@ export function RoomSummaryCard({ group, memberCount, onDetails }: { group?: Gro
           <SecondaryButton icon="info" onPress={onDetails}>
             {t("community.rooms.open")}
           </SecondaryButton>
+          {onShowQr ? (
+            <SecondaryButton icon="grid" onPress={onShowQr}>
+              {t("community.join.showQr")}
+            </SecondaryButton>
+          ) : null}
         </>
       ) : (
         <>
@@ -48,11 +53,13 @@ export function RoomHeaderCard({
   inviteMessage,
   memberCount,
   onInvite,
+  onShowQr,
 }: {
   group: Group;
   inviteMessage: string;
   memberCount: number;
   onInvite: () => void;
+  onShowQr?: () => void;
 }) {
   const { t } = useAppTranslation();
   return (
@@ -74,6 +81,11 @@ export function RoomHeaderCard({
       <PrimaryButton icon="share-2" onPress={onInvite}>
         {t("community.members.invite")}
       </PrimaryButton>
+      {onShowQr ? (
+        <SecondaryButton icon="grid" onPress={onShowQr}>
+          {t("community.join.showQr")}
+        </SecondaryButton>
+      ) : null}
       {inviteMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{inviteMessage}</Text> : null}
     </Card>
   );

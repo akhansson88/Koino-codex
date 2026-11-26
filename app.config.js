@@ -67,6 +67,7 @@ const baseConfig = {
     "expo-web-browser",
     "expo-notifications",
     ["expo-calendar", { "calendarPermission": "Allow KOINO to add community events to your calendar." }],
+    ["expo-camera", { "cameraPermission": "KOINO använder kameran bara för att läsa QR-koder." }],
     "expo-font",
     ["expo-sqlite", { enableFTS: true, useSQLCipher: true, withSQLiteVecExtension: true }],
     "expo-secure-store",
