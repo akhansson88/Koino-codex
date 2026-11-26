@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { router } from "expo-router";
+import { canApproveJoinRequests, groupRoleFor } from "@/features/community/roles";
 import { useKoino } from "@/state/koino-store";
 import { approveGroupMember, listGroupJoinRequests, rejectGroupJoinRequest } from "@/state/encryption/session";
 import { useAppTranslation } from "@/ui/app-language";
@@ -15,12 +16,13 @@ export default function MembersScreen() {
   const { t, language } = useAppTranslation();
   const { state } = useKoino();
   const group = state.groups.find((item) => item.id === state.currentGroupId);
-  const owner = Boolean(group && state.currentUserId && group.ownerId === state.currentUserId);
+  const membership = state.memberships.find((item) => item.groupId === group?.id && item.userId === state.currentUserId);
+  const canApprove = canApproveJoinRequests(groupRoleFor(group, membership, state.currentUserId), group);
   const [requests, setRequests] = useState<PendingRequest[]>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState("");
   const load = useCallback(async () => {
-    if (!group || !owner) { setRequests([]); return; }
+    if (!group || !canApprove) { setRequests([]); return; }
     try {
       setRequests(await listGroupJoinRequests(group.id));
       setError("");
@@ -28,7 +30,7 @@ export default function MembersScreen() {
       setError(t("community.rooms.requestsError"));
       setRequests([]);
     }
-  }, [group?.id, owner]);
+  }, [canApprove, group?.id]);
   useEffect(() => { void load(); }, [load]);
   async function decide(userId: string, approve: boolean) {
     if (!group || busy) return;
@@ -48,8 +50,8 @@ export default function MembersScreen() {
     <SecondaryButton onPress={() => router.back()}>{t("common.back")}</SecondaryButton>
     <Text accessibilityRole="header" style={[typography.screenTitle, { color: colors.ink }]}>{t("community.rooms.requestsTitle")}</Text>
     {!group ? <BodyText muted>{t("community.rooms.noneSelectedBody")}</BodyText> : null}
-    {group && !owner ? <BodyText muted>{t("community.roomDetails.subtitle")}</BodyText> : null}
-    {group && owner ? <Card style={{ gap: 12 }}>
+    {group && !canApprove ? <BodyText muted>{t("community.rooms.requestApproversOnly")}</BodyText> : null}
+    {group && canApprove ? <Card style={{ gap: 12 }}>
       {!requests ? <ActivityIndicator color={colors.ink} /> : null}
       {requests && requests.length === 0 ? <BodyText muted>{t("community.rooms.requestsEmpty")}</BodyText> : null}
       {(requests ?? []).map((request) => <View key={request.userId} style={{ gap: 8 }}>

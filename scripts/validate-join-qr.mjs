@@ -49,3 +49,22 @@ assert.equal(parseJoinPayload("mailto:someone@example.com"), undefined);
 assert.equal(parseJoinPayload("ABC 123"), undefined);
 
 console.log("Join QR payload validation passed.");
+
+// The same gate the members screen and room details use.
+const roles = await transform(await readFile(new URL("../features/community/roles.ts", import.meta.url), "utf8"), {
+  loader: "ts",
+  format: "esm",
+});
+const { canApproveJoinRequests } = await import(`data:text/javascript;base64,${Buffer.from(roles.code).toString("base64")}`);
+
+assert.equal(canApproveJoinRequests("owner", { joinApprovers: undefined }), true);
+assert.equal(canApproveJoinRequests("owner", { joinApprovers: "owner" }), true);
+assert.equal(canApproveJoinRequests("owner", { joinApprovers: "owner_and_leaders" }), true);
+assert.equal(canApproveJoinRequests("leader", { joinApprovers: "owner_and_leaders" }), true);
+assert.equal(canApproveJoinRequests("leader", { joinApprovers: "owner" }), false);
+assert.equal(canApproveJoinRequests("leader", { joinApprovers: undefined }), false);
+assert.equal(canApproveJoinRequests("member", { joinApprovers: "owner_and_leaders" }), false);
+assert.equal(canApproveJoinRequests(undefined, { joinApprovers: "owner_and_leaders" }), false);
+assert.equal(canApproveJoinRequests("owner", undefined), false);
+
+console.log("Join approver gate validation passed.");

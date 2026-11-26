@@ -5,10 +5,13 @@ import { canViewGroupStatistics, communityRole, leaderRoleUpdate } from "./commu
 import { loadGroupStatistics } from "./community-statistics-data";
 import type { GroupStatisticsDays } from "./community-statistics";
 import {
+  canApproveJoinRequests,
   communityMemberCount,
   decideJoin,
+  joinApproversOrDefault,
   joinPolicyOrDefault,
   normalizeInviteCode,
+  parseJoinApprovers,
   parseJoinPolicy,
   requestStatusOf,
 } from "./group-join";
@@ -36,6 +39,15 @@ async function requireGroup(groupId: string, uid: string, owner = false) {
   const value = await group(groupId);
   if (!value || !value.members?.[uid]) missing();
   if (owner && value!.ownerId !== uid) denied("Only the community host can do that.");
+  return value!;
+}
+// The host always decides; a group leader only while the host has granted it.
+async function requireJoinApprover(groupId: string, uid: string) {
+  const value = await group(groupId);
+  if (!value || !value.members?.[uid]) missing();
+  if (!canApproveJoinRequests(communityRole(value, uid), value!.joinApprovers)) {
+    denied("Only the community host and its group leaders can do that.");
+  }
   return value!;
 }
 function membership(groupId: string, userId: string, role: "owner" | "member", name: string, createdAt: string) {
@@ -80,15 +92,19 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
       if (record.joinPolicy !== undefined && !parseJoinPolicy(record.joinPolicy)) {
         invalid("Choose a valid join policy.");
       }
+      if (record.joinApprovers !== undefined && !parseJoinApprovers(record.joinApprovers)) {
+        invalid("Choose a valid join approver.");
+      }
       const joinPolicy = joinPolicyOrDefault(record.joinPolicy);
+      const joinApprovers = joinApproversOrDefault(record.joinApprovers);
       const created = await db().ref(`e2eeGroups/${groupId}`).transaction((value) => value ? undefined : {
-        id: groupId, ownerId: uid, revision: 1, epoch: 1, status: "ready", joinPolicy,
+        id: groupId, ownerId: uid, revision: 1, epoch: 1, status: "ready", joinPolicy, joinApprovers,
         members: { [uid]: { id: uid, userId: uid, role: "owner", joinedAt: record.createdAt ?? timestamp() } },
         createdAt: record.createdAt ?? timestamp(),
       });
       if (!created.committed) throw new HttpsError("already-exists", "That community already exists.");
       await db().ref().update({
-        [`encryptedData/groups/${groupId}`]: { ...record, joinPolicy },
+        [`encryptedData/groups/${groupId}`]: { ...record, joinPolicy, joinApprovers },
         [`encryptedData/groupMembers/${groupId}/${uid}`]: ownerMembership,
         [`encryptedData/userGroups/${uid}/${groupId}`]: userMembership,
         [`encryptedData/inviteCodes/${code}`]: { groupId, createdAt: record.createdAt ?? timestamp() },
@@ -167,6 +183,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
         groupId,
         name: typeof info?.name === "string" ? info.name.slice(0, 120) : "",
         joinPolicy: joinPolicyOrDefault(current!.joinPolicy),
+        joinApprovers: joinApproversOrDefault(current!.joinApprovers ?? info?.joinApprovers),
         memberCount: communityMemberCount(current),
         alreadyMember: Boolean(current!.members?.[uid]),
         ...(requestStatus ? { requestStatus } : {}),
@@ -175,20 +192,29 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
     case "setJoinPolicy": {
       requireVerifiedEmail();
       const groupId = id(data.groupId);
-      const joinPolicy = parseJoinPolicy(data.joinPolicy);
-      if (!joinPolicy) invalid("Choose a valid join policy.");
+      const requestedPolicy = data.joinPolicy === undefined ? undefined : parseJoinPolicy(data.joinPolicy);
+      if (data.joinPolicy !== undefined && !requestedPolicy) invalid("Choose a valid join policy.");
+      const requestedApprovers = data.joinApprovers === undefined ? undefined : parseJoinApprovers(data.joinApprovers);
+      if (data.joinApprovers !== undefined && !requestedApprovers) invalid("Choose a valid join approver.");
       const current = await requireGroup(groupId, uid, true);
       const info = (await db().ref(`encryptedData/groups/${groupId}`).get()).val() as Obj | null;
-      const stored = joinPolicyOrDefault(current.joinPolicy);
-      const mirrored = joinPolicyOrDefault(info?.joinPolicy);
-      if (stored === joinPolicy && mirrored === joinPolicy) return {};
+      const joinPolicy = requestedPolicy ?? joinPolicyOrDefault(current.joinPolicy);
+      const joinApprovers = requestedApprovers ?? joinApproversOrDefault(current.joinApprovers ?? info?.joinApprovers);
+      const unchanged =
+        joinPolicyOrDefault(current.joinPolicy) === joinPolicy &&
+        joinApproversOrDefault(current.joinApprovers) === joinApprovers &&
+        joinPolicyOrDefault(info?.joinPolicy) === joinPolicy &&
+        joinApproversOrDefault(info?.joinApprovers) === joinApprovers;
+      if (unchanged) return {};
       const createdAt = timestamp();
       await db().ref().update({
         [`e2eeGroups/${groupId}/joinPolicy`]: joinPolicy,
+        [`e2eeGroups/${groupId}/joinApprovers`]: joinApprovers,
         [`encryptedData/groups/${groupId}/joinPolicy`]: joinPolicy,
+        [`encryptedData/groups/${groupId}/joinApprovers`]: joinApprovers,
         [`encryptedData/groups/${groupId}/updatedAt`]: createdAt,
       });
-      return { joinPolicy };
+      return { joinPolicy, joinApprovers };
     }
     case "listJoinRequests": {
       const index = (await db().ref(`e2eeJoinRequestStatuses/${uid}`).get()).val() as Obj | null;
@@ -202,14 +228,14 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
     }
     case "listGroupRequests": {
       const groupId = id(data.groupId);
-      await requireGroup(groupId, uid, true);
+      await requireJoinApprover(groupId, uid);
       const requests = (await db().ref(`e2eeJoinRequests/${groupId}`).get()).val() as Obj | null;
       return { requests: Object.entries(requests ?? {}).map(([userId, value]) => ({ userId, name: typeof value?.name === "string" ? value.name : "KOINO member", requestedAt: typeof value?.requestedAt === "number" ? value.requestedAt : 0 })) };
     }
     case "approveJoin": {
       requireVerifiedEmail();
       const groupId = id(data.groupId), userId = id(data.userId);
-      await requireGroup(groupId, uid, true);
+      await requireJoinApprover(groupId, uid);
       const request = (await db().ref(`e2eeJoinRequests/${groupId}/${userId}`).get()).val() as Obj | null;
       const existing = (await db().ref(`e2eeGroups/${groupId}/members/${userId}`).get()).val();
       if (!request && !existing) missing("This access request is no longer available.");
@@ -245,7 +271,7 @@ export const koinoAccount = onCall({ region: "europe-west1", timeoutSeconds: 60 
     case "rejectJoin": {
       requireVerifiedEmail();
       const groupId = id(data.groupId), userId = id(data.userId);
-      await requireGroup(groupId, uid, true);
+      await requireJoinApprover(groupId, uid);
       await db().ref().update({
         [`e2eeJoinRequests/${groupId}/${userId}`]: null,
         [`e2eeJoinRequestStatuses/${userId}/${groupId}`]: { status: "rejected", updatedAt: Date.now() },

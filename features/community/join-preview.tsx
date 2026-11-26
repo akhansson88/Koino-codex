@@ -189,9 +189,13 @@ export function JoinPreviewCard({ preview, onCancel, onOpen }: {
           <Text style={[typography.caption, { color: colors.muted }]}>{communityMemberCount(invite.memberCount, t)}</Text>
         </View>
       </View>
-      <JoinPolicyBadge policy={invite.joinPolicy} />
+      <JoinPolicyBadge approvers={invite.joinApprovers} policy={invite.joinPolicy} />
       <Text style={[typography.body, { color: colors.muted }]}>
-        {t(open ? "community.join.previewOpen" : "community.join.previewApproval")}
+        {t(open
+          ? "community.join.previewOpen"
+          : invite.joinApprovers === "owner_and_leaders"
+            ? "community.join.previewApprovalLeaders"
+            : "community.join.previewApproval")}
       </Text>
       <PrimaryButton disabled={busy} loading={busy} onPress={() => void preview.join()}>
         {t(open ? "community.join.openButton" : "community.join.approvalButton")}

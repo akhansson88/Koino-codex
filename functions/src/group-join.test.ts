@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_JOIN_APPROVERS,
   DEFAULT_JOIN_POLICY,
   MAX_GROUP_MEMBERS,
+  canApproveJoinRequests,
   communityMemberCount,
   decideJoin,
+  joinApproversOrDefault,
   joinPolicyOrDefault,
   normalizeInviteCode,
+  parseJoinApprovers,
   parseJoinPolicy,
   requestStatusOf,
 } from "./group-join";
@@ -81,4 +85,29 @@ test("invite codes normalise the way the QR payload is read", () => {
   assert.equal(normalizeInviteCode("  abc123 "), "ABC123");
   assert.equal(normalizeInviteCode(undefined), "");
   assert.equal(normalizeInviteCode("koino"), "KOINO");
+});
+
+test("an absent or unknown approver setting means the host alone", () => {
+  assert.equal(DEFAULT_JOIN_APPROVERS, "owner");
+  assert.equal(joinApproversOrDefault(undefined), "owner");
+  assert.equal(joinApproversOrDefault(null), "owner");
+  assert.equal(joinApproversOrDefault("everyone"), "owner");
+  assert.equal(joinApproversOrDefault(true), "owner");
+  assert.equal(joinApproversOrDefault("owner_and_leaders"), "owner_and_leaders");
+  assert.equal(parseJoinApprovers("owner"), "owner");
+  assert.equal(parseJoinApprovers("owner_and_leaders"), "owner_and_leaders");
+  assert.equal(parseJoinApprovers("leaders"), undefined);
+  assert.equal(parseJoinApprovers("OWNER"), undefined);
+});
+
+test("the host always approves and a leader only while the host grants it", () => {
+  assert.equal(canApproveJoinRequests("owner", "owner"), true);
+  assert.equal(canApproveJoinRequests("owner", "owner_and_leaders"), true);
+  assert.equal(canApproveJoinRequests("owner", undefined), true);
+  assert.equal(canApproveJoinRequests("leader", "owner_and_leaders"), true);
+  assert.equal(canApproveJoinRequests("leader", "owner"), false);
+  assert.equal(canApproveJoinRequests("leader", undefined), false);
+  assert.equal(canApproveJoinRequests("leader", "everyone"), false);
+  assert.equal(canApproveJoinRequests("member", "owner_and_leaders"), false);
+  assert.equal(canApproveJoinRequests(undefined, "owner_and_leaders"), false);
 });

@@ -1,8 +1,9 @@
 import { Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import type { GroupJoinPolicy } from "@/state/types";
+import type { GroupJoinApprovers, GroupJoinPolicy } from "@/state/types";
 import { joinQrPayload } from "@/state/join-qr";
 import { useAppTranslation } from "@/ui/app-language";
+import type { TranslationFunction } from "@/ui/localization";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 /** The community QR: only `koino://join?code=…`, never group data. */
@@ -32,7 +33,19 @@ export function JoinQrCode({ code, size = 236 }: { code: string; size?: number }
   );
 }
 
-export function JoinPolicyBadge({ policy }: { policy: GroupJoinPolicy }) {
+export function joinPolicyBadgeKey(policy: GroupJoinPolicy, approvers: GroupJoinApprovers = "owner") {
+  if (policy === "open") return "community.join.openBadge" as const;
+  return approvers === "owner_and_leaders" ? "community.join.badgePrivateLeaders" as const : "community.join.badgePrivateOwner" as const;
+}
+
+/** The short combined value used in room details, e.g. "Privat · Jag och gruppledarna". */
+export function joinPolicySummary(policy: GroupJoinPolicy, approvers: GroupJoinApprovers, t: TranslationFunction) {
+  if (policy === "open") return t("community.join.openBadge");
+  const who = approvers === "owner_and_leaders" ? t("community.join.approversLeaders") : t("community.join.approversOwner");
+  return `${t("common.private")} · ${who}`;
+}
+
+export function JoinPolicyBadge({ approvers = "owner", policy }: { approvers?: GroupJoinApprovers; policy: GroupJoinPolicy }) {
   const { t } = useAppTranslation();
   const open = policy === "open";
   return (
@@ -59,7 +72,7 @@ export function JoinPolicyBadge({ policy }: { policy: GroupJoinPolicy }) {
         }}
       />
       <Text style={[typography.navLabel, { color: open ? shadcn.success : colors.muted }]}>
-        {t(open ? "community.join.openBadge" : "community.join.approvalBadge")}
+        {t(joinPolicyBadgeKey(policy, approvers))}
       </Text>
     </View>
   );

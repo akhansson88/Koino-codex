@@ -117,10 +117,12 @@ try {
   });
   assert.equal((await db.ref(`e2eeGroups/${groupId}/joinPolicy`).get()).val(), "approval", "default policy is approval");
   assert.equal((await db.ref(`encryptedData/groups/${groupId}/joinPolicy`).get()).val(), "approval", "mirror policy is approval");
+  assert.equal((await db.ref(`e2eeGroups/${groupId}/joinApprovers`).get()).val(), "owner", "default approver is the host");
+  assert.equal((await db.ref(`encryptedData/groups/${groupId}/joinApprovers`).get()).val(), "owner", "mirror approver is the host");
 
   // 2. resolveInvite returns only the preview fields.
   const preview = await call(guest, "resolveInvite", { code: " qrcode " });
-  assert.deepEqual(Object.keys(preview).sort(), ["alreadyMember", "groupId", "joinPolicy", "memberCount", "name"]);
+  assert.deepEqual(Object.keys(preview).sort(), ["alreadyMember", "groupId", "joinApprovers", "joinPolicy", "memberCount", "name"]);
   assert.equal(preview.groupId, groupId);
   assert.equal(preview.name, "QR Room");
   assert.equal(preview.joinPolicy, "approval");
@@ -141,7 +143,8 @@ try {
     (error) => error.code === "not-found" || error.code === "permission-denied",
   );
   await assert.rejects(call(owner, "setJoinPolicy", { groupId, joinPolicy: "everyone" }), /invalid-argument|valid join policy/i);
-  assert.deepEqual(await call(owner, "setJoinPolicy", { groupId, joinPolicy: "open" }), { joinPolicy: "open" });
+  await assert.rejects(call(owner, "setJoinPolicy", { groupId, joinApprovers: "leaders" }), /invalid-argument|valid join approver/i);
+  assert.deepEqual(await call(owner, "setJoinPolicy", { groupId, joinPolicy: "open" }), { joinPolicy: "open", joinApprovers: "owner" });
   assert.equal((await db.ref(`e2eeGroups/${groupId}/joinPolicy`).get()).val(), "open");
   assert.equal((await db.ref(`encryptedData/groups/${groupId}/joinPolicy`).get()).val(), "open");
   // Idempotent.
@@ -202,7 +205,53 @@ try {
   assert.equal(comeback.joined, undefined);
   assert.equal((await db.ref(`e2eeGroups/${groupId}/members/${removed.uid}`).get()).val(), null);
 
+  // 7b. A group leader may decide requests only while the host grants it.
+  await call(owner, "appointGroupLeader", { groupId, userId: second.uid });
+  assert.equal((await db.ref(`e2eeGroups/${groupId}/members/${second.uid}/role`).get()).val(), "leader");
+  await call(owner, "setJoinPolicy", { groupId, joinPolicy: "approval", joinApprovers: "owner_and_leaders" });
+  assert.equal((await db.ref(`e2eeGroups/${groupId}/joinApprovers`).get()).val(), "owner_and_leaders");
+  assert.equal((await db.ref(`encryptedData/groups/${groupId}/joinApprovers`).get()).val(), "owner_and_leaders");
+  const approverPreview = await call(guest, "resolveInvite", { code });
+  assert.equal(approverPreview.joinPolicy, "approval");
+  assert.equal(approverPreview.joinApprovers, "owner_and_leaders");
+
+  const third = await client("qr-third");
+  assert.equal((await call(third, "joinGroup", { code, name: "Third" })).status, "pending");
+  const leaderQueue = await call(second, "listGroupRequests", { groupId });
+  assert.equal(leaderQueue.requests.some((item) => item.userId === third.uid), true);
+  // The rules let the leader open the request list while the host allows it.
+  assert.ok((await get(ref(second.database, `e2eeJoinRequests/${groupId}`))).exists());
+  await call(second, "approveJoin", { groupId, userId: third.uid, name: "Third" });
+  assert.equal((await db.ref(`e2eeGroups/${groupId}/members/${third.uid}/role`).get()).val(), "member");
+
+  // A plain member can neither list, read nor decide.
+  await assert.rejects(call(guest, "listGroupRequests", { groupId }), (error) => error.code === "permission-denied");
+  await assert.rejects(
+    call(guest, "approveJoin", { groupId, userId: removed.uid, name: "Nope" }),
+    (error) => error.code === "permission-denied",
+  );
+  await assert.rejects(
+    get(ref(guest.database, `e2eeJoinRequests/${groupId}`)),
+    /permission_denied|Permission denied/i,
+    "a plain member cannot read the request list",
+  );
+  // A leader can never change the policy itself.
+  await assert.rejects(
+    call(second, "setJoinPolicy", { groupId, joinPolicy: "open" }),
+    (error) => error.code === "permission-denied",
+  );
+
+  // Switching back to the host alone revokes the leader at once.
+  await call(owner, "setJoinPolicy", { groupId, joinPolicy: "approval", joinApprovers: "owner" });
+  await assert.rejects(call(second, "listGroupRequests", { groupId }), (error) => error.code === "permission-denied");
+  await assert.rejects(
+    get(ref(second.database, `e2eeJoinRequests/${groupId}`)),
+    /permission_denied|Permission denied/i,
+    "the request list closes again for the leader",
+  );
+
   // 8. The 200-member ceiling stops an open join.
+  await call(owner, "setJoinPolicy", { groupId, joinPolicy: "open" });
   const members = {};
   for (let index = 0; index < 200; index++) members[`filler-${index}`] = { id: `filler-${index}`, role: "member" };
   await db.ref(`e2eeGroups/${groupId}/members`).update(members);

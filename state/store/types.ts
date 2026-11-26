@@ -1,6 +1,6 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import type { EventDraft } from "@/state/events";
-import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -42,7 +42,7 @@ export type Action =
   | { type: "createGroup"; name: string; expectedUserId?: Id }
   | { type: "joinGroup"; inviteCode: string; expectedUserId?: Id; report?: (receipt: JoinRequestReceipt) => void }
   | { type: "resolveInvite"; code: string; report?: (invite: CommunityInvitePreview) => void }
-  | { type: "setJoinPolicy"; id: Id; joinPolicy: GroupJoinPolicy }
+  | { type: "setJoinPolicy"; id: Id; joinPolicy: GroupJoinPolicy; joinApprovers: GroupJoinApprovers }
   | { type: "switchGroup"; id: Id }
   | { type: "leaveGroup"; id: Id }
   | { type: "removeGroupMember"; groupId: Id; userId: Id }

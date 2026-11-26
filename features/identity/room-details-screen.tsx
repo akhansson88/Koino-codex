@@ -16,7 +16,8 @@ import { JoinPolicySheet } from "@/features/identity/join-policy-sheet";
 import { SettingsSection, SettingsRow } from "@/features/identity/settings-components";
 import { MemberList } from "@/features/identity/members";
 import { RoomSwitcherSheet } from "@/features/identity/room-switcher";
-import { canViewGroupStatistics, groupRoleFor } from "@/features/community/roles";
+import { canApproveJoinRequests, canViewGroupStatistics, groupRoleFor } from "@/features/community/roles";
+import { joinPolicySummary } from "@/features/community/join-qr";
 
 export function RoomDetailsScreen() {
   const { state, dispatch } = useKoino();
@@ -38,6 +39,8 @@ export function RoomDetailsScreen() {
   const role = groupRoleFor(group, currentMembership, state.currentUserId);
   const ownsGroup = role === "owner";
   const canSeeStatistics = canViewGroupStatistics(role);
+  const canApproveRequests = canApproveJoinRequests(role, group);
+  const approvers = group?.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner";
   const [roomName, setRoomName] = useState(group?.name ?? "");
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, state.memberships.length || 1) : 0;
   const leaders = useMemo(
@@ -259,7 +262,7 @@ export function RoomDetailsScreen() {
             {roomMessage ? <Text style={[typography.caption, { color: colors.muted }]}>{roomMessage}</Text> : null}
 
             <SettingsSection label={t("community.management.settingsTitle")}>
-              {ownsGroup ? <SettingsRow icon="user-check" title={t("community.rooms.requestsTitle")} onPress={() => router.push("/members" as never)} /> : null}
+              {canApproveRequests ? <SettingsRow icon="user-check" title={t("community.rooms.requestsTitle")} onPress={() => router.push("/members" as never)} /> : null}
               <SettingsRow icon="users" title={t("community.members.title")} onPress={() => setActiveSheet("members")} />
               {canSeeStatistics ? (
                 <SettingsRow
@@ -301,8 +304,14 @@ export function RoomDetailsScreen() {
                 <SettingsRow
                   icon={group.joinPolicy === "open" ? "unlock" : "lock"}
                   title={t("community.join.policyTitle")}
-                  subtitle={t(group.joinPolicy === "open" ? "community.join.policyOpenHint" : "community.join.policyApprovalHint")}
-                  value={t(group.joinPolicy === "open" ? "community.join.policyOpen" : "community.join.policyApproval")}
+                  subtitle={t(
+                    group.joinPolicy === "open"
+                      ? "community.join.policyOpenHint"
+                      : approvers === "owner_and_leaders"
+                        ? "community.join.approversLeadersHint"
+                        : "community.join.policyApprovalHint",
+                  )}
+                  value={joinPolicySummary(group.joinPolicy === "open" ? "open" : "approval", approvers, t)}
                   onPress={() => setPolicyVisible(true)}
                   showDivider
                 />
@@ -408,6 +417,7 @@ export function RoomDetailsScreen() {
       <RoomSwitcherSheet visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
       {group ? (
         <JoinPolicySheet
+          approvers={approvers}
           groupId={group.id}
           groupName={group.name}
           onClose={() => setPolicyVisible(false)}

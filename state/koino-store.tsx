@@ -1589,7 +1589,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               if (!firebaseUser) throw new Error("Sign in to change who can join.");
               const groupToUpdate = groups.find((item) => item.id === action.id);
               if (!groupToUpdate || groupToUpdate.ownerId !== firebaseUser.uid) return;
-              await setGroupJoinPolicy(action.id, action.joinPolicy);
+              await setGroupJoinPolicy(action.id, action.joinPolicy, action.joinApprovers);
               return;
             }
             case "switchGroup":

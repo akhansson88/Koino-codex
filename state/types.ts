@@ -30,6 +30,7 @@ export type Group = {
   createdAt: string;
   updatedAt: string;
   joinPolicy?: GroupJoinPolicy;
+  joinApprovers?: GroupJoinApprovers;
   migrationPending?: boolean;
   migrationOwnerName?: string;
   migrationAwaitingApproval?: boolean;
@@ -40,11 +41,15 @@ export type GroupRole = "owner" | "leader" | "member";
 /** Who may join by scanning the community QR. Absent means "approval". */
 export type GroupJoinPolicy = "approval" | "open";
 
+/** Who approves join requests for a private community. Absent means "owner". */
+export type GroupJoinApprovers = "owner" | "owner_and_leaders";
+
 /** The narrow preview the server returns for a scanned invite code. */
 export type CommunityInvitePreview = {
   groupId: Id;
   name: string;
   joinPolicy: GroupJoinPolicy;
+  joinApprovers: GroupJoinApprovers;
   memberCount: number;
   alreadyMember: boolean;
   requestStatus?: "pending" | "approved" | "rejected" | "closed";

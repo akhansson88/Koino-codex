@@ -24,6 +24,13 @@ export function canViewGroupStatistics(role: GroupRole | undefined) {
   return role === "owner" || role === "leader";
 }
 
+/** The host always decides; a group leader only while the host grants it. */
+export function canApproveJoinRequests(role: GroupRole | undefined, group: Group | undefined) {
+  if (!group) return false;
+  if (role === "owner") return true;
+  return role === "leader" && group.joinApprovers === "owner_and_leaders";
+}
+
 export function groupRoleLabelKey(role: GroupRole): TranslationKey {
   if (role === "owner") return "community.members.role.host";
   if (role === "leader") return "community.members.role.leader";

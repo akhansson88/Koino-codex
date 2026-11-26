@@ -2,12 +2,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Text, View } from "react-native";
 
-import { JoinPolicyBadge, JoinQrCode } from "@/features/community/join-qr";
+import { JoinPolicyBadge, JoinQrCode, joinPolicySummary } from "@/features/community/join-qr";
 import { JoinPolicySheet } from "@/features/identity/join-policy-sheet";
 import { roomMemberCount, shareRoomInvite } from "@/features/identity/room-helpers";
 import { SettingsRow, SettingsSection } from "@/features/identity/settings-components";
 import { useKoino } from "@/state/koino-store";
-import type { GroupJoinPolicy } from "@/state/types";
+import type { GroupJoinApprovers, GroupJoinPolicy } from "@/state/types";
 import { Avatar, AppHeader, AppScreen, BodyText, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { communityMemberCount } from "@/ui/community-copy";
@@ -25,6 +25,7 @@ export default function GroupInviteRoute() {
   const memberCount = group ? roomMemberCount(state.groupMemberCounts, group.id, 1) : 0;
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const policy: GroupJoinPolicy = group?.joinPolicy === "open" ? "open" : "approval";
+  const approvers: GroupJoinApprovers = group?.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner";
 
   async function share() {
     if (!group) return;
@@ -56,7 +57,7 @@ export default function GroupInviteRoute() {
                 <Text style={[typography.caption, { color: colors.muted }]}>{communityMemberCount(memberCount, t)}</Text>
               </View>
               <JoinQrCode code={group.inviteCode} />
-              <JoinPolicyBadge policy={policy} />
+              <JoinPolicyBadge approvers={approvers} policy={policy} />
               <View style={{ alignItems: "center", gap: 4 }}>
                 <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("community.rooms.code")}</Text>
                 <RoomCodeCopy code={group.inviteCode} fontSize={26} iconSize={18} />
@@ -70,8 +71,14 @@ export default function GroupInviteRoute() {
             <SettingsSection label={t("community.join.policyTitle")}>
               <SettingsRow
                 icon={policy === "open" ? "unlock" : "lock"}
-                title={t(policy === "open" ? "community.join.policyOpen" : "community.join.policyApproval")}
-                subtitle={t(policy === "open" ? "community.join.policyOpenHint" : "community.join.policyApprovalHint")}
+                title={joinPolicySummary(policy, approvers, t)}
+                subtitle={t(
+                  policy === "open"
+                    ? "community.join.policyOpenHint"
+                    : approvers === "owner_and_leaders"
+                      ? "community.join.approversLeadersHint"
+                      : "community.join.policyApprovalHint",
+                )}
                 value={ownsGroup ? t("community.join.change") : undefined}
                 onPress={ownsGroup ? () => setPolicyVisible(true) : undefined}
               />
@@ -89,6 +96,7 @@ export default function GroupInviteRoute() {
 
       {group ? (
         <JoinPolicySheet
+          approvers={approvers}
           groupId={group.id}
           groupName={group.name}
           onClose={() => setPolicyVisible(false)}

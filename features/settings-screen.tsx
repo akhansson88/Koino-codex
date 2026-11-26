@@ -6,6 +6,7 @@ import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 
 import { AccessibilityInfo, BackHandler, FlatList, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
+import { joinPolicySummary } from "@/features/community/join-qr";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { checkInExistsForDay } from "@/state/check-ins";
 import { formatEventDay, formatEventTime, nextUpcomingEvent } from "@/state/events";
@@ -1656,7 +1657,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
                   <Text style={[typography.caption, { color: colors.muted }]}>
-                      {communityMemberCount(memberCount, t)} · {t(group.joinPolicy === "open" ? "community.join.openBadge" : "community.join.approvalBadge")}
+                      {communityMemberCount(memberCount, t)} · {joinPolicySummary(group.joinPolicy === "open" ? "open" : "approval", group.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner", t)}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={17} color={colors.muted} />

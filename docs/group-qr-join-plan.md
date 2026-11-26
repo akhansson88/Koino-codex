@@ -276,21 +276,26 @@ Branch `feat/group-qr-join` from `main` (8ab7f96).
 | --- | --- |
 | `45e3ec4` | feat(community): join by QR with approval and open policies — backend, rules, UI, tests, scripts |
 | `6911ca5` | fix(join): probe the camera natively and keep the policy preview fresh |
+| `94b2537` | docs(join): record the QR join implementation, test evidence and deploy status |
+| `TBD` | feat(community): let the host share join approval with group leaders |
 
 ### What is built
 
 Backend (`functions/src/account.ts`, `functions/src/group-join.ts`):
-- `createGroup` accepts `joinPolicy`, defaults to `approval`, writes `e2eeGroups/<gid>/joinPolicy` and `encryptedData/groups/<gid>/joinPolicy`.
-- `setJoinPolicy` (host only, verified email, enum validated, idempotent).
-- `resolveInvite` returns only `groupId`, `name`, `joinPolicy`, `memberCount`, `alreadyMember`, optional `requestStatus`.
+- `createGroup` accepts `joinPolicy` and `joinApprovers`, defaults `approval` / `owner`, writes both to `e2eeGroups/<gid>` and `encryptedData/groups/<gid>`.
+- `setJoinPolicy` (host only, verified email, both enums validated, idempotent) accepts a partial change and keeps `joinApprovers` stored while the community is open.
+- `resolveInvite` returns only `groupId`, `name`, `joinPolicy`, `joinApprovers`, `memberCount`, `alreadyMember`, optional `requestStatus`.
 - `joinGroup`: already a member → `approved` + `joined: true`; rejected stays rejected; open + never departed + under 200 → member with both mirrors in one atomic update; departed, removed, approval, and full communities fall through (`GROUP_FULL` is a `failed-precondition`, not a silent pending request).
-- `firebase.rules.json`: `joinPolicy` enum validation on both `groups/$groupId` nodes; `e2eeGroups`, `e2eeJoinRequests` and `e2eeJoinRequestStatuses` stay read-only/server-only.
+- `listGroupRequests`, `approveJoin`, `rejectJoin`: the host always; a `leader` only while `joinApprovers === "owner_and_leaders"` (role from `communityRole()`); everyone else `permission-denied`. Removing the leader role or switching back to `owner` revokes it at once.
+- `firebase.rules.json`: `joinPolicy` and `joinApprovers` enum validation on both group nodes; `e2eeJoinRequests/$groupId` readable by the host, and by a leader only when `joinApprovers` allows it. Writes stay callable-only.
 
 Frontend:
-- `Group.joinPolicy`, `CommunityInvitePreview`, `JoinRequestReceipt.joined`.
-- Store actions `resolveInvite` (cached 3 s, not 60 s, so a policy switch reaches the next scan) and `setJoinPolicy`.
-- `app/group-invite.tsx` (QR, code, share, policy badge, host policy sheet), `app/join-scan.tsx` (camera + manual code), `app/join.tsx` (deep link, resumes after sign-in/onboarding through `state/pending-join.ts`).
-- Shared preview, policy sheet, entry points in room details, the community tab, the join/create sheet and onboarding.
+- `Group.joinPolicy` / `Group.joinApprovers`, `CommunityInvitePreview`, `JoinRequestReceipt.joined`.
+- Store actions `resolveInvite` (cached 3 s) and `setJoinPolicy` (both fields).
+- `app/group-invite.tsx` (QR, code, share, policy badge, host policy sheet), `app/join-scan.tsx` (camera + manual code), `app/join.tsx` (deep link, resumes after sign-in/onboarding).
+- Policy sheet: **Vem kan gå med?** plus **Vem godkänner?** with *Bara jag (gruppägaren)* / *Jag och gruppledarna*, dimmed with a stored-choice note while the community is open.
+- `features/community/roles.ts`: `canApproveJoinRequests(role, group)` gates the **Medlemsförfrågningar** row in room details and `ui/members.tsx`; a plain member sees neither.
+- Badges: *Öppen – gå med direkt*, *Privat – värden godkänner*, *Privat – värden och gruppledarna godkänner*; the preview explains who approves.
 - Swedish and English copy in `ui/translations/sv.ts` / `en.ts`.
 - `react-native-qrcode-svg` (JS) and `expo-camera` (native, config plugin). The camera JS is loaded only after `requireOptionalNativeModule("ExpoCamera")` confirms the binary has it, so runtime 2.1.0 shows the manual-code fallback and never evaluates the module.
 
@@ -300,21 +305,21 @@ Frontend:
 | --- | --- |
 | `npm run typecheck` | pass |
 | `npm run typecheck:functions` | pass |
-| `npm --prefix functions test` | pass, 62 tests (includes `group-join.test.ts`) |
-| `node scripts/validate-join-qr.mjs` | pass (bare code, `koino://`, `koino:`, https, malformed) |
-| `npm run validate:join-qr-emulator` | pass (createGroup defaults, owner-only policy, open join + mirrors + content read, pending + no read, approve, sticky rejection, removed fallback, 200 ceiling, unknown/deleted code, unauth, client write denials) |
-| `koino-dev` functions + rules | deployed, callable verified over HTTPS (resolveInvite/join/policy) |
-| `koino-codex` functions + rules | deployed, endpoint answers 401 unauthenticated |
-| EAS Update production | published, runtime 2.1.0, group `83556bb3-1505-4847-a9c8-64645dc0a99e` |
+| `npm --prefix functions test` | pass, 64 tests (includes `group-join.test.ts` approver cases) |
+| `node scripts/validate-join-qr.mjs` | pass (payload formats + the `canApproveJoinRequests` gate) |
+| `npm run validate:join-qr-emulator` | pass (defaults, owner-only policy, open join + mirrors + content read, pending + no read, approve, sticky rejection, removed fallback, leader approves when granted, plain member denied for callable and rules, leader cannot set policy, revoke on switch, 200 ceiling, unknown/deleted code, unauth, client write denials) |
+| `koino-dev` functions + rules | deployed twice; callable verified over HTTPS (resolveInvite/join/policy with approvers) |
+| `koino-codex` functions + rules | deployed twice; endpoint answers 401 unauthenticated |
+| EAS Update production | published twice; latest runtime 2.1.0, group `4b7e9fef-8a12-4e76-9436-a0e864fd54d0` |
 
-Device walkthrough (KOINO Dev, runtime 2.1.0, Android, two identities):
-1. Open community: preview badge *Open – join instantly*, **Join** → member, app navigates to the community room (`alreadyMember: true`, `memberCount: 2`).
-2. Private community: preview badge *Private – request needed*, **Request membership** → *Request sent*; the host's request list shows the caller; after approval the same link shows *You are in …*.
+Device walkthrough (KOINO Dev, runtime 2.1.0, Android), from the first round:
+1. Open community: badge *Open – join instantly*, **Join** → member, app opens the community room (`alreadyMember: true`, `memberCount: 2`).
+2. Private community: badge *Private – request needed*, **Request membership** → *Request sent*; the host's request list shows the caller; after approval the same link shows *You are in …*.
 3. Removed member scanning an open code → *Request sent*, no membership, host receives a new request.
 4. Policy switched on the host → the next scan shows the new badge and button without an app restart.
 5. Unknown code → *That code is not a KOINO invite.*; with the camera module absent the scanner shows the manual fallback and the code path still works.
 
-The walkthrough ran on the connected Pixel 11 Pro: the only camera-less dev binary is arm64 and the Pixel_10 AVD is x86_64, so it cannot boot that build. Camera frames, the torch and the permission dialog stay unverified until the native build.
+The leader-approval walkthrough (criterion 3) was not run on a device: the only camera-less dev binary is arm64, the Pixel_10 AVD is x86_64, and the connected Pixel 11 Pro came into active use by the person during this round. The leader path is proven at the callable and rules level by the emulator suite, and the UI gate by `canApproveJoinRequests` tests and typecheck.
 
 ### Deviations from the plan
 

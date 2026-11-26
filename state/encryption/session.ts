@@ -2,7 +2,7 @@ import { onValue, ref as rawRef } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { auth, database, functions } from "@/state/store/firebase";
 import type { CommunityJoinRequest, JoinRequestReceipt } from "@/state/community-join-requests";
-import type { CommunityInvitePreview, GroupJoinPolicy, GroupStatistics, GroupStatisticsDays } from "@/state/types";
+import type { CommunityInvitePreview, GroupJoinApprovers, GroupJoinPolicy, GroupStatistics, GroupStatisticsDays } from "@/state/types";
 
 // KOINO accounts are ordinary Firebase accounts. There is no vault, recovery
 // key, device approval or escrow: signing in on any device shows the account's
@@ -60,8 +60,12 @@ export async function resolveCommunityInvite(code: string): Promise<CommunityInv
   if (!result?.groupId || (result.joinPolicy !== "approval" && result.joinPolicy !== "open")) {
     throw new Error("The community invite could not be read.");
   }
-  inviteCache.set(normalized, { value: result, at: Date.now() });
-  return result;
+  const value: CommunityInvitePreview = {
+    ...result,
+    joinApprovers: result.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner",
+  };
+  inviteCache.set(normalized, { value, at: Date.now() });
+  return value;
 }
 
 export function forgetResolvedInvite(code?: string) {
@@ -69,8 +73,8 @@ export function forgetResolvedInvite(code?: string) {
   else inviteCache.clear();
 }
 
-export async function setGroupJoinPolicy(groupId: string, joinPolicy: GroupJoinPolicy) {
-  await call("setJoinPolicy", { groupId, joinPolicy });
+export async function setGroupJoinPolicy(groupId: string, joinPolicy: GroupJoinPolicy, joinApprovers: GroupJoinApprovers) {
+  await call("setJoinPolicy", { groupId, joinPolicy, joinApprovers });
   inviteCache.clear();
 }
 
