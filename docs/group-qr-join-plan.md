@@ -278,6 +278,7 @@ Branch `feat/group-qr-join` from `main` (8ab7f96).
 | `6911ca5` | fix(join): probe the camera natively and keep the policy preview fresh |
 | `94b2537` | docs(join): record the QR join implementation, test evidence and deploy status |
 | `201370b` | feat(community): let the host share join approval with group leaders |
+| `a7f24b4` | chore(copy): call the role gruppledare and the screen Medlemsförfrågningar |
 
 ### What is built
 
@@ -310,6 +311,7 @@ Frontend:
 | `npm run validate:join-qr-emulator` | pass (defaults, owner-only policy, open join + mirrors + content read, pending + no read, approve, sticky rejection, removed fallback, leader approves when granted, plain member denied for callable and rules, leader cannot set policy, revoke on switch, 200 ceiling, unknown/deleted code, unauth, client write denials) |
 | `koino-dev` functions + rules | deployed twice; callable verified over HTTPS (resolveInvite/join/policy with approvers) |
 | `koino-codex` functions + rules | deployed twice; endpoint answers 401 unauthenticated |
+| Terminology | verified: no user-facing string uses *administratör*; the role is *gruppledare*, the option *Jag och gruppledarna*, and the request screen *Medlemsförfrågningar* |
 | EAS Update production | published twice; latest runtime 2.1.0, group `4b7e9fef-8a12-4e76-9436-a0e864fd54d0` |
 
 Device walkthrough (KOINO Dev, runtime 2.1.0, Android), from the first round:
