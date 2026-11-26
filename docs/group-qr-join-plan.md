@@ -265,3 +265,67 @@ Acceptance:
 - Universal links (`https://koinolabs.com/join/...`) — the app scheme is enough for the in-app scanner and the system camera; App Links/Universal Links can follow once the domain association files are hosted.
 - QR codes for individual invites with an expiry or a named recipient.
 - Showing a member list or statistics before joining.
+
+---
+
+## 10. Implementation status (26 November 2026)
+
+Branch `feat/group-qr-join` from `main` (8ab7f96).
+
+| Commit | What |
+| --- | --- |
+| `45e3ec4` | feat(community): join by QR with approval and open policies — backend, rules, UI, tests, scripts |
+| `6911ca5` | fix(join): probe the camera natively and keep the policy preview fresh |
+
+### What is built
+
+Backend (`functions/src/account.ts`, `functions/src/group-join.ts`):
+- `createGroup` accepts `joinPolicy`, defaults to `approval`, writes `e2eeGroups/<gid>/joinPolicy` and `encryptedData/groups/<gid>/joinPolicy`.
+- `setJoinPolicy` (host only, verified email, enum validated, idempotent).
+- `resolveInvite` returns only `groupId`, `name`, `joinPolicy`, `memberCount`, `alreadyMember`, optional `requestStatus`.
+- `joinGroup`: already a member → `approved` + `joined: true`; rejected stays rejected; open + never departed + under 200 → member with both mirrors in one atomic update; departed, removed, approval, and full communities fall through (`GROUP_FULL` is a `failed-precondition`, not a silent pending request).
+- `firebase.rules.json`: `joinPolicy` enum validation on both `groups/$groupId` nodes; `e2eeGroups`, `e2eeJoinRequests` and `e2eeJoinRequestStatuses` stay read-only/server-only.
+
+Frontend:
+- `Group.joinPolicy`, `CommunityInvitePreview`, `JoinRequestReceipt.joined`.
+- Store actions `resolveInvite` (cached 3 s, not 60 s, so a policy switch reaches the next scan) and `setJoinPolicy`.
+- `app/group-invite.tsx` (QR, code, share, policy badge, host policy sheet), `app/join-scan.tsx` (camera + manual code), `app/join.tsx` (deep link, resumes after sign-in/onboarding through `state/pending-join.ts`).
+- Shared preview, policy sheet, entry points in room details, the community tab, the join/create sheet and onboarding.
+- Swedish and English copy in `ui/translations/sv.ts` / `en.ts`.
+- `react-native-qrcode-svg` (JS) and `expo-camera` (native, config plugin). The camera JS is loaded only after `requireOptionalNativeModule("ExpoCamera")` confirms the binary has it, so runtime 2.1.0 shows the manual-code fallback and never evaluates the module.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | pass |
+| `npm run typecheck:functions` | pass |
+| `npm --prefix functions test` | pass, 62 tests (includes `group-join.test.ts`) |
+| `node scripts/validate-join-qr.mjs` | pass (bare code, `koino://`, `koino:`, https, malformed) |
+| `npm run validate:join-qr-emulator` | pass (createGroup defaults, owner-only policy, open join + mirrors + content read, pending + no read, approve, sticky rejection, removed fallback, 200 ceiling, unknown/deleted code, unauth, client write denials) |
+| `koino-dev` functions + rules | deployed, callable verified over HTTPS (resolveInvite/join/policy) |
+| `koino-codex` functions + rules | deployed, endpoint answers 401 unauthenticated |
+| EAS Update production | published, runtime 2.1.0, group `83556bb3-1505-4847-a9c8-64645dc0a99e` |
+
+Device walkthrough (KOINO Dev, runtime 2.1.0, Android, two identities):
+1. Open community: preview badge *Open – join instantly*, **Join** → member, app navigates to the community room (`alreadyMember: true`, `memberCount: 2`).
+2. Private community: preview badge *Private – request needed*, **Request membership** → *Request sent*; the host's request list shows the caller; after approval the same link shows *You are in …*.
+3. Removed member scanning an open code → *Request sent*, no membership, host receives a new request.
+4. Policy switched on the host → the next scan shows the new badge and button without an app restart.
+5. Unknown code → *That code is not a KOINO invite.*; with the camera module absent the scanner shows the manual fallback and the code path still works.
+
+The walkthrough ran on the connected Pixel 11 Pro: the only camera-less dev binary is arm64 and the Pixel_10 AVD is x86_64, so it cannot boot that build. Camera frames, the torch and the permission dialog stay unverified until the native build.
+
+### Deviations from the plan
+
+- Preview cache is 3 s instead of 60 s (acceptance 4 needs the badge to change on the next scan).
+- An open community at the 200-member ceiling returns `failed-precondition` `GROUP_FULL` instead of creating a request nobody can approve.
+- `joined: true` means "this call made you able to enter" for both fresh joins and existing members, matching the store's "dispatch switchGroup after joined" rule.
+- `koino-dev` had no `SMTP_PASSWORD` secret, so the deploy was unblocked with a random placeholder. Dev password-reset mail stays non-functional until the real SMTP password is set there; production was untouched.
+
+### Remaining for the 1 December native build
+
+- Expo build credits reset 1 December 2026 ~20:26 Sweden time.
+- Build `expo-camera` into the next native version, bump `runtimeVersion` to `2.2.0`, `store-internal` → Play internal, verify the scanner, torch and denied-permission paths on the Pixel 11 Pro.
+- After that build is live, the production update for 2.1.0 keeps the manual path; no further JS change is needed.
+
