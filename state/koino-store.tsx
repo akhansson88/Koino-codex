@@ -186,7 +186,12 @@ export async function runCommunityPostSubmission(
   const verses = actionVerses(action).map((verse) => ({ ...verse }));
   if (!validId(request.attemptId) || !validId(request.groupId) || !request.userId
     || request.userId !== dependencies.userId || request.groupId !== dependencies.groupId
-    || !Number.isFinite(Date.parse(request.createdAt)) || !validPostContent(action.kind, action.body, verses, action.audio ?? request.baseline?.audio)) {
+    || !Number.isFinite(Date.parse(request.createdAt)) || !validPostContent(
+      action.kind,
+      action.body,
+      verses,
+      action.type === "createPost" ? action.audio ?? undefined : action.audio === null ? undefined : action.audio ?? request.baseline?.audio,
+    )) {
     return failed("precondition");
   }
   if (!dependencies.isCurrent()) return failed("session");
@@ -1921,7 +1926,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
                if (!post || post.userId !== firebaseUser.uid) return;
                const verses = actionVerses(action);
-               if (!validPostContent(action.kind, action.body, verses, action.audio ?? post.audio)) return;
+               if (!validPostContent(action.kind, action.body, verses, action.audio === null ? undefined : action.audio ?? post.audio)) return;
                await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                  body: action.body.trim(),
                  kind: action.kind,
