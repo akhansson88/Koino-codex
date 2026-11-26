@@ -67,6 +67,7 @@
     "test:functions": "npm --prefix functions test",
     "validate:interactions": "node scripts/validate-native-interactions.mjs",
     "validate:selective-state": "node scripts/validate-selective-state.mjs",
+    "validate:email-verification": "node scripts/validate-email-verification.mjs",
     "validate:notification-navigation": "node scripts/validate-notification-navigation.mjs",
     "validate:prayers": "node scripts/validate-prayer-notifications.mjs",
     "validate:legacy-records": "node scripts/validate-legacy-records.mjs",

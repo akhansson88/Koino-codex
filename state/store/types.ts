@@ -36,7 +36,7 @@ export type Action =
   | { type: "accountDeleted" }
   | { type: "requestPasswordReset"; email: string }
   | { type: "sendEmailVerification" }
-  | { type: "refreshEmailVerification" }
+  | { type: "refreshEmailVerification"; report?: (verified: boolean) => void }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }
   | { type: "createGroup"; name: string; expectedUserId?: Id }

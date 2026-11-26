@@ -52,7 +52,12 @@ export function useCommunityJoinForm(userId: string | undefined, visible: boolea
     } catch (problem) {
       if (activeScope.current !== scope) return;
       const code = problem && typeof problem === "object" && "code" in problem ? problem.code : undefined;
-      setError(code === "functions/not-found" ? "community.error.inviteNotFound" : "onboarding.journey.joinFailed");
+      const message = problem instanceof Error ? problem.message : "";
+      setError(code === "functions/not-found"
+        ? "community.error.inviteNotFound"
+        : message.includes("EMAIL_NOT_VERIFIED")
+          ? "onboarding.account.emailNotVerified"
+          : "onboarding.journey.joinFailed");
     } finally {
       if (!settled && pendingScope.current === scope) pendingScope.current = undefined;
       if (activeScope.current === scope) setBusy(false);

@@ -63,11 +63,12 @@ export function EmailVerificationBanner() {
     if (pending) return;
     setPending("check");
     setMessage(undefined);
+    let verified = false;
     try {
-      await dispatch({ type: "refreshEmailVerification" });
-      // The store updates emailVerified; this message only helps when the
-      // mailbox link has not been opened yet.
-      setMessage("emailVerification.checkFailed");
+      await dispatch({ type: "refreshEmailVerification", report: (value) => { verified = value; } });
+      // The store updates emailVerified and this banner disappears once the
+      // mailbox link has been opened; only an unverified account keeps it.
+      if (!verified) setMessage("emailVerification.checkFailed");
     } catch {
       setMessage("emailVerification.checkFailed");
     } finally {

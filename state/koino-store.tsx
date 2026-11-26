@@ -601,6 +601,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     olderPostReactionsRef.current = [];
   }, []);
 
+  // A verification link is opened outside the app, so the signed-in User object
+  // and its token still say unverified until Auth is read again.
+  const refreshVerifiedEmail = useCallback(async () => {
+    const current = auth.currentUser;
+    if (!current) return false;
+    await current.reload();
+    if (current.emailVerified) await current.getIdToken(true);
+    if (auth.currentUser === current) setEmailVerified(current.emailVerified);
+    return current.emailVerified;
+  }, []);
+
   useEffect(() => {
     let previousUserId: string | undefined;
     return FirebaseAuth.onAuthStateChanged(auth, (user) => {
@@ -613,6 +624,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       previousUserId = user?.uid;
       setFirebaseUser(user);
       setEmailVerified(user?.emailVerified ?? false);
+      // The persisted user keeps its old verification flag across restarts.
+      if (user && !user.emailVerified) void refreshVerifiedEmail().catch(() => undefined);
       setAuthReady(true);
       setSignOutIncomplete(false);
       markStartupMilestone("authReady", user ? "signed-in" : "signed-out");
@@ -625,7 +638,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }
 
     });
-  }, [clearUserSession]);
+  }, [clearUserSession, refreshVerifiedEmail]);
 
   useEffect(() => {
     if (bibleHighlightUserRef.current === firebaseUser?.uid) return;
@@ -1304,6 +1317,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     authReady,
     signOutIncomplete,
     checkIns,
+    emailVerified,
     firebaseUser,
     groupMemberCounts,
     groups,
@@ -1543,11 +1557,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "refreshEmailVerification": {
-              const current = auth.currentUser;
-              if (!current) return;
-              await current.reload();
-              await current.getIdToken(true);
-              setEmailVerified(current.emailVerified);
+              const verified = await refreshVerifiedEmail();
+              action.report?.(verified);
               return;
             }
             case "confirmPasswordReset":
@@ -1567,6 +1578,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "createGroup": {
               if (!firebaseUser) return;
+              if (!auth.currentUser?.emailVerified) await refreshVerifiedEmail().catch(() => undefined);
               if (!expectedUserId) {
                 await createGroupForUser(firebaseUser, action.name, profile?.name);
                 return;
@@ -1588,6 +1600,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "joinGroup": {
               if (!firebaseUser || auth.currentUser?.uid !== firebaseUser.uid || signOutPending.current) {
+                throw new Error("Sign in to request community access.");
+              }
+              if (!auth.currentUser.emailVerified) await refreshVerifiedEmail().catch(() => undefined);
+              if (auth.currentUser?.uid !== firebaseUser.uid || signOutPending.current) {
                 throw new Error("Sign in to request community access.");
               }
               const receipt = await joinGroupByInvite(firebaseUser, action.inviteCode, profile?.name);
@@ -3305,6 +3321,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       prayerNotifications,
       prayerNotificationsHasMore,
       prayerNotificationsLoadingMore,
+      refreshVerifiedEmail,
       activityNotifications,
       privateCheckIns,
       privateCheckInsHasMore,
