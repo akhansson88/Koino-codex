@@ -46,9 +46,10 @@ export async function groupJoinRequest(code: string, name: string): Promise<Join
 }
 
 // A scanner may read the same code several times per second. The preview is
-// cached briefly so re-reading frames does not spend the join rate limit.
+// cached briefly so re-reading frames does not spend the join rate limit, but
+// a host's policy change must reach the next scan almost at once.
 const inviteCache = new Map<string, { value: CommunityInvitePreview; at: number }>();
-const inviteCacheMs = 60_000;
+const inviteCacheMs = 3_000;
 
 export async function resolveCommunityInvite(code: string): Promise<CommunityInvitePreview> {
   const normalized = code.trim().toUpperCase();

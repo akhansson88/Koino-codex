@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -12,12 +13,24 @@ type CameraModule = typeof import("expo-camera");
 let cached: CameraModule | null | undefined;
 
 /**
- * expo-camera is native. The current production binary (runtime 2.1.0) does not
- * contain it yet, so the module is loaded lazily and every failure falls back to
- * the manual code path instead of breaking the screen.
+ * expo-camera is native. A binary without it (the current production runtime
+ * 2.1.0) must never even evaluate the module's JavaScript, so the native module
+ * is probed first and the JS is required only when the binary really has it.
  */
+function nativeCameraAvailable() {
+  try {
+    return Boolean(requireOptionalNativeModule("ExpoCamera"));
+  } catch {
+    return false;
+  }
+}
+
 export function loadCameraModule(): CameraModule | null {
   if (cached !== undefined) return cached;
+  if (!nativeCameraAvailable()) {
+    cached = null;
+    return cached;
+  }
   try {
     cached = require("expo-camera") as CameraModule;
   } catch {
