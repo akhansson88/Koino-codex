@@ -40,7 +40,7 @@ const baseConfig = {
       backgroundColor: "#FAF6F0",
     },
     package: "com.akhansson.koinomvp",
-    versionCode: 21,
+    versionCode: 42,
     permissions: [
       "android.permission.RECORD_AUDIO",
       "android.permission.POST_NOTIFICATIONS",
