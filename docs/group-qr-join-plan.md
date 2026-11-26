@@ -277,7 +277,7 @@ Branch `feat/group-qr-join` from `main` (8ab7f96).
 | `45e3ec4` | feat(community): join by QR with approval and open policies — backend, rules, UI, tests, scripts |
 | `6911ca5` | fix(join): probe the camera natively and keep the policy preview fresh |
 | `94b2537` | docs(join): record the QR join implementation, test evidence and deploy status |
-| `TBD` | feat(community): let the host share join approval with group leaders |
+| `201370b` | feat(community): let the host share join approval with group leaders |
 
 ### What is built
 
