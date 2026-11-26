@@ -57,6 +57,7 @@ import {
   GroupBiblePlanParticipation,
   GroupEvent,
   Group,
+  GroupImage,
   Id,
   JournalEntry,
   KoinoState,
@@ -104,8 +105,17 @@ import {
 } from "@/state/store/image-operations";
 import { appointGroupLeader, leaveEncryptedGroup, removeGroupLeader, rotateGroup, deleteEncryptedGroup, lockSession, sessionGeneration } from "@/state/encryption/session";
 import { listenLegacyCommunities } from "@/state/encryption/migration";
+import { displayableImage } from "@/state/image-values";
 import { clearEncryptedImages } from "@/state/supabase-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
+
+// Legacy records can still carry a retired encrypted object where an image URL
+// used to be. Native Image views crash on that shape, so only a real URL is
+// kept in state.
+const withDisplayableImage = <T extends { image?: GroupImage }>(record: T): T => ({
+  ...record,
+  image: displayableImage(record.image),
+});
 
 // This boundary is injectable so its outcome/CAS behavior can be tested without
 // initializing Firebase. It is used only by explicitly opted-in Community forms.
@@ -603,7 +613,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         }
 
         const nextProfile = snapshot.val() as Profile;
-        setProfile(nextProfile);
+        setProfile({ ...nextProfile, image: displayableImage(nextProfile.image) });
         setProfileSnapshotReady(true);
         setProfileReady(true);
         markStartupMilestone("profileReady");
@@ -626,8 +636,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setLegacyGroups([]);
     setLegacyMemberships([]);
     return listenLegacyCommunities(firebaseUser.uid, (snapshot) => {
-      setLegacyMemberships(snapshot.memberships);
-      setLegacyGroups(snapshot.groups);
+      setLegacyMemberships(snapshot.memberships.map(withDisplayableImage));
+      setLegacyGroups(snapshot.groups.map(withDisplayableImage));
       setLegacyCommunitiesReady(snapshot.ready);
     }, () => {
       // Missing legacy access must never be interpreted as leaving a community.
@@ -647,7 +657,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       userGroupsRef,
       (snapshot) => {
         if (!active) return;
-        setUserMemberships(asArray<Membership>(snapshot.val()));
+        setUserMemberships(asArray<Membership>(snapshot.val()).map(withDisplayableImage));
         setUserGroupsReady(true);
         setUserGroupsSnapshotReady(true);
         markStartupMilestone("userGroupsReady");
@@ -687,7 +697,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(ref(database, `groups/${groupId}`), (snapshot) => {
         if (!active) return;
         if (snapshot.exists()) {
-          groupById.set(groupId, snapshot.val() as Group);
+          groupById.set(groupId, withDisplayableImage(snapshot.val() as Group));
         } else {
           groupById.delete(groupId);
         }
@@ -1033,7 +1043,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       }),
       onValue(membersRef, (snapshot) => {
         if (!active) return;
-        const nextMembers = asArray<Membership>(snapshot.val());
+        const nextMembers = asArray<Membership>(snapshot.val()).map(withDisplayableImage);
         setMemberships(nextMembers);
         setGroupMemberCounts((current) => current[groupId] === nextMembers.length
           ? current : { ...current, [groupId]: nextMembers.length });
@@ -1159,7 +1169,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const memberUsers = visibleMemberships.map<User>((membership) => ({
       id: membership.userId,
       name: membership.userName || (membership.userId === profile?.id ? profile.name : "Someone"),
-      image: membership.image ?? (membership.userId === profile?.id ? profile.image : undefined),
+      image: displayableImage(membership.image ?? (membership.userId === profile?.id ? profile.image : undefined)),
       createdAt: membership.createdAt,
     }));
     const users = memberUsers.length > 0 ? memberUsers : profile ? [profile] : [];

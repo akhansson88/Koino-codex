@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
+import { displayableImageUrl } from "@/state/image-values";
 import type { PresenceStatus } from "@/state/presence-model";
 import { developmentMode } from "@/state/store/firebase";
 import type { GroupImage } from "@/state/types";
@@ -33,6 +34,7 @@ export function Avatar({
   tone?: "orange" | "green" | "pink" | "blue";
 }) {
   const [failed, setFailed] = useState(false);
+  const imageUrl = displayableImageUrl(image);
   const palette = {
     orange: [colors.warmSoft, colors.textMuted],
     green: [colors.rhythmSoft, colors.textMuted],
@@ -42,7 +44,7 @@ export function Avatar({
 
   useEffect(() => {
     setFailed(false);
-  }, [image?.url]);
+  }, [imageUrl]);
 
   return (
     <View style={{ height: size, width: size }}>
@@ -59,12 +61,12 @@ export function Avatar({
           width: size,
         }}
       >
-        {!developmentMode && image?.url && !failed ? (
+        {!developmentMode && imageUrl && !failed ? (
           <Image
             accessibilityIgnoresInvertColors
             onError={() => setFailed(true)}
             resizeMode="cover"
-            source={{ uri: image.url }}
+            source={{ uri: imageUrl }}
             style={{ height: "100%", width: "100%" }}
           />
         ) : (
@@ -95,12 +97,13 @@ export function Avatar({
 export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name?: string; size?: number }) {
   const { t } = useAppTranslation();
   const [failed, setFailed] = useState(false);
+  const imageUrl = displayableImageUrl(image);
 
   useEffect(() => {
     setFailed(false);
-  }, [image?.url]);
+  }, [imageUrl]);
 
-  if (!developmentMode && image?.url && !failed) {
+  if (!developmentMode && imageUrl && !failed) {
     return (
       <View
         style={{
@@ -117,7 +120,7 @@ export function RoomImage({ image, name, size = 64 }: { image?: GroupImage; name
           accessibilityIgnoresInvertColors
           onError={() => setFailed(true)}
           resizeMode="cover"
-          source={{ uri: image.url }}
+          source={{ uri: imageUrl }}
           style={{ height: "100%", width: "100%" }}
         />
       </View>
