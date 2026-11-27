@@ -14,11 +14,11 @@ Implementation notes:
   pane header sits fixed above its pager, so a page turn moves only the text and never
   drags the menu sideways. The pager mounts three pages (previous/current/next) of that
   one translation, the pan drags them with the same resistance, the settle spring and
-  `chapterSelectionHaptic()` fire at the same moment, and the header title crossfades
-  through that pane's cursor. When the link is on, both pagers share one cursor and turn
-  together; when it is off, only the swiped pane moves. Each pane wraps its own
-  `ScrollView` in `Gesture.Native().requireExternalGestureToFail(pan)` so vertical
-  scrolling still wins;
+  `chapterSelectionHaptic()` fire at the same moment, and the main header title
+  crossfades through the primary pane's cursor. When the link is on, both pagers share
+  one cursor and turn together; when it is off, only the swiped pane moves. Each pane
+  wraps its own `ScrollView` in `Gesture.Native().requireExternalGestureToFail(pan)` so
+  vertical scrolling still wins;
   the pager skips its whole-page native wrapper (`wrapNativeGesture={false}`).
 - The Bible asset is now `assets/bible/koino-bible-v5.db` (62.8 MB) with all four
   translations and 186,886 cross-translation links.
@@ -143,7 +143,7 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
 - **Bottom controls:** previous/next chapter. They step the primary pane's pager; when
   the link is on the secondary turns with it, when the link is off only the primary turns.
   Each pane has its own chapter pager below a fixed header: a horizontal swipe in the
-  text drags only that pane's text, with the same resistance, settle spring, header
+  text drags only that pane's text, with the same resistance, settle spring, main header
   crossfade and haptic tick as the single reader. The header row itself never swipes;
   its reference updates in place when the turn commits. When the link is on, both
   pagers share the cursor and turn together. A short drag springs back and does not
