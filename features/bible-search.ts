@@ -260,6 +260,19 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
   }
   if (/\d\s*:\s*\d/.test(normalizedQuery)) return empty;
 
+  const version = bibleVersionFor(versionId);
+  if (!version.hasSearchIndex) {
+    // SFB15 and NKJV ship in the reader database only; the hybrid index is
+    // built for KJV and SRB26. Search their full text directly instead.
+    const textResults = await searchBibleText(normalizedQuery, versionId, boundedLimit);
+    abortIfNeeded(signal);
+    return { mode: "lexical", semanticState: "unavailable", results: textResults.map((result) => ({
+      id: `${versionId}:${result.reference}`, matchType: "text", kind: "verse", sources: ["lexical"],
+      verse: { book: result.position.book, chapter: result.position.chapter, startVerse: result.position.verse, endVerse: result.position.verse, reference: result.reference, referenceText: result.reference, text: result.text, translation: version.translation },
+      verses: [{ verse: result.position.verse, text: result.text }],
+    })) };
+  }
+
   const verseCache = new Map<string, BiblePassage | undefined>();
   const resolveResults = async (ranked: RankedDocument[]) => {
     const candidates = collapseSearchRanges(ranked, boundedLimit).map((item) => ({ ...item,
@@ -292,7 +305,7 @@ export async function searchScripture({ language, limit = 20, query, versionId, 
     })) };
   }
   abortIfNeeded(signal);
-  const translationId = versionId === "reformationsbibeln2026" ? 2 : 1;
+  const translationId = version.databaseId;
   const scope = testament || book ? { testament, book } : undefined;
   const lexical = await backend.lexical(normalizedQuery, translationId, boundedLimit, { mode: engine === "precise" ? "keyword" : undefined, scope });
   abortIfNeeded(signal);
@@ -350,7 +363,7 @@ export function createScriptureSearchPageSession({ language, query, versionId, l
     if (ranked || indexPromise || indexError || !backend.all) return;
     const controller = new AbortController();
     indexController = controller;
-    const task = backend.all(normalizedQuery, versionId === "reformationsbibeln2026" ? 2 : 1, response.semanticState === "ready" && response.mode === "hybrid", controller.signal, {
+    const task = backend.all(normalizedQuery, bibleVersionFor(versionId).databaseId, response.semanticState === "ready" && response.mode === "hybrid", controller.signal, {
       relativeSemanticCutoff: true,
       mode: engine === "precise" ? "keyword" : undefined,
       scope: testament || book ? { testament, book } : undefined,
@@ -373,7 +386,7 @@ export function createScriptureSearchPageSession({ language, query, versionId, l
     let backend: ScriptureSearchBackend | undefined;
     try { backend = await scriptureBackend(); } catch { check(signal, requestGeneration); }
     check(signal, requestGeneration);
-    if (backend?.all) {
+    if (backend?.all && bibleVersionFor(versionId).hasSearchIndex) {
       prepareIndex(backend);
       const usePreview = previewOffset < preview.length;
       if (!usePreview && !ranked) {
@@ -391,7 +404,7 @@ export function createScriptureSearchPageSession({ language, query, versionId, l
         if (flags & 4) sources.push("topic");
         if (flags & 8) sources.push("reference");
         const first = index.first[position], last = index.last[position];
-        return { document: { id: position, translation_id: versionId === "reformationsbibeln2026" ? 2 : 1, book: index.books[index.book[position]], chapter: index.chapter[position], start_verse: first, end_verse: last, kind: first === last ? "verse" : "passage", title: "", text: "", canonical_order: 0 }, score: 0, sources };
+        return { document: { id: position, translation_id: bibleVersionFor(versionId).databaseId, book: index.books[index.book[position]], chapter: index.chapter[position], start_verse: first, end_verse: last, kind: first === last ? "verse" : "passage", title: "", text: "", canonical_order: 0 }, score: 0, sources };
       };
       const page: ScriptureSearchResult[] = [];
       const pendingIds = new Set<string>();

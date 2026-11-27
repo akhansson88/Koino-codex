@@ -1,0 +1,24 @@
+Bible translation sources added on 27 November 2026
+===================================================
+
+Svenska Folkbibeln 2015 (SFB15)
+- Source: SFB15.docx, version 2.0, downloaded from
+  https://www.christianmolk.se/2022/10/svenska-folkbibeln-2015-till-logos-bible-software/
+- Digital edition compiled by Christian Mölk (christianmolk.se) as a Logos
+  Personal Book. The document itself states:
+  "Svenska Folkbibeln 2015 (SFB15) Copyright © 2015 by Svenska Folkbibeln
+  Foundation."
+- Converted with scripts/convert-sfb15-docx.py into assets/bible/sfb15.json.
+- The text is not public domain. Redistribution in an app requires permission
+  from Svenska Folkbibeln Foundation; this repository only stores the source
+  Alex supplied for the KOINO reader.
+
+New King James Version (NKJV)
+- Source: https://github.com/thiagobodruk/bible, json/en_nkjv.json (the
+  most-starred public Bible JSON repository that ships an NKJV file).
+- Converted with scripts/convert-nkjv-json.py into assets/bible/nkjv-verses.json.
+- NKJV is Copyright © 1982 by Thomas Nelson. The repository's MIT license
+  covers only its file structure and tooling, not the Bible text; the
+  repository explicitly says each translation stays with its rights holder.
+- Redistribution in an app requires a license from Thomas Nelson; this
+  repository only stores the source Alex supplied for the KOINO reader.

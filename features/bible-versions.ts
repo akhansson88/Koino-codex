@@ -1,6 +1,8 @@
 export const bibleVersions = [
-  { id: "kjv", label: "KJV", translation: "KJV", hasAudio: false },
-  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", hasAudio: true },
+  { id: "kjv", label: "KJV", translation: "KJV", databaseId: 1, hasSearchIndex: true, hasAudio: false },
+  { id: "reformationsbibeln2026", label: "Reformationsbibeln 2026", translation: "Reformationsbibeln 2026", databaseId: 2, hasSearchIndex: true, hasAudio: true },
+  { id: "sfb15", label: "Svenska Folkbibeln 2015", translation: "SFB15", databaseId: 3, hasSearchIndex: false, hasAudio: false },
+  { id: "nkjv", label: "NKJV", translation: "NKJV", databaseId: 4, hasSearchIndex: false, hasAudio: false },
 ] as const;
 
 export type BibleVersionId = (typeof bibleVersions)[number]["id"];

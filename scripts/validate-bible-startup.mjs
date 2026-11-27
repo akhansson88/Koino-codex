@@ -52,7 +52,7 @@ try {
       setup(builder) {
         builder.onResolve({ filter: /.*/ }, ({ path: name }) => {
           if (name in mocks) return { path: name, namespace: "mock" };
-          if (name.endsWith("koino-bible-v2.db")) return { path: name, namespace: "asset" };
+          if (name.endsWith("koino-bible-v3.db")) return { path: name, namespace: "asset" };
           if (name === "react" || name.startsWith("react/")) return { path: require.resolve(name), external: true };
         });
         builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path: name }) => ({ contents: mocks[name], loader: "jsx" }));

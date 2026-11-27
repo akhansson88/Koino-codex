@@ -124,10 +124,14 @@ export function testamentForBook(bookName: string): TestamentFilter {
 
 export function bibleVersionShortLabel(versionId: BibleVersionId) {
   if (versionId === "reformationsbibeln2026") return "SRB26";
+  if (versionId === "sfb15") return "SFB15";
+  if (versionId === "nkjv") return "NKJV";
   return "KJV";
 }
 
 export function bibleVersionDescription(versionId: BibleVersionId, t: TranslationFunction) {
   if (versionId === "reformationsbibeln2026") return t("bible.version.description.reformationsbibeln2026");
+  if (versionId === "sfb15") return t("bible.version.description.sfb15");
+  if (versionId === "nkjv") return t("bible.version.description.nkjv");
   return t("bible.version.description.kjv");
 }

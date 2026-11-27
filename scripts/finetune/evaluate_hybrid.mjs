@@ -28,7 +28,7 @@ const thresholds = {
 const temporary = await mkdtemp(path.join(os.tmpdir(), "koino-hybrid-eval-"));
 let search;
 try {
-  const reader = new DatabaseSync(path.join(root, "assets/bible/koino-bible-v2.db"), { readOnly: true });
+  const reader = new DatabaseSync(path.join(root, "assets/bible/koino-bible-v3.db"), { readOnly: true });
   const bookNames = new Map(reader.prepare("SELECT id,name FROM books").all().map(({ id, name }) => [id, name]));
   search = new DatabaseSync(path.resolve(args.database), { readOnly: true, allowExtension: true });
   search.loadExtension(path.join(root, "scripts/hybrid-search/.deps/sqlite_vec/vec0.dll"));

@@ -64,7 +64,7 @@ def main():
     for name,expected in expected_sources.items():
         if hashlib.sha256((ROOT / "assets/bible" / name).read_bytes()).hexdigest()!=expected:
             raise ValueError(f"Review the custom versification mapping before using changed source {name}")
-    connection = sqlite3.connect(f"file:{(ROOT / 'assets/bible/koino-bible-v2.db').as_posix()}?mode=ro", uri=True)
+    connection = sqlite3.connect(f"file:{(ROOT / 'assets/bible/koino-bible-v3.db').as_posix()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     rows = [dict(row) for row in connection.execute("SELECT v.*,b.name AS book,b.osis FROM verses v JOIN books b ON b.id=v.book_id ORDER BY v.id")]
     by_position = {translation: {} for translation in (1,2)}
@@ -193,7 +193,7 @@ def main():
     metadata = {"mappingRevision":MAPPING_REVISION,"topicSourceHeader":topic_header,
                 "verseCount":len(rows),"passageCount":len(passages),"windowCount":len(windows),
                 "topicCount":len(topics),"topicLinkCount":len(links),"crossReferenceCount":len(edge_rows),
-                "readerSha256":hashlib.sha256((ROOT / "assets/bible/koino-bible-v2.db").read_bytes()).hexdigest(),
+                "readerSha256":hashlib.sha256((ROOT / "assets/bible/koino-bible-v3.db").read_bytes()).hexdigest(),
                 "sourceHashes":{name:hashlib.sha256((ROOT / f"assets/bible/{name}").read_bytes()).hexdigest()for name in ["kjv-verses-1769.json","reformationsbibeln.json"]}}
     write_json("documents.json",documents)
     write_json("topics.json",topics)

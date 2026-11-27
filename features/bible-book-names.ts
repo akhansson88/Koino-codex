@@ -70,7 +70,8 @@ export const swedishBibleBookNames: Readonly<Record<string, string>> = {
 };
 
 export function bibleBookLanguage(language: AppLanguage, version?: string): AppLanguage {
-  return version?.toLowerCase().startsWith("reformationsbibeln") ? "sv" : language;
+  const normalized = version?.toLowerCase();
+  return normalized === "sfb15" || normalized?.startsWith("reformationsbibeln") ? "sv" : language;
 }
 
 export function displayBibleBookName(bookName: string, language: AppLanguage, version?: string) {

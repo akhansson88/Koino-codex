@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { build } from "esbuild";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
-const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v2.db");
+const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v3.db");
 
 try {
   await access(generatedBibleData);
@@ -22,7 +22,7 @@ const nativeDatabase = new DatabaseSync(generatedBibleData, { readOnly: true });
 
 try {
   assert.equal(nativeDatabase.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
-  assert.equal(nativeDatabase.prepare("PRAGMA user_version").get().user_version, 2);
+  assert.equal(nativeDatabase.prepare("PRAGMA user_version").get().user_version, 3);
   assert.deepEqual(
     nativeDatabase
       .prepare("SELECT translations.code, COUNT(*) AS count FROM verses JOIN translations ON translations.id = verses.translation_id GROUP BY translations.code ORDER BY translations.id")
@@ -31,11 +31,13 @@ try {
     [
       { code: "kjv", count: 31102 },
       { code: "reformationsbibeln2026", count: 31170 },
+      { code: "sfb15", count: 31153 },
+      { code: "nkjv", count: 31102 },
     ],
   );
-  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapters").get().count, 2378);
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapters").get().count, 4756);
   assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapters WHERE heading IS NOT NULL").get().count, 1162);
-  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapter_subtitles").get().count, 1288);
+  assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM chapter_subtitles").get().count, 3804);
   assert.equal(nativeDatabase.prepare("SELECT COUNT(*) AS count FROM verse_footnotes").get().count, 3006);
   assert.equal(
     nativeDatabase
@@ -224,6 +226,21 @@ try {
 
   assert.deepEqual(await searchScripture({ language: "en", limit: 0, query: "John 3:16", versionId: "kjv" }), []);
   assert.deepEqual(await searchScripture({ language: "en", limit: 0.5, query: "John 3:16", versionId: "kjv" }), []);
+
+  const sfb15GenesisOne = bibleChapter("Genesis", 1, "sfb15");
+  assert.ok(sfb15GenesisOne.verses[0].text.startsWith("I begynnelsen skapade Gud"), "SFB15 must read from its own translation rows");
+  const nkjvJohn = bibleChapter("John", 3, "nkjv");
+  assert.equal(
+    nkjvJohn.verses.find((verse) => verse.verse === 16)?.text,
+    "For God so loved the world that He gave His only begotten Son, that whoever believes in Him should not perish but have everlasting life.",
+  );
+  const sfb15Search = await runScriptureSearch({ language: "sv", query: "I begynnelsen skapade Gud", versionId: "sfb15" });
+  assert.equal(sfb15Search.semanticState, "unavailable", "Translations without a hybrid index must say semantic search is unavailable");
+  assert.equal(sfb15Search.results[0]?.verse.reference, "Genesis 1:1");
+  assert.equal(sfb15Search.results[0]?.verse.translation, "SFB15");
+  const nkjvSearch = await searchScripture({ language: "en", query: "For God so loved the world", versionId: "nkjv" });
+  assert.equal(nkjvSearch[0]?.verse.reference, "John 3:16");
+  assert.equal(nkjvSearch[0]?.verse.translation, "NKJV");
 
   console.log("Bible search validation passed.");
 } finally {

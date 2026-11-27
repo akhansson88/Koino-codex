@@ -6,12 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const builderPath = path.join(projectRoot, "scripts", "build-bible-database.py");
-const databasePath = path.join(projectRoot, "assets", "bible", "koino-bible-v2.db");
-const fingerprintPath = path.join(projectRoot, "assets", "bible", "koino-bible-v2.sha256");
+const databasePath = path.join(projectRoot, "assets", "bible", "koino-bible-v3.db");
+const fingerprintPath = path.join(projectRoot, "assets", "bible", "koino-bible-v3.sha256");
 const sourcePaths = [
   builderPath,
   path.join(projectRoot, "assets", "bible", "kjv-verses-1769.json"),
   path.join(projectRoot, "assets", "bible", "reformationsbibeln.json"),
+  path.join(projectRoot, "assets", "bible", "sfb15.json"),
+  path.join(projectRoot, "assets", "bible", "nkjv-verses.json"),
   path.join(projectRoot, "assets", "bible", "cross-references", "cross_references.json"),
 ];
 

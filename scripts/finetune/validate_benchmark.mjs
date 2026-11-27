@@ -12,7 +12,7 @@ const lockPath = path.join(ROOT, "scripts/finetune/narrative-paraphrase-benchmar
 const benchmarkBytes = readFileSync(benchmarkPath);
 const benchmark = JSON.parse(benchmarkBytes);
 const search = new DatabaseSync(path.join(ROOT, "assets/bible/search/koino-search-v1.db"), { readOnly: true });
-const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v2.db"), { readOnly: true });
+const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v3.db"), { readOnly: true });
 const books = new Map(reader.prepare("SELECT id,name FROM books").all().map(({ id, name }) => [id, name]));
 const recallQueries = JSON.parse(readFileSync(path.join(ROOT, "scripts/hybrid-search/recall-queries.json"), "utf8"));
 const recallGold = JSON.parse(readFileSync(path.join(ROOT, "scripts/hybrid-search/recall-gold.json"), "utf8"));

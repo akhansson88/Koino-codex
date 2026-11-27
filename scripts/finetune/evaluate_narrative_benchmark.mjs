@@ -16,7 +16,7 @@ const modelPath = path.resolve(args.model ?? path.join(ROOT, "assets/bible/searc
 const databasePath = path.resolve(args.database ?? path.join(ROOT, "assets/bible/search/koino-search-v1.db"));
 const outputPath = path.resolve(args.output ?? path.join(ROOT, "scripts/hybrid-search/.cache/finetune/narrative-benchmark-production.json"));
 const benchmark = JSON.parse(readFileSync(path.join(ROOT, "scripts/finetune/narrative-paraphrase-benchmark.json"), "utf8"));
-const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v2.db"), { readOnly: true });
+const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v3.db"), { readOnly: true });
 const books = new Map(reader.prepare("SELECT id,name FROM books").all().map(({ id, name }) => [id, name]));
 reader.close();
 const database = new DatabaseSync(databasePath, { readOnly: true, allowExtension: true });

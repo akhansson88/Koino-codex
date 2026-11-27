@@ -140,6 +140,8 @@ export const swedishTranslations: TranslationDictionary = {
   "bible.version.description": "Välj översättning för läsaren.",
   "bible.version.description.kjv": "Engelska",
   "bible.version.description.reformationsbibeln2026": "Modern svensk översättning",
+  "bible.version.description.sfb15": "Svensk översättning från 2015",
+  "bible.version.description.nkjv": "Engelska",
   "bible.navigator.close": "Stäng bibelnavigatorn",
   "bible.navigator.back": "Tillbaka",
   "bible.navigator.title": "Bibeln",

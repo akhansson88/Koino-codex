@@ -138,6 +138,8 @@ export const englishTranslations = {
   "bible.version.description": "Select the translation for the reader.",
   "bible.version.description.kjv": "English",
   "bible.version.description.reformationsbibeln2026": "Modern Swedish translation",
+  "bible.version.description.sfb15": "Swedish translation from 2015",
+  "bible.version.description.nkjv": "English",
   "bible.navigator.close": "Close Bible navigator",
   "bible.navigator.back": "Back",
   "bible.navigator.title": "Bible",

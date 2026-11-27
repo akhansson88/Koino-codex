@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v2.db"
+OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v3.db"
 TEMP_PATH = OUTPUT_PATH.with_suffix(".db.tmp")
 TRANSLATIONS = (
     (1, "kjv", "KJV", PROJECT_ROOT / "assets" / "bible" / "kjv-verses-1769.json"),
@@ -20,6 +20,18 @@ TRANSLATIONS = (
         "reformationsbibeln2026",
         "Reformationsbibeln 2026",
         PROJECT_ROOT / "assets" / "bible" / "reformationsbibeln.json",
+    ),
+    (
+        3,
+        "sfb15",
+        "Svenska Folkbibeln 2015",
+        PROJECT_ROOT / "assets" / "bible" / "sfb15.json",
+    ),
+    (
+        4,
+        "nkjv",
+        "NKJV",
+        PROJECT_ROOT / "assets" / "bible" / "nkjv-verses.json",
     ),
 )
 CROSS_REFERENCES_PATH = (
@@ -183,7 +195,7 @@ def insert_verses(connection: sqlite3.Connection) -> None:
                     chapter = int(source_chapter["number"])
                     chapter_id = next_chapter_id
                     next_chapter_id += 1
-                    heading = clean_text(source_chapter.get("heading", "")) or None
+                    heading = clean_text(source_chapter.get("heading") or "") or None
                     chapter_rows.append((chapter_id, translation_id, book_id, chapter, heading))
 
                     for display_order, subtitle in enumerate(source_chapter.get("subtitles", [])):
@@ -366,7 +378,7 @@ def main() -> None:
         create_schema(connection)
         insert_verses(connection)
         insert_cross_references(connection)
-        connection.execute("PRAGMA user_version = 2")
+        connection.execute("PRAGMA user_version = 3")
         connection.execute("ANALYZE")
         connection.execute("PRAGMA optimize")
         connection.commit()
