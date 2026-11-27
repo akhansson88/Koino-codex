@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   NativeScrollEvent,
@@ -111,7 +111,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
 }: Props, ref) {
   const { t } = useAppTranslation();
   const scrollRef = useRef<ScrollView>(null);
-  const [headerVerse, setHeaderVerse] = useState(position.verse);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [contentOrigin, setContentOrigin] = useState(0);
   const scrollOffsetRef = useRef(0);
@@ -120,6 +119,38 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   const pendingAnchorRef = useRef<{ anchor: VerseAnchor; line: number } | undefined>(undefined);
   const programmaticRef = useRef(false);
   const programmaticYRef = useRef(0);
+  const userDraggingRef = useRef(false);
+  const dragEndTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const programmaticTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const callbacksRef = useRef({
+    onFootnotePress,
+    onReadingMarkerPress,
+    onVerseCopy,
+    onVerseLongPress,
+    onVersePress,
+    onVersePressIn,
+  });
+  callbacksRef.current = {
+    onFootnotePress,
+    onReadingMarkerPress,
+    onVerseCopy,
+    onVerseLongPress,
+    onVersePress,
+    onVersePressIn,
+  };
+  const handleFootnote = useCallback((marker: string, footnote: BibleFootnote, verse: number) => {
+    callbacksRef.current.onFootnotePress(marker, footnote, verse);
+  }, []);
+  const handleCopy = useCallback((verse: number) => callbacksRef.current.onVerseCopy(verse), []);
+  const handleLongPress = useCallback((verse: number) => callbacksRef.current.onVerseLongPress(verse), []);
+  const handlePress = useCallback((verse: number) => callbacksRef.current.onVersePress(verse), []);
+  const handlePressIn = useCallback(() => callbacksRef.current.onVersePressIn(), []);
+  const handleMarkerPress = useCallback(() => callbacksRef.current.onReadingMarkerPress?.(), []);
+  const noopVerseRef = useCallback(() => {}, []);
+  const textPosition = useMemo(
+    () => ({ book: position.book, chapter: position.chapter, verse: 1 }),
+    [position.book, position.chapter],
+  );
   const onAnchorRef = useRef(onAnchor);
   onAnchorRef.current = onAnchor;
   const contentKey = `${versionId}:${position.book}:${position.chapter}`;
@@ -162,10 +193,9 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
         const y = offsetForAnchor(layout, pending.anchor, pending.line);
         if (y !== undefined) {
           pendingAnchorRef.current = undefined;
-          programmaticRef.current = true;
           programmaticYRef.current = y;
+          markProgrammatic();
           scrollRef.current?.scrollTo({ animated: false, y });
-          requestAnimationFrame(() => { programmaticRef.current = false; });
         }
       }
     }
@@ -176,24 +206,74 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
     if (!layout) return;
     const anchor = anchorAtOffset(layout, scrollY, 8);
     if (!anchor) return;
-    setHeaderVerse((current) => current === anchor.verse ? current : anchor.verse);
     onAnchorRef.current(anchor);
+  }, []);
+
+  const clearDragEndTimer = useCallback(() => {
+    if (dragEndTimerRef.current !== undefined) {
+      clearTimeout(dragEndTimerRef.current);
+      dragEndTimerRef.current = undefined;
+    }
+  }, []);
+
+  const markProgrammatic = useCallback(() => {
+    programmaticRef.current = true;
+    if (programmaticTimerRef.current !== undefined) clearTimeout(programmaticTimerRef.current);
+    // A native scroll event can arrive well after scrollTo returns. Keep the
+    // passive pane suppressed long enough to swallow the whole movement, not
+    // just the next frame.
+    programmaticTimerRef.current = setTimeout(() => {
+      programmaticTimerRef.current = undefined;
+      programmaticRef.current = false;
+    }, 180);
+  }, []);
+
+  const clearProgrammatic = useCallback(() => {
+    if (programmaticTimerRef.current !== undefined) {
+      clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = undefined;
+    }
+    programmaticRef.current = false;
   }, []);
 
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = event.nativeEvent.contentOffset.y;
     scrollOffsetRef.current = y;
-    if (programmaticRef.current) {
-      if (Math.abs(y - programmaticYRef.current) <= 2) return;
-      programmaticRef.current = false;
-    }
+    // Only the pane the finger is actually moving may drive the other one.
+    // A programmatic scroll on the follower must never publish an anchor, or
+    // the two panes push each other back and forth every frame.
+    if (programmaticRef.current) return;
+    if (!userDraggingRef.current) return;
     emitAnchor(y);
   }, [emitAnchor]);
 
   const handleBeginDrag = useCallback(() => {
-    programmaticRef.current = false;
+    clearProgrammatic();
+    userDraggingRef.current = true;
+    clearDragEndTimer();
     onDragStart();
-  }, [onDragStart]);
+  }, [clearDragEndTimer, clearProgrammatic, onDragStart]);
+
+  const handleMomentumBegin = useCallback(() => {
+    userDraggingRef.current = true;
+    clearDragEndTimer();
+  }, [clearDragEndTimer]);
+
+  const handleEndDrag = useCallback(() => {
+    clearDragEndTimer();
+    dragEndTimerRef.current = setTimeout(() => {
+      dragEndTimerRef.current = undefined;
+      userDraggingRef.current = false;
+    }, 250);
+  }, [clearDragEndTimer]);
+
+  const handleMomentumEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = event.nativeEvent.contentOffset.y;
+    scrollOffsetRef.current = y;
+    if (userDraggingRef.current) emitAnchor(y);
+    clearDragEndTimer();
+    userDraggingRef.current = false;
+  }, [clearDragEndTimer, emitAnchor]);
 
   const scrollToAnchor = useCallback((anchor: VerseAnchor, line: number) => {
     const layout = layoutRef.current;
@@ -204,12 +284,11 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
     const y = offsetForAnchor(layout, anchor, line);
     if (y === undefined) return false;
     const maximum = Math.max(0, (layout.tops[layout.tops.length - 1] ?? 0) + (layout.heights[layout.heights.length - 1] ?? 0) - viewportHeight);
-    programmaticRef.current = true;
     programmaticYRef.current = Math.min(y, maximum);
     scrollOffsetRef.current = programmaticYRef.current;
+    userDraggingRef.current = false;
+    markProgrammatic();
     scrollRef.current?.scrollTo({ animated: false, y: programmaticYRef.current });
-    setHeaderVerse(anchor.verse);
-    requestAnimationFrame(() => { programmaticRef.current = false; });
     return true;
   }, [viewportHeight]);
 
@@ -221,17 +300,13 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
     getLayout: () => layoutRef.current,
     scrollToAnchor,
     scrollToTop: () => {
-      programmaticRef.current = true;
       programmaticYRef.current = 0;
       scrollOffsetRef.current = 0;
+      userDraggingRef.current = false;
+      markProgrammatic();
       scrollRef.current?.scrollTo({ animated: false, y: 0 });
-      requestAnimationFrame(() => { programmaticRef.current = false; });
     },
-  }), [scrollToAnchor]);
-
-  useLayoutEffect(() => {
-    setHeaderVerse(position.verse);
-  }, [position.book, position.chapter, position.verse]);
+  }), [markProgrammatic, scrollToAnchor]);
 
   const versionLabel = bibleVersionShortLabel(versionId);
 
@@ -301,9 +376,11 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
         contentContainerStyle={{ paddingBottom: bottomInset, paddingHorizontal: 16, paddingTop: 8 }}
         keyboardShouldPersistTaps="handled"
         onLayout={({ nativeEvent }) => setViewportHeight(nativeEvent.layout.height)}
-        onMomentumScrollEnd={onScroll}
+        onMomentumScrollBegin={handleMomentumBegin}
+        onMomentumScrollEnd={handleMomentumEnd}
         onScroll={onScroll}
         onScrollBeginDrag={handleBeginDrag}
+        onScrollEndDrag={handleEndDrag}
         ref={scrollRef}
         removeClippedSubviews={false}
         scrollEventThrottle={16}
@@ -323,17 +400,17 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
               chapterHighlightByVerse={highlightByVerse}
               copyLabel={t("bible.actions.copy")}
               flowingParagraphText={flowingParagraphText}
-              onFootnotePress={onFootnotePress}
-              onReadingMarkerPress={onReadingMarkerPress}
-              onVerseCopy={onVerseCopy}
+              onFootnotePress={handleFootnote}
+              onReadingMarkerPress={handleMarkerPress}
+              onVerseCopy={handleCopy}
               onVerseLayout={handleVerseLayout}
-              onVerseLongPress={onVerseLongPress}
-              onVersePress={onVersePress}
-              onVersePressIn={onVersePressIn}
-              onVerseRef={() => {}}
+              onVerseLongPress={handleLongPress}
+              onVersePress={handlePress}
+              onVersePressIn={handlePressIn}
+              onVerseRef={noopVerseRef}
               palette={palette}
               planMarkers={EMPTY_MARKERS}
-              position={position}
+              position={textPosition}
               readingMarkersByVerse={readingMarkersByVerse}
               readerLineHeight={readerLineHeight}
               readerTextStyle={readerTextStyle}

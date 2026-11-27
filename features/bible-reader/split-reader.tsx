@@ -129,6 +129,8 @@ export function SplitReader({
   const dragStartRatioRef = useRef(ratio);
   const dragAnchorRef = useRef<{ anchor: VerseAnchor; driver: "primary" | "secondary" } | undefined>(undefined);
   const lastAnchorRef = useRef<{ anchor: VerseAnchor; driver: "primary" | "secondary" } | undefined>(undefined);
+  const positionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pendingPositionRef = useRef<BiblePosition | undefined>(undefined);
   const [headers, setHeaders] = useState<{ primary: ResolvedAnchor; secondary: ResolvedAnchor }>();
   const [primaryBoundary, setPrimaryBoundary] = useState<{ chapter: number; verse: number }>();
   const [secondaryBoundary, setSecondaryBoundary] = useState<{ chapter: number; verse: number }>();
@@ -211,7 +213,7 @@ export function SplitReader({
   const chapterLabel = useCallback((chapter: number) => `${displayBibleBookName(position.book, bookLanguage)} ${chapter}`, [bookLanguage, position.book]);
 
   const updateHeaders = useCallback((primaryAnchor: VerseAnchor, secondaryAnchor: VerseAnchor | undefined, approximate = false) => {
-    const signature = `${primaryAnchor.verse}:${Math.round(primaryAnchor.fraction * 20)}|${secondaryAnchor?.verse ?? 0}:${Math.round((secondaryAnchor?.fraction ?? 0) * 20)}:${approximate}`;
+    const signature = `${primaryAnchor.verse}|${secondaryAnchor?.verse ?? 0}:${approximate}`;
     if (headerSignatureRef.current === signature) return;
     headerSignatureRef.current = signature;
     setHeaders({
@@ -285,20 +287,33 @@ export function SplitReader({
   }, [onAnchorChange, position.chapter, resolveToPrimary, updateHeaders]);
 
   const handlePrimaryAnchor = useCallback((anchor: VerseAnchor) => {
+    if (driverRef.current !== "primary") return;
     driverRef.current = "primary";
     lastAnchorRef.current = { anchor, driver: "primary" };
     onAnchorChange?.(anchor);
     const signature = `${position.book}:${position.chapter}:${anchor.verse}`;
     if (lastPositionRef.current !== signature) {
       lastPositionRef.current = signature;
-      internalPositionRef.current = signature;
-      onPositionChange({ book: position.book, chapter: position.chapter, verse: anchor.verse }, primaryVersionId);
+      pendingPositionRef.current = { book: position.book, chapter: position.chapter, verse: anchor.verse };
+      if (positionTimerRef.current !== undefined) clearTimeout(positionTimerRef.current);
+      // Publish the reader position once the gesture settles. Publishing every
+      // verse makes the parent re-render and can drag the panes back to an
+      // older verse while the finger is still moving.
+      positionTimerRef.current = setTimeout(() => {
+        positionTimerRef.current = undefined;
+        const pending = pendingPositionRef.current;
+        if (!pending) return;
+        pendingPositionRef.current = undefined;
+        internalPositionRef.current = `${pending.book}:${pending.chapter}:${pending.verse}`;
+        onPositionChange(pending, primaryVersionId);
+      }, 260);
     }
     if (sync) applyToSecondary(anchor);
     else updateHeaders(anchor, undefined, undefined);
   }, [applyToSecondary, onAnchorChange, onPositionChange, position.book, position.chapter, primaryVersionId, sync, updateHeaders]);
 
   const handleSecondaryAnchor = useCallback((anchor: VerseAnchor) => {
+    if (driverRef.current !== "secondary") return;
     driverRef.current = "secondary";
     lastAnchorRef.current = { anchor, driver: "secondary" };
     if (sync) applyToPrimary(anchor);
@@ -307,6 +322,10 @@ export function SplitReader({
       lastPositionRef.current = signature;
     }
   }, [applyToPrimary, position.book, position.chapter, sync]);
+
+  useEffect(() => () => {
+    if (positionTimerRef.current !== undefined) clearTimeout(positionTimerRef.current);
+  }, []);
 
   const handleDragStart = useCallback((driver: "primary" | "secondary") => {
     driverRef.current = driver;
