@@ -1,5 +1,6 @@
 import { JournalEntryPreview } from "@/features/journal-entry-preview";
 import { FastingCard } from "@/features/fasting/fasting-card";
+import { FeedbackCard } from "@/features/feedback";
 import { MeBiblePlans } from "@/features/me-bible-plans";
 import { MePrayers } from "@/features/me-prayers";
 import { ownedJournalEntries, recentJourneyEntries, reflectionForJournalDay } from "@/features/me-journal";
@@ -267,6 +268,8 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
       <MeBiblePlans plans={state.biblePlans} userId={state.currentUserId} />
 
       <MePrayers notifications={state.prayerNotifications} users={state.users} />
+
+      <FeedbackCard />
 
       {state.authError ? (
         <Card>

@@ -5,6 +5,7 @@ import type { PropsWithChildren } from "react";
 import { useRef, useState } from "react";
 import { Platform, Text, useWindowDimensions, View } from "react-native";
 import { SupportKoinoCard } from "@/features/donation-flow-screen";
+import { useOpenFeedback } from "@/features/feedback";
 import { useKoino } from "@/state/koino-store";
 import { developmentMode } from "@/state/store/firebase";
 import {
@@ -45,6 +46,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
   const { state, dispatch } = useKoino();
   const { language, setLanguage, t } = useAppTranslation();
   const { preference, setPreference } = useTheme();
+  const openFeedback = useOpenFeedback("identity");
   const identitySheetRef = useRef<AppSheetHandle>(null);
   const navigateFromIdentity = (path: "/room-details" | "/donation-amount") => {
     if (presentation === "sheet") identitySheetRef.current?.dismiss(() => router.push(path));
@@ -222,7 +224,13 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
       </View>
 
       <SettingsSection label={t("identity.section.supportTrust")}>
-        <SettingsRow icon="message-circle" title={t("identity.help.title")} subtitle={t("identity.help.subtitle")} onPress={() => setActiveSheet("help")} />
+        <SettingsRow
+          icon="message-square"
+          title={t("identity.feedback.title")}
+          subtitle={t("identity.feedback.subtitle")}
+          onPress={openFeedback}
+        />
+        <SettingsRow icon="message-circle" title={t("identity.help.title")} subtitle={t("identity.help.subtitle")} onPress={() => setActiveSheet("help")} showDivider />
         <SettingsRow
           icon="lock"
           title={t("identity.security.title")}

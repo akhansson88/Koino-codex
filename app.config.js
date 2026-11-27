@@ -92,6 +92,11 @@ const baseConfig = {
   runtimeVersion: "2.1.0",
   updates: {
     url: "https://u.expo.dev/587506fb-be73-46b3-a680-0207aadeb2cf",
+    // Local release builds have no EAS channel baked in. Set this when building
+    // one so the installed app can still receive EAS Updates.
+    ...(process.env.KOINO_LOCAL_UPDATE_CHANNEL
+      ? { requestHeaders: { "Expo-Channel-Name": process.env.KOINO_LOCAL_UPDATE_CHANNEL } }
+      : {}),
   },
 };
 
