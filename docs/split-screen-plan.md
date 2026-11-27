@@ -676,7 +676,7 @@ mirror fields in phase 4.
 
 | Risk | Mitigation |
 | --- | --- |
-| Alignment is wrong in a hard chapter | Phrase-level confidence, manual overrides, `≈` badge, named acceptance cases, report gate in CI |
+| Alignment is wrong in a hard chapter | Segment confidence, manual overrides, `≈` badge, named acceptance cases, report gate in CI |
 | Two ScrollViews jank on low-end Android | UI-thread `scrollTo`, binary search, no per-frame React, 30 Hz JS fallback, test on the oldest supported device |
 | Mirror write rate drains battery/data | Adaptive 400 ms only while scrolling, 1 s idle, only while followed, measure a 10 min session |
 | Rules drift (not in repo) | Export and commit deployed rules before the payload change; emulator test that the exact payload is accepted |
