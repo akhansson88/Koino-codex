@@ -62,6 +62,19 @@ android: {
 Both require the next native build (runtime 2.2.0). JavaScript-only EAS Updates
 cannot add an entitlement or an intent filter.
 
+The custom-scheme fallback also needs the `app/+native-intent.tsx` rewrite:
+`koino://join?code=…` arrives with `join` as the URL **host**, so Expo Router
+would show "Unmatched Route" without it. The rewrite turns it into
+`/join?code=…` before routing. This is in the JS bundle and also ships with the
+next native build.
+
+**Important for the next build:** use an EAS `store-internal` build so the
+`production` update channel is embedded (`eas.json` sets it). A local release
+build only receives updates when it is made with
+`KOINO_LOCAL_UPDATE_CHANNEL=production`; the installed versionCode 42 on the
+Pixel was built without it, so it cannot download EAS Updates and still runs its
+embedded bundle. The next EAS build fixes that.
+
 ## Association values
 
 - Apple Team ID: `8Y4D77XWFB`

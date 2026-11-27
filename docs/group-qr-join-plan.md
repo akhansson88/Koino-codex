@@ -2,7 +2,11 @@
 
 Plan for letting someone join a KOINO community by scanning that community's QR code: a member shows the code, a non-member scans it, and the result is either a join request (private community) or immediate membership (open community).
 
-Status: planned 26 November 2026.
+Status: planned 26 November 2026. Updated 27 November 2026: the QR now
+encodes `https://koinolabs.com/join/?code=…`; the HTTPS landing page, iOS
+Universal Links and Android App Links are live. See `join/README.md` and
+section 11 of the two-phone plan. The app-scheme fallback still exists for
+builds that predate app links.
 
 ---
 
