@@ -63,7 +63,7 @@ const PagerCell = memo(function PagerCell({ page, active, cursor, width, reduced
     return reducedMotion
       ? { opacity: Math.max(0, 1 - Math.abs(distance)), transform: [{ translateX: 0 }] }
       : { opacity: 1, transform: [{ translateX: distance * width }] };
-  }, [index, width, reducedMotion]);
+  }, [cursor, index, width, reducedMotion]);
 
   useEffect(() => {
     if (!page.chapter) return;
@@ -164,7 +164,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     dragging.value = false;
     request.current = undefined;
     latest.current.onInteractionChange(false);
-  }, [currentKey, layoutKey, navigationRevision, width, reducedMotion, enabled]);
+  }, [currentKey, cursor, layoutKey, navigationRevision, width, reducedMotion, enabled]);
 
   useEffect(() => {
     mounted.current = true;

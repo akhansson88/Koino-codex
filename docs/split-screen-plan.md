@@ -10,13 +10,14 @@ AAB/store build is the remaining release step.
 
 Implementation notes:
 
-- Split mode uses the same `ChapterPager` as the single reader: three split pages
-  (previous/current/next, both translations each) are mounted side by side, the pan
+- Each pane has its own `ChapterPager` and its own chapter when the link is off. The
+  pager mounts three pages (previous/current/next) of that one translation, the pan
   drags them with the same resistance, the settle spring and `chapterSelectionHaptic()`
-  fire at the same moment, and the header title crossfades through `chapterCursor`.
-  Each pane wraps its own `ScrollView` in `Gesture.Native().requireExternalGestureToFail(pan)`
-  so vertical scrolling still wins; the pager skips its whole-page native wrapper
-  (`wrapNativeGesture={false}`).
+  fire at the same moment, and the header title crossfades through that pane's cursor.
+  When the link is on, both pagers share one cursor and turn together; when it is off,
+  only the swiped pane (and its header) moves. Each pane wraps its own `ScrollView` in
+  `Gesture.Native().requireExternalGestureToFail(pan)` so vertical scrolling still wins;
+  the pager skips its whole-page native wrapper (`wrapNativeGesture={false}`).
 - The Bible asset is now `assets/bible/koino-bible-v5.db` (62.8 MB) with all four
   translations and 186,886 cross-translation links.
 - The alignment is **verse-level structural**, not word-level: merges, splits,
@@ -33,7 +34,8 @@ Implementation notes:
 
 ## 0. The short version
 
-- Two panes, one reader. Top pane and bottom pane, 50/50 on phones.
+- Two panes, one reader. Each pane has its own chapter position while the link is off
+  and they page independently; turning the link on shares one chapter and one anchor.
 - The scroll anchor is `book + chapter + verse + fraction through the verse`, never a
   pixel offset and never just a verse number.
 - A precomputed, structural alignment table translates that anchor from one
@@ -136,14 +138,15 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
   the version sheet **for that pane only**.
 - **Main header:** the existing header, with the translation pill replaced by a
   `Jämför` chip showing `NKJV / SFB15`. The chapter title stays.
-- **Bottom controls:** previous/next chapter, shared by both panes. Both readers use the
-  same chapter pager: a horizontal swipe in either pane drags the whole split page (both
-  translations together) and springs to the next chapter with the same animation, header
-  crossfade and haptic tick as the single reader. The bottom controls call the split
-  pager's `step()` rather than jumping, so buttons and swipes behave identically.
+- **Bottom controls:** previous/next chapter. They step the primary pane's pager; when
+  the link is on the secondary turns with it, when the link is off only the primary turns.
+  Each pane has its own chapter pager: a horizontal swipe in a pane drags only that pane
+  and its header, with the same resistance, settle spring, header crossfade and haptic
+  tick as the single reader. When the link is on, both pagers share the cursor and turn
+  together. A short drag springs back and does not turn the page.
   Swipes that start on a pane header stay in the header: the version pill, reference,
-  sync, close and boundary hint run their own pan that blocks the pager, so opening or
-  tapping those menus never turns the page.
+  sync, close and boundary hint run their own pan that blocks that pane's pager, so
+  opening or tapping those menus never turns the page.
 - **Exit:** `×` on the secondary pane header, or the menu row again. The primary pane
   remains where it is, single-pane.
 
@@ -160,11 +163,12 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
   pane's translation.
 - **Long-press / highlight / copy / save / share:** unchanged, applied to the tapped
   pane's translation. The sheet subtitle names the translation when the two differ.
-- **Chapter change:** both panes load the mapped chapter (same number for all four
-  shipped translations). Swiping horizontally in either pane pages both panes together
-  through the shared `ChapterPager`; a short drag springs back and does not turn the
-  page. No automatic chapter advance at the end of a chapter; a `Nästa kapitel` chip
-  appears when the driver reaches the bottom. This avoids the follower pane flipping
+- **Chapter change:** each pane has its own chapter pager and can turn independently
+  while the link is off; turning the link on aligns the secondary to the primary. When
+  linked, both pagers share one cursor and turn together to the mapped chapter. A short
+  drag springs back. Tapping or long-pressing a verse quotes that pane's own chapter and
+  translation. No automatic chapter advance at the end of a chapter; a `Nästa kapitel`
+  chip appears when the driver reaches the bottom. This avoids the follower pane flipping
   chapter while the driver is still finishing a paragraph.
 - **Audio:** the spoken verse drives both panes. The audio player's translation is the
   primary pane; the secondary pane follows the mapped anchor.
@@ -660,9 +664,13 @@ mirror fields in phase 4.
 4. Psalm 51, Job 39, Daniel 4, 2 Corinthians 13, 3 John, Revelation 12.
 5. Change font size 12 → 28 and back; the anchor is preserved within one verse.
 6. Drag the seam 35% / 65%; the anchor is preserved; no jump.
-7. Chapter change moves both panes; both show the same chapter.
-8. Tap a verse in the bottom pane; the top moves to the mapped verse and the action
-   sheet quotes SRB26.
+7. Link on: a chapter swipe in either pane turns both panes and both headers together.
+   Link off: swipe the top pane; only the top pane and its header turn; repeat from the
+   bottom pane.
+8. Link off with the bottom pane on a different chapter: tap a verse in the bottom pane;
+   the action sheet quotes that pane's chapter and translation, and the main reader keeps
+   the top pane's chapter. A horizontal swipe starting on either pane header does not
+   turn that pane.
 9. Turn sync off, scroll one pane, turn it on: it re-anchors from the driver.
 10. Reduce motion: instant, no easing; no motion sickness.
 11. Dark theme (Vigil): both panes ≥ 4.5:1 text contrast; seam visible.
@@ -707,8 +715,11 @@ mirror fields in phase 4.
 - Vertical split, 50/50, 35–65% range; side by side only at ≥ 700 dp.
 - Primary = the translation the reader was already in; secondary = the other available
   translation (last used pair remembered).
-- Sync on by default; driver = last touched pane.
-- Selectable text in both panes; action sheet quotes the tapped translation.
+- Sync on by default; paging and scrolling move both panes together. With sync off each
+  pane keeps its own chapter and scroll position; turning sync on aligns the secondary to
+  the primary.
+- Selectable text in both panes; the action sheet quotes the tapped pane's chapter and
+  translation, even when the panes are on different chapters.
 - No automatic chapter advance; a chip instead.
 - `≈` for approximate and cross-chapter anchors; exact anchors are silent.
 - Mirror auto-enters split for verse scope; `Visa bara en` for focus; chapter scope
