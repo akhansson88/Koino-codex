@@ -11,6 +11,7 @@ export function BibleReaderToolsSheet({
   onClose,
   onHistoryBack,
   onHistoryForward,
+  onOpenCompare,
   onOpenMyPlaces,
   onOpenReading,
   onOpenSearch,
@@ -24,6 +25,7 @@ export function BibleReaderToolsSheet({
   onClose: () => void;
   onHistoryBack: () => void;
   onHistoryForward: () => void;
+  onOpenCompare: () => void;
   onOpenMyPlaces: () => void;
   onOpenReading: () => void;
   onOpenSearch: () => void;
@@ -42,13 +44,14 @@ export function BibleReaderToolsSheet({
     visible={visible}
     onClose={onClose}
     title={t("bible.reader.tools")}
-    height={Math.min(390, Math.round(height * 0.72))}
+    height={Math.min(438, Math.round(height * 0.78))}
     backgroundColor={palette.sheet}
     foregroundColor={palette.text}
     scroll
   >
     <View style={{ gap: 0 }}>
       <SheetActionRow icon="search" title={t("bible.accessibility.search")} color={palette.text} onPress={() => openAfterDismiss(onOpenSearch)} />
+      <SheetActionRow icon="columns" title={t("bible.compare.open")} subtitle={t("bible.compare.openHint")} color={palette.text} onPress={() => openAfterDismiss(onOpenCompare)} />
       <SheetActionRow icon="bookmark" title={t("bible.navigator.myPlaces")} color={palette.text} onPress={() => openAfterDismiss(onOpenMyPlaces)} />
       <SheetActionRow
         icon="eye"

@@ -29,18 +29,24 @@ function statusCopy(status: MirrorBarStatus) {
 export function ReadingMirrorBar({
   bottom,
   chapterLabel,
+  compareExpanded,
+  compareLabel,
   image,
   name,
   onFollowAgain,
   onStop,
+  onToggleCompareView,
   status,
 }: {
   bottom: number;
   chapterLabel: string;
+  compareExpanded?: boolean;
+  compareLabel?: string;
   image?: CommunityMember["image"];
   name: string;
   onFollowAgain: () => void;
   onStop: () => void;
+  onToggleCompareView?: () => void;
   status: MirrorBarStatus;
 }) {
   const { t } = useAppTranslation();
@@ -64,7 +70,9 @@ export function ReadingMirrorBar({
           </View>
         </View>
         <Text numberOfLines={1} style={[styles.detail, { color: live ? colors.textSecondary : pausedColor }]}>
-          {status === "live" ? chapterLabel : t(statusCopy(status), { name })}
+          {status === "live"
+            ? [chapterLabel, compareLabel].filter(Boolean).join(" · ")
+            : t(statusCopy(status), { name })}
         </Text>
       </View>
       {canFollowAgain ? (
@@ -75,6 +83,17 @@ export function ReadingMirrorBar({
         >
           <Feather name="corner-down-right" size={13} color={colors.paper} />
           <Text style={styles.followAgainText}>{t("reading.mirror.followAgain")}</Text>
+        </Pressable>
+      ) : null}
+      {onToggleCompareView && compareLabel ? (
+        <Pressable
+          accessibilityLabel={t(compareExpanded ? "reading.mirror.showOne" : "reading.mirror.showBoth")}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onToggleCompareView}
+          style={({ pressed }) => [styles.close, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Feather name={compareExpanded ? "square" : "columns"} size={15} color={colors.muted} />
         </Pressable>
       ) : null}
       <Pressable

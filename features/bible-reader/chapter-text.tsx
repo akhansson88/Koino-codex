@@ -424,7 +424,7 @@ type VerseRowProps = Pick<Parameters<typeof BibleText>[0],
   temporarySelected: boolean;
   persistedHighlightColor?: BibleHighlightColor;
   spoken: boolean;
-  onRowLayout: (verse: number, offset: number) => void;
+  onRowLayout: (verse: number, offset: number, height?: number) => void;
   verseNumberStyle: TextStyle;
   subtitlesBefore: BibleChapterSubtitle[];
   markersBefore: BiblePlanMarker[];
@@ -452,7 +452,7 @@ const BibleVerseRow = memo(function BibleVerseRow({
     focusTarget: null,
     measureInWindow: callback => textRef.current?.measureInWindow(callback),
   });
-  const handleLayout = useCallback((event: LayoutChangeEvent) => onRowLayout(item.verse, event.nativeEvent.layout.y), [item.verse, onRowLayout]);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => onRowLayout(item.verse, event.nativeEvent.layout.y, event.nativeEvent.layout.height), [item.verse, onRowLayout]);
   const publishRef = useCallback(() => {
     measurableRef.current.focusTarget = rowRef.current;
     onVerseRef(item.verse, rowRef.current && textRef.current ? measurableRef.current : null);

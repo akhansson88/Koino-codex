@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { setBibleDatabaseForTesting, queryBibleChapter, queryBibleChapterAsync, bibleChapterCrossReferenceVersesAsync, bibleChapterHasCrossReference } from "../features/bible-database.ts";
 
-const database = new DatabaseSync("assets/bible/koino-bible-v3.db", { readOnly: true });
+const database = new DatabaseSync("assets/bible/koino-bible-v4.db", { readOnly: true });
 const connection = {
   getAllSync: (sql, ...args) => database.prepare(sql).all(...args),
   getFirstSync: (sql, ...args) => database.prepare(sql).get(...args),

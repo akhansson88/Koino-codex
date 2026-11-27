@@ -8,7 +8,7 @@ const built = await build({ bundle:true, format:"esm", platform:"node", write:fa
   plugins:[{ name:"native-boundary", setup(builder) { builder.onResolve({filter:/bible-search\/native-backend$/},()=>({path:"unused-native-search",external:true})); } }],
 });
 const api = await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString("base64")}`);
-const reader = new DatabaseSync("assets/bible/koino-bible-v3.db",{readOnly:true});
+const reader = new DatabaseSync("assets/bible/koino-bible-v4.db",{readOnly:true});
 after(()=>reader.close());
 
 function connection(onAsync) {

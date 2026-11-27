@@ -21,6 +21,7 @@ import {
   mirrorPath,
   mirrorStatus,
   parseMirrorRecord,
+  MIRROR_ALIGNMENT_VERSION,
   MIRROR_HEARTBEAT_MS,
   MIRROR_PUBLISH_INTERVAL_MS,
   type MirrorAnchor,
@@ -38,12 +39,17 @@ function hexColor(value: unknown) {
 }
 
 type PublisherOptions = {
+  getActivity?: () => number;
   getAnchor?: () => MirrorAnchor;
   groupId?: string;
   highlights?: Record<number, string>;
+  mode?: "single" | "split";
   position: BiblePosition;
   scope: ReadingScope | "off";
+  secondaryVersionId?: BibleVersionId;
   selection?: number[];
+  splitRatio?: number;
+  splitSync?: boolean;
   userId?: string;
   versionId: BibleVersionId;
 };
@@ -54,19 +60,24 @@ type PublisherOptions = {
  * without a follower, so the richer stream does not exist most of the time.
  */
 export function useReadingMirrorPublisher({
+  getActivity,
   getAnchor,
   groupId,
   highlights,
+  mode,
   position,
   scope,
+  secondaryVersionId,
   selection,
+  splitRatio,
+  splitSync,
   userId,
   versionId,
 }: PublisherOptions) {
   const [followerCount, setFollowerCount] = useState(0);
   const followers = useRef(0);
-  const latest = useRef({ getAnchor, highlights, position, selection, versionId, scope, groupId, userId });
-  latest.current = { getAnchor, highlights, position, selection, versionId, scope, groupId, userId };
+  const latest = useRef({ getActivity, getAnchor, highlights, mode, position, selection, secondaryVersionId, splitRatio, splitSync, scope, groupId, userId, versionId });
+  latest.current = { getActivity, getAnchor, highlights, mode, position, selection, secondaryVersionId, splitRatio, splitSync, scope, groupId, userId, versionId };
 
   useEffect(() => {
     followers.current = 0;
@@ -136,13 +147,28 @@ export function useReadingMirrorPublisher({
         book: current.position.book,
         chapter: current.position.chapter,
         ...(Object.keys(ownHighlights).length > 0 ? { highlights: ownHighlights } : {}),
+        mode: current.mode === "split" ? "split" : "single",
+        ...(current.mode === "split" && current.secondaryVersionId
+          ? {
+            alignmentVersion: MIRROR_ALIGNMENT_VERSION,
+            secondaryVersionId: current.secondaryVersionId,
+            splitRatio: current.splitRatio ?? 0.5,
+            splitSync: current.splitSync ?? true,
+          }
+          : {}),
         ...(selection ? { selection } : {}),
         verse: current.position.verse,
         versionId: current.versionId,
       };
       const body = JSON.stringify(payload);
       const now = Date.now();
-      if (body === lastBody && now - lastWriteAt < MIRROR_HEARTBEAT_MS) return;
+      const scrolling = current.getActivity ? now - current.getActivity() < 2500 : false;
+      const minimumInterval = scrolling ? 350 : MIRROR_PUBLISH_INTERVAL_MS;
+      if (body === lastBody) {
+        if (now - lastWriteAt < MIRROR_HEARTBEAT_MS) return;
+      } else if (now - lastWriteAt < minimumInterval) {
+        return;
+      }
       lastWriteAt = now;
       lastBody = body;
 
@@ -153,7 +179,7 @@ export function useReadingMirrorPublisher({
     };
 
     write();
-    const timer = setInterval(write, MIRROR_PUBLISH_INTERVAL_MS);
+    const timer = setInterval(write, 350);
 
     return () => {
       disposed = true;

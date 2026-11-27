@@ -22,6 +22,10 @@ export type VerseQuickAction = "copy" | "highlight" | "journal" | "pray" | "save
 export type BibleReaderPreferences = {
   appTheme?: "light";
   bibleVersionId: BibleVersionId;
+  compareEnabled?: boolean;
+  compareRatio?: number;
+  compareSecondaryVersionId?: BibleVersionId;
+  compareSync?: boolean;
   fontId: BibleReaderFontId;
   fontSize: number;
   position: BiblePosition;

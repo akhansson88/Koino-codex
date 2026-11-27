@@ -32,7 +32,7 @@ def sha(value: str) -> str:
 
 
 def load_books():
-    connection = sqlite3.connect(ROOT / "assets/bible/koino-bible-v3.db")
+    connection = sqlite3.connect(ROOT / "assets/bible/koino-bible-v4.db")
     try:
         return {row[0]: row[1] for row in connection.execute("SELECT id,name FROM books")}
     finally:

@@ -23,14 +23,18 @@ import { bibleVersionDescription, bibleVersionShortLabel } from "@/features/bibl
 
 export function BibleVersionSheet({
   bibleVersionId,
+  excludeVersionId,
   onChangeBibleVersion,
   onClose: notifyClose,
+  onCompare,
   palette,
   visible,
 }: {
   bibleVersionId: BibleVersionId;
+  excludeVersionId?: BibleVersionId;
   onChangeBibleVersion: (versionId: BibleVersionId) => void;
   onClose: () => void;
+  onCompare?: () => void;
   palette: ReaderPalette;
   visible: boolean;
 }) {
@@ -40,14 +44,16 @@ export function BibleVersionSheet({
   const { t } = useAppTranslation();
   const { height } = useWindowDimensions();
   const bottomPadding = Math.max(26, insets.bottom + 18);
+  const versions = bibleVersions.filter((version) => version.id !== excludeVersionId);
+  const compareRows = onCompare ? 1 : 0;
   const contentHeight =
     bibleSheetTopPadding +
     bibleSheetHandleHeight +
     bibleSheetHeaderMinHeight +
     bibleSheetHeaderBottomPadding +
     bibleVersionListTopPadding +
-    bibleVersions.length * bibleVersionRowMinHeight +
-    Math.max(0, bibleVersions.length - 1) * bibleVersionRowGap +
+    (versions.length + compareRows) * bibleVersionRowMinHeight +
+    Math.max(0, versions.length + compareRows - 1) * bibleVersionRowGap +
     bottomPadding;
   const sheetHeight = Math.min(height * 0.92, contentHeight);
 
@@ -75,7 +81,7 @@ export function BibleVersionSheet({
               contentContainerStyle={{ gap: bibleVersionRowGap, paddingHorizontal: bibleSheetHorizontalPadding, paddingTop: bibleVersionListTopPadding }}
               style={{ flex: 1 }}
             >
-              {bibleVersions.map((version) => (
+              {versions.map((version) => (
                 <BibleVersionRow
                   description={bibleVersionDescription(version.id, t)}
                   key={version.id}
@@ -86,6 +92,34 @@ export function BibleVersionSheet({
                   shortLabel={bibleVersionShortLabel(version.id)}
                 />
               ))}
+              {onCompare ? (
+                <Pressable
+                  accessibilityHint={t("bible.compare.openHint")}
+                  accessibilityRole="button"
+                  onPress={() => { onClose(); onCompare(); }}
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: palette.surface,
+                    borderColor: palette.line,
+                    borderRadius: radius.lg,
+                    borderWidth: 1,
+                    flexDirection: "row",
+                    gap: 12,
+                    minHeight: bibleVersionRowMinHeight,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <View style={{ alignItems: "center", backgroundColor: palette.peach, borderRadius: 999, height: 40, justifyContent: "center", width: 40 }}>
+                    <Feather name="columns" size={17} color={palette.accent} />
+                  </View>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={{ color: palette.text, fontSize: 15, fontWeight: "900" }}>{t("bible.compare.open")}</Text>
+                    <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>{t("bible.compare.openHint")}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={palette.muted} />
+                </Pressable>
+              ) : null}
             </SheetScrollView>
           </View>
 

@@ -7,18 +7,25 @@ export const MIRROR_LIVE_WINDOW_MS = 20 * 1000;
 export const MIRROR_STALE_WINDOW_MS = 60 * 1000;
 export const MIRROR_RETENTION_MS = 10 * 60 * 1000;
 export const MIRROR_CONNECT_GRACE_MS = 8000;
+export const MIRROR_ALIGNMENT_VERSION = 1;
 
 export type MirrorAnchor = { offset: number; verse: number };
 export type MirrorSelection = { end: number; start: number };
 
 export type MirrorRecord = {
+  alignmentVersion?: number;
   anchorOffset: number;
   anchorVerse: number;
   at: number;
   book: string;
   chapter: number;
   highlights?: Record<number, string>;
+  mode?: "single" | "split";
+  secondaryVersionId?: string;
+  segmentId?: number;
   selection?: MirrorSelection;
+  splitRatio?: number;
+  splitSync?: boolean;
   versionId?: string;
   verse: number;
 };
@@ -86,15 +93,34 @@ export function parseMirrorRecord(value: unknown): MirrorRecord | undefined {
     }
   }
 
+  const mode = value.mode === "split" ? "split" : value.mode === "single" ? "single" : undefined;
+  const secondaryVersionId = typeof value.secondaryVersionId === "string" && value.secondaryVersionId.length <= 60
+    ? value.secondaryVersionId
+    : undefined;
+  const splitRatio = typeof value.splitRatio === "number" && Number.isFinite(value.splitRatio) &&
+    value.splitRatio >= 0.35 && value.splitRatio <= 0.65
+    ? value.splitRatio
+    : undefined;
+  const splitSync = typeof value.splitSync === "boolean" ? value.splitSync : undefined;
+  const segmentId = integerBetween(value.segmentId, 0, 10_000_000);
+  const alignmentVersion = integerBetween(value.alignmentVersion, 0, 1000);
+
   return {
     anchorOffset,
     anchorVerse,
     at,
     book,
     chapter,
+    ...(alignmentVersion === undefined ? {} : { alignmentVersion }),
     ...(Object.keys(highlights).length > 0 ? { highlights } : {}),
+    ...(mode ? { mode } : {}),
+    ...(mode === "split" && secondaryVersionId ? { secondaryVersionId } : {}),
+    ...(mode === "split" && splitRatio !== undefined ? { splitRatio } : {}),
+    ...(mode === "split" && splitSync !== undefined ? { splitSync } : {}),
+    ...(mode === "split" && segmentId !== undefined ? { segmentId } : {}),
     ...(selection ? { selection } : {}),
-    ...(typeof value.versionId === "string" && value.versionId.length <= 60 ? { versionId: value.versionId } : {}),
+    ...(mode !== "split" && typeof value.versionId === "string" && value.versionId.length <= 60 ? { versionId: value.versionId } : {}),
+    ...(mode === "split" && typeof value.versionId === "string" && value.versionId.length <= 60 ? { versionId: value.versionId } : {}),
     verse,
   };
 }

@@ -7,12 +7,15 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v3.db"
+OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v4.db"
 TEMP_PATH = OUTPUT_PATH.with_suffix(".db.tmp")
+ALIGNMENT_SCRIPT = PROJECT_ROOT / "scripts" / "build-bible-alignment.py"
 TRANSLATIONS = (
     (1, "kjv", "KJV", PROJECT_ROOT / "assets" / "bible" / "kjv-verses-1769.json"),
     (
@@ -378,7 +381,20 @@ def main() -> None:
         create_schema(connection)
         insert_verses(connection)
         insert_cross_references(connection)
-        connection.execute("PRAGMA user_version = 3")
+        connection.execute("PRAGMA user_version = 4")
+        connection.execute("ANALYZE")
+        connection.execute("PRAGMA optimize")
+        connection.commit()
+    finally:
+        connection.close()
+
+    # The split reader needs the cross-translation links. Build them on the
+    # finished text database, then publish one asset with both.
+    subprocess.run([sys.executable, str(ALIGNMENT_SCRIPT), str(TEMP_PATH)], check=True)
+
+    connection = sqlite3.connect(TEMP_PATH)
+    try:
+        connection.execute("PRAGMA user_version = 4")
         connection.execute("ANALYZE")
         connection.execute("PRAGMA optimize")
         connection.commit()

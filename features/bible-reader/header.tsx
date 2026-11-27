@@ -78,6 +78,7 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   previousChapterTitle,
   nextChapterTitle,
   translationLabel,
+  translationMaxWidth,
   topInset,
 }: {
   canGoBack: boolean;
@@ -102,6 +103,7 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
   previousChapterTitle?: string;
   nextChapterTitle?: string;
   translationLabel: string;
+  translationMaxWidth?: number;
   topInset: number;
 }) {
   const { t } = useAppTranslation();
@@ -149,7 +151,7 @@ export const BibleReaderHeader = memo(function BibleReaderHeader({
             flexDirection: "row",
             gap: 4,
             height: 40,
-            maxWidth: 82,
+            maxWidth: translationMaxWidth ?? 82,
             paddingHorizontal: 9,
           }}
         >

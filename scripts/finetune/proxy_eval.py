@@ -37,7 +37,7 @@ def digest(path: Path) -> str:
 def load_intervals() -> tuple[list[tuple[str, int, int, int]], dict[int, str]]:
     import sqlite3
 
-    reader = sqlite3.connect(ROOT / "assets/bible/koino-bible-v3.db")
+    reader = sqlite3.connect(ROOT / "assets/bible/koino-bible-v4.db")
     try:
         books = {row[0]: row[1] for row in reader.execute("SELECT id,name FROM books")}
     finally:

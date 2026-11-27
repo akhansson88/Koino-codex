@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 // Keep navigation bounds synchronized with the exact Bible text bundled for reading.
-const database = new DatabaseSync(fileURLToPath(new URL("../assets/bible/koino-bible-v3.db", import.meta.url)), { readOnly: true });
+const database = new DatabaseSync(fileURLToPath(new URL("../assets/bible/koino-bible-v4.db", import.meta.url)), { readOnly: true });
 const destination = new URL("../features/bible-verse-counts.json", import.meta.url);
 try {
   const counts = {};

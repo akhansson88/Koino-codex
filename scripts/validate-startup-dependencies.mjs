@@ -15,9 +15,9 @@ const metroConfig = readFileSync(path.join(projectRoot, "metro.config.js"), "utf
 const powershellLauncher = readFileSync(path.join(projectRoot, "script", "build_and_run.ps1"), "utf8");
 const shellLauncher = readFileSync(path.join(projectRoot, "script", "build_and_run.sh"), "utf8");
 
-assert.equal(packageJson.scripts.start, "expo start", "npm start must preserve Metro's cache and use the normal LAN transport");
-assert.equal(packageJson.scripts["start:tunnel"], "expo start --tunnel", "tunnel mode must not implicitly clear Metro's cache");
-assert.equal(packageJson.scripts["start:clear"], "expo start --clear", "cache clearing should remain an explicit command");
+assert.match(packageJson.scripts.start, /expo start --dev-client$/, "npm start must use the development client without clearing Metro's cache");
+assert.match(packageJson.scripts["start:tunnel"], /expo start --dev-client --tunnel$/, "tunnel mode must not implicitly clear Metro's cache");
+assert.match(packageJson.scripts["start:clear"], /expo start --dev-client --clear$/, "cache clearing should remain an explicit command");
 for (const lifecycleScript of ["prestart", "prestart:lan", "prestart:tunnel", "prestart:clear", "preandroid", "preios"]) {
   assert.equal(packageJson.scripts[lifecycleScript], undefined, `${lifecycleScript} must not regenerate Bible data`);
 }

@@ -10,6 +10,7 @@ const bundle = buildSync({
 });
 const model = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 const {
+  MIRROR_ALIGNMENT_VERSION,
   MIRROR_LIVE_WINDOW_MS,
   followerPath,
   mirrorHighlightsFor,
@@ -36,6 +37,29 @@ const parsed = parseMirrorRecord(base);
 assert.equal(parsed.anchorVerse, 13);
 assert.equal(parsed.anchorOffset, 0.25);
 assert.equal(parsed.verse, 13);
+
+// Compare mode: both translations, the seam ratio and the sync flag survive the
+// round trip. A single-pane record never carries the split-only fields.
+assert.equal(MIRROR_ALIGNMENT_VERSION, 1);
+const splitRecord = parseMirrorRecord({
+  ...base,
+  alignmentVersion: 1,
+  mode: "split",
+  secondaryVersionId: "sfb15",
+  splitRatio: 0.6,
+  splitSync: false,
+});
+assert.equal(splitRecord.mode, "split");
+assert.equal(splitRecord.secondaryVersionId, "sfb15");
+assert.equal(splitRecord.splitRatio, 0.6);
+assert.equal(splitRecord.splitSync, false);
+assert.equal(splitRecord.alignmentVersion, 1);
+assert.equal(parseMirrorRecord({ ...base, mode: "split", splitRatio: 0.2 }).splitRatio, undefined);
+assert.equal(parseMirrorRecord({ ...base, mode: "split", splitRatio: 0.9 }).splitRatio, undefined);
+assert.equal(parseMirrorRecord({ ...base, mode: "split", secondaryVersionId: "x".repeat(61) }).secondaryVersionId, undefined);
+assert.equal(parseMirrorRecord({ ...base, mode: "single", secondaryVersionId: "sfb15" }).secondaryVersionId, undefined);
+assert.equal(parseMirrorRecord({ ...base, mode: "single", splitRatio: 0.5 }).splitRatio, undefined);
+assert.equal(parseMirrorRecord({ ...base, mode: "other" }).mode, undefined);
 
 // A malformed core is ignored rather than rendered.
 for (const broken of [

@@ -48,6 +48,9 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
   if (!value) {
     return {
       bibleVersionId: defaultBibleVersionId,
+      compareEnabled: false,
+      compareRatio: 0.5,
+      compareSync: true,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,
@@ -63,9 +66,19 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
     const bibleVersionId = isBibleVersionId(parsed?.bibleVersionId) ? parsed.bibleVersionId : defaultBibleVersionId;
     const position = normalizeBiblePosition(parsed?.position, bibleVersionId);
     const history = readBibleHistory(parsed?.history, position, bibleVersionId);
+    const compareRatio = typeof parsed?.compareRatio === "number" && Number.isFinite(parsed.compareRatio)
+      ? Math.min(0.65, Math.max(0.35, parsed.compareRatio))
+      : 0.5;
+    const compareSecondaryVersionId = isBibleVersionId(parsed?.compareSecondaryVersionId) && parsed.compareSecondaryVersionId !== bibleVersionId
+      ? parsed.compareSecondaryVersionId
+      : undefined;
     return {
       appTheme: "light",
       bibleVersionId,
+      compareEnabled: parsed?.compareEnabled === true && Boolean(compareSecondaryVersionId),
+      compareRatio,
+      ...(compareSecondaryVersionId ? { compareSecondaryVersionId } : {}),
+      compareSync: typeof parsed?.compareSync === "boolean" ? parsed.compareSync : true,
       fontId: isReaderFontId(parsed?.fontId) ? parsed.fontId : defaultFontId,
       fontSize: normalizeFontSize(parsed?.fontSize),
       position: history.entries[history.index],
@@ -77,6 +90,9 @@ export function parsePreferences(value: string | null): BibleReaderPreferences {
   } catch {
     return {
       bibleVersionId: defaultBibleVersionId,
+      compareEnabled: false,
+      compareRatio: 0.5,
+      compareSync: true,
       fontId: defaultFontId,
       fontSize: defaultFontSize,
       position: defaultPosition,

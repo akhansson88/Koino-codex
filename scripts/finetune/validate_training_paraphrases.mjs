@@ -11,7 +11,7 @@ const benchmark = JSON.parse(readFileSync(path.join(ROOT, "scripts/finetune/narr
 const recallQueries = JSON.parse(readFileSync(path.join(ROOT, "scripts/hybrid-search/recall-queries.json"), "utf8"));
 const recallGold = JSON.parse(readFileSync(path.join(ROOT, "scripts/hybrid-search/recall-gold.json"), "utf8"));
 const search = new DatabaseSync(path.join(ROOT, "assets/bible/search/koino-search-v1.db"), { readOnly: true });
-const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v3.db"), { readOnly: true });
+const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v4.db"), { readOnly: true });
 const books = new Map(reader.prepare("SELECT id,name FROM books").all().map(({ id, name }) => [id, name]));
 const verseAt = search.prepare("SELECT 1 FROM documents WHERE translation_id=1 AND kind='verse' AND book=? AND chapter=? AND start_verse BETWEEN ? AND ? LIMIT 1");
 const failures = [];

@@ -48,13 +48,27 @@ export type BibleDatabaseCrossReferenceRow = {
   votes: number;
 };
 
+export type BibleDatabaseVerseLink = {
+  approximate: boolean;
+  confidence: number;
+  crossChapter: boolean;
+  sourceEnd: number;
+  sourceStart: number;
+  targetChapter: number;
+  targetEnd: number;
+  targetStart: number;
+  targetVerse: number;
+};
+
 const CHAPTER_CACHE_LIMIT = 6;
 const CROSS_REFERENCE_CHAPTER_CACHE_LIMIT = 6;
+const VERSE_LINK_CHAPTER_CACHE_LIMIT = 8;
 
 let database: BibleDatabaseConnection | undefined;
 const activeDatabases = new Map<BibleDatabaseConnection, number>();
 const chapterCache = new Map<string, BibleDatabaseChapter>();
 const crossReferenceChapterCache = new Map<string, Set<number>>();
+const verseLinkChapterCache = new Map<string, Map<number, BibleDatabaseVerseLink[]>>();
 const pendingChapters = new Map<string, Promise<BibleDatabaseChapter>>();
 
 function cacheValue<Key, Value>(cache: Map<Key, Value>, key: Key, value: Value, limit: number) {
@@ -77,13 +91,14 @@ function requireDatabase() {
 
 export async function initializeBibleDatabase(nextDatabase: SQLiteDatabase) {
   const metadata = nextDatabase.getFirstSync<{ user_version: number }>("PRAGMA user_version");
-  if (metadata?.user_version !== 3) {
+  if (metadata?.user_version !== 4) {
     throw new Error(`Unsupported Bible database version: ${metadata?.user_version ?? "unknown"}`);
   }
   await nextDatabase.execAsync("PRAGMA query_only = ON");
   database = nextDatabase;
   chapterCache.clear();
   crossReferenceChapterCache.clear();
+  verseLinkChapterCache.clear();
   pendingChapters.clear();
 }
 
@@ -103,6 +118,7 @@ export function releaseBibleDatabase(releasedDatabase: BibleDatabaseConnection) 
     database = Array.from(activeDatabases.keys()).at(-1);
     chapterCache.clear();
     crossReferenceChapterCache.clear();
+  verseLinkChapterCache.clear();
     pendingChapters.clear();
   }
 }
@@ -113,6 +129,7 @@ export function setBibleDatabaseForTesting(nextDatabase: BibleDatabaseConnection
   database = nextDatabase;
   chapterCache.clear();
   crossReferenceChapterCache.clear();
+  verseLinkChapterCache.clear();
   pendingChapters.clear();
 }
 
@@ -309,6 +326,69 @@ export function queryBibleCrossReferences(book: string, chapter: number, verse: 
     chapter,
     verse,
   );
+}
+
+/**
+ * The split reader's alignment for one chapter, grouped by source verse.
+ * Loaded once per chapter and cached; the scroll path never queries SQLite.
+ */
+export function queryBibleVerseLinks(
+  sourceTranslationId: number,
+  targetTranslationId: number,
+  book: string,
+  chapter: number,
+) {
+  const key = `${sourceTranslationId}>${targetTranslationId}|${book}|${chapter}`;
+  const cached = verseLinkChapterCache.get(key);
+  if (cached) return cacheValue(verseLinkChapterCache, key, cached, VERSE_LINK_CHAPTER_CACHE_LIMIT);
+
+  const rows = requireDatabase().getAllSync<{
+    approximate: number;
+    confidence: number;
+    cross_chapter: number;
+    source_end: number;
+    source_start: number;
+    source_verse: number;
+    target_chapter: number;
+    target_end: number;
+    target_start: number;
+    target_verse: number;
+  }>(
+    `SELECT verse_links.source_verse, verse_links.target_chapter, verse_links.target_verse,
+            verse_links.source_start, verse_links.source_end,
+            verse_links.target_start, verse_links.target_end,
+            verse_links.confidence, verse_links.approximate, verse_links.cross_chapter
+       FROM verse_links
+       JOIN books ON books.id = verse_links.book_id
+      WHERE verse_links.source_translation_id = ?
+        AND verse_links.target_translation_id = ?
+        AND books.name = ?
+        AND verse_links.source_chapter = ?
+      ORDER BY verse_links.source_verse, verse_links.source_start`,
+    sourceTranslationId,
+    targetTranslationId,
+    book,
+    chapter,
+  );
+
+  const grouped = new Map<number, BibleDatabaseVerseLink[]>();
+  for (const row of rows) {
+    const link: BibleDatabaseVerseLink = {
+      approximate: row.approximate === 1,
+      confidence: row.confidence,
+      crossChapter: row.cross_chapter === 1,
+      sourceEnd: row.source_end,
+      sourceStart: row.source_start,
+      targetChapter: row.target_chapter,
+      targetEnd: row.target_end,
+      targetStart: row.target_start,
+      targetVerse: row.target_verse,
+    };
+    const links = grouped.get(row.source_verse);
+    if (links) links.push(link);
+    else grouped.set(row.source_verse, [link]);
+  }
+  return cacheValue(verseLinkChapterCache, key, grouped, VERSE_LINK_CHAPTER_CACHE_LIMIT);
 }
 
 function ftsQuery(value: string) {

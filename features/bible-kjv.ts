@@ -13,7 +13,9 @@ import {
   queryBibleChapterAsync,
   queryBibleCrossReferences,
   queryBibleText,
+  queryBibleVerseLinks,
   queryBibleVerseRangesAsync,
+  type BibleDatabaseVerseLink,
   type BibleDatabaseVerseRange,
   type BibleDatabaseVerseRow,
 } from "@/features/bible-database";
@@ -127,6 +129,15 @@ function bibleChapterFromRows(result: ReturnType<typeof queryBibleChapter>): Bib
 export function bibleChapterVerses(book: string, chapter: number, versionId?: BibleVersionId): BibleChapterVerse[] {
   return bibleChapter(book, chapter, versionId).verses;
 }
+
+/** Cross-translation verse links for one chapter of one translation. */
+export function bibleVerseLinks(book: string, chapter: number, versionId?: BibleVersionId, targetVersionId?: BibleVersionId) {
+  const source = bibleVersionFor(versionId);
+  const target = bibleVersionFor(targetVersionId ?? "kjv");
+  return queryBibleVerseLinks(source.databaseId, target.databaseId, normalizeBibleBookName(book), chapter);
+}
+
+export type { BibleDatabaseVerseLink };
 
 export function bibleCrossReferences(position: BiblePosition, versionId?: BibleVersionId): BibleCrossReference[] {
   return queryBibleCrossReferences(position.book, position.chapter, position.verse)
