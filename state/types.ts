@@ -217,6 +217,11 @@ export type BibleRibbon = {
   lastOpenedAt?: string;
 };
 
+export type BookmarkTombstone = {
+  bookmarkId: Id;
+  deletedAt: string;
+};
+
 export type BiblePassageReference = {
   id?: Id;
   book?: string;
@@ -647,6 +652,7 @@ export type KoinoState = {
   bookmarkCollections: BookmarkCollection[];
   bibleRibbons: BibleRibbon[];
   bookmarksLoaded: boolean;
+  bookmarkOutboxCount: number;
   fasts: Fast[];
   fastsReady: boolean;
   groupFasts: GroupFast[];

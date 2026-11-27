@@ -1,5 +1,7 @@
 import { Feather } from "@expo/vector-icons";
+import { useRef } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 
 import type { ReaderPalette } from "@/features/bible-reader/types";
 import type { BookmarkCollection, BookmarkCollectionColor, SavedVerse } from "@/state/types";
@@ -130,8 +132,10 @@ export function BookmarkChip({
 
 export function BookmarkRow({
   collection,
+  onDelete,
   onLongPress,
   onMore,
+  onMove,
   onPress,
   reference,
   selected,
@@ -139,8 +143,10 @@ export function BookmarkRow({
   verse,
 }: {
   collection?: BookmarkCollection;
+  onDelete: () => void;
   onLongPress: () => void;
   onMore: () => void;
+  onMove: () => void;
   onPress: () => void;
   reference: string;
   selected: boolean;
@@ -149,7 +155,8 @@ export function BookmarkRow({
 }) {
   const { t } = useAppTranslation();
   const color = collection ? bookmarkColor(collection.color) : colors.line;
-  return (
+  const swipeRef = useRef<Swipeable>(null);
+  const content = (
     <Pressable
       accessibilityHint={selectionMode ? undefined : t("bookmarks.rowHint")}
       accessibilityLabel={`${reference}. ${verse.text.slice(0, 100)}${verse.note ? `. ${t("bookmarks.hasNote")}` : ""}${collection ? `. ${collection.name}` : ""}`}
@@ -238,6 +245,58 @@ export function BookmarkRow({
         </Pressable>
       ) : null}
     </Pressable>
+  );
+
+  return (
+    <Swipeable
+      enabled={!selectionMode}
+      overshootRight={false}
+      ref={swipeRef}
+      renderRightActions={() => (
+        <View style={{ flexDirection: "row", gap: 6, paddingLeft: 6 }}>
+          <Pressable
+            accessibilityLabel={t("bookmarks.move")}
+            accessibilityRole="button"
+            onPress={() => {
+              swipeRef.current?.close();
+              onMove();
+            }}
+            style={{
+              alignItems: "center",
+              backgroundColor: colors.accentSubtle,
+              borderRadius: radius.md,
+              justifyContent: "center",
+              minWidth: 76,
+              paddingHorizontal: 10,
+            }}
+          >
+            <Feather name="folder" size={17} color={colors.gold} />
+            <Text style={[typography.label, { color: colors.gold, fontSize: 11 }]}>{t("bookmarks.move")}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel={t("bookmarks.delete")}
+            accessibilityRole="button"
+            onPress={() => {
+              swipeRef.current?.close();
+              onDelete();
+            }}
+            style={{
+              alignItems: "center",
+              backgroundColor: colors.dangerSurface,
+              borderRadius: radius.md,
+              justifyContent: "center",
+              minWidth: 76,
+              paddingHorizontal: 10,
+            }}
+          >
+            <Feather name="trash-2" size={17} color={colors.danger} />
+            <Text style={[typography.label, { color: colors.danger, fontSize: 11 }]}>{t("bookmarks.delete")}</Text>
+          </Pressable>
+        </View>
+      )}
+    >
+      {content}
+    </Swipeable>
   );
 }
 

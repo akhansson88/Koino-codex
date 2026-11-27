@@ -27,6 +27,7 @@ export const policies: Record<string, CollectionPolicy> = {
   savedVerses: { depth: 3, scope: "user", metadata: ["savedAt"] },
   bookmarkCollections: { depth: 3, scope: "user", metadata: ["id", "name", "color", "sortOrder", "createdAt", "updatedAt"] },
   bibleRibbons: { depth: 3, scope: "user", metadata: ["id", "book", "chapter", "verse", "label", "createdAt", "updatedAt", "lastOpenedAt"] },
+  bookmarkTombstones: { depth: 3, scope: "user", metadata: ["bookmarkId", "deletedAt"] },
   bibleHighlights: { depth: 3, scope: "user", metadata: ["createdAt", "updatedAt"] },
   bibleHighlightColors: { depth: 3, scope: "user", metadata: ["id", "createdAt", "updatedAt"] },
   bibleHighlightColorSettings: { depth: 2, scope: "user", metadata: [] },

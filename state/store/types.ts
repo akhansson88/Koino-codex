@@ -93,6 +93,7 @@ export type Action =
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }
   | { type: "updateSavedVerse"; id: Id; patch: { collectionId?: Id | null; note?: string } }
+  | { type: "touchSavedVerse"; id: Id }
   | { type: "moveSavedVerses"; ids: Id[]; collectionId: Id | null }
   | { type: "removeSavedVerses"; ids: Id[] }
   | { type: "createBookmarkCollection"; name: string; color: BookmarkCollectionColor }

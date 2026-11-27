@@ -26,6 +26,7 @@ export function BiblePlanReaderPanel({
   markers,
   onJump,
   onMarkRead,
+  onSaveDay,
   onSelectPlan,
   onSelectDay,
   palette,
@@ -36,6 +37,7 @@ export function BiblePlanReaderPanel({
   markers: BiblePlanMarker[];
   onJump: () => void;
   onMarkRead: () => Promise<void>;
+  onSaveDay?: () => void;
   onSelectPlan: (id: string) => void;
   onSelectDay: (dayNumber: number) => void;
   palette: ReaderPalette;
@@ -235,6 +237,26 @@ export function BiblePlanReaderPanel({
               </Text>
             </Pressable>
           </View>
+
+          {day?.ranges?.length && onSaveDay ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onSaveDay}
+              style={{
+                alignItems: "center",
+                borderColor: palette.line,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                flexDirection: "row",
+                gap: 7,
+                justifyContent: "center",
+                minHeight: 42,
+              }}
+            >
+              <Feather name="bookmark" size={15} color={palette.accent} />
+              <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "900" }}>{t("bible.plans.reader.saveDay")}</Text>
+            </Pressable>
+          ) : null}
 
           {authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{authError}</Text> : null}
         </View>

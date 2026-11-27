@@ -218,6 +218,7 @@ const PRIVATE_ACCOUNT_PATHS = [
   "savedVerses",
   "bookmarkCollections",
   "bibleRibbons",
+  "bookmarkTombstones",
   "bibleHighlights",
   "bibleHighlightColors",
   "bibleHighlightColorSettings",

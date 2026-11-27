@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, FlatList, Keyboard, Pressable, ScrollView, StyleSheet, Text, View, type ViewToken } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +16,8 @@ import { type ReaderPalette } from "@/features/bible-reader/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius } from "@/ui/theme";
 import type { BibleVerse } from "@/state/types";
+import { useKoinoFields } from "@/state/koino-store";
+import { bookmarkMatchesQuery, sortBookmarks } from "@/state/bookmarks";
 import { SheetTextInput } from "@/ui/app-sheet";
 
 const topics = ["anxiety", "hope", "forgiveness", "identity", "loneliness", "purpose", "prayer"] as const;
@@ -221,6 +224,12 @@ function ScriptureSearchView({
   const audio = useBibleAudio();
   const insets = useSafeAreaInsets();
   const results = search.response.results;
+  const { savedVerses } = useKoinoFields(["savedVerses"]);
+  const bookmarkMatches = useMemo(() => {
+    const normalized = query.trim();
+    if (!normalized) return [];
+    return sortBookmarks(savedVerses.filter((verse) => bookmarkMatchesQuery(verse, normalized)), "recent").slice(0, 3);
+  }, [query, savedVerses]);
   const studyResults = !search.loading && !search.error && results.length > 0 ? (search.studyResults ?? []) : [];
   const [inputFocused, setInputFocused] = useState(false);
   const [expandedStudy, setExpandedStudy] = useState<number | undefined>(undefined);
@@ -444,6 +453,41 @@ function ScriptureSearchView({
         {search.error ? <View accessibilityLiveRegion="polite" style={{ gap: 8 }}>
           <Text style={{ color: palette.muted }}>{t("shared.scripturePicker.searchError")}</Text>
           <Pressable accessibilityRole="button" onPress={search.retry} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: palette.accent, fontWeight: "700" }}>{t("bible.search.retry")}</Text></Pressable>
+        </View> : null}
+        {bookmarkMatches.length && !search.error ? <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, padding: 14, gap: 10 }}>
+          <Text style={{ color: palette.text, fontSize: 16, fontWeight: "800" }}>{t("bible.search.bookmarks.title")}</Text>
+          {bookmarkMatches.map((verse) => {
+            const matchReference = displayBibleReference(verse.reference, language, verse.translation);
+            return (
+              <Pressable
+                accessibilityLabel={t("bible.navigator.openPassage", { reference: matchReference })}
+                accessibilityRole="button"
+                key={verse.id}
+                onPress={() => onSelect({
+                  book: verse.book,
+                  chapter: verse.chapter,
+                  startVerse: verse.startVerse,
+                  endVerse: verse.endVerse,
+                  reference: verse.reference,
+                  text: verse.text,
+                  translation: verse.translation,
+                  contextBefore: verse.contextBefore,
+                  contextAfter: verse.contextAfter,
+                })}
+                style={({ pressed }) => ({ gap: 3, minHeight: 44, opacity: pressed ? 0.65 : 1, paddingVertical: 3 })}
+              >
+                <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+                  <Feather name="bookmark" size={14} color={palette.accent} />
+                  <Text style={{ color: palette.accent, flex: 1, fontSize: 13, fontWeight: "800" }}>{matchReference}</Text>
+                  {verse.note ? <Feather name="edit-3" size={12} color={palette.muted} /> : null}
+                </View>
+                <Text numberOfLines={2} style={{ color: palette.text, fontSize: 14, lineHeight: 20 }}>{verse.text}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable accessibilityRole="button" onPress={() => router.push("/bookmarks" as never)} style={{ minHeight: 38, justifyContent: "center" }}>
+            <Text style={{ color: palette.accent, fontSize: 12, fontWeight: "700" }}>{t("bible.search.bookmarks.viewAll")}</Text>
+          </Pressable>
         </View> : null}
         {studyResults.length && !search.error ? <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderWidth: 1, borderRadius: radius.lg, padding: 16, gap: 12 }}>
           <Text style={{ color: palette.text, fontSize: 17, fontWeight: "800" }}>{t("bible.search.study.title")}</Text>

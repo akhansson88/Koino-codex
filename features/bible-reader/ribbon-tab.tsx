@@ -5,6 +5,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { displayBibleReference } from "@/features/bible-book-names";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import type { BibleRibbon } from "@/state/types";
+import type { BiblePosition } from "@/features/bible-canon";
 import { BottomSheet, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
@@ -72,20 +73,24 @@ export function BibleRibbonSheet({
   currentId,
   onClose,
   onContinue,
+  onContinuePosition,
   onMove,
   onRemove,
   onRename,
   onSet,
+  recentPlaces,
   ribbons,
   visible,
 }: {
   currentId?: string;
   onClose: () => void;
   onContinue: (ribbon: BibleRibbon) => void;
+  onContinuePosition: (position: BiblePosition) => void;
   onMove: (id: string) => void;
   onRemove: (id: string) => void;
   onRename: (id: string, label: string) => void;
   onSet: () => void;
+  recentPlaces: BiblePosition[];
   ribbons: BibleRibbon[];
   visible: boolean;
 }) {
@@ -204,6 +209,37 @@ export function BibleRibbonSheet({
 
         {!ribbons.length ? (
           <Text style={[typography.body, { color: colors.muted }]}>{t("ribbons.setHere")}</Text>
+        ) : null}
+
+        {recentPlaces.length ? (
+          <View style={{ gap: 6, paddingTop: 4 }}>
+            <Text style={[typography.label, { color: colors.muted }]}>{t("ribbons.recent")}</Text>
+            {recentPlaces.map((place) => {
+              const reference = displayBibleReference(`${place.book} ${place.chapter}:${place.verse}`, bookLanguage);
+              return (
+                <Pressable
+                  accessibilityLabel={`${reference}. ${t("ribbons.continue")}`}
+                  accessibilityRole="button"
+                  key={`${place.book}:${place.chapter}:${place.verse}`}
+                  onPress={() => onContinuePosition(place)}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    backgroundColor: pressed ? shadcn.secondary : "transparent",
+                    borderBottomColor: colors.line,
+                    borderBottomWidth: 1,
+                    flexDirection: "row",
+                    gap: 9,
+                    minHeight: 48,
+                    paddingHorizontal: 2,
+                  })}
+                >
+                  <Feather name="clock" size={14} color={colors.muted} />
+                  <Text numberOfLines={1} style={[typography.body, { color: colors.ink, flex: 1 }]}>{reference}</Text>
+                  <Feather name="corner-up-right" size={15} color={colors.gold} />
+                </Pressable>
+              );
+            })}
+          </View>
         ) : null}
 
         <View style={{ gap: 8, paddingTop: 4 }}>

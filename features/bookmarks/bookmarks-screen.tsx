@@ -42,7 +42,7 @@ export function BookmarksScreen() {
   const { t } = useAppTranslation();
   const bookLanguage = useBibleBookLanguage();
   const { dispatch } = useKoinoActions();
-  const state = useKoinoFields(["bookmarkCollections", "bibleRibbons", "bookmarksLoaded", "currentUserId", "savedVerses"]);
+  const state = useKoinoFields(["bookmarkCollections", "bookmarkOutboxCount", "bibleRibbons", "bookmarksLoaded", "currentGroupId", "currentUserId", "savedVerses"]);
   const insets = useSafeAreaInsets();
   useTheme();
 
@@ -139,6 +139,7 @@ export function BookmarksScreen() {
 
   const openVerse = useCallback((verse: SavedVerse) => {
     setSheetVerse(undefined);
+    void dispatch({ type: "touchSavedVerse", id: verse.id });
     if (!verse.book || !verse.chapter || !verse.startVerse) {
       router.push("/(tabs)/bible" as never);
       return;
@@ -164,6 +165,50 @@ export function BookmarksScreen() {
       },
     } as never);
   }, [dispatch]);
+
+  const openJournal = useCallback((verse: SavedVerse, kind: "scripture" | "prayer_request") => {
+    setSheetVerse(undefined);
+    router.push({
+      pathname: "/(tabs)/me",
+      params: {
+        newEntry: `${Date.now()}`,
+        composeKind: kind,
+        composeTitle: referenceFor(verse),
+        verseBook: verse.book,
+        verseChapter: String(verse.chapter),
+        verseStart: String(verse.startVerse),
+        verseEnd: String(verse.endVerse ?? verse.startVerse),
+        verseReference: verse.reference,
+        verseText: verse.text,
+        verseTranslation: verse.translation,
+      },
+    } as never);
+  }, [referenceFor]);
+
+  const shareToCommunity = useCallback((verse: SavedVerse) => {
+    if (!state.currentGroupId) {
+      Alert.alert(t("bookmarks.communityUnavailableTitle"), t("bookmarks.communityUnavailableBody"));
+      return;
+    }
+    setSheetVerse(undefined);
+    void dispatch({
+      type: "createPost",
+      body: t("bookmarks.shareBody"),
+      kind: "scripture",
+      title: referenceFor(verse),
+      verse: {
+        book: verse.book,
+        chapter: verse.chapter,
+        startVerse: verse.startVerse,
+        endVerse: verse.endVerse,
+        reference: verse.reference,
+        text: verse.text,
+        translation: verse.translation,
+        contextBefore: verse.contextBefore,
+        contextAfter: verse.contextAfter,
+      },
+    }).then(() => setToast(t("bookmarks.shared")));
+  }, [dispatch, referenceFor, state.currentGroupId, t]);
 
   const toggleSelected = useCallback((id: string) => {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -312,6 +357,13 @@ export function BookmarksScreen() {
         </View>
       ) : null}
 
+      {state.bookmarkOutboxCount > 0 ? (
+        <View style={{ alignItems: "center", backgroundColor: colors.accentSubtle, borderColor: colors.line, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: 7, marginBottom: 8, marginHorizontal: 20, minHeight: 34, paddingHorizontal: 12 }}>
+          <Feather name="cloud-off" size={14} color={colors.gold} />
+          <Text style={[typography.caption, { color: colors.gold, fontSize: 12 }]}>{t("bookmarks.sync.pending")}</Text>
+        </View>
+      ) : null}
+
       <FlatList
         contentContainerStyle={{ gap: 8, paddingBottom: selectionMode ? 140 : 40, paddingHorizontal: 20 }}
         data={visible}
@@ -416,8 +468,13 @@ export function BookmarksScreen() {
         renderItem={({ item }) => (
           <BookmarkRow
             collection={collections.find((collection) => collection.id === item.collectionId)}
+            onDelete={() => deleteOne(item)}
             onLongPress={() => toggleSelected(item.id)}
             onMore={() => setSheetVerse(item)}
+            onMove={() => {
+              setSelectedIds([item.id]);
+              setMoveVisible(true);
+            }}
             onPress={() => selectionMode ? toggleSelected(item.id) : setSheetVerse(item)}
             reference={referenceFor(item)}
             selected={selectedIds.includes(item.id)}
@@ -458,6 +515,9 @@ export function BookmarksScreen() {
         onCreateCollection={openNewCollection}
         onDelete={deleteOne}
         onOpen={openVerse}
+        onPray={(verse) => openJournal(verse, "prayer_request")}
+        onReflect={(verse) => openJournal(verse, "scripture")}
+        onShareToCommunity={shareToCommunity}
         onUpdate={(id, patch) => { void dispatch({ type: "updateSavedVerse", id, patch }); }}
         reference={sheetVerse ? referenceFor(sheetVerse) : ""}
         verse={sheetVerse}

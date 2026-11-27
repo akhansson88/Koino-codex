@@ -2201,6 +2201,22 @@ export function BibleScreen() {
             markers={pagePlanMarkers[chapterKey] ?? []}
             onJump={jumpToSelectedPlanDay}
             onMarkRead={toggleSelectedPlanDay}
+            onSaveDay={() => {
+              const ranges = selectedPlanCurrentDay?.day?.ranges ?? [];
+              const verses = ranges
+                .map((range) => buildBibleVerse(
+                  range.start.book,
+                  range.start.chapter,
+                  range.start.verse,
+                  range.end.chapter === range.start.chapter ? range.end.verse : range.start.verse,
+                  bibleVersionId,
+                ))
+                .filter((verse): verse is BibleVerse => Boolean(verse));
+              if (!verses.length) return;
+              void Promise.all(verses.map((verse) => dispatch({ type: "saveVerse", verse })))
+                .then(() => setReaderToast({ message: t("bible.plans.reader.savedDay"), tone: "success" }))
+                .catch(() => setReaderToast({ message: t("bible.plans.reader.saveDayError"), tone: "error" }));
+            }}
             onSelectPlan={(id) => { setSelectedPlanId(id); setSelectedPlanDayNumber(undefined); }}
             onSelectDay={(dayNumber) => {
               const day = selectedPlan?.days.find((item) => item.dayNumber === dayNumber);
@@ -2589,10 +2605,18 @@ export function BibleScreen() {
         currentId={ribbonAtPosition?.id}
         onClose={() => setRibbonSheetVisible(false)}
         onContinue={continueRibbon}
+        onContinuePosition={(nextPosition) => {
+          setRibbonSheetVisible(false);
+          jumpToPosition(nextPosition, { highlight: true });
+        }}
         onMove={moveRibbonHere}
         onRemove={removeRibbon}
         onRename={(id, label) => { void dispatch({ type: "renameBibleRibbon", id, label }); }}
         onSet={() => { setRibbonSheetVisible(false); void setRibbonHere(); }}
+        recentPlaces={history.entries
+          .filter((place) => place.book !== position.book || place.chapter !== position.chapter || place.verse !== position.verse)
+          .slice(-3)
+          .reverse()}
         ribbons={state.bibleRibbons}
         visible={ribbonSheetVisible}
       />

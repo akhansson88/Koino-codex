@@ -16,6 +16,9 @@ export function BookmarkSheet({
   onCreateCollection,
   onDelete,
   onOpen,
+  onPray,
+  onReflect,
+  onShareToCommunity,
   onUpdate,
   reference,
   verse,
@@ -25,6 +28,9 @@ export function BookmarkSheet({
   onCreateCollection: () => void;
   onDelete: (verse: SavedVerse) => void;
   onOpen: (verse: SavedVerse) => void;
+  onPray: (verse: SavedVerse) => void;
+  onReflect: (verse: SavedVerse) => void;
+  onShareToCommunity: (verse: SavedVerse) => void;
   onUpdate: (id: string, patch: { collectionId?: string | null; note?: string }) => void;
   reference: string;
   verse?: SavedVerse;
@@ -135,6 +141,12 @@ export function BookmarkSheet({
           </SecondaryButton>
         </View>
 
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <ActionPill icon="users" label={t("bookmarks.shareCommunity")} onPress={() => onShareToCommunity(verse)} />
+          <ActionPill icon="heart" label={t("bookmarks.pray")} onPress={() => onPray(verse)} />
+          <ActionPill icon="edit-3" label={t("bookmarks.reflect")} onPress={() => onReflect(verse)} />
+        </View>
+
         <View style={{ gap: 8 }}>
           <Text style={[typography.label, { color: colors.muted }]}>{t("bookmarks.listen")}</Text>
           <SavedVerseAudioControl palette={palette} reference={reference} verse={verse} />
@@ -223,6 +235,30 @@ export function BookmarkSheet({
         </Pressable>
       </View>
     </BottomSheet>
+  );
+}
+
+function ActionPill({ icon, label, onPress }: { icon: "users" | "heart" | "edit-3"; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        backgroundColor: pressed ? shadcn.secondary : colors.paper,
+        borderColor: colors.line,
+        borderRadius: 999,
+        borderWidth: 1,
+        flexDirection: "row",
+        gap: 6,
+        minHeight: 38,
+        paddingHorizontal: 12,
+      })}
+    >
+      <Feather name={icon} size={14} color={colors.gold} />
+      <Text style={[typography.label, { color: colors.ink }]}>{label}</Text>
+    </Pressable>
   );
 }
 

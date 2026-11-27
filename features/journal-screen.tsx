@@ -75,7 +75,18 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     if (!state.prayerNotifications.some((item) => !item.readAt)) return;
     void dispatch({ type: "markAllPrayerNotificationsRead" }).catch(() => undefined);
   }, [dispatch, state.prayerNotifications]);
-  const params = useLocalSearchParams<{ newEntry?: string }>();
+  const params = useLocalSearchParams<{
+    newEntry?: string;
+    composeKind?: string;
+    composeTitle?: string;
+    verseBook?: string;
+    verseChapter?: string;
+    verseStart?: string;
+    verseEnd?: string;
+    verseReference?: string;
+    verseText?: string;
+    verseTranslation?: string;
+  }>();
   const [draft, setDraft] = useState<symbol>();
   const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
   const [audience, setAudience] = useState<DraftAudience>();
@@ -187,7 +198,24 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     if (!params.newEntry || params.newEntry === lastNewEntryParamRef.current) return;
     lastNewEntryParamRef.current = params.newEntry;
     beginEntry();
-  }, [params.newEntry]);
+    const kind = params.composeKind;
+    if (kind === "scripture" || kind === "reflection" || kind === "prayer_request") setEntryKind(kind);
+    if (params.composeTitle) setTitle(params.composeTitle);
+    const chapter = Number(params.verseChapter);
+    const startVerse = Number(params.verseStart);
+    const endVerse = Number(params.verseEnd ?? params.verseStart);
+    if (params.verseBook && Number.isInteger(chapter) && Number.isInteger(startVerse)) {
+      setVerses([{
+        book: params.verseBook,
+        chapter,
+        startVerse,
+        endVerse: Number.isInteger(endVerse) ? endVerse : startVerse,
+        reference: params.verseReference ?? params.verseBook,
+        text: params.verseText ?? "",
+        translation: params.verseTranslation,
+      }]);
+    }
+  }, [params.composeKind, params.composeTitle, params.newEntry, params.verseBook, params.verseChapter, params.verseEnd, params.verseReference, params.verseStart, params.verseText, params.verseTranslation]);
 
   return (
     <AppScreen topInset={false}>
