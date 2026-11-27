@@ -1114,13 +1114,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   }, [firebaseUser?.uid, personalHistoryUid]);
 
   useEffect(() => {
-    if (!firebaseUser?.uid || !bookmarksLoaded) return;
+    if (!firebaseUser?.uid) return;
+    const hasLocalBookmarkState = savedVerses.length > 0 || bookmarkCollections.length > 0 || bibleRibbons.length > 0;
+    if (!bookmarksLoaded && !(bookmarkOutboxCountState > 0 && hasLocalBookmarkState)) return;
     void writeBookmarkCache(firebaseUser.uid, {
       bookmarks: savedVerses,
       collections: bookmarkCollections,
       ribbons: bibleRibbons,
     });
-  }, [bibleRibbons, bookmarkCollections, bookmarksLoaded, firebaseUser?.uid, savedVerses]);
+  }, [bibleRibbons, bookmarkCollections, bookmarkOutboxCountState, bookmarksLoaded, firebaseUser?.uid, savedVerses]);
 
   useEffect(() => {
     if (!Object.keys(bookmarkTombstones).length) return;

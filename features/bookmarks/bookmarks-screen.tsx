@@ -84,7 +84,7 @@ export function BookmarksScreen() {
   }, [state.currentUserId]);
 
   useEffect(() => {
-    if (!state.currentUserId || state.bookmarksLoaded || state.savedVerses.length > 0) return;
+    if (!state.currentUserId || state.bookmarksLoaded) return;
     let active = true;
     void readBookmarkCache(state.currentUserId).then((snapshot) => {
       if (!active || !snapshot) return;
@@ -97,7 +97,7 @@ export function BookmarksScreen() {
     return () => {
       active = false;
     };
-  }, [state.bookmarksLoaded, state.currentUserId, state.savedVerses.length]);
+  }, [state.bookmarksLoaded, state.currentUserId]);
 
   useEffect(() => {
     if (!state.currentUserId || !sortReady) return;
@@ -110,9 +110,16 @@ export function BookmarksScreen() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const bookmarks = state.bookmarksLoaded ? state.savedVerses : cache.bookmarks;
-  const collections = state.bookmarksLoaded ? state.bookmarkCollections : cache.collections;
-  const ribbons = state.bookmarksLoaded ? state.bibleRibbons : cache.ribbons;
+  const mergedBookmarks = new Map(cache.bookmarks.map((verse) => [verse.id, verse]));
+  for (const verse of state.savedVerses) mergedBookmarks.set(verse.id, verse);
+  const mergedCollections = new Map(cache.collections.map((collection) => [collection.id, collection]));
+  for (const collection of state.bookmarkCollections) mergedCollections.set(collection.id, collection);
+  const mergedRibbons = new Map(cache.ribbons.map((ribbon) => [ribbon.id, ribbon]));
+  for (const ribbon of state.bibleRibbons) mergedRibbons.set(ribbon.id, ribbon);
+
+  const bookmarks = state.bookmarksLoaded ? state.savedVerses : [...mergedBookmarks.values()];
+  const collections = state.bookmarksLoaded ? state.bookmarkCollections : [...mergedCollections.values()];
+  const ribbons = state.bookmarksLoaded ? state.bibleRibbons : [...mergedRibbons.values()];
   const selectionMode = selectedIds.length > 0;
 
   const collectionCounts = useMemo(() => Object.fromEntries(
