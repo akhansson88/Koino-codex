@@ -1200,13 +1200,16 @@ export function BibleScreen() {
       return;
     }
     if (!record.secondaryVersionId || !isBibleVersionId(record.secondaryVersionId)) return;
+    if (record.versionId && isBibleVersionId(record.versionId) && record.versionId !== bibleVersionId) {
+      setBibleVersionId(record.versionId);
+    }
     if (!splitMode) setSplitMode(true);
     if (splitSecondaryVersionId !== record.secondaryVersionId) setSplitSecondaryVersionId(record.secondaryVersionId);
     const nextRatio = record.splitRatio ?? 0.5;
     if (splitRatio !== nextRatio) setSplitRatio(nextRatio);
     const nextSync = record.splitSync ?? true;
     if (splitSyncEnabled !== nextSync) setSplitSyncEnabled(nextSync);
-  }, [mirror.record, mirrorSession, splitMode, splitRatio, splitSecondaryVersionId, splitSyncEnabled]);
+  }, [bibleVersionId, mirror.record, mirrorSession, splitMode, splitRatio, splitSecondaryVersionId, splitSyncEnabled]);
 
   const scrollMirrorTo = useCallback((record: MirrorRecord) => {
     if (!mirrorSession || mirrorPaused) return false;
@@ -2157,7 +2160,6 @@ export function BibleScreen() {
           ratio={splitRatio}
           readerLineHeight={readerLineHeight}
           readerTextStyle={readerTextStyle}
-          readOnly={Boolean(mirrorSession)}
           readingMarkersByVerse={readingMarkersByVerse}
           secondaryVersionId={splitSecondaryVersionId}
           selectedVerseNumbers={selectedVerseNumbers}

@@ -53,7 +53,6 @@ type Props = {
   onVersePressIn: () => void;
   palette: ReaderPalette;
   position: BiblePosition;
-  readOnly: boolean;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
   readingMarkersByVerse?: Record<number, ReadingMarker[]>;
@@ -99,7 +98,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   onVersePressIn,
   palette,
   position,
-  readOnly,
   readerLineHeight,
   readerTextStyle,
   readingMarkersByVerse,
@@ -346,11 +344,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
         </View>
       </ScrollView>
 
-      {readOnly ? (
-        <View pointerEvents="none" style={{ bottom: 8, left: 0, position: "absolute", right: 0 }}>
-          <Text style={{ color: palette.muted, fontSize: 10, textAlign: "center" }}>{t("bible.compare.readOnly")}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }));

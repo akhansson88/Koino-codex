@@ -47,7 +47,6 @@ export type SplitReaderProps = {
   ratio: number;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
-  readOnly: boolean;
   readingMarkersByVerse?: Record<number, ReadingMarker[]>;
   secondaryVersionId: BibleVersionId;
   selectedVerseNumbers: number[];
@@ -106,7 +105,6 @@ export function SplitReader({
   ratio,
   readerLineHeight,
   readerTextStyle,
-  readOnly,
   readingMarkersByVerse,
   secondaryVersionId,
   selectedVerseNumbers,
@@ -471,7 +469,6 @@ export function SplitReader({
           onVersePressIn={onVersePressIn}
           palette={palette}
           position={position}
-          readOnly={readOnly}
           readerLineHeight={readerLineHeight}
           readerTextStyle={readerTextStyle}
           readingMarkersByVerse={readingMarkersByVerse}
@@ -529,7 +526,6 @@ export function SplitReader({
           onVersePressIn={onVersePressIn}
           palette={palette}
           position={position}
-          readOnly={readOnly}
           readerLineHeight={readerLineHeight}
           readerTextStyle={readerTextStyle}
           ref={secondaryPaneRef}
