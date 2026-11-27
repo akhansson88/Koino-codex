@@ -141,6 +141,9 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
   translations together) and springs to the next chapter with the same animation, header
   crossfade and haptic tick as the single reader. The bottom controls call the split
   pager's `step()` rather than jumping, so buttons and swipes behave identically.
+  Swipes that start on a pane header stay in the header: the version pill, reference,
+  sync, close and boundary hint run their own pan that blocks the pager, so opening or
+  tapping those menus never turns the page.
 - **Exit:** `×` on the secondary pane header, or the menu row again. The primary pane
   remains where it is, single-pane.
 

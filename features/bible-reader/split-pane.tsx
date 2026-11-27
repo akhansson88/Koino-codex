@@ -378,8 +378,17 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
       </ScrollView>
   );
 
-  return (
-    <View style={{ backgroundColor: palette.background, flex: 1, minHeight: 0 }}>
+  const headerPan = useMemo(
+    () => pan ? Gesture.Pan().blocksExternalGesture(pan) : undefined,
+    [pan],
+  );
+
+  // Horizontal swipes that start on the pane header belong to its buttons and
+  // menus, not to the chapter pager. The header pan blocks the shared pager
+  // until it fails, so a swipe over the KJV/SRB26 pill, sync, close or the
+  // boundary hint never turns the page. Taps still reach the buttons.
+  const headerContent = (
+    <View collapsable={false}>
       <View style={{
         alignItems: "center",
         borderBottomColor: palette.line,
@@ -440,6 +449,12 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
           <Text numberOfLines={1} style={{ color: palette.accent, flex: 1, fontSize: 10, fontWeight: "800" }}>{boundaryHint}</Text>
         </Pressable>
       ) : null}
+    </View>
+  );
+
+  return (
+    <View style={{ backgroundColor: palette.background, flex: 1, minHeight: 0 }}>
+      {headerPan ? <GestureDetector gesture={headerPan}>{headerContent}</GestureDetector> : headerContent}
       {nativeScroll
         ? <GestureDetector gesture={nativeScroll}>{scrollView}</GestureDetector>
         : scrollView}
