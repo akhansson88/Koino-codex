@@ -849,7 +849,7 @@ export function BibleScreen() {
   }, [state.currentUserId, storageKey]);
 
   useEffect(() => {
-    if (!storageKey || !preferencesReady) return;
+    if (!storageKey || !preferencesReady || mirrorSession) return;
 
     const sync = readerPreferencesSyncRef.current;
     if (sync.userId !== state.currentUserId) return;
@@ -912,7 +912,7 @@ export function BibleScreen() {
     const timeout = scheduleCloudSave(pendingSave);
 
     return () => clearTimeout(timeout);
-  }, [bibleVersionId, fontId, fontSize, flowingParagraphText, history, position, preferencesReady, showVerseNumbers, splitMode, splitRatio, splitSecondaryVersionId, splitSyncEnabled, state.currentUserId, storageKey]);
+  }, [bibleVersionId, fontId, fontSize, flowingParagraphText, history, mirrorSession, position, preferencesReady, showVerseNumbers, splitMode, splitRatio, splitSecondaryVersionId, splitSyncEnabled, state.currentUserId, storageKey]);
 
   useEffect(() => {
     return () => {
