@@ -45,6 +45,10 @@ assert.equal(fastDurationProblem("dry", 1, 24), null);
 assert.equal(fastDurationProblem("dry", 1, 25), "duration");
 assert.equal(fastDurationProblem("water", 1, 73), "duration");
 assert.equal(fastDurationProblem("water", 1, 72), null);
+assert.equal(fastDurationProblem("custom", 7, 168), null);
+const legacyWeek = buildFastPlan({ mode: "custom", startDate: "2026-11-23", startTime: "00:00", durationDays: 7, durationHours: 168 });
+assert.equal(new Date(legacyWeek.endAt).getTime() - new Date(legacyWeek.startAt).getTime(), 7 * 24 * 3_600_000);
+assert.equal(legacyWeek.durationDays, 7);
 
 const daily = buildFastPlan({
   mode: "if_16_8",

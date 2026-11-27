@@ -55,7 +55,10 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
   const [startDate, setStartDate] = useState(() => initial?.startDate ?? localDayKey(new Date()));
   const [startTime, setStartTime] = useState(() => initial?.schedule.kind === "weekly" ? initial.schedule.startTime : "00:00");
   const [durationDays, setDurationDays] = useState(() => initial?.durationDays ?? config.defaultDurationDays);
-  const [durationHours, setDurationHours] = useState(() => initial?.durationHours ?? config.defaultDurationHours ?? 24);
+  const [durationHours, setDurationHours] = useState(() => initial?.durationHours
+    ?? (initial?.schedule.kind === "continuous"
+      ? Math.max(1, Math.round((Date.parse(initial.endAt) - Date.parse(initial.startAt)) / 3_600_000))
+      : config.defaultDurationHours ?? 24));
   const [schedule, setSchedule] = useState<FastSchedule>(() => initial?.schedule ? cloneSchedule(initial.schedule) : defaultFastSchedule(mode));
   const [alertEnabled, setAlertEnabled] = useState(initial?.alertEnabled ?? true);
   const [shareWithGroup, setShareWithGroup] = useState(initial?.visibility === "group");
@@ -67,7 +70,10 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
     setStartDate(initial?.startDate ?? localDayKey(new Date()));
     setStartTime(initial?.schedule.kind === "weekly" ? initial.schedule.startTime : "00:00");
     setDurationDays(initial?.durationDays ?? config.defaultDurationDays);
-    setDurationHours(initial?.durationHours ?? config.defaultDurationHours ?? 24);
+    setDurationHours(initial?.durationHours
+      ?? (initial?.schedule.kind === "continuous"
+        ? Math.max(1, Math.round((Date.parse(initial.endAt) - Date.parse(initial.startAt)) / 3_600_000))
+        : config.defaultDurationHours ?? 24));
     setSchedule(initial?.schedule ? cloneSchedule(initial.schedule) : defaultFastSchedule(mode));
     setAlertEnabled(initial?.alertEnabled ?? true);
     setShareWithGroup(initial?.visibility === "group" || Boolean(defaultShare && !initial));
@@ -86,15 +92,21 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
   const durationChoices = useMemo(() => {
     if (family === "continuous") {
       const max = config.maxDurationHours ?? 72;
-      return [12, 16, 24, 36, 48, 72].filter((hours) => hours <= max);
+      const choices = [12, 16, 24, 36, 48, 72].filter((hours) => hours <= max);
+      if (durationHours > 0 && !choices.includes(durationHours)) choices.push(durationHours);
+      return choices.sort((left, right) => left - right);
     }
     if (family === "weekly") return [14, 28, 42];
     if (mode === "daniel") return [10, 21];
     if (mode === "until_1800") return [1, 3, 7, 14, 21];
     return [7, 14, 21, 30, 42];
-  }, [config.maxDurationHours, family, mode]);
+  }, [config.maxDurationHours, durationHours, family, mode]);
 
-  const needsSafety = mode === "dry" || (family === "continuous" && durationHours > 48);
+  const needsSafety = mode === "dry" || (family === "continuous" && durationHours > 48 && !(
+    initial
+    && (initial.durationHours ?? Math.round((Date.parse(initial.endAt) - Date.parse(initial.startAt)) / 3_600_000)) === durationHours
+    && !initial.safetyAcceptedAt
+  ));
   const scheduleProblem = fastScheduleProblem(schedule);
   const durationProblem = fastDurationProblem(mode, durationDays, durationHours);
   const plan = useMemo(() => {
@@ -318,15 +330,22 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
                     }}
                   >
                     <Text style={[typography.label, { color: active ? shadcn.primaryForeground : colors.ink }]}>
-                      {t("fasting.setup.hours", { count: value })}
+                      {value >= 24 && value % 24 === 0
+                        ? value === 24
+                          ? t("fasting.setup.day")
+                          : t("fasting.setup.days", { count: value / 24 })
+                        : t("fasting.setup.hours", { count: value })}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
             <Text style={[typography.caption, { color: colors.muted }]}>
-              {t("fasting.setup.durationHintHours", { max: config.maxDurationHours ?? 72 })}
+              {t("fasting.setup.durationHintHours", { max: Math.min(config.maxDurationHours ?? 72, 72) })}
             </Text>
+            {durationHours > 72 ? (
+              <Text style={[typography.caption, { color: colors.muted }]}>{t("fasting.setup.legacyHint")}</Text>
+            ) : null}
           </View>
         </>
       ) : null}

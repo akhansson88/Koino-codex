@@ -180,8 +180,8 @@ export const fastModeConfigs: Record<FastMode, FastModeConfig> = {
     detailKey: "fasting.mode.custom.detail",
     defaultDurationDays: 1,
     defaultDurationHours: 24,
-    maxDurationDays: 3,
-    maxDurationHours: 72,
+    maxDurationDays: 365,
+    maxDurationHours: 8760,
     defaultSchedule: { kind: "continuous" },
   },
 };
