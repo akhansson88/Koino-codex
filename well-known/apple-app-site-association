@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8Y4D77XWFB.com.akhansson.koino",
+        "paths": [
+          "/join",
+          "/join/",
+          "/join/*"
+        ]
+      }
+    ]
+  }
+}

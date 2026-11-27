@@ -1,0 +1,12 @@
+<IfModule mod_headers.c>
+  Header always set Content-Type "application/json"
+  Header always set Cache-Control "public, max-age=300"
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+<IfModule mod_mime.c>
+  AddType application/json .json
+</IfModule>
+<Files "apple-app-site-association">
+  ForceType application/json
+</Files>
+Options -Indexes

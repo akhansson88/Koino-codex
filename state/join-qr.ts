@@ -1,8 +1,9 @@
 // The QR carries only the community invite code, never a group id, name or
-// member data. The server resolves the code, so a screenshot of the QR leaks no
-// more than the code that is already printed in the room.
+// member data. The HTTPS link is the one QR payload: it opens the app through
+// Universal Links / App Links when installed, and otherwise reaches the
+// invite page that offers the app and the code.
 export const JOIN_LINK_PREFIX = "koino://join?code=";
-export const JOIN_HTTPS_PREFIX = "https://koinolabs.com/join";
+export const JOIN_HTTPS_PREFIX = "https://koinolabs.com/join/";
 
 const inviteCodePattern = /^[A-Za-z0-9_-]{3,160}$/;
 
@@ -13,7 +14,7 @@ export function normalizeInviteCode(value: string) {
 export function joinQrPayload(code: string) {
   const normalized = normalizeInviteCode(code);
   if (!inviteCodePattern.test(normalized)) throw new Error("That is not a KOINO invite code.");
-  return `${JOIN_LINK_PREFIX}${encodeURIComponent(normalized)}`;
+  return `${JOIN_HTTPS_PREFIX}?code=${encodeURIComponent(normalized)}`;
 }
 
 /** Read a code from a bare code, a koino:// link or the https join page. */

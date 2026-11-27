@@ -11,8 +11,8 @@ const { joinQrPayload, normalizeInviteCode, parseJoinPayload } = await import(
 );
 
 // The QR carries only the code, never a group id or a name.
-assert.equal(joinQrPayload("abc123"), "koino://join?code=ABC123");
-assert.equal(joinQrPayload("  AbC-123 "), "koino://join?code=ABC-123");
+assert.equal(joinQrPayload("abc123"), "https://koinolabs.com/join/?code=ABC123");
+assert.equal(joinQrPayload("  AbC-123 "), "https://koinolabs.com/join/?code=ABC-123");
 assert.throws(() => joinQrPayload(""));
 assert.throws(() => joinQrPayload("two words"));
 assert.throws(() => joinQrPayload("a/b"));

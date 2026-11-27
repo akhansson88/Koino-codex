@@ -6,7 +6,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationFunction } from "@/ui/localization";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
-/** The community QR: only `koino://join?code=…`, never group data. */
+/** The community QR: the HTTPS invite link, never group data. */
 export function JoinQrCode({ code, size = 236 }: { code: string; size?: number }) {
   const { t } = useAppTranslation();
   return (

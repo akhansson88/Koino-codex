@@ -1,5 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { Image, Platform, Share } from "react-native";
+import { joinQrPayload } from "@/state/join-qr";
 import type { Group, Id } from "@/state/types";
 import type { TranslationFunction } from "@/ui/localization";
 
@@ -9,7 +10,8 @@ export function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallbac
 }
 
 export async function shareRoomInvite(room: Group, t: TranslationFunction) {
-  const invitation = t("community.rooms.invitation", { code: room.inviteCode, name: room.name });
+  const link = joinQrPayload(room.inviteCode);
+  const invitation = t("community.rooms.invitation", { code: room.inviteCode, name: room.name, link });
   const clipboard =
     Platform.OS === "web"
       ? (globalThis as typeof globalThis & { navigator?: { clipboard?: { writeText?: (text: string) => Promise<void> } } }).navigator?.clipboard

@@ -1117,7 +1117,7 @@ export const englishTranslations = {
   "community.encryption.requested": "Access request sent",
   "community.rooms.created": "Community created.",
   "community.rooms.enterCode": "Enter a community code",
-  "community.rooms.invitation": "Join {name} on KOINO with community code {code}.",
+  "community.rooms.invitation": "Join {name} on KOINO: {link}\n\nCommunity code: {code}",
   "community.rooms.invite": "Invite",
   "community.rooms.inviteCopied": "Invite copied.",
   "community.rooms.inviteFallback": "Community code is selectable if sharing is unavailable.",

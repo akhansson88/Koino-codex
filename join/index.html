@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#F3EDE2">
+<title>KOINO — Gå med i en gemenskap</title>
+<link rel="stylesheet" href="/join/join.css">
+</head>
+<body>
+<main class="card">
+  <header class="top">
+    <span class="wordmark">KOINO</span>
+    <div class="lang" role="group" aria-label="Språk / Language">
+      <button type="button" data-lang="sv" aria-pressed="true">SV</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+  <div class="rule"></div>
+
+  <section id="invite" class="section">
+    <p class="eyebrow" data-i18n="eyebrow"></p>
+    <h1 data-i18n="title"></h1>
+    <p class="lede" data-i18n="lede"></p>
+    <div class="code-card">
+      <div class="code-copy">
+        <span class="code-label" data-i18n="codeLabel"></span>
+        <strong class="code-value" id="codeValue">—</strong>
+      </div>
+      <button class="copy-button" id="copyCode" type="button" data-i18n="copy"></button>
+    </div>
+    <a class="button primary" id="openApp" href="#" data-i18n="open"></a>
+    <p class="hint" id="openHint" data-i18n="hint"></p>
+    <p class="status" id="copyStatus" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="get" class="section get hidden">
+    <h2 data-i18n="getTitle"></h2>
+    <p class="get-body" data-i18n="getBody"></p>
+    <div class="store-row">
+      <a class="button primary store hidden" id="iosStore" href="#" data-i18n="iosStore"></a>
+      <a class="button primary store hidden" id="androidStore" href="#" data-i18n="androidStore"></a>
+    </div>
+    <p class="hint store-note" id="storeNote" data-i18n="storeNote"></p>
+    <a class="button secondary" id="waitlist" href="#" data-i18n="waitlist"></a>
+  </section>
+
+  <section id="invalid" class="section invalid hidden">
+    <h1 data-i18n="invalidTitle"></h1>
+    <p class="lede" data-i18n="invalidBody"></p>
+    <a class="button primary" id="home" href="https://koinolabs.com/" data-i18n="home"></a>
+  </section>
+
+  <footer class="footer" data-i18n="footer"></footer>
+</main>
+<script src="/join/config.js"></script>
+<script src="/join/join.js"></script>
+</body>
+</html>

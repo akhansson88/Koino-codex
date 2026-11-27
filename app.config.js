@@ -119,6 +119,9 @@ module.exports = {
   ios: {
     ...baseConfig.ios,
     bundleIdentifier: isDevelopment ? developmentIosId : baseConfig.ios.bundleIdentifier,
+    // Universal Links for https://koinolabs.com/join?... The AASA file lives at
+    // https://koinolabs.com/.well-known/apple-app-site-association.
+    associatedDomains: isDevelopment ? undefined : ["applinks:koinolabs.com"],
     infoPlist: isDevelopment ? {
       ...baseConfig.ios.infoPlist,
       NSLocalNetworkUsageDescription: "KOINO Dev connects to Metro on your local network.",
@@ -132,5 +135,15 @@ module.exports = {
     ...baseConfig.android,
     package: isDevelopment ? developmentAndroidId : baseConfig.android.package,
     googleServicesFile: isDevelopment ? undefined : baseConfig.android.googleServicesFile,
+    // App Links for https://koinolabs.com/join?... The assetlinks.json file
+    // lives at https://koinolabs.com/.well-known/assetlinks.json.
+    intentFilters: isDevelopment ? undefined : [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [{ scheme: "https", host: "koinolabs.com", pathPrefix: "/join" }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
   },
 };

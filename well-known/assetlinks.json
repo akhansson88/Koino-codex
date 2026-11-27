@@ -1,0 +1,16 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.akhansson.koinomvp",
+      "sha256_cert_fingerprints": [
+        "27:89:F4:81:84:06:82:39:BC:FB:98:47:52:DF:F5:3C:34:EA:5E:09:FA:35:F4:D1:5B:C1:AA:57:01:EA:2D:AB",
+        "64:86:5A:C5:D0:EB:FF:CF:04:83:73:BB:89:54:43:BF:82:29:E5:86:2D:BA:5C:FB:23:FD:33:D1:59:AA:8F:35",
+        "7B:0D:8A:4F:25:8C:D0:06:23:12:62:E4:09:63:68:E3:E8:55:58:DB:4C:2B:AF:57:69:39:99:AE:47:04:28:37"
+      ]
+    }
+  }
+]

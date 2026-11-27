@@ -1119,7 +1119,7 @@ export const swedishTranslations: TranslationDictionary = {
   "community.encryption.requested": "Begäran om åtkomst skickad",
   "community.rooms.created": "Gemenskapen har skapats.",
   "community.rooms.enterCode": "Ange en gemenskapskod",
-  "community.rooms.invitation": "Gå med i {name} på KOINO med gemenskapskoden {code}.",
+  "community.rooms.invitation": "Gå med i {name} på KOINO: {link}\n\nGemenskapskod: {code}",
   "community.rooms.invite": "Bjud in",
   "community.rooms.inviteCopied": "Inbjudan har kopierats.",
   "community.rooms.inviteFallback": "Gemenskapskoden kan markeras om delning inte är tillgänglig.",
