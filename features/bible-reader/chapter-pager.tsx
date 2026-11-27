@@ -118,7 +118,16 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     if (mounted.current && token === epoch.current) latest.current.onInteractionChange(false);
   }, []);
 
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const clearStepTimer = useCallback(() => {
+    if (stepTimerRef.current !== undefined) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = undefined;
+    }
+  }, []);
+
   const finishStep = useCallback((token: number) => {
+    clearStepTimer();
     const pending = request.current;
     const latestProps = latest.current;
     if (!mounted.current || !pending || pending.epoch !== token || token !== epoch.current ||
@@ -128,7 +137,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     pending.phase = "handoff";
     latestProps.onCommit(target);
     chapterSelectionHaptic();
-  }, []);
+  }, [clearStepTimer]);
 
   const requestStep = useCallback((direction: ChapterStep, token?: number, fromGesture = false) => {
     const p = latest.current;
@@ -136,12 +145,39 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     const source = p.pages.find(page => page.key === p.currentKey)!;
     const target = p.pages.find(page => page.index === source.index + direction);
     if (!target) { locked.value = false; return; }
+    clearStepTimer();
     locked.value = true;
     request.current = { epoch: epoch.current, source: p.currentKey, target: target.key, direction, phase: "waiting" };
     p.onInteractionChange(true);
     if (target.error) p.onRetry(target.key);
     setRequestRevision(value => value + 1);
-  }, [locked]);
+    // A page can mount during the drag without ever delivering its layout
+    // callback. Never leave the pager locked in a half-swiped state: once the
+    // target chapter is loaded let the spring start, and if it never loads
+    // spring back and release input.
+    stepTimerRef.current = setTimeout(() => {
+      stepTimerRef.current = undefined;
+      const pending = request.current;
+      if (!mounted.current || !pending || pending.phase !== "waiting" || pending.epoch !== epoch.current) return;
+      const readyTarget = latest.current.pages.find(page => page.key === pending.target);
+      if (readyTarget?.chapter) {
+        ready.current.add(readyTarget.key);
+        setReadyRevision(value => value + 1);
+        return;
+      }
+      request.current = undefined;
+      locked.value = false;
+      const source = latest.current.pages.find(page => page.key === latest.current.currentKey);
+      cancelAnimation(cursor);
+      if (source) {
+        cursor.value = latest.current.reducedMotion
+          ? withTiming(source.index, { duration: 100 }, finished => { if (finished) scheduleOnRN(interactionEnded, pending.epoch); })
+          : withSpring(source.index, settleSpring, finished => { if (finished) scheduleOnRN(interactionEnded, pending.epoch); });
+      } else {
+        scheduleOnRN(interactionEnded, pending.epoch);
+      }
+    }, 500);
+  }, [clearStepTimer, cursor, interactionEnded, locked, ready]);
 
   const gestureStarted = useCallback((token: number) => {
     if (mounted.current && token === epoch.current) latest.current.onInteractionChange(true);
@@ -153,6 +189,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
   }), [requestStep, held]);
 
   useLayoutEffect(() => {
+    clearStepTimer();
     epoch.current++;
     gestureEpoch.value = epoch.current;
     cancelAnimation(cursor);
@@ -164,7 +201,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     dragging.value = false;
     request.current = undefined;
     latest.current.onInteractionChange(false);
-  }, [currentKey, cursor, layoutKey, navigationRevision, width, reducedMotion, enabled]);
+  }, [clearStepTimer, currentKey, cursor, layoutKey, navigationRevision, width, reducedMotion, enabled]);
 
   useEffect(() => {
     mounted.current = true;
@@ -172,9 +209,10 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
       mounted.current = false;
       epoch.current++;
       request.current = undefined;
+      clearStepTimer();
       cancelAnimation(cursor);
     };
-  }, [cursor]);
+  }, [clearStepTimer, cursor]);
 
   const markReady = useCallback((key: string) => {
     if (!mounted.current || ready.current.has(key)) return;
@@ -188,6 +226,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
     if (!pending || pending.phase !== "waiting") return;
     const target = pages.find(page => page.key === pending.target);
     if (!target || target.error) {
+      clearStepTimer();
       request.current = undefined;
       cancelAnimation(cursor);
       cursor.value = index;
@@ -197,6 +236,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
       return;
     }
     if (!target.chapter || !ready.current.has(target.key)) return;
+    clearStepTimer();
     pending.phase = "animating";
     const token = pending.epoch;
     const destination = target.index;
@@ -209,7 +249,7 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
         if (finished) scheduleOnRN(finishStep, token);
       });
     }
-  }, [pages, readyRevision, requestRevision]);
+  }, [clearStepTimer, pages, readyRevision, requestRevision]);
 
   const pan = useMemo(() => Gesture.Pan().enabled(enabled).maxPointers(1).manualActivation(true)
     .onTouchesDown((event, manager) => {

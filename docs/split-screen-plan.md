@@ -11,12 +11,14 @@ AAB/store build is the remaining release step.
 Implementation notes:
 
 - Each pane has its own `ChapterPager` and its own chapter when the link is off. The
-  pager mounts three pages (previous/current/next) of that one translation, the pan
-  drags them with the same resistance, the settle spring and `chapterSelectionHaptic()`
-  fire at the same moment, and the header title crossfades through that pane's cursor.
-  When the link is on, both pagers share one cursor and turn together; when it is off,
-  only the swiped pane (and its header) moves. Each pane wraps its own `ScrollView` in
-  `Gesture.Native().requireExternalGestureToFail(pan)` so vertical scrolling still wins;
+  pane header sits fixed above its pager, so a page turn moves only the text and never
+  drags the menu sideways. The pager mounts three pages (previous/current/next) of that
+  one translation, the pan drags them with the same resistance, the settle spring and
+  `chapterSelectionHaptic()` fire at the same moment, and the header title crossfades
+  through that pane's cursor. When the link is on, both pagers share one cursor and turn
+  together; when it is off, only the swiped pane moves. Each pane wraps its own
+  `ScrollView` in `Gesture.Native().requireExternalGestureToFail(pan)` so vertical
+  scrolling still wins;
   the pager skips its whole-page native wrapper (`wrapNativeGesture={false}`).
 - The Bible asset is now `assets/bible/koino-bible-v5.db` (62.8 MB) with all four
   translations and 186,886 cross-translation links.
@@ -140,13 +142,13 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
   `Jämför` chip showing `NKJV / SFB15`. The chapter title stays.
 - **Bottom controls:** previous/next chapter. They step the primary pane's pager; when
   the link is on the secondary turns with it, when the link is off only the primary turns.
-  Each pane has its own chapter pager: a horizontal swipe in a pane drags only that pane
-  and its header, with the same resistance, settle spring, header crossfade and haptic
-  tick as the single reader. When the link is on, both pagers share the cursor and turn
-  together. A short drag springs back and does not turn the page.
-  Swipes that start on a pane header stay in the header: the version pill, reference,
-  sync, close and boundary hint run their own pan that blocks that pane's pager, so
-  opening or tapping those menus never turns the page.
+  Each pane has its own chapter pager below a fixed header: a horizontal swipe in the
+  text drags only that pane's text, with the same resistance, settle spring, header
+  crossfade and haptic tick as the single reader. The header row itself never swipes;
+  its reference updates in place when the turn commits. When the link is on, both
+  pagers share the cursor and turn together. A short drag springs back and does not
+  turn the page. If the next chapter cannot be loaded, the pager springs back and
+  releases input after 500 ms instead of staying half-swiped.
 - **Exit:** `×` on the secondary pane header, or the menu row again. The primary pane
   remains where it is, single-pane.
 
@@ -669,8 +671,8 @@ mirror fields in phase 4.
    bottom pane.
 8. Link off with the bottom pane on a different chapter: tap a verse in the bottom pane;
    the action sheet quotes that pane's chapter and translation, and the main reader keeps
-   the top pane's chapter. A horizontal swipe starting on either pane header does not
-   turn that pane.
+   the top pane's chapter. A horizontal swipe in either pane's text never moves that
+   pane's header row, and a swipe on the header does not turn the pane.
 9. Turn sync off, scroll one pane, turn it on: it re-anchors from the driver.
 10. Reduce motion: instant, no easing; no motion sickness.
 11. Dark theme (Vigil): both panes ≥ 4.5:1 text contrast; seam visible.

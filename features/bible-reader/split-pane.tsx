@@ -60,6 +60,7 @@ type Props = {
   readingMarkersByVerse?: Record<number, ReadingMarker[]>;
   selectedVerseNumbers: number[];
   selectedVersePosition?: BiblePosition;
+  showHeader?: boolean;
   showVerseNumbers: boolean;
   showFollowAgain: boolean;
   spokenVerse?: number;
@@ -68,6 +69,105 @@ type Props = {
 };
 
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
+
+export type SplitPaneHeaderProps = {
+  approximate: boolean;
+  boundaryHint?: string;
+  headerReference: string;
+  onBoundaryPress?: () => void;
+  onClose?: () => void;
+  onFollowAgain?: () => void;
+  onShowVersionPicker: () => void;
+  onToggleSync: () => void;
+  palette: ReaderPalette;
+  showFollowAgain: boolean;
+  syncEnabled: boolean;
+  versionId: BibleVersionId;
+};
+
+/** Fixed pane chrome: version, live reference, link and close. It sits above
+ * the chapter pager so a horizontal page turn never drags the menu sideways. */
+export const SplitPaneHeader = memo(function SplitPaneHeader({
+  approximate,
+  boundaryHint,
+  headerReference,
+  onBoundaryPress,
+  onClose,
+  onFollowAgain,
+  onShowVersionPicker,
+  onToggleSync,
+  palette,
+  showFollowAgain,
+  syncEnabled,
+  versionId,
+}: SplitPaneHeaderProps) {
+  const { t } = useAppTranslation();
+  const versionLabel = bibleVersionShortLabel(versionId);
+  return (
+    <View collapsable={false} style={{ backgroundColor: palette.background }}>
+      <View style={{
+        alignItems: "center",
+        borderBottomColor: palette.line,
+        borderBottomWidth: 1,
+        flexDirection: "row",
+        gap: 6,
+        minHeight: 34,
+        paddingHorizontal: 10,
+      }}>
+        <Pressable
+          accessibilityHint={t("bible.compare.changeVersionHint")}
+          accessibilityLabel={t("bible.compare.paneVersion", { version: versionLabel })}
+          accessibilityRole="button"
+          onPress={onShowVersionPicker}
+          style={{ alignItems: "center", backgroundColor: palette.input, borderColor: palette.line, borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 4, minHeight: 26, paddingHorizontal: 8 }}
+        >
+          <Text style={{ color: palette.accent, fontSize: 11, fontWeight: "900", letterSpacing: 0.3 }}>{versionLabel}</Text>
+          <Feather name="chevron-down" size={11} color={palette.accent} />
+        </Pressable>
+        <Text numberOfLines={1} style={{ color: palette.text, flex: 1, fontSize: 12, fontWeight: "700" }}>
+          {headerReference}
+          {approximate ? <Text style={{ color: palette.muted }}>{"  ≈"}</Text> : null}
+        </Text>
+        {showFollowAgain ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onFollowAgain}
+            style={{ alignItems: "center", backgroundColor: palette.text, borderRadius: 999, flexDirection: "row", gap: 3, minHeight: 24, paddingHorizontal: 8 }}
+          >
+            <Feather name="corner-down-right" size={11} color={palette.background} />
+            <Text style={{ color: palette.background, fontSize: 10, fontWeight: "800" }}>{t("bible.compare.followAgain")}</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityLabel={syncEnabled ? t("bible.compare.syncOn") : t("bible.compare.syncOff")}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: syncEnabled }}
+          hitSlop={8}
+          onPress={onToggleSync}
+          style={{ alignItems: "center", height: 26, justifyContent: "center", width: 26 }}
+        >
+          <Feather name={syncEnabled ? "link" : "link-2"} size={14} color={syncEnabled ? palette.accent : palette.muted} />
+        </Pressable>
+        {onClose ? (
+          <Pressable accessibilityLabel={t("bible.compare.close")} accessibilityRole="button" hitSlop={8} onPress={onClose} style={{ alignItems: "center", height: 26, justifyContent: "center", width: 24 }}>
+            <Feather name="x" size={15} color={palette.muted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {boundaryHint ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBoundaryPress}
+          style={{ alignItems: "center", backgroundColor: palette.peach, borderBottomColor: palette.line, borderBottomWidth: 1, flexDirection: "row", gap: 4, minHeight: 24, paddingHorizontal: 10 }}
+        >
+          <Feather name="corner-down-right" size={11} color={palette.accent} />
+          <Text numberOfLines={1} style={{ color: palette.accent, flex: 1, fontSize: 10, fontWeight: "800" }}>{boundaryHint}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+});
 
 /**
  * One pane of the compare reader. Owns its scroll position, its measured verse
@@ -106,6 +206,7 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   readingMarkersByVerse,
   selectedVerseNumbers,
   selectedVersePosition,
+  showHeader = true,
   showVerseNumbers,
   showFollowAgain,
   spokenVerse,
@@ -311,7 +412,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
     },
   }), [markProgrammatic, scrollToAnchor]);
 
-  const versionLabel = bibleVersionShortLabel(versionId);
   const nativeScroll = useMemo(
     () => pan ? Gesture.Native().requireExternalGestureToFail(pan) : undefined,
     [pan],
@@ -378,83 +478,26 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
       </ScrollView>
   );
 
-  const headerPan = useMemo(
-    () => pan ? Gesture.Pan().blocksExternalGesture(pan) : undefined,
-    [pan],
-  );
-
-  // Horizontal swipes that start on the pane header belong to its buttons and
-  // menus, not to the chapter pager. The header pan blocks the shared pager
-  // until it fails, so a swipe over the KJV/SRB26 pill, sync, close or the
-  // boundary hint never turns the page. Taps still reach the buttons.
-  const headerContent = (
-    <View collapsable={false}>
-      <View style={{
-        alignItems: "center",
-        borderBottomColor: palette.line,
-        borderBottomWidth: 1,
-        flexDirection: "row",
-        gap: 6,
-        minHeight: 34,
-        paddingHorizontal: 10,
-      }}>
-        <Pressable
-          accessibilityHint={t("bible.compare.changeVersionHint")}
-          accessibilityLabel={t("bible.compare.paneVersion", { version: versionLabel })}
-          accessibilityRole="button"
-          onPress={onShowVersionPicker}
-          style={{ alignItems: "center", backgroundColor: palette.input, borderColor: palette.line, borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 4, minHeight: 26, paddingHorizontal: 8 }}
-        >
-          <Text style={{ color: palette.accent, fontSize: 11, fontWeight: "900", letterSpacing: 0.3 }}>{versionLabel}</Text>
-          <Feather name="chevron-down" size={11} color={palette.accent} />
-        </Pressable>
-        <Text numberOfLines={1} style={{ color: palette.text, flex: 1, fontSize: 12, fontWeight: "700" }}>
-          {headerReference}
-          {approximate ? <Text style={{ color: palette.muted }}>{"  ≈"}</Text> : null}
-        </Text>
-        {showFollowAgain ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onFollowAgain}
-            style={{ alignItems: "center", backgroundColor: palette.text, borderRadius: 999, flexDirection: "row", gap: 3, minHeight: 24, paddingHorizontal: 8 }}
-          >
-            <Feather name="corner-down-right" size={11} color={palette.background} />
-            <Text style={{ color: palette.background, fontSize: 10, fontWeight: "800" }}>{t("bible.compare.followAgain")}</Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityLabel={syncEnabled ? t("bible.compare.syncOn") : t("bible.compare.syncOff")}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: syncEnabled }}
-          hitSlop={8}
-          onPress={onToggleSync}
-          style={{ alignItems: "center", height: 26, justifyContent: "center", width: 26 }}
-        >
-          <Feather name={syncEnabled ? "link" : "link-2"} size={14} color={syncEnabled ? palette.accent : palette.muted} />
-        </Pressable>
-        {onClose ? (
-          <Pressable accessibilityLabel={t("bible.compare.close")} accessibilityRole="button" hitSlop={8} onPress={onClose} style={{ alignItems: "center", height: 26, justifyContent: "center", width: 24 }}>
-            <Feather name="x" size={15} color={palette.muted} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {boundaryHint ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onBoundaryPress}
-          style={{ alignItems: "center", backgroundColor: palette.peach, borderBottomColor: palette.line, borderBottomWidth: 1, flexDirection: "row", gap: 4, minHeight: 24, paddingHorizontal: 10 }}
-        >
-          <Feather name="corner-down-right" size={11} color={palette.accent} />
-          <Text numberOfLines={1} style={{ color: palette.accent, flex: 1, fontSize: 10, fontWeight: "800" }}>{boundaryHint}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
+  const header = showHeader ? (
+    <SplitPaneHeader
+      approximate={approximate}
+      boundaryHint={boundaryHint}
+      headerReference={headerReference}
+      onBoundaryPress={onBoundaryPress}
+      onClose={onClose}
+      onFollowAgain={onFollowAgain}
+      onShowVersionPicker={onShowVersionPicker}
+      onToggleSync={onToggleSync}
+      palette={palette}
+      showFollowAgain={showFollowAgain}
+      syncEnabled={syncEnabled}
+      versionId={versionId}
+    />
+  ) : null;
 
   return (
     <View style={{ backgroundColor: palette.background, flex: 1, minHeight: 0 }}>
-      {headerPan ? <GestureDetector gesture={headerPan}>{headerContent}</GestureDetector> : headerContent}
+      {header}
       {nativeScroll
         ? <GestureDetector gesture={nativeScroll}>{scrollView}</GestureDetector>
         : scrollView}

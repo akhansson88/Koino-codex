@@ -6,7 +6,7 @@ import { bibleVerseLinks, type BibleFootnote, type BiblePosition, type BibleVers
 import { ChapterPager, type ChapterPagerHandle } from "@/features/bible-reader/chapter-pager";
 import { chapterIndex, readerChapterKey } from "@/features/bible-reader/chapter-navigation";
 import { useChapterWindow, type ChapterPage } from "@/features/bible-reader/chapter-window";
-import { SplitPane, type SplitPaneHandle } from "@/features/bible-reader/split-pane";
+import { SplitPane, SplitPaneHeader, type SplitPaneHandle } from "@/features/bible-reader/split-pane";
 import {
   composeAnchor,
   resolveAnchor,
@@ -583,6 +583,19 @@ export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(funct
       style={{ flex: 1, minHeight: 0, paddingTop: topInset }}
     >
       <View style={{ flex: dragRatio, minHeight: 0 }}>
+        <SplitPaneHeader
+          approximate={false}
+          boundaryHint={primaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(position.book, bookLanguage)} ${primaryBoundary.chapter}:${primaryBoundary.verse}` }) : undefined}
+          headerReference={primaryReference}
+          onBoundaryPress={primaryBoundary ? handlePrimaryBoundary : undefined}
+          onShowVersionPicker={() => onShowVersionPicker("primary")}
+          onToggleSync={onToggleSync}
+          palette={palette}
+          showFollowAgain={false}
+          syncEnabled={sync}
+          versionId={primaryVersionId}
+        />
+        <View style={{ flex: 1, minHeight: 0 }}>
         <ChapterPager
           backgroundColor={palette.background}
           currentKey={primaryKey}
@@ -630,6 +643,7 @@ export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(funct
               selectedVerseNumbers={active && selectionMatchesPage(page.position) ? selectedVerseNumbers : EMPTY_NUMBERS}
               selectedVersePosition={active && selectionMatchesPage(page.position) ? selectedVersePosition : undefined}
               showFollowAgain={false}
+              showHeader={false}
               showVerseNumbers={showVerseNumbers}
               spokenVerse={active ? spokenVerse : undefined}
               syncEnabled={sync}
@@ -640,11 +654,27 @@ export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(funct
           width={width}
           wrapNativeGesture={false}
         />
+        </View>
       </View>
 
       <SplitSeam active handlers={panResponder.panHandlers} palette={palette} />
 
       <View style={{ flex: 1 - dragRatio, minHeight: 0 }}>
+        <SplitPaneHeader
+          approximate={Boolean(secondaryHeader?.approximate)}
+          boundaryHint={secondaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(effectiveSecondaryPosition.book, bookLanguage)} ${secondaryBoundary.chapter}:${secondaryBoundary.verse}` }) : undefined}
+          headerReference={secondaryReference}
+          onBoundaryPress={secondaryBoundary ? handleSecondaryBoundary : undefined}
+          onClose={onClose}
+          onFollowAgain={!sync && !mirroring ? onToggleSync : undefined}
+          onShowVersionPicker={() => onShowVersionPicker("secondary")}
+          onToggleSync={onToggleSync}
+          palette={palette}
+          showFollowAgain={!sync && !mirroring}
+          syncEnabled={sync}
+          versionId={secondaryVersionId}
+        />
+        <View style={{ flex: 1, minHeight: 0 }}>
         <ChapterPager
           backgroundColor={palette.background}
           currentKey={secondaryKey}
@@ -695,6 +725,7 @@ export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(funct
                 selectedVerseNumbers={active && selectionMatchesPage(page.position) ? selectedVerseNumbers : EMPTY_NUMBERS}
                 selectedVersePosition={active && selectionMatchesPage(page.position) ? selectedVersePosition : undefined}
                 showFollowAgain={active && !sync && !mirroring}
+                showHeader={false}
                 showVerseNumbers={showVerseNumbers}
                 spokenVerse={active && sameChapter ? spokenVerse : undefined}
                 syncEnabled={sync}
@@ -706,6 +737,7 @@ export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(funct
           width={width}
           wrapNativeGesture={false}
         />
+        </View>
       </View>
     </View>
   );
