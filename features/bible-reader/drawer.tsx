@@ -47,11 +47,14 @@ export function BibleDrawer({
   journalEntries,
   onClose,
   onCopySavedVerse,
+  onOpenBookmarks,
   onOpenPlans: openPlans,
   onOpenReflection: openReflection,
+  onOpenRibbons,
   onRemoveSavedVerse,
   onSelect: selectPosition,
   palette,
+  ribbonCount,
   savedVerses,
   versionLabel,
   visible,
@@ -64,11 +67,14 @@ export function BibleDrawer({
   journalEntries: JournalEntry[];
   onClose: () => void;
   onCopySavedVerse: (verse: SavedVerse) => void;
+  onOpenBookmarks: () => void;
   onOpenPlans: () => void;
   onOpenReflection: (entryId: string) => void;
+  onOpenRibbons: () => void;
   onRemoveSavedVerse: (id: string) => Promise<void>;
   onSelect: (position: BiblePosition, intent?: ReaderNavigationIntent) => void;
   palette: ReaderPalette;
+  ribbonCount: number;
   savedVerses: SavedVerse[];
   versionLabel: string;
   visible: boolean;
@@ -308,14 +314,21 @@ export function BibleDrawer({
                 <DrawerSection title={t("bible.navigator.myPlaces")} palette={palette}>
                   <DrawerRow
                     icon="bookmark"
-                    onPress={() => setStage("saved")}
+                    onPress={onOpenBookmarks}
                     palette={palette}
                     subtitle={savedVerses.length === 0
                       ? t("bible.navigator.saved.emptyCount")
                       : savedVerses.length === 1
                         ? t("bible.navigator.saved.single")
                         : t("bible.navigator.saved.count", { count: savedVerses.length })}
-                    title={t("bible.navigator.saved")}
+                    title={t("bookmarks.title")}
+                  />
+                  <DrawerRow
+                    icon="tag"
+                    onPress={onOpenRibbons}
+                    palette={palette}
+                    subtitle={t("ribbons.count", { count: ribbonCount })}
+                    title={t("ribbons.title")}
                   />
                   <DrawerRow
                     icon="edit-2"

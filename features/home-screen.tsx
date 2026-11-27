@@ -67,10 +67,10 @@ function homeGreetingPeriodAt(date: Date): HomeGreetingPeriod {
 }
 
 const homeFields = [
-  "authError", "biblePlans", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError",
+  "authError", "biblePlans", "bibleRibbons", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError",
   "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps",
   "groupEvents", "groups", "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady",
-  "profileReady", "userGroupsReady", "users", "groupFasts", "groupFastsReady",
+  "profileReady", "savedVerses", "userGroupsReady", "users", "groupFasts", "groupFastsReady",
 ] as const;
 
 export function HomeScreen() {
@@ -333,7 +333,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
 
         <EmailVerificationBanner />
 
-        <HomeScripture plans={state.biblePlans} userId={state.currentUserId} date={todayKey} />
+        <HomeScripture bookmarkCount={state.savedVerses.length} plans={state.biblePlans} ribbons={state.bibleRibbons} userId={state.currentUserId} date={todayKey} />
 
         {activeGroupId ? (
           <ReadingNowHomeCard

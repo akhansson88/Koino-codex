@@ -187,6 +187,34 @@ export type BibleVerse = ScriptureReference;
 export type SavedVerse = ScriptureReference & {
   id: Id;
   savedAt: string;
+  schema?: number;
+  updatedAt?: string;
+  note?: string;
+  noteUpdatedAt?: string;
+  collectionId?: Id | null;
+  lastOpenedAt?: string;
+};
+
+export type BookmarkCollectionColor = "ember" | "clay" | "moss" | "rose" | "gold" | "violet";
+
+export type BookmarkCollection = {
+  id: Id;
+  name: string;
+  color: BookmarkCollectionColor;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BibleRibbon = {
+  id: Id;
+  book: string;
+  chapter: number;
+  verse: number;
+  label?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastOpenedAt?: string;
 };
 
 export type BiblePassageReference = {
@@ -616,6 +644,9 @@ export type KoinoState = {
   discussionFollows: DiscussionFollow[];
   journalEntries: JournalEntry[];
   savedVerses: SavedVerse[];
+  bookmarkCollections: BookmarkCollection[];
+  bibleRibbons: BibleRibbon[];
+  bookmarksLoaded: boolean;
   fasts: Fast[];
   fastsReady: boolean;
   groupFasts: GroupFast[];

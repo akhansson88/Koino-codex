@@ -216,6 +216,8 @@ const PRIVATE_ACCOUNT_PATHS = [
   "prayerNotifications",
   "activityNotifications",
   "savedVerses",
+  "bookmarkCollections",
+  "bibleRibbons",
   "bibleHighlights",
   "bibleHighlightColors",
   "bibleHighlightColorSettings",

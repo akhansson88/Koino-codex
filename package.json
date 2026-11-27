@@ -52,6 +52,7 @@
     "validate:bible-verse-selection": "node scripts/validate-bible-verse-selection.mjs",
     "validate:bible-copy": "node scripts/validate-bible-copy.mjs",
     "validate:saved-verses": "node scripts/validate-saved-verses.mjs",
+    "validate:bookmarks": "node scripts/validate-bookmarks.mjs",
     "validate:bible-highlights": "node scripts/validate-bible-highlights.mjs",
     "validate:bible-picker": "node scripts/validate-bible-picker-lifecycle.mjs",
     "validate:bible-history": "node scripts/validate-bible-history.mjs",

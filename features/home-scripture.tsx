@@ -6,16 +6,23 @@ import { Text, View } from "react-native";
 import { biblePlanReadingRoute, completionPercent, planPace, todayDateKey } from "@/features/bible-plans";
 import { biblePlanTemplates, displayPlanTitle, planCoverKey } from "@/features/bible-plan-library";
 import { PlanCoverImage, PlanProgressBar, planReferencesLabel } from "@/features/bible-plan-ui";
+import { displayBibleReference } from "@/features/bible-book-names";
 import { hasRecordedBibleReadingPosition, readerStorageKey } from "@/features/bible-preferences";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import storage from "@/state/encryption/local-storage";
 import { useKoinoActions } from "@/state/koino-store";
-import type { BiblePlan } from "@/state/types";
+import type { BiblePlan, BibleRibbon } from "@/state/types";
 import { BodyText, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 
-export function HomeScripture({ date, plans, userId }: { date: string; plans: BiblePlan[]; userId?: string }) {
+export function HomeScripture({ bookmarkCount, date, plans, ribbons, userId }: {
+  bookmarkCount: number;
+  date: string;
+  plans: BiblePlan[];
+  ribbons: BibleRibbon[];
+  userId?: string;
+}) {
   const { language, t } = useAppTranslation();
   const bookLanguage = useBibleBookLanguage();
   const { dispatch } = useKoinoActions();
@@ -27,8 +34,16 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
   const day = highlight?.day;
   const pace = plan ? planPace(plan, date) : undefined;
   const percent = plan ? completionPercent(plan.days.filter((item) => item.completedAt).length, plan.days.length) : 0;
-  const title = plan ? displayPlanTitle(plan, language) : t("bible.plans.today.emptyTitle");
-  const reference = day ? planReferencesLabel(day, bookLanguage) : undefined;
+  const latestRibbon = ribbons[0];
+  const ribbonReference = latestRibbon
+    ? displayBibleReference(`${latestRibbon.book} ${latestRibbon.chapter}:${latestRibbon.verse}`, bookLanguage)
+    : undefined;
+  const title = plan
+    ? displayPlanTitle(plan, language)
+    : latestRibbon
+      ? latestRibbon.label ?? ribbonReference ?? t("ribbons.homeTitle")
+      : t("bible.plans.today.emptyTitle");
+  const reference = day ? planReferencesLabel(day, bookLanguage) : ribbonReference;
 
   useFocusEffect(useCallback(() => {
     if (day || !userId) return;
@@ -48,16 +63,33 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
   const isCatchUp = Boolean(dayDate && dayDate < todayDateKey());
   const openPlans = () => router.push({ pathname: "/bible-plans", params: { tab: "library" } });
   const openMyPlans = () => router.push({ pathname: "/bible-plans", params: { tab: "mine" } });
+  const openBookmarks = () => router.push("/bookmarks" as never);
+  const openBibleAtRibbon = () => {
+    if (!latestRibbon) {
+      router.push("/(tabs)/bible" as never);
+      return;
+    }
+    void dispatch({ type: "touchBibleRibbon", id: latestRibbon.id });
+    router.push({
+      pathname: "/(tabs)/bible",
+      params: {
+        book: latestRibbon.book,
+        chapter: String(latestRibbon.chapter),
+        verse: String(latestRibbon.verse),
+      },
+    } as never);
+  };
   const primary = () => {
     if (plan && day) router.push(biblePlanReadingRoute(plan.id, day.dayNumber));
     else if (plan) openMyPlans();
+    else if (latestRibbon) openBibleAtRibbon();
     else router.push("/(tabs)/bible");
   };
   const primaryLabel = plan && day
     ? isCatchUp ? t("bible.plans.today.catchUp") : t("bible.plans.today.continue")
     : plan
       ? t("bible.plans.plan.view")
-      : canResume
+      : latestRibbon || canResume
         ? t("home.scripture.resume")
         : t("home.scripture.open");
 
@@ -78,7 +110,9 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
                 : isCatchUp
                   ? t("bible.plans.today.catchUpLabel")
                   : t("bible.plans.today.todayLabel")
-              : t("bible.plans.today.startHere")}
+              : latestRibbon
+                ? t("ribbons.homeTitle")
+                : t("bible.plans.today.startHere")}
           </Text>
           <Text numberOfLines={2} style={[typography.title, { color: "#FFFFFF" }]}>{title}</Text>
           <Text style={[typography.caption, { color: "rgba(255,255,255,0.84)" }]}>
@@ -86,7 +120,9 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
               ? t("bible.plans.today.dayOf", { day: day.dayNumber, total: plan.days.length })
               : plan
                 ? t("bible.plans.paused")
-                : t("bible.plans.today.emptyBody")}
+                : latestRibbon
+                  ? ribbonReference
+                  : t("bible.plans.today.emptyBody")}
           </Text>
         </LinearGradient>
       </PlanCoverImage>
@@ -138,13 +174,21 @@ export function HomeScripture({ date, plans, userId }: { date: string; plans: Bi
           </>
         ) : (
           <>
-            <BodyText muted>{t("home.scripture.libraryCount", { count: biblePlanTemplates.length })}</BodyText>
+            <BodyText muted>
+              {latestRibbon && ribbonReference
+                ? `${t("ribbons.homeTitle")} · ${ribbonReference}`
+                : t("home.scripture.libraryCount", { count: biblePlanTemplates.length })}
+            </BodyText>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <PrimaryButton icon={canResume ? "book-open" : "compass"} onPress={primary} style={{ flex: 1 }}>
+              <PrimaryButton icon={latestRibbon || canResume ? "book-open" : "compass"} onPress={primary} style={{ flex: 1 }}>
                 {primaryLabel}
               </PrimaryButton>
-              <SecondaryButton icon="calendar" onPress={openPlans} style={{ flex: 1 }}>
-                {t("bible.plans.today.findPlan")}
+              <SecondaryButton
+                icon={bookmarkCount ? "bookmark" : "calendar"}
+                onPress={bookmarkCount ? openBookmarks : openPlans}
+                style={{ flex: 1 }}
+              >
+                {bookmarkCount ? t("bookmarks.title") : t("bible.plans.today.findPlan")}
               </SecondaryButton>
             </View>
           </>

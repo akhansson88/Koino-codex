@@ -35,6 +35,8 @@ export const DELETION_MANIFEST: Record<string, DeletionRule> = {
   journalEntries: { kind: "user", path: "journalEntries/{uid}" },
   fasts: { kind: "user", path: "fasts/{uid}" },
   savedVerses: { kind: "user", path: "savedVerses/{uid}" },
+  bookmarkCollections: { kind: "user", path: "bookmarkCollections/{uid}" },
+  bibleRibbons: { kind: "user", path: "bibleRibbons/{uid}" },
   bibleHighlights: { kind: "user", path: "bibleHighlights/{uid}" },
   bibleHighlightColors: { kind: "user", path: "bibleHighlightColors/{uid}" },
   bibleHighlightColorSettings: { kind: "user", path: "bibleHighlightColorSettings/{uid}" },

@@ -60,7 +60,7 @@ import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
 import type { Action } from "@/state/store/types";
-import type { BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
+import type { BibleHighlightColor, BibleHighlightPaletteColor, BibleRibbon, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
 import { SharedComposer, type BibleComposerIntent } from "@/ui/shared-composer";
@@ -123,6 +123,7 @@ import {
 import { useGroupReading, useReadingPublisher, useReadingShareSetting } from "@/state/reading-share";
 import type { ReadingMarker } from "@/features/bible-reader/chapter-text";
 import { BibleReaderToolsSheet } from "@/features/bible-reader/tools-sheet";
+import { BibleRibbonSheet, BibleRibbonTab } from "@/features/bible-reader/ribbon-tab";
 import { BiblePlanReaderPanel } from "@/features/bible-reader/plan-panel";
 import { BibleText } from "@/features/bible-reader/chapter-text";
 import { useVisibleVerseSelection } from "@/features/bible-reader/use-visible-verse";
@@ -171,10 +172,11 @@ type PendingBibleReaderCloudSave = {
 };
 
 export function BibleScreen() {
-  const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string }>();
+  const planParams = useLocalSearchParams<{ planId?: string; planDay?: string; planJump?: string; book?: string; chapter?: string; verse?: string }>();
   const handledPlanJump = useRef<string | undefined>(undefined);
+  const handledBookmarkJump = useRef<string | undefined>(undefined);
   const [selectedPlanDayNumber, setSelectedPlanDayNumber] = useState<number | undefined>();
-  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "memberships", "savedVerses"]);
+  const state = useKoinoFields(["bibleHighlightColors", "bibleHighlights", "biblePlans", "bibleRibbons", "currentGroupId", "currentUserId", "groups", "journalEntries", "journalShareGroupId", "memberships", "savedVerses"]);
   const { dispatch } = useKoinoActions();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
@@ -237,6 +239,7 @@ export function BibleScreen() {
   const [versionPickerVisible, setVersionPickerVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
+  const [ribbonSheetVisible, setRibbonSheetVisible] = useState(false);
   const [readingVisible, setReadingVisible] = useState(false);
   const [readingBubbleVisible, setReadingBubbleVisible] = useState(true);
   const [mirrorSession, setMirrorSession] = useState<{ name: string; scope: ReadingScope; userId: string }>();
@@ -1133,6 +1136,19 @@ export function BibleScreen() {
     },
     [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader, mirrorPaused, mirrorSession, splitMode],
   );
+
+  // A bookmark or ribbon opens the reader with book/chapter/verse. The key
+  // guard prevents a tab focus from re-jumping after the reader moved.
+  useEffect(() => {
+    const book = planParams.book;
+    const chapter = Number(planParams.chapter);
+    const verse = Number(planParams.verse);
+    if (!preferencesReady || !book || !Number.isInteger(chapter) || !Number.isInteger(verse) || chapter < 1 || verse < 1) return;
+    const key = `${book}:${chapter}:${verse}`;
+    if (handledBookmarkJump.current === key) return;
+    handledBookmarkJump.current = key;
+    jumpToPosition({ book, chapter, verse }, { highlight: true });
+  }, [jumpToPosition, planParams.book, planParams.chapter, planParams.verse, preferencesReady]);
 
   const followReader = useCallback((entry: ReadingEntry) => {
     const name = memberById.get(entry.userId)?.name ?? t("common.someone");
@@ -2090,6 +2106,40 @@ export function BibleScreen() {
     },
   }), [travelHistory, openSearch]);
 
+  const ribbonAtPosition = state.bibleRibbons.find((ribbon) =>
+    ribbon.book === position.book && ribbon.chapter === position.chapter && ribbon.verse === position.verse);
+  const ribbonReference = displayBibleReference(`${position.book} ${position.chapter}:${position.verse}`, bookLanguage);
+
+  const setRibbonHere = useCallback(async () => {
+    try {
+      await dispatch({ type: "setBibleRibbon", position });
+      chapterSelectionHaptic();
+      setReaderToast({ message: t("ribbons.setToast", { reference: ribbonReference }), tone: "success" });
+    } catch (error) {
+      if (error instanceof Error && error.message === "RIBBON_LIMIT") setRibbonSheetVisible(true);
+      else setReaderToast({ message: t("ribbons.error"), tone: "error" });
+    }
+  }, [dispatch, position, ribbonReference, t]);
+
+  const continueRibbon = useCallback((ribbon: BibleRibbon) => {
+    setRibbonSheetVisible(false);
+    void dispatch({ type: "touchBibleRibbon", id: ribbon.id });
+    jumpToPosition({ book: ribbon.book, chapter: ribbon.chapter, verse: ribbon.verse }, { highlight: true });
+  }, [dispatch, jumpToPosition]);
+
+  const moveRibbonHere = useCallback((id: string) => {
+    void dispatch({ type: "moveBibleRibbon", id, position })
+      .then(() => setReaderToast({ message: t("ribbons.setToast", { reference: ribbonReference }), tone: "success" }))
+      .catch(() => setReaderToast({ message: t("ribbons.error"), tone: "error" }));
+    setRibbonSheetVisible(false);
+  }, [dispatch, position, ribbonReference, t]);
+
+  const removeRibbon = useCallback((id: string) => {
+    void dispatch({ type: "removeBibleRibbon", id })
+      .then(() => setReaderToast({ message: t("ribbons.removed"), tone: "success" }))
+      .catch(() => setReaderToast({ message: t("ribbons.error"), tone: "error" }));
+  }, [dispatch, t]);
+
   return (
     <BibleBookVersionContext.Provider value={bibleVersionId}>
     <View pointerEvents={preferencesReady ? "auto" : "none"} style={{ backgroundColor: readerPalette.background, flex: 1, paddingTop: insets.top }}>
@@ -2124,6 +2174,18 @@ export function BibleScreen() {
         topInset={0}
       />
       </Animated.View>
+
+      {!showSplit && preferencesReady ? (
+        <BibleRibbonTab
+          active={Boolean(ribbonAtPosition)}
+          onLongPress={() => setRibbonSheetVisible(true)}
+          onPress={() => {
+            if (ribbonAtPosition) setRibbonSheetVisible(true);
+            else void setRibbonHere();
+          }}
+          top={insets.top + (readerHeaderHidden ? 14 : readerHeaderHeight) + 10}
+        />
+      ) : null}
 
       {planOverlayVisible ? (
         <View
@@ -2426,18 +2488,22 @@ export function BibleScreen() {
         visible={settingsVisible}
       />
       <BibleReaderToolsSheet
+        bookmarkCount={state.savedVerses.length}
         canGoHistoryBack={history.index > 0}
         canGoHistoryForward={history.index < history.entries.length - 1}
         onClose={() => setMoreVisible(false)}
         onHistoryBack={headerActions.onHistoryBack}
         onHistoryForward={headerActions.onHistoryForward}
+        onOpenBookmarks={() => { setMoreVisible(false); router.push("/bookmarks" as never); }}
         onOpenCompare={openSplit}
         onOpenMyPlaces={headerActions.onOpenMyPlaces}
         onOpenReading={() => setReadingVisible(true)}
+        onOpenRibbons={() => { setMoreVisible(false); setRibbonSheetVisible(true); }}
         onOpenSearch={headerActions.onOpenSearch}
         onOpenSettings={headerActions.onOpenSettings}
         palette={readerPalette}
         readingCount={liveOtherReaders.length}
+        ribbonCount={state.bibleRibbons.length}
         visible={moreVisible}
       />
       <ReadingNowSheet
@@ -2489,6 +2555,8 @@ export function BibleScreen() {
         initialPosition={position}
         journalEntries={state.journalEntries.filter((entry) => entry.userId === state.currentUserId)}
         onClose={() => setPickerVisible(false)}
+        onOpenBookmarks={() => { setPickerVisible(false); router.push("/bookmarks" as never); }}
+        onOpenRibbons={() => { setPickerVisible(false); setRibbonSheetVisible(true); }}
         onOpenPlans={() => {
           setPickerVisible(false);
           router.push("/bible-plans" as never);
@@ -2512,9 +2580,21 @@ export function BibleScreen() {
           jumpToPosition(nextPosition, { intent });
         }}
         palette={readerPalette}
+        ribbonCount={state.bibleRibbons.length}
         savedVerses={state.savedVerses}
         versionLabel={bibleVersion.label}
         visible={pickerVisible}
+      />
+      <BibleRibbonSheet
+        currentId={ribbonAtPosition?.id}
+        onClose={() => setRibbonSheetVisible(false)}
+        onContinue={continueRibbon}
+        onMove={moveRibbonHere}
+        onRemove={removeRibbon}
+        onRename={(id, label) => { void dispatch({ type: "renameBibleRibbon", id, label }); }}
+        onSet={() => { setRibbonSheetVisible(false); void setRibbonHere(); }}
+        ribbons={state.bibleRibbons}
+        visible={ribbonSheetVisible}
       />
       <Modal animationType="slide" visible={searchVisible} onRequestClose={closeSearch} onDismiss={() => {
         if (!browseAfterSearchDismiss.current) return;

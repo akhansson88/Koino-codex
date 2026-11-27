@@ -1,6 +1,6 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import type { EventDraft } from "@/state/events";
-import type { AudioClip, BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, FastMode, FastSchedule, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { AudioClip, BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanPosition, BiblePlanRange, BookmarkCollectionColor, CommunityInvitePreview, EntryKind, EventRsvpStatus, FastMode, FastSchedule, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -92,6 +92,17 @@ export type Action =
   | { type: "acknowledgeFast"; id: Id }
   | { type: "saveVerse"; verse: BibleVerse }
   | { type: "removeSavedVerse"; id: Id }
+  | { type: "updateSavedVerse"; id: Id; patch: { collectionId?: Id | null; note?: string } }
+  | { type: "moveSavedVerses"; ids: Id[]; collectionId: Id | null }
+  | { type: "removeSavedVerses"; ids: Id[] }
+  | { type: "createBookmarkCollection"; name: string; color: BookmarkCollectionColor }
+  | { type: "updateBookmarkCollection"; id: Id; name?: string; color?: BookmarkCollectionColor; sortOrder?: number }
+  | { type: "deleteBookmarkCollection"; id: Id }
+  | { type: "setBibleRibbon"; position: BiblePlanPosition; label?: string }
+  | { type: "moveBibleRibbon"; id: Id; position: BiblePlanPosition }
+  | { type: "renameBibleRibbon"; id: Id; label: string }
+  | { type: "removeBibleRibbon"; id: Id }
+  | { type: "touchBibleRibbon"; id: Id }
   | { type: "highlightVerses"; color: BibleHighlightColor; colorId?: Id; verses: BibleVerse[] }
   | { type: "removeBibleHighlight"; id: Id }
   | { type: "removeBibleHighlights"; ids: Id[] }

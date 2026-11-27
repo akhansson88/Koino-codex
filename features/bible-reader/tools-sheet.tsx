@@ -6,32 +6,40 @@ import { useAppTranslation } from "@/ui/app-language";
 import { type ReaderPalette } from "@/features/bible-reader/types";
 
 export function BibleReaderToolsSheet({
+  bookmarkCount,
   canGoHistoryBack,
   canGoHistoryForward,
   onClose,
   onHistoryBack,
   onHistoryForward,
+  onOpenBookmarks,
   onOpenCompare,
   onOpenMyPlaces,
   onOpenReading,
+  onOpenRibbons,
   onOpenSearch,
   onOpenSettings,
   palette,
   readingCount,
+  ribbonCount,
   visible,
 }: {
+  bookmarkCount: number;
   canGoHistoryBack: boolean;
   canGoHistoryForward: boolean;
   onClose: () => void;
   onHistoryBack: () => void;
   onHistoryForward: () => void;
+  onOpenBookmarks: () => void;
   onOpenCompare: () => void;
   onOpenMyPlaces: () => void;
   onOpenReading: () => void;
+  onOpenRibbons: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   palette: ReaderPalette;
   readingCount: number;
+  ribbonCount: number;
   visible: boolean;
 }) {
   const sheetRef = useRef<AppSheetHandle>(null);
@@ -44,7 +52,7 @@ export function BibleReaderToolsSheet({
     visible={visible}
     onClose={onClose}
     title={t("bible.reader.tools")}
-    height={Math.min(438, Math.round(height * 0.78))}
+    height={Math.min(516, Math.round(height * 0.82))}
     backgroundColor={palette.sheet}
     foregroundColor={palette.text}
     scroll
@@ -52,6 +60,8 @@ export function BibleReaderToolsSheet({
     <View style={{ gap: 0 }}>
       <SheetActionRow icon="search" title={t("bible.accessibility.search")} color={palette.text} onPress={() => openAfterDismiss(onOpenSearch)} />
       <SheetActionRow icon="columns" title={t("bible.compare.open")} subtitle={t("bible.compare.openHint")} color={palette.text} onPress={() => openAfterDismiss(onOpenCompare)} />
+      <SheetActionRow icon="bookmark" title={t("bookmarks.title")} subtitle={t("bible.navigator.saved.count", { count: bookmarkCount })} color={palette.text} onPress={() => openAfterDismiss(onOpenBookmarks)} />
+      <SheetActionRow icon="tag" title={t("ribbons.title")} subtitle={t("ribbons.count", { count: ribbonCount })} color={palette.text} onPress={() => openAfterDismiss(onOpenRibbons)} />
       <SheetActionRow icon="bookmark" title={t("bible.navigator.myPlaces")} color={palette.text} onPress={() => openAfterDismiss(onOpenMyPlaces)} />
       <SheetActionRow
         icon="eye"

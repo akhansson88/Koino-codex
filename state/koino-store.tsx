@@ -43,7 +43,9 @@ import { eventDraftProblem, isGroupEventKind, normalizeEventReminderMinutes, sor
 import { normalizeFast, openFast } from "@/state/fasting";
 import { buildFastPlan, fastPlanPhase } from "@/state/fasting-plan";
 import { canJoinGroupFast, groupFastParticipant, groupFastProjection, participantCount, sortGroupFasts } from "@/state/group-fasting";
-import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
+import { canonicalSavedVerseRecord, normalizeSavedVerseRecords, savedVerseIdentity, savedVerseNeedsCanonicalKey, savedVerseStorageId } from "@/state/saved-verses";
+import { createBookmarkCollectionId, ribbonStorageId, sortBookmarkCollections, sortRibbons } from "@/state/bookmarks";
+import { clearBookmarkCache, writeBookmarkCache } from "@/state/bookmark-cache";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
 import { roomImagePublicUrl, uploadRoomImage, uploadUserAvatar, userAvatarPublicUrl } from "@/state/supabase-storage";
@@ -70,6 +72,9 @@ import {
   Id,
   JournalEntry,
   KoinoState,
+  BookmarkCollection,
+  BibleRibbon,
+  BiblePlanPosition,
   Membership,
   NotificationPreferences,
   Post,
@@ -399,7 +404,7 @@ async function claimCheckInDay(
 
 const pendingPrayerCompletionKeys = new Set<string>();
 
-const pendingSavedVerseDedupKeys = new Set<string>();
+const pendingSavedVerseMigrationKeys = new Set<string>();
 
 const passwordResetUrl = "https://koino-codex.firebaseapp.com/reset-password";
 
@@ -490,6 +495,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [discussionFollows, setDiscussionFollows] = useState<DiscussionFollow[]>([]);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [savedVerses, setSavedVerses] = useState<SavedVerse[]>([]);
+  const [bookmarkCollections, setBookmarkCollections] = useState<BookmarkCollection[]>([]);
+  const [bibleRibbons, setBibleRibbons] = useState<BibleRibbon[]>([]);
+  const [bookmarksLoaded, setBookmarksLoaded] = useState(false);
   const [fasts, setFasts] = useState<Fast[]>([]);
   const [fastsReady, setFastsReady] = useState(false);
   const [bibleHighlights, setBibleHighlights] = useState<BibleHighlight[]>([]);
@@ -544,6 +552,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   journalShareGroupRef.current = journalShareGroupId;
 
   const clearUserSession = useCallback(() => {
+    const clearingUid = auth.currentUser?.uid;
+    if (clearingUid) void clearBookmarkCache(clearingUid);
     setFirebaseUser(null);
     setProfile(null);
     setProfileReady(true);
@@ -574,6 +584,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setDiscussionFollows([]);
     setJournalEntries([]);
     setSavedVerses([]);
+    setBookmarkCollections([]);
+    setBibleRibbons([]);
+    setBookmarksLoaded(false);
     setFasts([]);
     setFastsReady(true);
     setBibleHighlights([]);
@@ -893,6 +906,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const activityNotificationsRef = ref(database, `activityNotifications/${firebaseUser.uid}`);
     const notificationPreferencesRef = ref(database, `notificationPreferences/${firebaseUser.uid}`);
     const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
+    const bookmarkCollectionsRef = ref(database, `bookmarkCollections/${firebaseUser.uid}`);
+    const bibleRibbonsRef = ref(database, `bibleRibbons/${firebaseUser.uid}`);
+    const connectedRef = ref(database, ".info/connected");
+    let databaseConnected = false;
+    let sawSavedVerseSnapshot = false;
     const fastsRef = ref(database, `fasts/${firebaseUser.uid}`);
     const bibleHighlightsRef = ref(database, `bibleHighlights/${firebaseUser.uid}`);
     bibleHighlightMutationsRef.current?.dispose();
@@ -908,6 +926,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     olderPrayerNotificationsRef.current = [];
     setJournalEntriesHasMore(false);
     setPrayerNotificationsHasMore(false);
+    setBookmarksLoaded(false);
 
     const unsubs = [
       onValue(recentFirebaseQuery(journalRef), (snapshot) => {
@@ -934,29 +953,64 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           ...((snapshot.val() as Partial<NotificationPreferences> | null) ?? {}),
         });
       }),
+      onValue(connectedRef, (snapshot) => {
+        databaseConnected = snapshot.val() === true;
+        if (databaseConnected && sawSavedVerseSnapshot) setBookmarksLoaded(true);
+      }),
       onValue(savedVersesRef, (snapshot) => {
         const normalized = normalizeSavedVerseRecords(snapshot.val());
         setSavedVerses(normalized.verses);
+        sawSavedVerseSnapshot = true;
+        if (snapshot.exists() || databaseConnected) setBookmarksLoaded(true);
 
-        const duplicateStorageKeys = normalized.duplicateStorageKeys.filter((key) => {
-          const pendingKey = `${firebaseUser.uid}:${key}`;
-          if (pendingSavedVerseDedupKeys.has(pendingKey)) return false;
-          pendingSavedVerseDedupKeys.add(pendingKey);
+        const uid = firebaseUser.uid;
+        const writes = new Map<string, SavedVerse>();
+        const removals = new Set(normalized.duplicateStorageKeys);
+        for (const verse of normalized.verses) {
+          if (!savedVerseNeedsCanonicalKey(verse)) continue;
+          const canonical = canonicalSavedVerseRecord(verse);
+          if (!canonical) continue;
+          writes.set(canonical.id, canonical);
+          removals.add(verse.id);
+        }
+
+        const pendingWrites = [...writes.entries()].filter(([key]) => {
+          const pendingKey = `${uid}:write:${key}`;
+          if (pendingSavedVerseMigrationKeys.has(pendingKey)) return false;
+          pendingSavedVerseMigrationKeys.add(pendingKey);
           return true;
         });
+        const pendingRemovals = [...removals].filter((key) => {
+          if (writes.has(key)) return false;
+          const pendingKey = `${uid}:remove:${key}`;
+          if (pendingSavedVerseMigrationKeys.has(pendingKey)) return false;
+          pendingSavedVerseMigrationKeys.add(pendingKey);
+          return true;
+        });
+        if (!pendingWrites.length && !pendingRemovals.length) return;
 
-        if (duplicateStorageKeys.length > 0) {
-          void update(
-            ref(database),
-            Object.fromEntries(duplicateStorageKeys.map((key) => [`savedVerses/${firebaseUser.uid}/${key}`, null])),
-          )
-            .catch(() => {
-              // The normalized in-memory list remains safe; a later snapshot retries persistence.
-            })
-            .finally(() => {
-              duplicateStorageKeys.forEach((key) => pendingSavedVerseDedupKeys.delete(`${firebaseUser.uid}:${key}`));
-            });
-        }
+        const updates: Record<string, unknown> = {};
+        for (const [key, verse] of pendingWrites) updates[`savedVerses/${uid}/${key}`] = verse;
+        for (const key of pendingRemovals) updates[`savedVerses/${uid}/${key}`] = null;
+
+        void update(ref(database), updates)
+          .catch(() => {
+            // The normalized in-memory list remains safe; a later snapshot retries migration.
+          })
+          .finally(() => {
+            pendingWrites.forEach(([key]) => pendingSavedVerseMigrationKeys.delete(`${uid}:write:${key}`));
+            pendingRemovals.forEach((key) => pendingSavedVerseMigrationKeys.delete(`${uid}:remove:${key}`));
+          });
+      }),
+      onValue(bookmarkCollectionsRef, (snapshot) => {
+        setBookmarkCollections(sortBookmarkCollections(asArray<BookmarkCollection>(snapshot.val())));
+      }, () => {
+        // Rules for this new path may not be deployed on an older backend yet.
+      }),
+      onValue(bibleRibbonsRef, (snapshot) => {
+        setBibleRibbons(sortRibbons(asArray<BibleRibbon>(snapshot.val())));
+      }, () => {
+        // Rules for this new path may not be deployed on an older backend yet.
       }),
       onValue(bibleHighlightsRef, (snapshot) => {
         if (active && auth.currentUser?.uid === firebaseUser.uid) highlightMutations.receive(asArray<BibleHighlight>(snapshot.val()));
@@ -1011,6 +1065,15 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       if (bibleHighlightMutationsRef.current === highlightMutations) bibleHighlightMutationsRef.current = null;
     };
   }, [firebaseUser?.uid, personalHistoryUid]);
+
+  useEffect(() => {
+    if (!firebaseUser?.uid || !bookmarksLoaded) return;
+    void writeBookmarkCache(firebaseUser.uid, {
+      bookmarks: savedVerses,
+      collections: bookmarkCollections,
+      ribbons: bibleRibbons,
+    });
+  }, [bibleRibbons, bookmarkCollections, bookmarksLoaded, firebaseUser?.uid, savedVerses]);
 
   useEffect(() => {
     if (!firebaseUser || !profile?.currentGroupId || !currentGroupEncrypted) {
@@ -1319,6 +1382,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       discussionFollows: visibleShared.discussionFollows,
       journalEntries,
       savedVerses,
+      bookmarkCollections,
+      bibleRibbons,
+      bookmarksLoaded,
       fasts,
       fastsReady,
       groupFasts,
@@ -1376,6 +1442,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     replies,
     discussionFollows,
     savedVerses,
+    bookmarkCollections,
+    bibleRibbons,
+    bookmarksLoaded,
     fasts,
     fastsReady,
     groupFasts,
@@ -2963,11 +3032,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const identity = savedVerseIdentity(action.verse);
               const key = savedVerseStorageId(action.verse);
               if (!identity || !key) return;
+              const timestamp = now();
               const savedVerse: SavedVerse = {
                 ...action.verse,
                 id: key,
+                schema: 2,
                 referenceText: action.verse.referenceText ?? action.verse.reference,
-                savedAt: now(),
+                savedAt: timestamp,
+                updatedAt: timestamp,
               };
               const savedVersesRef = ref(database, `savedVerses/${firebaseUser.uid}`);
               const existingSnapshot = await get(savedVersesRef);
@@ -2981,6 +3053,199 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "removeSavedVerse": {
               if (!firebaseUser) return;
               await remove(ref(database, `savedVerses/${firebaseUser.uid}/${action.id}`));
+              setSavedVerses((current) => current.filter((verse) => verse.id !== action.id));
+              return;
+            }
+            case "updateSavedVerse": {
+              if (!firebaseUser) return;
+              const timestamp = now();
+              const writes: Record<string, unknown> = { updatedAt: timestamp };
+              let note: string | undefined;
+              if ("collectionId" in action.patch) {
+                writes.collectionId = action.patch.collectionId ?? null;
+              }
+              if ("note" in action.patch) {
+                note = action.patch.note?.trim().slice(0, 500);
+                writes.note = note ? note : null;
+                writes.noteUpdatedAt = timestamp;
+              }
+              await update(ref(database, `savedVerses/${firebaseUser.uid}/${action.id}`), writes);
+              setSavedVerses((verses) => verses.map((verse) => verse.id === action.id
+                ? {
+                    ...verse,
+                    updatedAt: timestamp,
+                    ...("collectionId" in action.patch ? { collectionId: action.patch.collectionId ?? null } : {}),
+                    ...("note" in action.patch ? { note: note || undefined, noteUpdatedAt: timestamp } : {}),
+                  }
+                : verse));
+              return;
+            }
+            case "moveSavedVerses": {
+              if (!firebaseUser) return;
+              const ids = [...new Set(action.ids)];
+              if (!ids.length) return;
+              const timestamp = now();
+              const updates: Record<string, unknown> = {};
+              for (const id of ids) {
+                updates[`savedVerses/${firebaseUser.uid}/${id}/collectionId`] = action.collectionId ?? null;
+                updates[`savedVerses/${firebaseUser.uid}/${id}/updatedAt`] = timestamp;
+              }
+              await update(ref(database), updates);
+              setSavedVerses((verses) => verses.map((verse) => ids.includes(verse.id)
+                ? { ...verse, collectionId: action.collectionId ?? null, updatedAt: timestamp }
+                : verse));
+              return;
+            }
+            case "removeSavedVerses": {
+              if (!firebaseUser) return;
+              const ids = [...new Set(action.ids)];
+              if (!ids.length) return;
+              await update(
+                ref(database),
+                Object.fromEntries(ids.map((id) => [`savedVerses/${firebaseUser.uid}/${id}`, null])),
+              );
+              setSavedVerses((verses) => verses.filter((verse) => !ids.includes(verse.id)));
+              return;
+            }
+            case "createBookmarkCollection": {
+              if (!firebaseUser) return;
+              const name = action.name.trim().slice(0, 40);
+              if (!name) throw new Error("A collection needs a name.");
+              const timestamp = now();
+              const collection: BookmarkCollection = {
+                id: createBookmarkCollectionId(name, bookmarkCollections),
+                name,
+                color: action.color,
+                sortOrder: bookmarkCollections.length,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              };
+              await set(ref(database, `bookmarkCollections/${firebaseUser.uid}/${collection.id}`), collection);
+              setBookmarkCollections((collections) => sortBookmarkCollections([
+                ...collections.filter((item) => item.id !== collection.id),
+                collection,
+              ]));
+              return;
+            }
+            case "updateBookmarkCollection": {
+              if (!firebaseUser) return;
+              const current = bookmarkCollections.find((collection) => collection.id === action.id);
+              if (!current) return;
+              const name = action.name?.trim().slice(0, 40) || current.name;
+              const timestamp = now();
+              const patch = {
+                name,
+                color: action.color ?? current.color,
+                sortOrder: action.sortOrder ?? current.sortOrder,
+                updatedAt: timestamp,
+              };
+              await update(ref(database, `bookmarkCollections/${firebaseUser.uid}/${action.id}`), patch);
+              setBookmarkCollections((collections) => sortBookmarkCollections(collections.map((collection) =>
+                collection.id === action.id ? { ...collection, ...patch } : collection)));
+              return;
+            }
+            case "deleteBookmarkCollection": {
+              if (!firebaseUser) return;
+              const timestamp = now();
+              const updates: Record<string, unknown> = {
+                [`bookmarkCollections/${firebaseUser.uid}/${action.id}`]: null,
+              };
+              for (const verse of savedVerses.filter((item) => item.collectionId === action.id)) {
+                updates[`savedVerses/${firebaseUser.uid}/${verse.id}/collectionId`] = null;
+                updates[`savedVerses/${firebaseUser.uid}/${verse.id}/updatedAt`] = timestamp;
+              }
+              await update(ref(database), updates);
+              setBookmarkCollections((collections) => collections.filter((collection) => collection.id !== action.id));
+              setSavedVerses((verses) => verses.map((verse) => verse.collectionId === action.id
+                ? { ...verse, collectionId: null, updatedAt: timestamp }
+                : verse));
+              return;
+            }
+            case "setBibleRibbon": {
+              if (!firebaseUser) return;
+              const { book, chapter, verse } = action.position;
+              if (!book || !Number.isInteger(chapter) || !Number.isInteger(verse) || chapter < 1 || verse < 1) return;
+              const id = ribbonStorageId(book, chapter, verse);
+              if (bibleRibbons.some((ribbon) => ribbon.id === id)) return;
+              if (bibleRibbons.length >= 5) throw new Error("RIBBON_LIMIT");
+              const timestamp = now();
+              const ribbon: BibleRibbon = {
+                id,
+                book,
+                chapter,
+                verse,
+                ...(action.label?.trim() ? { label: action.label.trim().slice(0, 40) } : {}),
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                lastOpenedAt: timestamp,
+              };
+              await set(ref(database, `bibleRibbons/${firebaseUser.uid}/${id}`), ribbon);
+              setBibleRibbons((ribbons) => sortRibbons([
+                ...ribbons.filter((item) => item.id !== ribbon.id),
+                ribbon,
+              ]));
+              return;
+            }
+            case "moveBibleRibbon": {
+              if (!firebaseUser) return;
+              const current = bibleRibbons.find((ribbon) => ribbon.id === action.id);
+              if (!current) return;
+              const { book, chapter, verse } = action.position;
+              if (!book || !Number.isInteger(chapter) || !Number.isInteger(verse) || chapter < 1 || verse < 1) return;
+              const id = ribbonStorageId(book, chapter, verse);
+              if (id === current.id) return;
+              if (bibleRibbons.some((ribbon) => ribbon.id === id)) throw new Error("RIBBON_EXISTS");
+              const timestamp = now();
+              const next: BibleRibbon = {
+                ...current,
+                id,
+                book,
+                chapter,
+                verse,
+                updatedAt: timestamp,
+                lastOpenedAt: timestamp,
+              };
+              await update(ref(database), {
+                [`bibleRibbons/${firebaseUser.uid}/${current.id}`]: null,
+                [`bibleRibbons/${firebaseUser.uid}/${id}`]: next,
+              });
+              setBibleRibbons((ribbons) => sortRibbons([
+                ...ribbons.filter((ribbon) => ribbon.id !== current.id && ribbon.id !== next.id),
+                next,
+              ]));
+              return;
+            }
+            case "renameBibleRibbon": {
+              if (!firebaseUser) return;
+              const current = bibleRibbons.find((ribbon) => ribbon.id === action.id);
+              if (!current) return;
+              const timestamp = now();
+              const label = action.label.trim().slice(0, 40);
+              const patch = { ...(label ? { label } : { label: null }), updatedAt: timestamp };
+              await update(ref(database, `bibleRibbons/${firebaseUser.uid}/${action.id}`), patch);
+              setBibleRibbons((ribbons) => ribbons.map((ribbon) => ribbon.id === action.id
+                ? { ...ribbon, ...(label ? { label } : { label: undefined }), updatedAt: timestamp }
+                : ribbon));
+              return;
+            }
+            case "removeBibleRibbon": {
+              if (!firebaseUser) return;
+              await remove(ref(database, `bibleRibbons/${firebaseUser.uid}/${action.id}`));
+              setBibleRibbons((ribbons) => ribbons.filter((ribbon) => ribbon.id !== action.id));
+              return;
+            }
+            case "touchBibleRibbon": {
+              if (!firebaseUser) return;
+              const current = bibleRibbons.find((ribbon) => ribbon.id === action.id);
+              if (!current) return;
+              const timestamp = now();
+              await update(ref(database, `bibleRibbons/${firebaseUser.uid}/${action.id}`), {
+                lastOpenedAt: timestamp,
+                updatedAt: timestamp,
+              });
+              setBibleRibbons((ribbons) => sortRibbons(ribbons.map((ribbon) => ribbon.id === action.id
+                ? { ...ribbon, lastOpenedAt: timestamp, updatedAt: timestamp }
+                : ribbon)));
               return;
             }
             case "highlightVerses": {
