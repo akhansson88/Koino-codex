@@ -2,22 +2,24 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
 
-import { formatFastRange, formatCountdown } from "@/features/fasting/format";
+import { formatCountdown, formatFastRange } from "@/features/fasting/format";
 import { useFastClock } from "@/features/fasting/use-fast-clock";
+import { latestFast, openFast } from "@/state/fasting";
 import {
-  fastDayNumber,
-  fastPhase,
-  fastProgressPercent,
-  fastRemainingMinutes,
-  latestFast,
-  openFast,
-} from "@/state/fasting";
+  fastPlanDayNumber,
+  fastPlanPhase,
+  fastPlanRemainingMinutes,
+  fastPlanWindowAt,
+  fastWindowProgressPercent,
+} from "@/state/fasting-plan";
+import { fastModeConfig } from "@/state/fasting-modes";
+import { participantCount } from "@/state/group-fasting";
 import { useKoinoFields } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
 import { BodyText, Card } from "@/ui/app-components";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
-const fastingCardFields = ["fasts", "fastsReady"] as const;
+const fastingCardFields = ["fasts", "fastsReady", "groupFasts", "groups", "currentGroupId"] as const;
 
 export function FastingCard() {
   const state = useKoinoFields(fastingCardFields);
@@ -41,26 +43,30 @@ export function FastingCard() {
   const active = openFast(state.fasts, now);
   const latest = latestFast(state.fasts);
   const shown = active ?? latest;
-  const phase = shown ? fastPhase(shown, now) : undefined;
-  const percent = shown && phase !== "scheduled" ? fastProgressPercent(shown, now) : 0;
+  const phase = shown ? fastPlanPhase(shown, now) : undefined;
+  const window = shown ? fastPlanWindowAt(shown, now) : undefined;
+  const percent = shown && window?.phase === "fasting" ? fastWindowProgressPercent(shown, now) : 0;
+  const group = state.groups.find((item) => item.id === state.currentGroupId);
+  const shared = shown?.visibility === "group" && shown.groupId === group?.id
+    ? state.groupFasts.find((item) => item.id === shown.id)
+    : undefined;
+  const joined = Boolean(shown?.sourceGroupFastId);
 
   const title = !shown
     ? t("me.fasting.start")
-    : phase === "scheduled"
-      ? t("me.fasting.startsIn", { time: formatCountdown(fastRemainingMinutes(shown, now), language) })
-      : phase === "active"
-        ? t("me.fasting.remaining", { time: formatCountdown(fastRemainingMinutes(shown, now), language) })
-        : phase === "ended"
-          ? t("me.fasting.ended")
-          : t("me.fasting.complete");
+    : window?.phase === "fasting"
+      ? t("me.fasting.remaining", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), language) })
+      : window?.phase === "eating"
+        ? t("fasting.status.eating")
+        : phase === "scheduled"
+          ? t("me.fasting.startsIn", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), language) })
+          : phase === "ended"
+            ? t("me.fasting.ended")
+            : t("me.fasting.complete");
 
   const subtitle = !shown
-    ? t("me.fasting.empty")
-    : phase === "scheduled"
-      ? t("me.fasting.startsOn", { date: formatFastRange(shown, language) })
-      : phase === "active"
-        ? t("me.fasting.dayOf", { day: fastDayNumber(shown, now), total: shown.durationDays })
-        : t("me.fasting.summary", { days: shown.durationDays, range: formatFastRange(shown, language) });
+    ? t("fasting.choose.body")
+    : `${t(fastModeConfig(shown.mode).titleKey as never)} · ${t("fasting.dashboard.dayOf", { day: fastPlanDayNumber(shown, now), total: shown.durationDays })}`;
 
   return (
     <Pressable
@@ -83,7 +89,7 @@ export function FastingCard() {
             <Feather color={colors.muted} name="chevron-right" size={18} />
           </View>
 
-          {shown && phase !== "scheduled" ? (
+          {shown && window?.phase === "fasting" ? (
             <View style={{ gap: 6 }}>
               <View
                 accessibilityLabel={`${percent}%`}
@@ -94,12 +100,12 @@ export function FastingCard() {
                 <View style={{ backgroundColor: colors.accentRhythm, borderRadius: 999, height: "100%", width: `${percent}%` }} />
               </View>
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={[typography.caption, { color: colors.muted }]}>
-                  {t("fasting.progress.percent", { percent })}
-                </Text>
+                <Text style={[typography.caption, { color: colors.muted }]}>{t("fasting.progress.percent", { percent })}</Text>
                 <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
-                  <Feather color={colors.muted} name="lock" size={11} />
-                  <Text style={[typography.caption, { color: colors.muted }]}>{t("me.fasting.private")}</Text>
+                  <Feather color={colors.muted} name={shared ? "users" : "lock"} size={11} />
+                  <Text style={[typography.caption, { color: colors.muted }]}>
+                    {joined ? t("fasting.group.joined") : shared ? t("fasting.dashboard.sharedCount", { count: participantCount(shared) }) : t("me.fasting.private")}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -109,6 +115,16 @@ export function FastingCard() {
             <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
               <Feather color={colors.muted} name="lock" size={11} />
               <Text style={[typography.caption, { color: colors.muted }]}>{t("me.fasting.private")}</Text>
+            </View>
+          ) : null}
+
+          {shown && window?.phase !== "fasting" ? (
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 4 }}>
+              <Feather color={colors.muted} name={shared ? "users" : "lock"} size={11} />
+              <Text style={[typography.caption, { color: colors.muted }]}>
+                {joined ? t("fasting.group.joined") : shared ? t("fasting.dashboard.sharedCount", { count: participantCount(shared) }) : t("me.fasting.private")}
+              </Text>
+              {shown ? <Text style={[typography.caption, { color: colors.muted }]}>· {formatFastRange(shown, language)}</Text> : null}
             </View>
           ) : null}
         </Card>

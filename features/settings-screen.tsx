@@ -10,6 +10,9 @@ import { joinPolicySummary } from "@/features/community/join-qr";
 import { CheckInModal, moodNumber, type CheckInStep } from "@/features/check-in-modal";
 import { checkInExistsForDay } from "@/state/check-ins";
 import { formatEventDay, formatEventTime, nextUpcomingEvent } from "@/state/events";
+import { activeGroupFast, nextGroupFast, participantCount } from "@/state/group-fasting";
+import { fastModeConfig } from "@/state/fasting-modes";
+import { formatFastDate } from "@/features/fasting/format";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { Action, CommunitySubmissionOutcome, CommunitySubmissionRequest } from "@/state/store/types";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
@@ -167,7 +170,7 @@ function notifyCommunityComposer(attempt: CommunityComposerAttempt) {
 export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomView?: RoomView }) {
   useTheme();
   const insets = useSafeAreaInsets();
-  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps", "groupEvents", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
+  const state = useKoinoFields(["checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityContentHasMore", "communityContentLoadingMore", "communityFeedError", "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps", "groupEvents", "groupFasts", "groupFastsReady", "groupMemberCounts", "groups", "journalEntries", "journalShareGroupId", "memberships", "postReactions", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady", "replies", "users"]);
   const { dispatch } = useKoinoActions();
   const { language, t } = useAppTranslation();
   const navigation = useNavigation();
@@ -382,6 +385,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const ownsGroup = Boolean(group && group.ownerId === state.currentUserId);
   const otherRooms = useMemo(() => state.groups.filter((item) => item.id !== state.currentGroupId), [state.currentGroupId, state.groups]);
   const nextEvent = useMemo(() => nextUpcomingEvent(state.groupEvents), [state.groupEvents]);
+  const nextFast = activeGroupFast(state.groupFasts) ?? nextGroupFast(state.groupFasts);
   const memberCount = roomMemberCount(state.groupMemberCounts, group?.id, state.memberships.length || 1);
   const currentUser = state.users.find((item) => item.id === state.currentUserId);
   const todayKey = localDayKey(new Date());
@@ -1782,6 +1786,47 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     {nextEvent
                       ? `${nextEvent.title} · ${formatEventDay(nextEvent.startAt, language, { month: "short", day: "numeric" })} ${formatEventTime(nextEvent.startAt, language)}`
                       : t("community.events.empty")}
+                  </Text>
+                </View>
+                <Feather color={colors.disabledText} name="chevron-right" size={17} />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel={nextFast
+                  ? `${t("fasting.group.entry")}. ${t(fastModeConfig(nextFast.mode).titleKey as never)}. ${formatFastDate(nextFast.startAt, language, { weekday: "short", hour: "2-digit", minute: "2-digit" })}`
+                  : t("fasting.group.entry")}
+                accessibilityRole="button"
+                onPress={() => router.push("/group-fasting" as never)}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  backgroundColor: pressed ? shadcn.secondary : shadcn.card,
+                  borderColor: shadcn.border,
+                  borderRadius: radius.lg,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  gap: 12,
+                  minHeight: 74,
+                  padding: 14,
+                })}
+              >
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: shadcn.brandSoft,
+                    borderRadius: radius.md,
+                    height: 40,
+                    justifyContent: "center",
+                    width: 40,
+                  }}
+                >
+                  <Feather color={shadcn.brand} name="activity" size={19} />
+                </View>
+                <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+                  <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("fasting.group.entry")}</Text>
+                  <Text numberOfLines={2} style={[typography.caption, { color: colors.muted }]}>
+                    {nextFast
+                      ? `${t(fastModeConfig(nextFast.mode).titleKey as never)} · ${formatFastDate(nextFast.startAt, language, { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${t("fasting.group.joinedCount", { count: participantCount(nextFast) })}`
+                      : t("fasting.group.entryEmpty")}
                   </Text>
                 </View>
                 <Feather color={colors.disabledText} name="chevron-right" size={17} />

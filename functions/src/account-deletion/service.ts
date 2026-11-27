@@ -294,6 +294,21 @@ async function deleteGroupContent(uid: string): Promise<Map<string, Target>> {
     }
   }
 
+  // A joined member's participant record is nested under somebody else's fast,
+  // so collectMatches stops at the host record. Remove the member's own child
+  // entry explicitly from every community fast.
+  for (const root of ROOTS) {
+    const base = root ? `${root}/groupFasts` : "groupFasts";
+    const communities = await read(base);
+    for (const [groupId, fasts] of Object.entries(communities ?? {})) {
+      if (!isObject(fasts)) continue;
+      for (const [fastId, fast] of Object.entries(fasts)) {
+        if (!isObject(fast) || !isObject(fast.participants) || !isObject(fast.participants[uid])) continue;
+        writer.add(`${base}/${groupId}/${fastId}/participants/${uid}`);
+      }
+    }
+  }
+
   // Remove replies to authored posts and check-ins, then reactions and
   // notifications that point at any removed target.
   for (const root of ROOTS) {

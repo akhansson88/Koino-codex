@@ -12,19 +12,34 @@ export function FastingReminderRuntime() {
   const { currentUserId, fasts, fastsReady } = useKoinoFields(fields);
   const { t } = useAppTranslation();
   const body = t("fasting.notification.body");
+  const windowStartBody = t("fasting.notification.windowStart");
+  const windowEndBody = t("fasting.notification.windowEnd");
+  const danielMorningBody = t("fasting.notification.danielMorning");
 
   useEffect(() => {
     if (!fastsReady) return;
-    void syncFastReminders({ body, fasts: currentUserId ? fasts : [] });
-  }, [body, currentUserId, fasts, fastsReady]);
+    void syncFastReminders({
+      body,
+      danielMorningBody,
+      fasts: currentUserId ? fasts : [],
+      windowEndBody,
+      windowStartBody,
+    });
+  }, [body, currentUserId, danielMorningBody, fasts, fastsReady, windowEndBody, windowStartBody]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active" || !fastsReady) return;
-      void syncFastReminders({ body, fasts: currentUserId ? fasts : [] });
+      void syncFastReminders({
+        body,
+        danielMorningBody,
+        fasts: currentUserId ? fasts : [],
+        windowEndBody,
+        windowStartBody,
+      });
     });
     return () => subscription.remove();
-  }, [body, currentUserId, fasts, fastsReady]);
+  }, [body, currentUserId, danielMorningBody, fasts, fastsReady, windowEndBody, windowStartBody]);
 
   return null;
 }

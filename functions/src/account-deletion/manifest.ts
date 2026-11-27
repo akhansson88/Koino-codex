@@ -44,6 +44,7 @@ export const DELETION_MANIFEST: Record<string, DeletionRule> = {
   groupBiblePlanParticipation: { kind: "groupAuthored", collection: "groupBiblePlanParticipation" },
   groupEvents: { kind: "groupAuthored", collection: "groupEvents", cascade: true },
   eventRsvps: { kind: "groupAuthored", collection: "eventRsvps" },
+  groupFasts: { kind: "groupAuthored", collection: "groupFasts" },
   supportIntents: { kind: "user", path: "supportIntents/{uid}" },
   // Container for the plaintext model. Every child collection above has its
   // own entry; the node itself is never deleted wholesale.

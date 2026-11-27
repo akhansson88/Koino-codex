@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { transform } from "esbuild";
+import { buildSync } from "esbuild";
 
 process.env.TZ = "Europe/Stockholm";
 
-const result = await transform(await readFile(new URL("../state/fasting.ts", import.meta.url), "utf8"), {
-  loader: "ts",
+const bundle = buildSync({
+  entryPoints: ["state/fasting.ts"],
+  bundle: true,
+  platform: "node",
   format: "esm",
+  write: false,
+  alias: { "@": process.cwd() },
 });
 const {
   fastDayNumber,
@@ -20,7 +23,7 @@ const {
   isFastDate,
   latestFast,
   openFast,
-} = await import(`data:text/javascript;base64,${Buffer.from(result.code).toString("base64")}`);
+} = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 
 assert.equal(isFastDate("2026-11-23"), true);
 assert.equal(isFastDate("2026-02-29"), false);

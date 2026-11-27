@@ -1,6 +1,6 @@
 import type { JoinRequestReceipt } from "@/state/community-join-requests";
 import type { EventDraft } from "@/state/events";
-import type { AudioClip, BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
+import type { AudioClip, BibleHighlightColor, CheckIn, BibleVerse, BiblePlanDay, BiblePlanRange, CommunityInvitePreview, EntryKind, EventRsvpStatus, FastMode, FastSchedule, GroupJoinApprovers, GroupJoinPolicy, Id, JournalEntryType, KoinoState, NotificationPreferences, Post, PostReaction, PostReactionKind, PrayerReaction, PrayerSession, User, HeartMood } from "@/state/types";
 
 export type Profile = User & {
   email?: string | null;
@@ -82,8 +82,12 @@ export type Action =
   | { type: "createJournalEntry"; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip; shareWithGroup?: boolean; title?: string; journalScope?: JournalScope }
   | { type: "updateJournalEntry"; id: Id; body: string; entryKind?: EntryKind; journalType?: JournalEntryType; heartMood?: HeartMood; verse?: BibleVerse; verses?: BibleVerse[]; audio?: AudioClip | null; sharedPostId?: Id; title?: string; journalScope?: JournalScope }
   | { type: "deleteJournalEntry"; id: Id }
-  | { type: "startFast"; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }
-  | { type: "updateFast"; id: Id; startDate: string; durationDays: number; timeZone: string; alertEnabled: boolean }
+  | { type: "startFast"; mode: FastMode; schedule: FastSchedule; startDate: string; startTime?: string; durationDays: number; durationHours?: number; timeZone: string; alertEnabled: boolean; shareWithGroup?: boolean }
+  | { type: "updateFast"; id: Id; mode: FastMode; schedule: FastSchedule; startDate: string; startTime?: string; durationDays: number; durationHours?: number; timeZone: string; alertEnabled: boolean }
+  | { type: "setFastVisibility"; id: Id; shared: boolean }
+  | { type: "joinGroupFast"; groupId: Id; fastId: Id; replaceOpenFast?: boolean }
+  | { type: "leaveGroupFast"; groupId: Id; fastId: Id }
+  | { type: "removeGroupFast"; groupId: Id; fastId: Id }
   | { type: "endFast"; id: Id }
   | { type: "acknowledgeFast"; id: Id }
   | { type: "saveVerse"; verse: BibleVerse }

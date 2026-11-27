@@ -40,7 +40,9 @@ import { biblePlanProgressUpdates, preserveBiblePlanProgress } from "@/state/bib
 import { addPlanDays, isPlanDate, rescheduleBiblePlan } from "@/state/bible-plan-schedule";
 import { buildBiblePlanDays, completedDayNumbers, planCompletionStatus, todayDateKey } from "@/features/bible-plans";
 import { eventDraftProblem, isGroupEventKind, normalizeEventReminderMinutes, sortGroupEvents } from "@/state/events";
-import { fastDurationDays, fastEndAt, fastPhase, fastStartAt, openFast } from "@/state/fasting";
+import { normalizeFast, openFast } from "@/state/fasting";
+import { buildFastPlan, fastPlanPhase } from "@/state/fasting-plan";
+import { canJoinGroupFast, groupFastParticipant, groupFastProjection, participantCount, sortGroupFasts } from "@/state/group-fasting";
 import { normalizeSavedVerseRecords, savedVerseIdentity, savedVerseStorageId } from "@/state/saved-verses";
 import { createSnapshotStore, useSelectedSnapshot, type SnapshotStore } from "@/state/selective-store";
 import { createBibleHighlightMutations, type BibleHighlightChanges } from "@/state/store/bible-highlights";
@@ -56,6 +58,10 @@ import {
   BiblePlan,
   EventRsvp,
   Fast,
+  FastMode,
+  FastSchedule,
+  GroupFast,
+  GroupFastParticipant,
   GroupBiblePlanAnnouncement,
   GroupBiblePlanParticipation,
   GroupEvent,
@@ -490,6 +496,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
   const [groupEvents, setGroupEvents] = useState<GroupEvent[]>([]);
   const [eventRsvps, setEventRsvps] = useState<EventRsvp[]>([]);
   const [groupEventsReady, setGroupEventsReady] = useState(false);
+  const [groupFasts, setGroupFasts] = useState<GroupFast[]>([]);
+  const [groupFastsReady, setGroupFastsReady] = useState(false);
   const bibleHighlightMutationsRef = useRef<ReturnType<typeof createBibleHighlightMutations> | null>(null);
   const bibleHighlightUserRef = useRef<string | undefined>(undefined);
   if (!bibleHighlightMutationsRef.current) bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
@@ -572,6 +580,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setGroupEvents([]);
     setEventRsvps([]);
     setGroupEventsReady(false);
+    setGroupFasts([]);
+    setGroupFastsReady(false);
     bibleHighlightMutationsRef.current?.dispose();
     bibleHighlightMutationsRef.current = createBibleHighlightMutations(setBibleHighlights);
     setBibleHighlightColors([]);
@@ -954,7 +964,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       onValue(fastsRef, (snapshot) => {
         if (!active) return;
         setFasts(
-          asArray<Fast>(snapshot.val()).sort((left, right) =>
+          asArray<Fast>(snapshot.val()).map(normalizeFast).sort((left, right) =>
             Date.parse(right.startAt) - Date.parse(left.startAt) || Date.parse(right.createdAt) - Date.parse(left.createdAt),
           ),
         );
@@ -1026,6 +1036,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       olderPostReactionsRef.current = [];
       setGroupBiblePlanAnnouncements([]);
       setGroupBiblePlanParticipations([]);
+      setGroupFasts([]);
+      setGroupFastsReady(true);
       return;
     }
 
@@ -1064,6 +1076,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     setGroupEvents([]);
     setEventRsvps([]);
     setGroupEventsReady(false);
+    setGroupFasts([]);
+    setGroupFastsReady(false);
 
     const markCommunityFeedReady = () => {
       if (
@@ -1104,6 +1118,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     const planParticipationsRef = ref(database, `groupBiblePlanParticipation/${groupId}`);
     const eventsRef = ref(database, `groupEvents/${groupId}`);
     const eventRsvpsRef = ref(database, `eventRsvps/${groupId}`);
+    const groupFastsRef = ref(database, `groupFasts/${groupId}`);
 
     const unsubs = [
       FirebaseDatabase.onValue(FirebaseDatabase.ref(database, `moderationTombstones/${groupId}`), snapshot => {
@@ -1210,6 +1225,17 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         rsvpsReady = true;
         markGroupEventsReady();
       }, handleCommunityFeedError),
+      onValue(groupFastsRef, (snapshot) => {
+        if (!active) return;
+        setGroupFasts(
+          asArray<GroupFast>(snapshot.val()).sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt)),
+        );
+        setGroupFastsReady(true);
+      }, () => {
+        if (!active) return;
+        setGroupFasts([]);
+        setGroupFastsReady(true);
+      }),
     ];
 
     return () => {
@@ -1295,6 +1321,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
       savedVerses,
       fasts,
       fastsReady,
+      groupFasts,
+      groupFastsReady,
       bibleHighlights,
       bibleHighlightColors,
       biblePlans,
@@ -1350,6 +1378,8 @@ export function KoinoProvider({ children }: PropsWithChildren) {
     savedVerses,
     fasts,
     fastsReady,
+    groupFasts,
+    groupFastsReady,
     bibleHighlights,
     bibleHighlightColors,
     biblePlans,
@@ -1446,6 +1476,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           "submitCheckIn", "updateCheckIn", "deleteCheckIn", "createPost", "editPost", "deletePost", "markPrayerAnswered", "updatePrayerAnswer", "unmarkPrayerAnswered",
           "unpray", "togglePostReaction", "createReply", "deleteReply", "announceBiblePlan", "unannounceBiblePlan", "joinGroupBiblePlan", "setDiscussionFollow",
           "createEvent", "updateEvent", "deleteEvent", "setEventRsvp",
+          "setFastVisibility", "joinGroupFast", "leaveGroupFast", "removeGroupFast",
         ];
         const explicitGroupId = action.type === "removeGroupMember" || action.type === "transferGroupOwnership" ? action.groupId
           : ["leaveGroup", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup"].includes(action.type) && "id" in action ? action.id : undefined;
@@ -2583,61 +2614,299 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             }
             case "startFast": {
               if (!firebaseUser) return;
-              const durationDays = fastDurationDays(action.durationDays);
-              const startAt = fastStartAt(action.startDate);
-              const endAt = durationDays ? fastEndAt(action.startDate, durationDays) : undefined;
-              if (!durationDays || !startAt || !endAt || !action.timeZone.trim()) {
-                throw new Error("Enter a start date and a duration from 1 to 365 days.");
-              }
+              const groupId = profile?.currentGroupId;
+              const plan = buildFastPlan({
+                mode: action.mode,
+                schedule: action.schedule,
+                startDate: action.startDate,
+                startTime: action.startTime,
+                durationDays: action.durationDays,
+                durationHours: action.durationHours,
+              });
               if (openFast(fasts)) throw new Error("Finish or end your current fast before starting another.");
               const timestamp = now();
+              const shared = Boolean(action.shareWithGroup && groupId);
               const fast: Fast = {
                 id: id("fast"),
                 userId: firebaseUser.uid,
-                startDate: action.startDate,
-                durationDays,
-                timeZone: action.timeZone,
-                startAt: startAt.toISOString(),
-                endAt: endAt.toISOString(),
+                startDate: plan.startDate,
+                durationDays: plan.durationDays,
+                ...(plan.durationHours ? { durationHours: plan.durationHours } : {}),
+                timeZone: action.timeZone.trim() || "UTC",
+                startAt: plan.startAt,
+                endAt: plan.endAt,
                 status: "active",
                 alertEnabled: action.alertEnabled,
                 createdAt: timestamp,
                 updatedAt: timestamp,
+                mode: action.mode,
+                schedule: plan.schedule,
+                visibility: shared ? "group" : "private",
+                ...(shared && groupId ? { groupId, sharedAt: timestamp } : {}),
+                ...(action.mode === "dry" || (action.durationHours ?? 0) > 48 ? { safetyAcceptedAt: timestamp } : {}),
               };
-              await set(
-                ref(database, `fasts/${firebaseUser.uid}/${fast.id}`),
-                fast,
+              const writes: Record<string, unknown> = {
+                [`fasts/${firebaseUser.uid}/${fast.id}`]: fast,
+              };
+              await update(
+                ref(database),
+                writes,
                 () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
               );
+              if (shared && groupId) {
+                // Rules check that the private fast exists, and a sibling path in
+                // one multi-path update is not visible to that check. Publish the
+                // projection right after the private record.
+                try {
+                  await set(
+                    ref(database, `groupFasts/${groupId}/${fast.id}`),
+                    groupFastProjection(fast, groupId, timestamp),
+                  );
+                } catch {
+                  await update(ref(database, `fasts/${firebaseUser.uid}/${fast.id}`), {
+                    visibility: "private",
+                    groupId: null,
+                    sharedAt: null,
+                    updatedAt: now(),
+                  }).catch(() => undefined);
+                  throw new Error("The fast was saved privately because it could not be shared.");
+                }
+              }
+              setFasts((current) => [...current, fast]);
+              if (shared && groupId) {
+                setGroupFasts((current) => sortGroupFasts([
+                  ...current.filter((item) => item.id !== fast.id),
+                  groupFastProjection(fast, groupId, timestamp),
+                ]));
+              }
               return;
             }
             case "updateFast": {
               if (!firebaseUser) return;
               const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
               if (!current) throw new Error("This fast is no longer available.");
-              if (current.status === "ended" || fastPhase(current) === "complete") {
+              if (current.status === "ended" || fastPlanPhase(current) === "complete") {
                 throw new Error("This fast has already ended.");
               }
-              const durationDays = fastDurationDays(action.durationDays);
-              const startAt = fastStartAt(action.startDate);
-              const endAt = durationDays ? fastEndAt(action.startDate, durationDays) : undefined;
-              if (!durationDays || !startAt || !endAt || !action.timeZone.trim()) {
-                throw new Error("Enter a start date and a duration from 1 to 365 days.");
+              if (current.sourceGroupFastId) {
+                throw new Error("This fast is shared with your community. End it here, or plan your own fast.");
+              }
+              const plan = buildFastPlan({
+                mode: action.mode,
+                schedule: action.schedule,
+                startDate: action.startDate,
+                startTime: action.startTime,
+                durationDays: action.durationDays,
+                durationHours: action.durationHours,
+              });
+              const shared = current.visibility === "group" && current.groupId
+                ? groupFasts.find((item) => item.id === current.id && item.groupId === current.groupId)
+                : undefined;
+              const joined = participantCount(shared) > 0;
+              const scheduleChanged = current.startAt !== plan.startAt
+                || current.endAt !== plan.endAt
+                || current.startDate !== plan.startDate
+                || current.durationDays !== plan.durationDays
+                || current.durationHours !== plan.durationHours;
+              if (joined && scheduleChanged) {
+                throw new Error("This fast is locked because someone joined. You can still end it or make it private.");
               }
               const updatedAt = now();
+              const updated: Fast = {
+                ...current,
+                startDate: plan.startDate,
+                durationDays: plan.durationDays,
+                durationHours: plan.durationHours,
+                timeZone: action.timeZone.trim() || current.timeZone,
+                startAt: plan.startAt,
+                endAt: plan.endAt,
+                mode: action.mode,
+                schedule: plan.schedule,
+                alertEnabled: action.alertEnabled,
+                updatedAt,
+              };
+              const writes: Record<string, unknown> = {
+                [`fasts/${firebaseUser.uid}/${current.id}/startDate`]: updated.startDate,
+                [`fasts/${firebaseUser.uid}/${current.id}/durationDays`]: updated.durationDays,
+                [`fasts/${firebaseUser.uid}/${current.id}/durationHours`]: updated.durationHours ?? null,
+                [`fasts/${firebaseUser.uid}/${current.id}/timeZone`]: updated.timeZone,
+                [`fasts/${firebaseUser.uid}/${current.id}/startAt`]: updated.startAt,
+                [`fasts/${firebaseUser.uid}/${current.id}/endAt`]: updated.endAt,
+                [`fasts/${firebaseUser.uid}/${current.id}/mode`]: updated.mode,
+                [`fasts/${firebaseUser.uid}/${current.id}/schedule`]: updated.schedule,
+                [`fasts/${firebaseUser.uid}/${current.id}/alertEnabled`]: updated.alertEnabled,
+                [`fasts/${firebaseUser.uid}/${current.id}/updatedAt`]: updatedAt,
+              };
+              if (shared && current.groupId && !joined) {
+                writes[`groupFasts/${current.groupId}/${current.id}`] = groupFastProjection(updated, current.groupId, updatedAt);
+              }
               await update(
-                ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
-                {
-                  startDate: action.startDate,
-                  durationDays,
-                  timeZone: action.timeZone,
-                  startAt: startAt.toISOString(),
-                  endAt: endAt.toISOString(),
-                  alertEnabled: action.alertEnabled,
-                  updatedAt,
-                },
+                ref(database),
+                writes,
                 () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
               );
+              setFasts((currentFasts) => currentFasts.map((item) => item.id === current.id ? updated : item));
+              if (shared && current.groupId && !joined) {
+                setGroupFasts((currentGroupFasts) => currentGroupFasts.map((item) => item.id === current.id
+                  ? { ...groupFastProjection(updated, current.groupId!, updatedAt), participants: item.participants }
+                  : item));
+              }
+              return;
+            }
+            case "setFastVisibility": {
+              if (!firebaseUser) return;
+              const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
+              if (!current) throw new Error("This fast is no longer available.");
+              if (current.status === "ended" || fastPlanPhase(current) === "complete") {
+                throw new Error("This fast has already ended.");
+              }
+              const groupId = profile?.currentGroupId;
+              if (action.shared && !groupId) throw new Error("Choose a community before sharing a fast.");
+              const updatedAt = now();
+              const writes: Record<string, unknown> = {};
+              if (action.shared && groupId) {
+                const updated: Fast = {
+                  ...current,
+                  visibility: "group",
+                  groupId,
+                  sharedAt: updatedAt,
+                  updatedAt,
+                };
+                writes[`fasts/${firebaseUser.uid}/${current.id}/visibility`] = "group";
+                writes[`fasts/${firebaseUser.uid}/${current.id}/groupId`] = groupId;
+                writes[`fasts/${firebaseUser.uid}/${current.id}/sharedAt`] = updatedAt;
+                writes[`fasts/${firebaseUser.uid}/${current.id}/updatedAt`] = updatedAt;
+                writes[`groupFasts/${groupId}/${current.id}`] = groupFastProjection(updated, groupId, updatedAt);
+                await update(ref(database), writes);
+                setFasts((currentFasts) => currentFasts.map((item) => item.id === current.id ? updated : item));
+                setGroupFasts((currentGroupFasts) => sortGroupFasts([
+                  ...currentGroupFasts.filter((item) => item.id !== current.id),
+                  groupFastProjection(updated, groupId, updatedAt),
+                ]));
+              } else {
+                writes[`fasts/${firebaseUser.uid}/${current.id}/visibility`] = "private";
+                writes[`fasts/${firebaseUser.uid}/${current.id}/groupId`] = null;
+                writes[`fasts/${firebaseUser.uid}/${current.id}/sharedAt`] = null;
+                writes[`fasts/${firebaseUser.uid}/${current.id}/updatedAt`] = updatedAt;
+                if (current.groupId) writes[`groupFasts/${current.groupId}/${current.id}`] = null;
+                await update(ref(database), writes);
+                setFasts((currentFasts) => currentFasts.map((item) => item.id === current.id
+                  ? { ...item, visibility: "private", groupId: undefined, sharedAt: undefined, updatedAt }
+                  : item));
+                if (current.groupId) {
+                  setGroupFasts((currentGroupFasts) => currentGroupFasts.filter((item) => item.id !== current.id));
+                }
+              }
+              return;
+            }
+            case "joinGroupFast": {
+              if (!firebaseUser) return;
+              const groupId = profile?.currentGroupId;
+              if (!groupId || action.groupId !== groupId) return;
+              const shared = groupFasts.find((item) => item.id === action.fastId && item.groupId === groupId);
+              if (!shared) throw new Error("This fast is no longer available.");
+              if (!canJoinGroupFast(shared)) throw new Error("This fast has already started.");
+              if (shared.participants?.[firebaseUser.uid]) return;
+              const ownOpen = openFast(fasts);
+              if (ownOpen && !action.replaceOpenFast) throw new Error("Finish or end your current fast before joining another.");
+              const timestamp = now();
+              const personalFast: Fast = {
+                id: id("fast"),
+                userId: firebaseUser.uid,
+                startDate: shared.startDate,
+                durationDays: shared.durationDays,
+                ...(shared.durationHours ? { durationHours: shared.durationHours } : {}),
+                timeZone: shared.timeZone || "UTC",
+                startAt: shared.startAt,
+                endAt: shared.endAt,
+                status: "active",
+                alertEnabled: true,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                mode: shared.mode,
+                schedule: shared.schedule,
+                visibility: "private",
+                groupId,
+                sourceGroupFastId: shared.id,
+                sourceUserId: shared.userId,
+              };
+              const participant = groupFastParticipant(firebaseUser.uid, timestamp, personalFast.id);
+              const writes: Record<string, unknown> = {
+                [`fasts/${firebaseUser.uid}/${personalFast.id}`]: personalFast,
+                [`groupFasts/${groupId}/${shared.id}/participants/${firebaseUser.uid}`]: participant,
+              };
+              if (ownOpen) {
+                writes[`fasts/${firebaseUser.uid}/${ownOpen.id}/status`] = "ended";
+                writes[`fasts/${firebaseUser.uid}/${ownOpen.id}/endedAt`] = timestamp;
+                writes[`fasts/${firebaseUser.uid}/${ownOpen.id}/updatedAt`] = timestamp;
+                if (ownOpen.visibility === "group" && ownOpen.groupId) {
+                  writes[`groupFasts/${ownOpen.groupId}/${ownOpen.id}`] = null;
+                }
+                if (ownOpen.sourceGroupFastId && ownOpen.groupId) {
+                  writes[`groupFasts/${ownOpen.groupId}/${ownOpen.sourceGroupFastId}/participants/${firebaseUser.uid}`] = null;
+                }
+              }
+              await update(
+                ref(database),
+                writes,
+                () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
+              );
+              setFasts((current) => [
+                ...current.map((item) => ownOpen && item.id === ownOpen.id
+                  ? { ...item, status: "ended" as const, endedAt: timestamp, updatedAt: timestamp }
+                  : item),
+                personalFast,
+              ]);
+              if (ownOpen?.visibility === "group" && ownOpen.groupId) {
+                setGroupFasts((current) => current.filter((item) => item.id !== ownOpen.id));
+              }
+              if (ownOpen?.sourceGroupFastId && ownOpen.groupId) {
+                setGroupFasts((current) => current.map((item) => {
+                  if (item.id !== ownOpen.sourceGroupFastId) return item;
+                  const participants = { ...(item.participants ?? {}) };
+                  delete participants[firebaseUser.uid];
+                  return { ...item, participants };
+                }));
+              }
+              setGroupFasts((current) => current.map((item) => item.id === shared.id
+                ? { ...item, participants: { ...(item.participants ?? {}), [firebaseUser.uid]: participant } }
+                : item));
+              return;
+            }
+            case "leaveGroupFast": {
+              if (!firebaseUser) return;
+              const groupId = profile?.currentGroupId;
+              if (!groupId || action.groupId !== groupId) return;
+              const shared = groupFasts.find((item) => item.id === action.fastId && item.groupId === groupId);
+              const personal = fasts.find((fast) => fast.sourceGroupFastId === action.fastId && fast.groupId === groupId);
+              if (!shared || !personal) return;
+              if (Date.now() >= shared.joinCutoffMs) {
+                throw new Error("This fast has already started. End your own fast instead.");
+              }
+              await update(ref(database), {
+                [`fasts/${firebaseUser.uid}/${personal.id}`]: null,
+                [`groupFasts/${groupId}/${shared.id}/participants/${firebaseUser.uid}`]: null,
+              });
+              setFasts((current) => current.filter((fast) => fast.id !== personal.id));
+              setGroupFasts((current) => current.map((item) => {
+                if (item.id !== shared.id) return item;
+                const participants = { ...(item.participants ?? {}) };
+                delete participants[firebaseUser.uid];
+                return { ...item, participants };
+              }));
+              return;
+            }
+            case "removeGroupFast": {
+              if (!firebaseUser) return;
+              const groupId = profile?.currentGroupId;
+              if (!groupId || action.groupId !== groupId) return;
+              const group = groups.find((item) => item.id === groupId);
+              const shared = groupFasts.find((item) => item.id === action.fastId && item.groupId === groupId);
+              if (!group || group.ownerId !== firebaseUser.uid || !shared) return;
+              await update(ref(database), {
+                [`groupFasts/${groupId}/${shared.id}`]: null,
+              });
+              setGroupFasts((current) => current.filter((item) => item.id !== shared.id));
               return;
             }
             case "endFast": {
@@ -2645,17 +2914,42 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
               if (!current || current.status === "ended") return;
               const endedAt = now();
+              const writes: Record<string, unknown> = {
+                [`fasts/${firebaseUser.uid}/${action.id}/status`]: "ended",
+                [`fasts/${firebaseUser.uid}/${action.id}/endedAt`]: endedAt,
+                [`fasts/${firebaseUser.uid}/${action.id}/updatedAt`]: endedAt,
+              };
+              if (current.visibility === "group" && current.groupId) {
+                writes[`groupFasts/${current.groupId}/${current.id}`] = null;
+              }
+              if (current.sourceGroupFastId && current.groupId) {
+                writes[`groupFasts/${current.groupId}/${current.sourceGroupFastId}/participants/${firebaseUser.uid}`] = null;
+              }
               await update(
-                ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
-                { status: "ended", endedAt, updatedAt: endedAt },
+                ref(database),
+                writes,
                 () => auth.currentUser?.uid === firebaseUser.uid && sessionGeneration() === generation,
               );
+              setFasts((currentFasts) => currentFasts.map((item) => item.id === current.id
+                ? { ...item, status: "ended", endedAt, updatedAt: endedAt }
+                : item));
+              if (current.visibility === "group" && current.groupId) {
+                setGroupFasts((currentGroupFasts) => currentGroupFasts.filter((item) => item.id !== current.id));
+              }
+              if (current.sourceGroupFastId && current.groupId) {
+                setGroupFasts((currentGroupFasts) => currentGroupFasts.map((item) => {
+                  if (item.id !== current.sourceGroupFastId) return item;
+                  const participants = { ...(item.participants ?? {}) };
+                  delete participants[firebaseUser.uid];
+                  return { ...item, participants };
+                }));
+              }
               return;
             }
             case "acknowledgeFast": {
               if (!firebaseUser) return;
               const current = fasts.find((fast) => fast.id === action.id && fast.userId === firebaseUser.uid);
-              if (!current || current.acknowledgedAt || fastPhase(current) !== "complete") return;
+              if (!current || current.acknowledgedAt || fastPlanPhase(current) !== "complete") return;
               const acknowledgedAt = now();
               await update(
                 ref(database, `fasts/${firebaseUser.uid}/${action.id}`),
@@ -3251,6 +3545,10 @@ export function KoinoProvider({ children }: PropsWithChildren) {
           highlightAction ||
           action.type === "startFast" ||
           action.type === "updateFast" ||
+          action.type === "setFastVisibility" ||
+          action.type === "joinGroupFast" ||
+          action.type === "leaveGroupFast" ||
+          action.type === "removeGroupFast" ||
           action.type === "endFast" ||
           action.type === "acknowledgeFast" ||
           action.type === "signIn" ||

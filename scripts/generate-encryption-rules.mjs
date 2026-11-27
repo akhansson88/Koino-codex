@@ -124,6 +124,19 @@ for (const [collection, p] of Object.entries(policies)) {
   if (collection === "prayerNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
   store[collection] = target;
 }
+// A shared fast is readable by the whole community, but only its host can
+// publish or edit it. Each participant may add or remove only their own entry,
+// and only before the fast begins (joinCutoffMs). The owner of the community may
+// remove any shared fast for moderation.
+const groupFastNode = store.groupFasts.$groupId.$id;
+groupFastNode[".write"] = `${writableMember} && ((!newData.exists() && (data.child('userId').val() == auth.uid || root.child('e2eeGroups').child($groupId).child('ownerId').val() == auth.uid)) || (newData.exists() && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && newData.child('id').val() == $id && root.child('encryptedData').child('fasts').child(auth.uid).child($id).exists() && (!data.exists() || data.child('userId').val() == auth.uid)))`;
+groupFastNode.participants = {
+  "$uid": {
+    ".write": `${member} && auth.uid == $uid && (!newData.exists() || (now < data.parent().parent().child('joinCutoffMs').val() && newData.child('userId').val() == $uid && newData.child('joinedAt').isString() && newData.child('personalFastId').isString()))`,
+    ".validate": "newData.hasChildren(['userId','joinedAt','personalFastId']) && newData.child('userId').val() == $uid",
+  },
+};
+store.groupFasts.$groupId[".indexOn"] = ["startAt"];
 rules.encryptedData = store;
 rules.legacyUndecryptable = { "$uid": { ".read": own, ".write": own, "$collection": { "$id": plaintext } } };
 rules.moderationTombstones = { "$groupId": { ".read": member, ".write": false } };

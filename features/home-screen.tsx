@@ -13,6 +13,9 @@ import { HomeScripture } from "@/features/home-scripture";
 import { markStartupMilestone } from "@/features/startup-performance";
 import { CheckInSubmissionError, checkInForDay } from "@/state/check-ins";
 import { eventRsvpFor, nextUpcomingEvent } from "@/state/events";
+import { activeGroupFast, groupFastStart, nextGroupFast, participantCount } from "@/state/group-fasting";
+import { fastModeConfig } from "@/state/fasting-modes";
+import { formatFastDate } from "@/features/fasting/format";
 import { normalizeEntryKind } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { id, localDayKey } from "@/state/store/helpers";
@@ -67,7 +70,7 @@ const homeFields = [
   "authError", "biblePlans", "checkIns", "checkInDailyClaims", "checkInDailyClaimsReady", "communityFeedError",
   "communityFeedGroupId", "communityFeedOffline", "communityFeedReady", "currentGroupId", "currentUserId", "eventRsvps",
   "groupEvents", "groups", "memberships", "posts", "prayerReactions", "privateCheckIns", "privateCheckInsReady",
-  "profileReady", "userGroupsReady", "users",
+  "profileReady", "userGroupsReady", "users", "groupFasts", "groupFastsReady",
 ] as const;
 
 export function HomeScreen() {
@@ -88,7 +91,7 @@ function HomeRhythm({ state, group, activeGroupId }: {
   activeGroupId: string | undefined;
 }) {
   const { dispatch } = useKoinoActions();
-  const { t } = useAppTranslation();
+  const { t, language } = useAppTranslation();
   useTheme();
   const params = useLocalSearchParams<{ checkIn?: string }>();
   const [checkInVisible, setCheckInVisible] = useState(false);
@@ -173,6 +176,8 @@ function HomeRhythm({ state, group, activeGroupId }: {
     () => (activeGroupId ? nextUpcomingEvent(state.groupEvents) : undefined),
     [activeGroupId, state.groupEvents],
   );
+  const fastNow = activeGroupFast(state.groupFasts) ?? nextGroupFast(state.groupFasts);
+  const upcomingFast = activeGroupId ? fastNow : undefined;
   const greetingName = state.currentUserId ? firstName(userById.get(state.currentUserId)) : undefined;
   const greetingKey = homeGreetingKeys[homeGreetingPeriodAt(homeDate)][greetingName ? "named" : "default"];
   const showMigration = group?.migrationPending && state.profileReady && state.userGroupsReady;
@@ -387,6 +392,19 @@ function HomeRhythm({ state, group, activeGroupId }: {
               event={upcomingEvent}
               onPress={() => router.push({ pathname: "/event-details", params: { eventId: upcomingEvent.id } } as never)}
               rsvpStatus={eventRsvpFor(state.eventRsvps, upcomingEvent.id, state.currentUserId)?.status}
+            />
+          </View>
+        ) : null}
+
+        {upcomingFast ? (
+          <View style={{ gap: 6 }}>
+            <Text style={[typography.sectionLabel, { color: colors.muted }]}>{t("fasting.group.entry")}</Text>
+            <HomeAction
+              action={t("fasting.group.entryNext", { title: t(fastModeConfig(upcomingFast.mode).titleKey as never), count: participantCount(upcomingFast) })}
+              icon="activity"
+              onPress={() => router.push("/group-fasting" as never)}
+              subtitle={`${formatFastDate(new Date(groupFastStart(upcomingFast)), language, { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${t("fasting.group.joinedCount", { count: participantCount(upcomingFast) })}`}
+              title={t(fastModeConfig(upcomingFast.mode).titleKey as never)}
             />
           </View>
         ) : null}

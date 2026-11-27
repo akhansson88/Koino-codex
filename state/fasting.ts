@@ -1,4 +1,6 @@
-import type { Fast, FastPhase } from "@/state/types";
+import type { Fast, FastPhase, FastSchedule } from "@/state/types";
+import { isFastMode } from "@/state/fasting-modes";
+import { localDayKey as planLocalDayKey } from "@/state/fasting-plan";
 
 const DAY_MS = 86_400_000;
 
@@ -106,4 +108,22 @@ export function fastHistory(fasts: readonly Fast[]) {
   return [...fasts].sort((left, right) =>
     Date.parse(right.startAt) - Date.parse(left.startAt) || Date.parse(right.createdAt) - Date.parse(left.createdAt),
   );
+}
+
+/** Legacy records written before modes existed are ordinary custom fasts. */
+export function normalizeFast(record: Fast): Fast {
+  const mode = isFastMode(record.mode) ? record.mode : "custom";
+  const schedule: FastSchedule = record.schedule && typeof record.schedule === "object"
+    ? record.schedule
+    : { kind: "continuous" };
+  return {
+    ...record,
+    mode,
+    schedule,
+    visibility: record.visibility === "group" ? "group" : "private",
+  };
+}
+
+export function fastLocalDayKey(date: Date) {
+  return planLocalDayKey(date);
 }

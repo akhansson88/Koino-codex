@@ -116,6 +116,7 @@ function RootNavigator() {
           <Stack.Screen name="community-statistics" options={{ headerShown: false }} />
           <Stack.Screen name="bible-plans" options={{ headerShown: false }} />
           <Stack.Screen name="fasting" options={{ headerShown: false }} />
+          <Stack.Screen name="group-fasting" options={{ headerShown: false }} />
           <Stack.Screen name="donation-amount" options={{ headerShown: false }} />
           <Stack.Screen name="donation-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="donation-thank-you" options={{ headerShown: false }} />

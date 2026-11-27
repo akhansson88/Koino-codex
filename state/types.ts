@@ -500,12 +500,34 @@ export type SupportIntent = {
 
 export type FastPhase = "scheduled" | "active" | "complete" | "ended";
 
-/** One account-private fast. Only the owner can read or write the record. */
+export type FastMode =
+  | "water"
+  | "dry"
+  | "until_1800"
+  | "if_16_8"
+  | "if_18_6"
+  | "if_20_4"
+  | "if_5_2"
+  | "if_24_weekly"
+  | "monk"
+  | "daniel"
+  | "custom";
+
+export type FastVisibility = "private" | "group";
+
+export type FastSchedule =
+  | { kind: "continuous" }
+  | { kind: "daily"; fastStart: string; fastEnd: string }
+  | { kind: "weekly"; weekdays: number[]; startTime: string; durationHours: number }
+  | { kind: "partial"; ruleSet: "daniel" };
+
+/** One account-owned fast plan. Only the owner can read or write the record. */
 export type Fast = {
   id: Id;
   userId: Id;
   startDate: string;
   durationDays: number;
+  durationHours?: number;
   timeZone: string;
   startAt: string;
   endAt: string;
@@ -513,6 +535,39 @@ export type Fast = {
   alertEnabled: boolean;
   endedAt?: string;
   acknowledgedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  mode: FastMode;
+  schedule: FastSchedule;
+  visibility: FastVisibility;
+  groupId?: Id;
+  sharedAt?: string;
+  sourceGroupFastId?: Id;
+  sourceUserId?: Id;
+  safetyAcceptedAt?: string;
+};
+
+export type GroupFastParticipant = {
+  userId: Id;
+  joinedAt: string;
+  personalFastId: Id;
+};
+
+/** A shared projection of one member's fast, readable by the active community. */
+export type GroupFast = {
+  id: Id;
+  groupId: Id;
+  userId: Id;
+  mode: FastMode;
+  schedule: FastSchedule;
+  startDate: string;
+  startAt: string;
+  endAt: string;
+  durationDays: number;
+  durationHours?: number;
+  timeZone: string;
+  joinCutoffMs: number;
+  participants?: Record<Id, GroupFastParticipant>;
   createdAt: string;
   updatedAt: string;
 };
@@ -563,6 +618,8 @@ export type KoinoState = {
   savedVerses: SavedVerse[];
   fasts: Fast[];
   fastsReady: boolean;
+  groupFasts: GroupFast[];
+  groupFastsReady: boolean;
   bibleHighlights: BibleHighlight[];
   bibleHighlightColors: BibleHighlightPaletteColor[];
   biblePlans: BiblePlan[];
