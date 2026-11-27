@@ -168,7 +168,7 @@ export function BookmarksScreen() {
 
   const openJournal = useCallback((verse: SavedVerse, kind: "scripture" | "prayer_request") => {
     setSheetVerse(undefined);
-    router.push({
+    router.navigate({
       pathname: "/(tabs)/me",
       params: {
         newEntry: `${Date.now()}`,
