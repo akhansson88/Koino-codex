@@ -122,6 +122,15 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   const programmaticYRef = useRef(0);
   const onAnchorRef = useRef(onAnchor);
   onAnchorRef.current = onAnchor;
+  const contentKey = `${versionId}:${position.book}:${position.chapter}`;
+  const contentKeyRef = useRef(contentKey);
+  if (contentKeyRef.current !== contentKey) {
+    contentKeyRef.current = contentKey;
+    relativeRef.current = {};
+    layoutRef.current = undefined;
+    pendingAnchorRef.current = undefined;
+    scrollOffsetRef.current = 0;
+  }
 
   const rebuildLayout = useCallback(() => {
     const entries = Object.entries(relativeRef.current)
@@ -309,6 +318,7 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
         >
           {chapter ? (
             <BibleText
+              key={contentKey}
               chapterHeading={chapter.heading}
               chapterHighlightByVerse={highlightByVerse}
               copyLabel={t("bible.actions.copy")}
