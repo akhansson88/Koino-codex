@@ -33,7 +33,7 @@
     "ios:dev": "node scripts/native/run-development-ios.cjs",
     "ios:dev:verify": "node scripts/native/verify-development-ios.cjs",
     "bible:build": "node scripts/generate-bible-data.mjs",
-    "bible:align": "python scripts/build-bible-alignment.py assets/bible/koino-bible-v4.db",
+    "bible:align": "python scripts/build-bible-alignment.py assets/bible/koino-bible-v5.db",
     "doctor": "npx expo-doctor",
     "validate:bible-plans": "node scripts/validate-bible-plan-schedule.mjs && node scripts/validate-bible-plan-progress.mjs && node scripts/validate-bible-plan-library.mjs && node scripts/validate-me-bible-plans.mjs",
     "validate:events": "node scripts/validate-events.mjs",

@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v4.db"
+OUTPUT_PATH = PROJECT_ROOT / "assets" / "bible" / "koino-bible-v5.db"
 TEMP_PATH = OUTPUT_PATH.with_suffix(".db.tmp")
 ALIGNMENT_SCRIPT = PROJECT_ROOT / "scripts" / "build-bible-alignment.py"
 TRANSLATIONS = (

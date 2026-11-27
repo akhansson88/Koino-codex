@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { build } from "esbuild";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
-const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v4.db");
+const generatedBibleData = path.join(projectRoot, "assets", "bible", "koino-bible-v5.db");
 
 try {
   await access(generatedBibleData);
@@ -22,7 +22,7 @@ const nativeDatabase = new DatabaseSync(generatedBibleData, { readOnly: true });
 
 try {
   assert.equal(nativeDatabase.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
-  assert.equal(nativeDatabase.prepare("PRAGMA user_version").get().user_version, 4);
+  assert.equal(nativeDatabase.prepare("PRAGMA user_version").get().user_version, 5);
   assert.deepEqual(
     nativeDatabase
       .prepare("SELECT translations.code, COUNT(*) AS count FROM verses JOIN translations ON translations.id = verses.translation_id GROUP BY translations.code ORDER BY translations.id")

@@ -39,6 +39,7 @@ type Props = {
   highlightByVerse: Record<number, BibleHighlightColor>;
   onAnchor: (anchor: VerseAnchor) => void;
   onBoundaryPress?: () => void;
+  onChapterStep: (direction: -1 | 1) => void;
   onClose?: () => void;
   onDragStart: () => void;
   onFollowAgain?: () => void;
@@ -84,6 +85,7 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   highlightByVerse,
   onAnchor,
   onBoundaryPress,
+  onChapterStep,
   onClose,
   onDragStart,
   onFollowAgain,
@@ -120,6 +122,7 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   const programmaticRef = useRef(false);
   const programmaticYRef = useRef(0);
   const userDraggingRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const dragEndTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const programmaticTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const callbacksRef = useRef({
@@ -381,6 +384,22 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
         onScroll={onScroll}
         onScrollBeginDrag={handleBeginDrag}
         onScrollEndDrag={handleEndDrag}
+        onTouchCancel={() => { touchStartRef.current = undefined; }}
+        onTouchEnd={(event) => {
+          const start = touchStartRef.current;
+          touchStartRef.current = undefined;
+          if (!start) return;
+          const touch = event.nativeEvent.changedTouches?.[0] ?? event.nativeEvent.touches?.[0];
+          if (!touch) return;
+          const dx = touch.pageX - start.x;
+          const dy = touch.pageY - start.y;
+          if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.2) onChapterStep(dx < 0 ? 1 : -1);
+        }}
+        onTouchStart={(event) => {
+          const touch = event.nativeEvent.touches?.[0];
+          if (!touch) return;
+          touchStartRef.current = { x: touch.pageX, y: touch.pageY };
+        }}
         ref={scrollRef}
         removeClippedSubviews={false}
         scrollEventThrottle={16}

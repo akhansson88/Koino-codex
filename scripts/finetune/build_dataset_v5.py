@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SEARCH_DB = ROOT / "assets/bible/search/koino-search-v1.db"
-READER_DB = ROOT / "assets/bible/koino-bible-v4.db"
+READER_DB = ROOT / "assets/bible/koino-bible-v5.db"
 STUDY_DB = ROOT / "assets/bible/study/koino-study-v1.db"
 CACHE = ROOT / "assets/bible/search/.cache"
 OUT = ROOT / "scripts/hybrid-search/.cache/finetune/v5"

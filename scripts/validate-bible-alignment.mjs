@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const database = new DatabaseSync(path.join(root, "assets", "bible", "koino-bible-v4.db"), { readOnly: true });
+const database = new DatabaseSync(path.join(root, "assets", "bible", "koino-bible-v5.db"), { readOnly: true });
 
 const books = new Map(database.prepare("SELECT name, id FROM books").all().map((row) => [row.name, row.id]));
 const translationIds = new Map(database.prepare("SELECT code, id FROM translations").all().map((row) => [row.code, row.id]));
@@ -65,6 +65,9 @@ expect("kjv", "reformationsbibeln2026", "Psalms", 3, 1, 3, 2, { approximate: fal
 expect("sfb15", "kjv", "Psalms", 51, 2, 51, 1, { approximate: true });
 expect("sfb15", "kjv", "Psalms", 51, 3, 51, 1, { approximate: false });
 expect("kjv", "sfb15", "Psalms", 51, 1, 51, 3, { approximate: false });
+expect("kjv", "sfb15", "Psalms", 51, 2, 51, 4, { approximate: false });
+expect("reformationsbibeln2026", "kjv", "Psalms", 51, 1, 51, 1, { approximate: true });
+expect("reformationsbibeln2026", "kjv", "Psalms", 51, 2, 51, 1, { approximate: true });
 
 // A chapter whose counts happen to match must stay 1:1.
 expect("sfb15", "kjv", "Psalms", 23, 1, 23, 1, { approximate: false });
@@ -85,6 +88,33 @@ expect("reformationsbibeln2026", "kjv", "3 John", 1, 15, 1, 14, { approximate: f
 // Revelation 12:18 is the first half of KJV 13:1: a cross-chapter link.
 const revelation = expect("reformationsbibeln2026", "kjv", "Revelation", 12, 18, 13, 1, { approximate: true });
 assert.equal(revelation.crossChapter, true, "Revelation 12:18 should be marked cross-chapter");
+
+// Every psalm title in every Swedish translation maps to the first content
+// verse of KJV, and the first content verse maps to KJV 1. This is the class
+// of problem that made Psalm 51 look unsynced above verse 3.
+for (const code of ["sfb15", "reformationsbibeln2026"]) {
+  for (let chapter = 1; chapter <= 150; chapter += 1) {
+    const targetCount = database.prepare(
+      `SELECT COUNT(*) AS count FROM verses v JOIN books b ON b.id = v.book_id
+        WHERE v.translation_id = ? AND b.name = 'Psalms' AND v.chapter = ?`,
+    ).get(translationIds.get(code), chapter).count;
+    const kjvCount = database.prepare(
+      `SELECT COUNT(*) AS count FROM verses v JOIN books b ON b.id = v.book_id
+        WHERE v.translation_id = 1 AND b.name = 'Psalms' AND v.chapter = ?`,
+    ).get(chapter).count;
+    const titleCount = targetCount - kjvCount;
+    if (titleCount <= 0) continue;
+    for (let verse = 1; verse <= titleCount; verse += 1) {
+      const title = resolve(code, "kjv", "Psalms", chapter, verse);
+      assert.ok(title, `${code} Ps ${chapter}:${verse} title has no link`);
+      assert.equal(title.chapter, chapter, `${code} Ps ${chapter}:${verse} title chapter`);
+      assert.equal(title.verse, 1, `${code} Ps ${chapter}:${verse} title should land on KJV 1`);
+    }
+    const content = resolve(code, "kjv", "Psalms", chapter, titleCount + 1);
+    assert.ok(content, `${code} Ps ${chapter} first content verse has no link`);
+    assert.equal(content.verse, 1, `${code} Ps ${chapter} first content verse should land on KJV 1`);
+  }
+}
 
 // Every verse resolves, in both directions.
 for (const code of ["reformationsbibeln2026", "sfb15", "nkjv"]) {

@@ -32,8 +32,9 @@ TARGETS = (2, 3, 4)  # Reformationsbibeln 2026, SFB15, NKJV
 # A psalm superscription is a separate verse in the Swedish translations and
 # not a verse in KJV. It is always at the start and can be one or two verses.
 PSALM_TITLE = re.compile(
-    r"^(För körledaren|En psalm|En sång|En bön|En vishetspsalm|En klagopsalm|"
-    r"Av David|Bön av|Davids psalm|En vallfartssång)"
+    r"^(För körledaren|Till körledaren|En psalm|En sång|En bön|En vishetspsalm|"
+    r"En läropsalm|En klagopsalm|En klagosång|Av David|Bön av|Davids psalm|"
+    r"En vallfartssång)"
 )
 PSALM_TITLE_CONTINUATION = re.compile(r"^(Av |när |efter |till |som |och )")
 

@@ -13,7 +13,7 @@ const deps=path.join(root,"scripts/hybrid-search/.deps/sqlite_vec");
 if(!process.env.SQLITE_VEC_EXTENSION&&!existsSync(path.join(root,"scripts/hybrid-search/.deps/sqlite_vec-0.1.7a2.dist-info")))run(python,["-m","pip","install","--upgrade","--target","scripts/hybrid-search/.deps","sqlite-vec==0.1.7a2"]);
 if(!existsSync(path.join(root,"scripts/hybrid-search/.deps/tokenizers")))run(python,["-m","pip","install","--no-deps","--target","scripts/hybrid-search/.deps","tokenizers==0.22.2"]);
 run(python,["scripts/hybrid-search/fetch-sources.py"]);
-const inputs=["scripts/hybrid-search/prepare.py","scripts/hybrid-search/versification.py","scripts/hybrid-search/sources.lock.json","assets/bible/koino-bible-v4.db","assets/bible/search/narrative-labels.json"];
+const inputs=["scripts/hybrid-search/prepare.py","scripts/hybrid-search/versification.py","scripts/hybrid-search/sources.lock.json","assets/bible/koino-bible-v5.db","assets/bible/search/narrative-labels.json"];
 const digest=createHash("sha256");
 for(const input of inputs)digest.update(readFileSync(path.join(root,input)));
 const fingerprint=digest.digest("hex");

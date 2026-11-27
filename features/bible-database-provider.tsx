@@ -7,8 +7,8 @@ import { initializeBibleDatabase, releaseBibleDatabase, retainBibleDatabase } fr
 import { markStartupMilestone } from "@/features/startup-performance";
 import { colors } from "@/ui/theme";
 
-const BIBLE_DATABASE_NAME = "koino-bible-v4.db";
-const BIBLE_DATABASE_ASSET = require("../assets/bible/koino-bible-v4.db");
+const BIBLE_DATABASE_NAME = "koino-bible-v5.db";
+const BIBLE_DATABASE_ASSET = require("../assets/bible/koino-bible-v5.db");
 
 const BibleDatabaseState = createContext<{ ready: boolean; error?: Error; request: () => void }>({ ready: false, request: () => {} });
 

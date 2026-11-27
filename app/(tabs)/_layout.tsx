@@ -13,6 +13,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { colors, typography } from "@/ui/theme";
 import { useTheme } from "@/ui/theme-provider";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
+import { useTabSwipeLocked } from "@/ui/tab-swipe-lock";
 
 const TAB_ROUTES = ["/(tabs)/bible", "/(tabs)", "/(tabs)/me", "/(tabs)/community"] as const;
 
@@ -45,9 +46,10 @@ export default function TabLayout() {
   const { scheme } = useTheme();
   const pathname = usePathname();
   const rootIndex = rootTabIndex(pathname);
+  const tabSwipeLocked = useTabSwipeLocked();
 
   const swipeGesture = useMemo(() => Gesture.Pan()
-    .enabled(rootIndex >= 0)
+    .enabled(rootIndex > 0 && !tabSwipeLocked)
     .activeOffsetX([-26, 26])
     .failOffsetY([-18, 18])
     .runOnJS(true)
@@ -60,7 +62,7 @@ export default function TabLayout() {
       const nextIndex = rootIndex + (direction < 0 ? 1 : -1);
       if (nextIndex < 0 || nextIndex >= TAB_ROUTES.length) return;
       router.navigate(TAB_ROUTES[nextIndex] as never);
-    }), [rootIndex]);
+    }), [rootIndex, tabSwipeLocked]);
 
   return (
     <GestureDetector gesture={swipeGesture}>

@@ -56,6 +56,7 @@ export type SplitReaderProps = {
   sync: boolean;
   topInset: number;
   onAnchorChange?: (anchor: VerseAnchor) => void;
+  onChapterStep: (direction: -1 | 1) => void;
 };
 
 function highlightMap(highlights: BibleHighlight[], book: string, chapter: number, translation: string) {
@@ -89,6 +90,7 @@ export function SplitReader({
   navigationRevision,
   onChangeRatio,
   onShowVersionPicker,
+  onChapterStep,
   onClose,
   onFootnotePress,
   onPositionChange,
@@ -476,6 +478,7 @@ export function SplitReader({
           highlightByVerse={primaryHighlights}
           onAnchor={handlePrimaryAnchor}
           onBoundaryPress={primaryBoundary ? () => onPositionChange({ book: position.book, chapter: primaryBoundary.chapter, verse: primaryBoundary.verse }, primaryVersionId) : undefined}
+          onChapterStep={onChapterStep}
           onDragStart={() => handleDragStart("primary")}
           onFootnotePress={(marker, footnote, verse) => onFootnotePress(marker, footnote, verse, primaryVersionId)}
           onReadingMarkerPress={onReadingMarkerPress}
@@ -532,6 +535,7 @@ export function SplitReader({
           onAnchor={handleSecondaryAnchor}
           onBoundaryPress={secondaryBoundary ? () => onPositionChange({ book: position.book, chapter: secondaryBoundary.chapter, verse: secondaryBoundary.verse }, secondaryVersionId) : undefined}
           onClose={onClose}
+          onChapterStep={onChapterStep}
           onDragStart={() => handleDragStart("secondary")}
           onFollowAgain={onToggleSync}
           onFootnotePress={(marker, footnote, verse) => onFootnotePress(marker, footnote, verse, secondaryVersionId)}

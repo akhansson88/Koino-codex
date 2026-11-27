@@ -37,7 +37,7 @@ const tokenizerConfigPath = path.join(ASSETS,"multilingual-e5-small-config.token
 const encoderSourceHash = fileHash(path.join(ROOT,"features/bible-search/embedding-core.mjs"));
 const embeddingRevision = hash(`${E5_MODEL_REVISION}:${fileHash(modelPath)}:${fileHash(tokenizerPath)}:${fileHash(tokenizerConfigPath)}:${encoderSourceHash}:rust-tokenizers-0.22.2`);
 const prepared = readJson("prepared-meta.json");
-if (prepared.readerSha256 !== fileHash(path.join(ROOT,"assets/bible/koino-bible-v4.db"))) throw new Error("Reader asset changed after preparation; rerun prepare.py");
+if (prepared.readerSha256 !== fileHash(path.join(ROOT,"assets/bible/koino-bible-v5.db"))) throw new Error("Reader asset changed after preparation; rerun prepare.py");
 const tokenizerJson=JSON.parse(readFileSync(tokenizerPath,"utf8"));
 const tokenizerConfig=JSON.parse(readFileSync(tokenizerConfigPath,"utf8"));
 const documents=readJson("tokenized-documents.json");

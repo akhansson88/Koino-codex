@@ -18,7 +18,7 @@ try {
   const manifest = JSON.parse(await readFile(path.join(assets, "search-manifest.json"), "utf8"));
   assert.equal(manifest.modelRevision, E5_MODEL_REVISION);
   assert.equal(manifest.dimensions, 384);
-  assert.equal(createHash("sha256").update(await readFile(path.join(root, "assets/bible/koino-bible-v4.db"))).digest("hex"), manifest.readerSha256, "Rebuild the search index after changing the packaged Bible text");
+  assert.equal(createHash("sha256").update(await readFile(path.join(root, "assets/bible/koino-bible-v5.db"))).digest("hex"), manifest.readerSha256, "Rebuild the search index after changing the packaged Bible text");
   const extension = process.env.SQLITE_VEC_PATH ?? path.join(root, "scripts/hybrid-search/.deps/sqlite_vec", process.platform === "win32" ? "vec0.dll" : process.platform === "darwin" ? "vec0.dylib" : "vec0.so");
   await access(extension);
   search = new DatabaseSync(path.join(assets, "koino-search-v1.db"), { readOnly: true, allowExtension: true });
@@ -28,7 +28,7 @@ try {
   assert.equal(search.prepare("SELECT COUNT(*) AS n FROM documents WHERE kind='verse'").get().n, 62272);
   assert.equal(search.prepare("SELECT COUNT(*) AS n FROM documents WHERE end_verse<start_verse").get().n, 0);
   assert.equal(search.prepare("SELECT COUNT(*) AS n FROM topic_documents t LEFT JOIN documents d ON d.id=t.document_id WHERE d.id IS NULL").get().n, 0);
-  reader = new DatabaseSync(path.join(root, "assets/bible/koino-bible-v4.db"), { readOnly: true });
+  reader = new DatabaseSync(path.join(root, "assets/bible/koino-bible-v5.db"), { readOnly: true });
   const outfile = path.join(temporary, "search.mjs");
   await build({
     bundle: true, format: "esm", platform: "node", outfile, logLevel: "silent",

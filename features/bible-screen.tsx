@@ -133,6 +133,7 @@ import { useChapterWindow } from "@/features/bible-reader/chapter-window";
 import { chapterIndex, readerChapterKey, ReaderScrollIntent, type ReaderNavigationIntent } from "@/features/bible-reader/chapter-navigation";
 import { chapterSelectionHaptic } from "@/features/bible-reader/chapter-haptics";
 import { useReducedMotion } from "@/ui/use-reduced-motion";
+import { setTabSwipeLocked } from "@/ui/tab-swipe-lock";
 import { BibleBottomReadingControls } from "@/features/bible-reader/reading-controls";
 import { SelectedVerseSuggestionBar, VerseActionSheet } from "@/features/bible-reader/verse-actions";
 import { copyBibleVerses } from "@/features/bible-reader/copy";
@@ -934,6 +935,11 @@ export function BibleScreen() {
     setSelectedFootnote(undefined);
     if (!splitMode) setActionVersionId(bibleVersionId);
   }, [bibleVersionId, splitMode]);
+
+  useEffect(() => {
+    setTabSwipeLocked(splitMode);
+    return () => setTabSwipeLocked(false);
+  }, [splitMode]);
 
   const tryScrollToVerse = useCallback((verse: number, animated: boolean, request = readerScrollIntent.current.pending) => {
     if (!request || request.target.kind !== "verse" || request.target.verse !== verse ||
@@ -2171,6 +2177,12 @@ export function BibleScreen() {
           onAnchorChange={(anchor) => {
             splitAnchorRef.current = anchor;
             lastReaderActivityRef.current = Date.now();
+          }}
+          onChapterStep={(direction) => {
+            const next = direction > 0
+              ? nextBibleChapter(position.book, position.chapter)
+              : previousBibleChapter(position.book, position.chapter);
+            if (next) jumpToPosition(next, { intent: "chapter" });
           }}
         />
       ) : (

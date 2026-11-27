@@ -52,7 +52,7 @@ def encode(session, texts, prefix, limit):
 def main():
     benchmark = json.loads((ROOT / "scripts/finetune/narrative-paraphrase-benchmark.json").read_text(encoding="utf-8"))
     documents = json.loads((ASSETS / ".cache/tokenized-documents.json").read_text(encoding="utf-8"))
-    reader = sqlite3.connect(ROOT / "assets/bible/koino-bible-v4.db")
+    reader = sqlite3.connect(ROOT / "assets/bible/koino-bible-v5.db")
     books = {row[0]: row[1] for row in reader.execute("SELECT id,name FROM books")}
     reader.close()
     by_book = {}

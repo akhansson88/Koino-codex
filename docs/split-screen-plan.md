@@ -10,7 +10,7 @@ AAB/store build is the remaining release step.
 
 Implementation notes:
 
-- The Bible asset is now `assets/bible/koino-bible-v4.db` (62.8 MB) with all four
+- The Bible asset is now `assets/bible/koino-bible-v5.db` (62.8 MB) with all four
   translations and 186,886 cross-translation links.
 - The alignment is **verse-level structural**, not word-level: merges, splits,
   omitted verses and psalm titles are mapped, and a sub-verse anchor uses the

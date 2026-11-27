@@ -15,7 +15,7 @@ const databasePath = path.resolve(args[2] ?? path.join(ROOT, "assets/bible/searc
 const round = (value) => Math.round(value * 1e6) / 1e6;
 const database = new DatabaseSync(databasePath, { readOnly: true, allowExtension: true });
 database.loadExtension(path.join(ROOT, "scripts/hybrid-search/.deps/sqlite_vec/vec0.dll"));
-const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v4.db"), { readOnly: true });
+const reader = new DatabaseSync(path.join(ROOT, "assets/bible/koino-bible-v5.db"), { readOnly: true });
 const bookNames = new Map(reader.prepare("SELECT id,name FROM books").all().map(({ id, name }) => [id, name]));
 const encoder = await createTextEncoder({
   runtime,

@@ -91,7 +91,7 @@ function requireDatabase() {
 
 export async function initializeBibleDatabase(nextDatabase: SQLiteDatabase) {
   const metadata = nextDatabase.getFirstSync<{ user_version: number }>("PRAGMA user_version");
-  if (metadata?.user_version !== 4) {
+  if (metadata?.user_version !== 5) {
     throw new Error(`Unsupported Bible database version: ${metadata?.user_version ?? "unknown"}`);
   }
   await nextDatabase.execAsync("PRAGMA query_only = ON");

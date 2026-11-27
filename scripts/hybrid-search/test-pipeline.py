@@ -16,7 +16,7 @@ ASSETS = ROOT / "assets/bible/search"
 class PipelineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.reader = sqlite3.connect(f"file:{(ROOT / 'assets/bible/koino-bible-v4.db').as_posix()}?mode=ro",uri=True)
+        cls.reader = sqlite3.connect(f"file:{(ROOT / 'assets/bible/koino-bible-v5.db').as_posix()}?mode=ro",uri=True)
         cls.positions = {translation:{tuple(row) for row in cls.reader.execute("SELECT book_id,chapter,verse FROM verses WHERE translation_id=?",(translation,))}for translation in (1,2)}
         cls.mapping = mapping(cls.positions[1],cls.positions[2])
 
