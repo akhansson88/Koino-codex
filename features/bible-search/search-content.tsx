@@ -16,8 +16,9 @@ import { type ReaderPalette } from "@/features/bible-reader/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius } from "@/ui/theme";
 import type { BibleVerse } from "@/state/types";
-import { useKoinoFields } from "@/state/koino-store";
+import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { bookmarkMatchesQuery, sortBookmarks } from "@/state/bookmarks";
+import { savedVerseIdentity } from "@/state/saved-verses";
 import { SheetTextInput } from "@/ui/app-sheet";
 
 const topics = ["anxiety", "hope", "forgiveness", "identity", "loneliness", "purpose", "prayer"] as const;
@@ -224,7 +225,9 @@ function ScriptureSearchView({
   const audio = useBibleAudio();
   const insets = useSafeAreaInsets();
   const results = search.response.results;
+  const { dispatch } = useKoinoActions();
   const { savedVerses } = useKoinoFields(["savedVerses"]);
+  const savedIdentities = useMemo(() => new Set(savedVerses.map(savedVerseIdentity)), [savedVerses]);
   const bookmarkMatches = useMemo(() => {
     const normalized = query.trim();
     if (!normalized) return [];
@@ -533,6 +536,18 @@ function ScriptureSearchView({
             }} style={{ gap: 10 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Text style={{ flex: 1, color: palette.text, fontSize: 17, fontWeight: "800" }}>{displayBibleReference(result.verse.reference, language, bibleVersionId)}</Text>
+              <Pressable
+                accessibilityLabel={t("shared.scripture.saveVerse")}
+                accessibilityRole="button"
+                accessibilityState={{ selected: savedIdentities.has(savedVerseIdentity(result.verse)) }}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  void dispatch({ type: "saveVerse", verse: result.verse });
+                }}
+                style={{ alignItems: "center", height: 44, justifyContent: "center", width: 44 }}
+              >
+                <Feather name="bookmark" size={18} color={savedIdentities.has(savedVerseIdentity(result.verse)) ? palette.accent : palette.muted} />
+              </Pressable>
               <Feather name="arrow-up-right" size={18} color={palette.muted} />
             </View>
             {result.contentState ? <View accessibilityLiveRegion="polite" style={{ minHeight: Math.max(32, (rowHeights.current[result.id] ?? 120) - 100), flexDirection: "row", alignItems: "center", gap: 8 }}>
