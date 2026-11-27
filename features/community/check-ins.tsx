@@ -15,14 +15,9 @@ import {
   VerseList,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import { communityActionLabel, communityResponseNoun } from "@/ui/community-copy";
+import { LikeButton } from "@/ui/like-button";
 import { LinkPreviewContent } from "@/ui/link-preview";
-import {
-  CommunityCardAction,
-  CommunityCardResponseSummary,
-  CommunityCheckInMood,
-  CommunityFeedCard,
-} from "@/ui/post-card";
+import { CommunityCheckInMood, CommunityFeedCard } from "@/ui/post-card";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { FocusedCommunityScreenIntro } from "@/features/community/focused-header";
@@ -186,7 +181,6 @@ export function CheckInCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const suppressOpenRef = useRef(false);
   const pendingDelete = useRef<(() => void) | undefined>(undefined);
-  const itemKind = feedItemKind(item);
 
   function openDeleteConfirmation() {
     if (!onDelete) return;
@@ -241,13 +235,11 @@ export function CheckInCard({
   return (
     <CommunityFeedCard
       actions={
-        <CommunityCardAction
-          active={reacted}
-          icon="heart"
-          label={communityActionLabel(itemKind, reacted, t)}
+        <LikeButton
+          count={reactionCount}
+          liked={reacted}
           onPress={onReact}
-          overview={overview || undefined}
-          tone="check_in"
+          disabled={!onReact}
         />
       }
       attachment={
@@ -280,16 +272,6 @@ export function CheckInCard({
       }}
       overlay={menu}
       overview={overview || undefined}
-      responseSummary={
-        (overview ? reactionCount > 0 : reactedBy?.length) ? (
-          <CommunityCardResponseSummary
-            compact={overview || undefined}
-            count={reactionCount}
-            label={communityResponseNoun(item, reactionCount, t)}
-            users={reactedBy}
-          />
-        ) : undefined
-      }
       style={{ zIndex: menuOpen ? 10 : 1 }}
     />
   );

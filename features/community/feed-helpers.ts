@@ -21,12 +21,12 @@ export function localDayKey(value: string | Date) {
 }
 
 export function isPrayerFeedKind(kind: EntryKind | "post" | undefined) {
-  const normalized = normalizeEntryKind(kind);
-  return normalized === "prayer_request" || normalized === "prayer_moment";
+  return normalizeEntryKind(kind) === "prayer_request";
 }
 
-export function isPrayerMomentKind(kind: EntryKind | "post" | undefined) {
-  return normalizeEntryKind(kind) === "prayer_moment";
+export function isPrayerMomentKind(_kind: EntryKind | "post" | undefined) {
+  // Legacy prayer_moment records render as ordinary posts.
+  return false;
 }
 
 export function roomMemberCount(counts: Record<Id, number>, roomId?: Id, fallback = 1) {
@@ -61,9 +61,6 @@ export function filterCommunityFeedItems(items: FeedItem[], detailTab: RoomDetai
   if (detailTab === "checkins") {
     return items.filter((item) => item.type === "check_in");
   }
-  if (detailTab === "reflections") {
-    return items.filter((item) => item.type === "post" && normalizeEntryKind(item.kind) === "reflection");
-  }
   return items;
 }
 
@@ -88,12 +85,10 @@ export function communityFeedEndpointBody(detailTab: RoomDetailTab, communityNam
   if (variant === "no-recent") {
     if (detailTab === "prayer") return t("community.feed.noRecentPrayer", { name: communityName });
     if (detailTab === "checkins") return t("community.feed.noRecentCheckIns", { name: communityName });
-    if (detailTab === "reflections") return t("community.feed.noRecentReflections", { name: communityName });
     return t("community.feed.noRecent", { name: communityName });
   }
 
   if (detailTab === "prayer") return t("community.feed.caughtUpPrayer", { name: communityName });
   if (detailTab === "checkins") return t("community.feed.caughtUpCheckIns", { name: communityName });
-  if (detailTab === "reflections") return t("community.feed.caughtUpReflections", { name: communityName });
   return t("community.feed.caughtUp", { name: communityName });
 }

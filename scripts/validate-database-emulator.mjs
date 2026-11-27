@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { initializeApp, deleteApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { connectDatabaseEmulator, equalTo, get, getDatabase, goOffline, goOnline, limitToLast, onValue, orderByChild, query, ref, remove, runTransaction, set } from "firebase/database";
+import { connectDatabaseEmulator, equalTo, get, getDatabase, goOffline, goOnline, limitToLast, onValue, orderByChild, query, ref, remove, runTransaction, set, update } from "firebase/database";
 
 const projectId = "demo-koino";
 const namespace = "demo-koino-default-rtdb";
@@ -226,6 +226,83 @@ try {
       if (updates.at(-1) === matched.length + 1) { clearInterval(timer); resolve(); }
     }, 20); setTimeout(() => { clearInterval(timer); reject(new Error("Reconnect listener timed out")); }, 5000); });
   } finally { unsubscribe(); }
+  const moveDay = "2026-02-20";
+  const moveCheckInId = "move-checkin";
+  const moveClaimRef = ref(member.database, `checkInDailyClaims/${member.uid}/group1/${moveDay}`);
+  await set(moveClaimRef, dailyClaim(moveDay, moveCheckInId, "private"));
+  const movePrivate = checkIn(member.uid, moveCheckInId, moveDay, "private");
+  await set(ref(member.database, `privateCheckIns/${member.uid}/${moveCheckInId}`), movePrivate);
+  await set(moveClaimRef, { ...(await get(moveClaimRef)).val(), status: "committed" });
+  await update(ref(member.database), {
+    [`checkIns/group1/${moveCheckInId}`]: { ...movePrivate, visibility: "group" },
+    [`privateCheckIns/${member.uid}/${moveCheckInId}`]: null,
+    [`checkInDailyClaims/${member.uid}/group1/${moveDay}/visibility`]: "group",
+  });
+  assert.equal((await get(ref(member.database, `checkIns/group1/${moveCheckInId}`))).val().visibility, "group");
+  assert.equal((await get(ref(member.database, `privateCheckIns/${member.uid}/${moveCheckInId}`))).exists(), false);
+  assert.equal((await get(moveClaimRef)).val().visibility, "group");
+  await update(ref(member.database), {
+    [`checkIns/group1/${moveCheckInId}`]: null,
+    [`privateCheckIns/${member.uid}/${moveCheckInId}`]: { ...movePrivate, visibility: "private" },
+    [`checkInDailyClaims/${member.uid}/group1/${moveDay}/visibility`]: "private",
+  });
+  assert.equal((await get(ref(member.database, `privateCheckIns/${member.uid}/${moveCheckInId}`))).val().visibility, "private");
+  assert.equal((await get(ref(member.database, `checkIns/group1/${moveCheckInId}`))).exists(), false);
+  assert.equal((await get(moveClaimRef)).val().visibility, "private");
+  await remove(ref(member.database, `privateCheckIns/${member.uid}/${moveCheckInId}`));
+  await remove(moveClaimRef);
+
+  const canonicalPost = {
+    id: "rules-post", userId: member.uid, groupId: "group1", kind: "post",
+    body: "A plain post", createdAt: "2026-03-01T10:00:00.000Z",
+  };
+  await set(ref(member.database, `posts/group1/${canonicalPost.id}`), canonicalPost);
+  assert.equal((await get(ref(member.database, `posts/group1/${canonicalPost.id}`))).val().kind, "post");
+  await assert.rejects(
+    () => set(ref(member.database, "posts/group1/legacy-praise"), { ...canonicalPost, id: "legacy-praise", kind: "praise" }),
+    /permission_denied|Permission denied/i,
+    "Legacy post kinds are rejected for new writes",
+  );
+  const canonicalReaction = {
+    id: `${member.uid}_post_${canonicalPost.id}_like`, userId: member.uid,
+    targetType: "post", targetId: canonicalPost.id, kind: "like", createdAt: "2026-03-01T10:01:00.000Z",
+  };
+  await set(ref(member.database, `postReactions/group1/${canonicalReaction.id}`), canonicalReaction);
+  await assert.rejects(
+    () => set(ref(member.database, "postReactions/group1/legacy-reaction"), {
+      ...canonicalReaction, id: "legacy-reaction", kind: "reflection",
+    }),
+    /permission_denied|Permission denied/i,
+    "Legacy reaction kinds are rejected",
+  );
+  await assert.rejects(
+    () => set(ref(member.database, "postReactions/group1/wrong-id"), {
+      ...canonicalReaction, id: "wrong-id", targetId: canonicalPost.id,
+    }),
+    /permission_denied|Permission denied/i,
+    "A like must use the canonical user_target_like id",
+  );
+  const canonicalJournal = {
+    id: "rules-journal", userId: member.uid, body: "A private note", source: "manual",
+    entryKind: "post", isPrivate: true, sharedCheckInId: moveCheckInId,
+    createdAt: "2026-03-01T10:02:00.000Z", updatedAt: "2026-03-01T10:02:00.000Z",
+  };
+  await set(ref(member.database, `journalEntries/${member.uid}/${canonicalJournal.id}`), canonicalJournal);
+  assert.equal((await get(ref(member.database, `journalEntries/${member.uid}/${canonicalJournal.id}`))).val().entryKind, "post");
+  await assert.rejects(
+    () => get(ref(outsider.database, `journalEntries/${member.uid}/${canonicalJournal.id}`)),
+    /permission_denied|Permission denied/i,
+    "Another member cannot read a private journal entry",
+  );
+  await assert.rejects(
+    () => set(ref(member.database, "journalEntries/" + member.uid + "/rules-journal-legacy"), { ...canonicalJournal, id: "rules-journal-legacy", entryKind: "praise" }),
+    /permission_denied|Permission denied/i,
+    "Legacy journal kinds are rejected for new writes",
+  );
+  await remove(ref(member.database, `journalEntries/${member.uid}/${canonicalJournal.id}`));
+  await remove(ref(member.database, `postReactions/group1/${canonicalReaction.id}`));
+  await remove(ref(member.database, `posts/group1/${canonicalPost.id}`));
+
   console.log("Database emulator passed: daily check-in claims, cross-device deduplication, private/shared slot enforcement, reader preference sync, private access, indexed queries, pagination, and reconnect.");
   await signOut(member.auth);
   await signOut(outsider.auth);

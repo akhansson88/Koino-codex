@@ -103,7 +103,9 @@
     "encryption:recovery-seed": "node scripts/generate-recovery-seed.mjs",
     "validate:development-client": "node scripts/validate-development-client.mjs",
     "validate:account-deletion": "node scripts/validate-account-deletion-manifest.mjs",
-    "validate:account-deletion-emulator": "npx firebase-tools emulators:exec --config firebase.account-deletion-test.json --only auth,database --project demo-koino \"node scripts/validate-account-deletion-emulator.mjs\""
+    "validate:account-deletion-emulator": "npx firebase-tools emulators:exec --config firebase.account-deletion-test.json --only auth,database --project demo-koino \"node scripts/validate-account-deletion-emulator.mjs\"",
+    "migrate:posts-likes": "node scripts/migrate-posts-likes.mjs",
+    "restore:posts-likes": "node scripts/restore-posts-likes.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

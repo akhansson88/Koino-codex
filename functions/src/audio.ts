@@ -25,7 +25,8 @@ type AudioRequest =
   | { operation: "finalizeUpload"; path: string }
   | { operation: "createDownload"; path: string }
   | { operation: "delete"; path: string }
-  | { operation: "copyForShare"; sourcePath: string; groupId: string; clipId: string };
+  | { operation: "copyForShare"; sourcePath: string; groupId: string; clipId: string }
+  | { operation: "copyForPrivate"; sourcePath: string; clipId: string };
 
 function invalid(message = "Invalid audio request."): never {
   throw new HttpsError("invalid-argument", message);
@@ -178,6 +179,16 @@ export const koinoAudio = onCall({ region: REGION }, async (request) => {
       if (source.scope !== "user" || source.ownerId !== uid) denied();
       await requireGroup(data.groupId, uid);
       const destination = `audio/groups/${data.groupId}/${data.clipId}.m4a`;
+      await bucket.file(source.path).copy(bucket.file(destination));
+      return { path: destination };
+    }
+
+    case "copyForPrivate": {
+      if (typeof data.clipId !== "string" || !CLIP_ID.test(data.clipId)) invalid("Invalid recording id.");
+      const source = parsePath(data.sourcePath);
+      if (source.scope === "group") await requireGroup(source.ownerId, uid);
+      else if (source.ownerId !== uid) denied();
+      const destination = `audio/users/${uid}/${data.clipId}.m4a`;
       await bucket.file(source.path).copy(bucket.file(destination));
       return { path: destination };
     }

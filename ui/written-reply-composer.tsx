@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+﻿import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 import { deleteAudioClip } from "@/state/audio-storage";
@@ -9,13 +9,13 @@ import { Button } from "@/ui/shadcn/button";
 import { colors, typography } from "@/ui/theme";
 import { VoiceNoteField } from "@/features/audio/voice-note-field";
 
-export const MAX_WRITTEN_ENCOURAGEMENT_LENGTH = 500;
+export const MAX_WRITTEN_REPLY_LENGTH = 500;
 
-function writtenEncouragementId() {
+function writtenReplyId() {
   return `reply_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function WrittenEncouragementComposer({
+export function WrittenReplyComposer({
   autoFocus = false,
   communityName,
   groupId,
@@ -44,7 +44,7 @@ export function WrittenEncouragementComposer({
   const replyIdRef = useRef<string | undefined>(undefined);
   const trimmedValue = value.trim();
   const sendDisabled = (!trimmedValue && !audio) || submitting;
-  const resolvedPlaceholder = placeholder ?? t("community.encouragement.placeholder");
+  const resolvedPlaceholder = placeholder ?? t("community.reply.placeholder");
 
   function changeAudio(next: AudioClip | undefined) {
     if (audio && audio.id !== next?.id) void deleteAudioClip(audio);
@@ -55,13 +55,13 @@ export function WrittenEncouragementComposer({
     if (submittingRef.current) return;
     replyIdRef.current = undefined;
     setSubmissionFailed(false);
-    onChangeText(nextValue.slice(0, MAX_WRITTEN_ENCOURAGEMENT_LENGTH));
+    onChangeText(nextValue.slice(0, MAX_WRITTEN_REPLY_LENGTH));
   }
 
   async function send() {
     if ((!trimmedValue && !audio) || submittingRef.current) return;
 
-    const replyId = replyIdRef.current ?? writtenEncouragementId();
+    const replyId = replyIdRef.current ?? writtenReplyId();
     replyIdRef.current = replyId;
     submittingRef.current = true;
     setSubmitting(true);
@@ -84,7 +84,7 @@ export function WrittenEncouragementComposer({
       accessibilityLabel={resolvedPlaceholder}
       autoFocus={autoFocus}
       editable={!submitting}
-      maxLength={MAX_WRITTEN_ENCOURAGEMENT_LENGTH}
+      maxLength={MAX_WRITTEN_REPLY_LENGTH}
       multiline={variant === "sheet"}
       onChangeText={changeText}
       onSubmitEditing={variant === "inline" ? send : undefined}
@@ -120,10 +120,10 @@ export function WrittenEncouragementComposer({
         {error}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <Button disabled={submitting} onPress={onDismiss} style={{ flex: 1 }} variant="outline">
-            {t("community.encouragement.notNow")}
+            {t("community.reply.notNow")}
           </Button>
           <Button disabled={sendDisabled} icon="send" loading={submitting} onPress={send} style={{ flex: 1 }}>
-            {t("community.encouragement.send")}
+            {t("community.reply.send")}
           </Button>
         </View>
       </View>
@@ -159,3 +159,4 @@ export function WrittenEncouragementComposer({
     </View>
   );
 }
+

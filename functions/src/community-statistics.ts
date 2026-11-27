@@ -150,7 +150,7 @@ function roundOne(value: number) {
 }
 
 function kindOf(record: RawRecord) {
-  return typeof record.kind === "string" && record.kind ? record.kind : "post";
+  return record.kind === "prayer_request" ? "prayer_request" : "post";
 }
 
 export function statisticsRangeStart(now: number, days: GroupStatisticsDays) {

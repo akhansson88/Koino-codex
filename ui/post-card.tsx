@@ -22,15 +22,12 @@ import {
 import { useAppTranslation } from "@/ui/app-language";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import {
-  communityActionLabel,
-  communityDefaultFeedTitle,
   communityFeedItemLabel,
   communityMoodScaleDescription,
   communityMoodScaleLabel,
-  communityPrayerMomentDisplayCopy,
   communityPrayerNoun,
-  communityResponseNoun,
 } from "@/ui/community-copy";
+import { LikeButton } from "@/ui/like-button";
 import { LinkPreviewContent } from "@/ui/link-preview";
 import { AudioCard } from "@/features/audio/audio-card";
 import { formatRelativeTime } from "@/ui/relative-time";
@@ -62,9 +59,7 @@ type CommunityFeedCardProps = {
 
 function toneForItem(item: FeedItem): CommunityCardTone {
   if (item.type === "check_in") return "check_in";
-  const itemKind = feedItemKind(item);
-  if (itemKind === "prayer_request" || itemKind === "prayer_moment") return "prayer";
-  return itemKind;
+  return feedItemKind(item) === "prayer_request" ? "prayer" : "reflection";
 }
 
 function toneColors(tone: CommunityCardTone) {
@@ -99,6 +94,7 @@ function softSemanticLabelColor(accent: string) {
 
 export function CommunityContentTypeLabel({ item }: { item: FeedItem }) {
   const { t } = useAppTranslation();
+  if (item.type === "post" && feedItemKind(item) === "post") return null;
   const label = communityFeedItemLabel(item, t);
   const labelColor = softSemanticLabelColor(toneColors(toneForItem(item)).accent);
   return (
@@ -190,7 +186,7 @@ export function CommunityFeedCard({
 }: CommunityFeedCardProps) {
   const { language, t } = useAppTranslation();
   const relativeTime = formatRelativeTime(item.createdAt, language);
-  const metadata = overview
+  const metadata = overview && (item.type === "check_in" || feedItemKind(item) === "prayer_request")
     ? [communityFeedItemLabel(item, t), relativeTime].filter(Boolean).join(" · ")
     : relativeTime;
   const visibleBody = body || bodyFallback;
@@ -489,16 +485,10 @@ export function PostCard({
   }
 
   const itemKind = feedItemKind(item);
-  const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
-  const isPrayerPost = itemKind === "prayer_request" || itemKind === "prayer_moment";
-  const reactionTone = toneForItem(item);
-  const reactionIcon: CommunityCardActionIcon =
-    itemKind === "praise" ? "star" : itemKind === "scripture" ? "book-open" : itemKind === "update" ? "message-circle" : "heart";
+  const displayCopy = { body: item.body, title: item.type === "post" ? item.title : undefined };
+  const isPrayerPost = itemKind === "prayer_request";
   const hasPersonalNote = Boolean(displayCopy.body.trim());
-  const reactionPresentedAsCompleted = itemKind !== "scripture" && Boolean(reacted);
-  const hasPrayerActivity = itemKind !== "praise" && (overview ? prayerCount > 0 : Boolean(prayedBy?.length));
-  const hasReactionActivity = itemKind !== "scripture" && !isPrayerPost
-    && (overview ? (reactionCount ?? 0) > 0 : Boolean(reactedBy?.length));
+  const hasPrayerActivity = overview ? prayerCount > 0 : Boolean(prayedBy?.length);
 
   const menuButton = ownsItem && (onEdit || onDelete) ? (
     <Pressable
@@ -548,36 +538,23 @@ export function PostCard({
     <CommunityFeedCard
       actions={
         <>
-          {!isPrayerPost && onReact ? (
+          {isPrayerPost ? (
             <CommunityCardAction
-              active={reactionPresentedAsCompleted}
-              icon={reactionIcon}
-              label={communityActionLabel(itemKind, reactionPresentedAsCompleted, t)}
-              onPress={onReact}
+              active={prayed}
+              icon="pray"
+              label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
+              onPress={onPray}
               overview={overview || undefined}
-              tone={reactionTone}
+              tone="prayer"
             />
           ) : (
-            <CommunityCardAction
-              active={prayed}
-              icon="pray"
-              label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
-              onPress={onPray}
-              overview={overview || undefined}
-              tone="prayer"
+            <LikeButton
+              count={reactionCount ?? 0}
+              liked={Boolean(reacted)}
+              onPress={() => onReact?.()}
+              disabled={!onReact}
             />
           )}
-          {!isPrayerPost && itemKind !== "praise" && onReact ? (
-            <CommunityCardAction
-              active={prayed}
-              icon="pray"
-              label={t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
-              onPress={onPray}
-              overview={overview || undefined}
-              tone="prayer"
-              variant="secondary"
-            />
-          ) : null}
           {onReply ? (
             <CommunityCardAction
               accessibilityLabel={t(replyCount === 1 ? "community.reply.count.one" : "community.reply.count.other", { count: replyCount })}
@@ -600,7 +577,7 @@ export function PostCard({
       authorName={authorName}
       bodyContent={item.type === "post" && item.audio ? (
         <View style={{ gap: 10 }}>
-          <AudioCard clip={item.audio} kind={itemKind === "prayer_request" || itemKind === "prayer_moment" ? "prayer" : "journal"} />
+          <AudioCard clip={item.audio} kind={itemKind === "prayer_request" ? "prayer" : "journal"} />
           {displayCopy.body ? (
             <LinkPreviewContent text={displayCopy.body}>
               {({ hiddenUrl, preview }) => (
@@ -614,7 +591,7 @@ export function PostCard({
             </LinkPreviewContent>
           ) : null}
         </View>
-      ) : itemKind !== "scripture" || hasPersonalNote ? (
+      ) : hasPersonalNote ? (
         <LinkPreviewContent text={displayCopy.body}>
           {({ hiddenUrl, preview }) => (
             <>
@@ -637,25 +614,13 @@ export function PostCard({
       }}
       overlay={menu}
       overview={overview || undefined}
-      responseSummary={
-        hasPrayerActivity || hasReactionActivity ? (
-          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-            {hasReactionActivity ? (
-              <CommunityCardResponseSummary
-                compact={overview || undefined}
-                count={reactionCount ?? 0}
-                label={communityResponseNoun(item, reactionCount ?? 0, t)}
-                users={reactedBy}
-              />
-            ) : null}
-            {hasPrayerActivity ? (
-              <CommunityCardResponseSummary compact={overview || undefined} count={prayerCount} label={communityPrayerNoun(prayerCount, t)} users={prayedBy} />
-            ) : null}
-          </View>
-        ) : undefined
-      }
+      responseSummary={hasPrayerActivity ? (
+        <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          <CommunityCardResponseSummary compact={overview || undefined} count={prayerCount} label={communityPrayerNoun(prayerCount, t)} users={prayedBy} />
+        </View>
+      ) : undefined}
       style={{ zIndex: menuOpen ? 10 : 1 }}
-      title={itemKind === "update" ? displayCopy.title || communityDefaultFeedTitle(item, t) : undefined}
+      title={displayCopy.title}
     />
   );
 }

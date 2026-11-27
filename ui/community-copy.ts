@@ -1,73 +1,19 @@
-import { feedItemKind, moodScaleValue, normalizeEntryKind } from "@/state/product";
+import { moodScaleValue, normalizeEntryKind } from "@/state/product";
 import type { EntryKind, FeedItem, HeartMood } from "@/state/types";
 import { translateMessage, type TranslationFunction, type TranslationKey } from "@/ui/localization";
 
-const prayerMomentTemplateToken = "\u0000";
-
-function englishPrayerMomentCopy(key: TranslationKey, values?: Record<string, string>) {
-  return translateMessage("en", key, values);
-}
-
-function templateParts(template: string) {
-  const tokenIndex = template.indexOf(prayerMomentTemplateToken);
-  return tokenIndex < 0
-    ? { prefix: template, suffix: "" }
-    : {
-        prefix: template.slice(0, tokenIndex),
-        suffix: template.slice(tokenIndex + prayerMomentTemplateToken.length),
-      };
-}
-
+// Legacy prayer-moment posts are rendered as ordinary posts.
 export function communityPrayerMomentDisplayCopy(
   item: Pick<Extract<FeedItem, { type: "post" }>, "body" | "kind" | "title">,
-  t: TranslationFunction,
+  _t: TranslationFunction,
 ) {
-  const original = { body: item.body, title: item.title };
-  if (normalizeEntryKind(item.kind) !== "prayer_moment") return original;
-
-  const aboutTemplate = englishPrayerMomentCopy("community.prayer.generated.about", { note: prayerMomentTemplateToken });
-  const { prefix: aboutPrefix, suffix: aboutSuffix } = templateParts(aboutTemplate);
-  const aboutSeparator = `\n\n${aboutPrefix}`;
-  const aboutIndex = item.body.indexOf(aboutSeparator);
-  const canonicalBody = aboutIndex < 0 ? item.body : item.body.slice(0, aboutIndex);
-  const note = aboutIndex < 0 ? undefined : item.body.slice(aboutIndex + aboutSeparator.length, aboutSuffix ? -aboutSuffix.length : undefined);
-  if (aboutIndex >= 0 && aboutSuffix && !item.body.endsWith(aboutSuffix)) return original;
-
-  const canonicalGenericBody = englishPrayerMomentCopy("community.prayer.generated.body");
-  const canonicalGenericTitle = englishPrayerMomentCopy("community.defaultTitle.prayerMoment");
-  let recipientName: string | undefined;
-
-  if (canonicalBody === canonicalGenericBody && item.title === canonicalGenericTitle) {
-    recipientName = undefined;
-  } else {
-    const recipientBodyTemplate = englishPrayerMomentCopy("community.prayer.generated.bodyForPerson", { name: prayerMomentTemplateToken });
-    const { prefix, suffix } = templateParts(recipientBodyTemplate);
-    if (!canonicalBody.startsWith(prefix) || !canonicalBody.endsWith(suffix)) return original;
-    recipientName = canonicalBody.slice(prefix.length, suffix ? -suffix.length : undefined);
-    if (!recipientName || item.title !== englishPrayerMomentCopy("community.prayer.generated.titleForPerson", { name: recipientName })) {
-      return original;
-    }
-  }
-
-  const localizedBody = recipientName
-    ? t("community.prayer.generated.bodyForPerson", { name: recipientName })
-    : t("community.prayer.generated.body");
-  return {
-    body: note === undefined ? localizedBody : `${localizedBody}\n\n${t("community.prayer.generated.about", { note })}`,
-    title: recipientName
-      ? t("community.prayer.generated.titleForPerson", { name: recipientName })
-      : t("community.defaultTitle.prayerMoment"),
-  };
+  return { body: item.body, title: item.title };
 }
 
 export function communityEntryKindLabel(kind: EntryKind | "post" | undefined, t: TranslationFunction) {
-  const normalized = normalizeEntryKind(kind);
-  if (normalized === "prayer_request") return t("community.contentType.prayerRequest");
-  if (normalized === "prayer_moment") return t("community.contentType.prayerMoment");
-  if (normalized === "praise") return t("community.contentType.praise");
-  if (normalized === "update") return t("community.contentType.update");
-  if (normalized === "scripture") return t("community.contentType.scripture");
-  return t("community.contentType.reflection");
+  return normalizeEntryKind(kind) === "prayer_request"
+    ? t("community.contentType.prayerRequest")
+    : t("community.contentType.post");
 }
 
 export function communityFeedItemLabel(item: FeedItem, t: TranslationFunction) {
@@ -76,25 +22,10 @@ export function communityFeedItemLabel(item: FeedItem, t: TranslationFunction) {
 }
 
 export function communityActionLabel(kind: EntryKind, completed: boolean, t: TranslationFunction) {
-  if (kind === "prayer_request" || kind === "prayer_moment") {
+  if (normalizeEntryKind(kind) === "prayer_request") {
     return t(completed ? "community.action.prayer.completed" : "community.action.prayer.default");
   }
-  if (kind === "praise") return t(completed ? "community.action.praise.completed" : "community.action.praise.default");
-  if (kind === "update") return t(completed ? "community.action.update.completed" : "community.action.update.default");
-  if (kind === "scripture") return t(completed ? "community.action.scripture.completed" : "community.action.scripture.default");
-  return t(completed ? "community.action.reflection.completed" : "community.action.reflection.default");
-}
-
-export function communityResponseNoun(item: FeedItem, count: number, t: TranslationFunction) {
-  const itemKind = feedItemKind(item);
-  if (itemKind === "reflection") {
-    return t(count === 1 ? "community.response.encouragement.one" : "community.response.encouragement.other");
-  }
-  if (itemKind === "praise") return t(count === 1 ? "community.response.amen.one" : "community.response.amen.other");
-  if (itemKind === "scripture") {
-    return t(count === 1 ? "community.response.reflection.one" : "community.response.reflection.other");
-  }
-  return t(count === 1 ? "community.response.response.one" : "community.response.response.other");
+  return t(completed ? "community.like.completed" : "community.like.default");
 }
 
 export function communityPrayerNoun(count: number, t: TranslationFunction) {
@@ -144,19 +75,14 @@ export function communityHeartMoodCopy(mood: HeartMood, t: TranslationFunction) 
 
 export function communityDefaultFeedTitle(item: FeedItem, t: TranslationFunction) {
   if (item.type === "check_in") return communityMoodScaleLabel(item.mood, t);
-  const kind = normalizeEntryKind(item.kind);
-  if (kind === "prayer_request") return t("community.defaultTitle.prayerRequest");
-  if (kind === "prayer_moment") return t("community.defaultTitle.prayerMoment");
-  if (kind === "praise") return t("community.defaultTitle.praise");
-  if (kind === "update") return t("community.defaultTitle.update");
-  if (kind === "scripture") return t("community.defaultTitle.scripture");
-  return t("community.defaultTitle.reflection");
+  return normalizeEntryKind(item.kind) === "prayer_request"
+    ? t("community.defaultTitle.prayerRequest")
+    : t("community.defaultTitle.post");
 }
 
-export function communityRoomTabLabel(value: "recent" | "prayer" | "checkins" | "reflections", t: TranslationFunction) {
+export function communityRoomTabLabel(value: "recent" | "prayer" | "checkins", t: TranslationFunction) {
   if (value === "prayer") return t("community.tabs.prayer");
   if (value === "checkins") return t("community.tabs.checkIns");
-  if (value === "reflections") return t("community.tabs.reflections");
   return t("community.tabs.recent");
 }
 

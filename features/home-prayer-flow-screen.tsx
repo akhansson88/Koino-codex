@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 
@@ -27,7 +27,7 @@ import { LinkPreviewContent } from "@/ui/link-preview";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, typography } from "@/ui/theme";
-import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { WrittenReplyComposer } from "@/ui/written-reply-composer";
 import { VoiceNoteField } from "@/features/audio/voice-note-field";
 import { deleteAudioClip } from "@/state/audio-storage";
 import type { AudioClip } from "@/state/types";
@@ -535,11 +535,11 @@ function HomePrayerFlowSession({ groupId, session }: { groupId?: Id; session: Re
       />
       <BottomSheet
         onClose={() => setMessageComposerVisible(false)}
-        title={t("community.encouragement.addMessageTitle")}
+        title={t("community.reply.addMessageTitle")}
         visible={requestCompleted && messageComposerVisible}
       >
-        <BodyText muted>{t("community.encouragement.supportingCopy")}</BodyText>
-        <WrittenEncouragementComposer
+        <BodyText muted>{t("community.reply.supportingCopy")}</BodyText>
+        <WrittenReplyComposer
           autoFocus
           onChangeText={setEncouragementDraft}
           onDismiss={() => setMessageComposerVisible(false)}
@@ -556,7 +556,7 @@ function HomePrayerFlowSession({ groupId, session }: { groupId?: Id; session: Re
             setMessageSentRequestId(activeRequest.id);
             setMessageComposerVisible(false);
           }}
-          placeholder={t("community.reply.encouragementPlaceholder")}
+          placeholder={t("community.reply.placeholder")}
           value={encouragementDraft}
           variant="sheet"
         />
@@ -564,3 +564,6 @@ function HomePrayerFlowSession({ groupId, session }: { groupId?: Id; session: Re
     </>
   );
 }
+
+
+

@@ -1,4 +1,4 @@
-import { normalizeEntryKind } from "@/state/product";
+import { normalizePostKind } from "@/state/product";
 import type { BibleVerse, CheckIn, EntryKind, FeedItem, Id, Post, PrayerReaction } from "@/state/types";
 
 type CommunityPostItem = Extract<FeedItem, { type: "post" }>;
@@ -73,9 +73,7 @@ function isRenderablePost(post: Post, groupId: Id) {
     return false;
   }
 
-  const kind = normalizeEntryKind(post.kind);
-  if (kind === "scripture") return Boolean(post.verse || post.verses?.length);
-  return post.body.trim().length > 0;
+  return post.body.trim().length > 0 || Boolean(post.verse || post.verses?.length) || Boolean(post.audio);
 }
 
 function checkInFeedItem(checkIn: CheckIn): CommunityCheckInItem {
@@ -133,7 +131,7 @@ export function selectCommunityContent({ checkIns, groupId, posts }: CommunityCo
   });
 
   posts.forEach((post) => {
-    if (!isRenderablePost(post, groupId) || normalizeEntryKind(post.kind) === "prayer_moment") return;
+    if (!isRenderablePost(post, groupId)) return;
     const item = postFeedItem(post);
     uniqueItems.set(communityContentKey(item), item);
   });
@@ -153,7 +151,7 @@ export function selectCommunityPostById(
 
 export function selectPrayerRequests(items: readonly FeedItem[]): CommunityPostItem[] {
   return items.filter(
-    (item): item is CommunityPostItem => item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request",
+    (item): item is CommunityPostItem => item.type === "post" && normalizePostKind(item.kind) === "prayer_request",
   );
 }
 

@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { buildGroupStatistics, statisticsRangeStart } from "./community-statistics";
 
@@ -28,8 +28,8 @@ const source = {
   },
   posts: {
     request: { userId: "b", kind: "prayer_request", createdAt: "2026-11-21T10:00:00.000Z", answeredAt: "2026-11-23T10:00:00.000Z" },
-    reflection: { userId: "c", kind: "reflection", createdAt: "2026-11-22T10:00:00.000Z" },
-    outsider: { userId: "d", kind: "reflection", createdAt: "2026-11-22T10:00:00.000Z" },
+    reflection: { userId: "c", kind: "post", createdAt: "2026-11-22T10:00:00.000Z" },
+    outsider: { userId: "d", kind: "post", createdAt: "2026-11-22T10:00:00.000Z" },
     old: { userId: "a", kind: "update", createdAt: "2026-10-01T10:00:00.000Z" },
   },
   replies: {
@@ -78,7 +78,7 @@ test("builds member, activity, prayer and Bible plan statistics from shared acti
 
   assert.equal(result.posts.total, 2);
   assert.equal(result.posts.byKind.prayer_request, 1);
-  assert.equal(result.posts.byKind.reflection, 1);
+  assert.equal(result.posts.byKind.post, 1);
   assert.equal(result.replies.total, 2);
   assert.deepEqual(result.prayers, {
     requests: 1,
@@ -139,3 +139,4 @@ test("passes the truncation flag through", () => {
   const result = buildGroupStatistics({ ...source, truncated: true });
   assert.equal(result.truncated, true);
 });
+

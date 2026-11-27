@@ -3,7 +3,13 @@ import { Id, PostReaction, PrayerReaction, Reply } from "@/state/types";
 import { database } from "@/state/store/firebase";
 import { asArray } from "@/state/store/helpers";
 
-export async function deleteFeedItemWithChildren(groupId: Id, targetType: "post" | "check_in", targetId: Id, _ownerId: Id) {
+export async function deleteFeedItemWithChildren(
+  groupId: Id,
+  targetType: "post" | "check_in",
+  targetId: Id,
+  _ownerId: Id,
+  extraWrites: Record<string, unknown> = {},
+) {
   const [replySnapshot, reactionSnapshot, postReactionSnapshot] = await Promise.all([
     get(ref(database, `replies/${groupId}`)),
     get(ref(database, `prayerReactions/${groupId}`)),
@@ -41,6 +47,7 @@ export async function deleteFeedItemWithChildren(groupId: Id, targetType: "post"
   // rules-authorized cascade. No owner moderation privilege is used here.
   await update(ref(database), {
     ...childDeletes,
+    ...extraWrites,
     [`${targetType === "post" ? "posts" : "checkIns"}/${groupId}/${targetId}`]: null,
   });
 }

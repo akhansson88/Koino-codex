@@ -124,6 +124,16 @@ for (const [collection, p] of Object.entries(policies)) {
   if (collection === "prayerNotifications") node.readAt = { ".write": own, ".validate": "newData.isString()" };
   store[collection] = target;
 }
+// Canonical content kinds. Legacy values stay readable because validation only
+// applies to new writes; the migration rewrites them before the strict rules go live.
+store.posts.$groupId.$id.kind = { ".validate": "newData.val() == 'post' || newData.val() == 'prayer_request'" };
+store.posts.$groupId.$id[".validate"] = "newData.val() == null || (newData.child('id').val() == $id && newData.child('userId').val() == auth.uid && newData.child('groupId').val() == $groupId && (newData.child('kind').val() == 'post' || newData.child('kind').val() == 'prayer_request') && newData.child('body').isString() && newData.child('createdAt').isString())";
+store.journalEntries.$uid.$id.entryKind = { ".validate": "newData.val() == null || newData.val() == 'post' || newData.val() == 'prayer_request'" };
+const likeNode = store.postReactions.$groupId.$id;
+likeNode.kind = { ".validate": "newData.val() == 'like'" };
+likeNode.id = { ".validate": "newData.val() == auth.uid + '_' + newData.parent().child('targetType').val() + '_' + newData.parent().child('targetId').val() + '_like'" };
+likeNode[".validate"] = "newData.val() == null || (newData.child('id').val() == $id && newData.child('userId').val() == auth.uid && (newData.child('targetType').val() == 'post' || newData.child('targetType').val() == 'check_in') && newData.child('targetId').isString() && newData.child('kind').val() == 'like' && newData.child('createdAt').isString())";
+
 // A shared fast is readable by the whole community, but only its host can
 // publish or edit it. Each participant may add or remove only their own entry,
 // and only before the fast begins (joinCutoffMs). The owner of the community may

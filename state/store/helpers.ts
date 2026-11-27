@@ -1,17 +1,13 @@
 import { FirebaseError } from "firebase/app";
-import {
-  AudioClip,
-  BibleHighlightColor,
-  BibleHighlightPaletteColor,
-  BibleVerse,
-  Id,
-  PrayerReaction,
-  PrayerSession,
-} from "@/state/types";
+import type { AudioClip, BibleHighlightColor, BibleHighlightPaletteColor, BibleVerse, Id, PrayerReaction, PrayerSession } from "@/state/types";
 import { type CreatePostKind } from "@/state/store/types";
 
 export function now() {
   return new Date().toISOString();
+}
+
+export function postReactionId(userId: Id, targetType: "post" | "check_in", targetId: Id) {
+  return `${userId}_${targetType}_${targetId}_like`;
 }
 
 export function localDayKey(value: string | Date) {
@@ -68,12 +64,13 @@ export function actionVerses(action: { verse?: BibleVerse; verses?: BibleVerse[]
 }
 
 export function postSupportsTitle(kind: CreatePostKind) {
-  return kind === "prayer_request" || kind === "prayer_moment" || kind === "update";
+  return kind === "prayer_request";
 }
 
 export function validPostContent(kind: CreatePostKind, body: string, verses: BibleVerse[], audio?: AudioClip) {
   if (audio) return true;
-  return kind === "scripture" ? verses.length > 0 : Boolean(body.trim());
+  if (kind === "post") return Boolean(body.trim()) || verses.length > 0;
+  return Boolean(body.trim());
 }
 
 export function bibleReferenceStorageId(verse: Pick<BibleVerse, "reference" | "translation">) {

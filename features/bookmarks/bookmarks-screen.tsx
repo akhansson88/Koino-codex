@@ -201,7 +201,7 @@ export function BookmarksScreen() {
     void dispatch({
       type: "createPost",
       body: t("bookmarks.shareBody"),
-      kind: "scripture",
+      kind: "post",
       title: referenceFor(verse),
       verse: {
         book: verse.book,

@@ -8,7 +8,7 @@ H = actual emulator Auth tokens, signed Functions HTTP callables, RTDB SDK/secur
 
 | Requirement | Result | Evidence |
 | --- | --- | --- |
-| Owner removes reflection, prayer request and praise | PASS | H; post/prayer also P |
+| Owner removes a post, a prayer request and a check-in | PASS | H; post/prayer also P |
 | Owner removes member's shared check-in | PASS | H, including authorized decryption before removal |
 | Matching private journal survives shared check-in removal | PASS | H: same-ID linked journal plus full ciphertext equality and author decryption before/after import |
 | Private journals/check-ins remain inaccessible to owner/outsider | PASS | H: read, delete and forged-write denials; private data unchanged |

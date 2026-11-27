@@ -12,13 +12,8 @@ import { colors, radius, typography } from "@/ui/theme";
 
 const swedishContentLabels: Record<ActivityNotification["contentLabel"], string> = {
   post: "inlägg",
-  reflection: "reflektion",
   "prayer request": "böneämne",
-  prayer: "bön",
-  praise: "lovprisning",
   "check-in": "incheckning",
-  update: "uppdatering",
-  "scripture reflection": "bibelreflektion",
 };
 
 type NotificationRow =
@@ -26,13 +21,8 @@ type NotificationRow =
   | { kind: "prayer"; createdAt: string; prayer: PrayerNotification };
 
 function ownerNotificationKey(content: ActivityNotification["contentLabel"]) {
-  if (content === "reflection") return "notifications.owner.reflection" as const;
   if (content === "prayer request") return "notifications.owner.prayerRequest" as const;
-  if (content === "prayer") return "notifications.owner.prayer" as const;
-  if (content === "praise") return "notifications.owner.praise" as const;
   if (content === "check-in") return "notifications.owner.checkIn" as const;
-  if (content === "update") return "notifications.owner.update" as const;
-  if (content === "scripture reflection") return "notifications.owner.scripture" as const;
   return "notifications.owner.post" as const;
 }
 

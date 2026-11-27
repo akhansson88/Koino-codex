@@ -5,9 +5,9 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { isCheckInJournalEntry } from "@/state/check-ins";
-import { journalEntryTypeFor, visibility } from "@/state/product";
+import { journalEntryTypeFor, normalizePostKind, visibility } from "@/state/product";
 import type { KoinoContextValue } from "@/state/store/types";
-import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType } from "@/state/types";
+import type { BibleVerse, JournalEntry, JournalEntryType, PostKind } from "@/state/types";
 import { AppScreen, BodyText, BottomSheet, Card, IconButton, RoomImage, SecondaryButton, SectionHeading, VerseList } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
@@ -16,6 +16,8 @@ import { AudioCard } from "@/features/audio/audio-card";
 import { LinkPreview } from "@/ui/link-preview";
 import { Button } from "@/ui/shadcn/button";
 import { SharedComposer } from "@/ui/shared-composer";
+import { VisibilityToggle } from "@/ui/visibility-toggle";
+import { VisibilityConfirmSheet } from "@/ui/visibility-confirm-sheet";
 import { colors, typography } from "@/ui/theme";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 
@@ -41,7 +43,10 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
   const [draft, setDraft] = useState<symbol>();
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [entryMenuVisible, setEntryMenuVisible] = useState(false);
-  const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
+  const [entryKind, setEntryKind] = useState<PostKind>("post");
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityConfirmVisible, setVisibilityConfirmVisible] = useState(false);
+  const [visibilityError, setVisibilityError] = useState<string>();
   const [journalType, setJournalType] = useState<JournalEntryType>("reflection");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -69,7 +74,7 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
           body: sharedCheckIn.reflectionText || "Shared check-in",
           source: "manual" as const,
           journalType: "heart_checkin" as const,
-          entryKind: "reflection" as EntryKind,
+          entryKind: "post" as PostKind,
           mood: sharedCheckIn.mood,
           heartMood: undefined,
           verse: sharedCheckIn.verse,
@@ -105,12 +110,47 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
   const presentation = journalEntryPresentation(currentEntry, t);
   const isSharedCheckIn = Boolean(currentEntry.isSharedCheckIn);
   const audienceLocked = isCheckInJournalEntry(currentEntry);
-  const sharedCopy = journalEntryHasSharedCopy(currentEntry);
+  const sharedCopy = journalEntryHasSharedCopy(currentEntry, { posts: state.posts, checkIns: state.checkIns });
+  const publicPost = currentEntry.sharedPostId ? state.posts.find((post) => post.id === currentEntry.sharedPostId) : undefined;
+  const publicCheckIn = currentEntry.sharedCheckInId ? state.checkIns.find((item) => item.id === currentEntry.sharedCheckInId) : undefined;
+  const sharedEngagement = publicPost
+    ? {
+        comments: state.replies.filter((reply) => reply.targetType === "post" && reply.targetId === publicPost.id).length,
+        likes: new Set(state.postReactions.filter((reaction) => reaction.targetType === "post" && reaction.targetId === publicPost.id).map((reaction) => reaction.userId)).size,
+      }
+    : publicCheckIn
+      ? {
+          comments: state.replies.filter((reply) => reply.targetType === "check_in" && reply.targetId === publicCheckIn.id).length,
+          likes: new Set(state.postReactions.filter((reaction) => reaction.targetType === "check_in" && reaction.targetId === publicCheckIn.id).map((reaction) => reaction.userId)).size,
+        }
+      : { comments: 0, likes: 0 };
+
+  async function applyVisibility(next: "private" | "group") {
+    setVisibilityBusy(true);
+    setVisibilityError(undefined);
+    try {
+      await dispatch({ type: "setJournalVisibility", id: currentEntry.id, visibility: next });
+      setVisibilityConfirmVisible(false);
+    } catch {
+      setVisibilityError(t("community.visibility.error"));
+    } finally {
+      setVisibilityBusy(false);
+    }
+  }
+
+  function changeVisibility(next: "private" | "group") {
+    if (visibilityBusy || !state.currentGroupId) return;
+    if (next === "private" && (sharedEngagement.comments > 0 || sharedEngagement.likes > 0) && sharedCopy) {
+      setVisibilityConfirmVisible(true);
+      return;
+    }
+    void applyVisibility(next);
+  }
 
   function openEditor() {
     if (!state.currentUserId || pending.current) return;
     setJournalType(storedType);
-    setEntryKind(currentEntry.entryKind ?? (storedType === "prayer" ? "prayer_request" : storedType === "answered_prayer" ? "praise" : storedType === "scripture_note" ? "scripture" : "reflection"));
+    setEntryKind(normalizePostKind(currentEntry.entryKind ?? (storedType === "prayer" ? "prayer_request" : "post")));
     setTitle(currentEntry.title ?? "");
     setBody(currentEntry.body);
     setVerses(normalizeBibleVerses(currentEntry.verse, currentEntry.verses));
@@ -208,21 +248,41 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
       <View style={{ gap: 8 }}>
         <SectionHeading>{t(isSharedCheckIn ? "me.journey.detail.sharedWith" : "me.journey.detail.privacy")}</SectionHeading>
         {isSharedCheckIn ? (
-          <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-            <RoomImage image={group?.image} name={group?.name ?? t("tabs.community")} size={34} />
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.label, { color: colors.ink }]}>{group?.name ?? t("tabs.community")}</Text>
-              <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.detail.sharedWithCommunity")}</Text>
-            </View>
-          </Card>
+          <>
+            <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
+              <RoomImage image={group?.image} name={group?.name ?? t("tabs.community")} size={34} />
+              <View style={{ flex: 1 }}>
+                <Text style={[typography.label, { color: colors.ink }]}>{group?.name ?? t("tabs.community")}</Text>
+                <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.detail.sharedWithCommunity")}</Text>
+              </View>
+            </Card>
+            <VisibilityToggle
+              value="group"
+              communityName={group?.name}
+              busy={visibilityBusy}
+              disabled={!group}
+              onChange={(next) => {
+                if (next !== "private") return;
+                setVisibilityBusy(true);
+                void dispatch({ type: "setCheckInVisibility", id: currentEntry.id, visibility: "private" })
+                  .then(() => router.back())
+                  .catch(() => setVisibilityError(t("community.visibility.error")))
+                  .finally(() => setVisibilityBusy(false));
+              }}
+            />
+          </>
         ) : (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
-            <Feather name={sharedCopy ? "users" : "lock"} size={14} color={colors.muted} />
-            <Text style={[typography.caption, { color: colors.muted, flex: 1 }]}>
-              {t(sharedCopy ? "me.journey.preview.sharedCopy" : "me.journey.detail.privateOnly")}
-            </Text>
-          </View>
+          <VisibilityToggle
+            value={sharedCopy ? "group" : "private"}
+            communityName={group?.name}
+            busy={visibilityBusy}
+            disabled={!group}
+            onChange={changeVisibility}
+          />
         )}
+        {visibilityError ? (
+          <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{visibilityError}</Text>
+        ) : null}
       </View>
       {isSharedCheckIn ? null : (
         <SecondaryButton icon="edit-2" onPress={openEditor}>
@@ -230,6 +290,15 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         </SecondaryButton>
       )}
       {saved ? <BodyText accessibilityRole="alert" accessibilityLiveRegion="polite">{t("me.journey.composer.editSaved")}</BodyText> : null}
+      <VisibilityConfirmSheet
+        visible={visibilityConfirmVisible}
+        checkIn={Boolean(currentEntry.linkedCheckInId || currentEntry.sharedCheckInId || isSharedCheckIn)}
+        comments={sharedEngagement.comments}
+        likes={sharedEngagement.likes}
+        busy={visibilityBusy}
+        onCancel={() => setVisibilityConfirmVisible(false)}
+        onConfirm={() => { void applyVisibility("private"); }}
+      />
       <SharedComposer
         visible={Boolean(draft)}
         context="journal"
@@ -244,8 +313,9 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
         audienceLocked={audienceLocked}
         editing
         onKind={(kind) => {
-          setEntryKind(kind);
-          if (!audienceLocked) setJournalType(journalEntryTypeFor({ entryKind: kind, source: currentEntry.source }));
+          const next = normalizePostKind(kind);
+          setEntryKind(next);
+          if (!audienceLocked) setJournalType(journalEntryTypeFor({ entryKind: next, source: currentEntry.source }));
         }}
         submission={saving ? { status: "pending", inFlight: true } : saveFailed ? { status: "failure", inFlight: false } : undefined}
         submissionFeedback={saving ? "me.journey.composer.saving" : saveFailed ? "me.journey.composer.saveFailed" : undefined}
@@ -268,7 +338,17 @@ function JournalDetailContent({ state, dispatch, routeId }: Pick<KoinoContextVal
       >
         <SheetMenuGroup>
           <SheetMenuItem
+            icon={sharedCopy ? "lock" : "globe"}
+            title={t(sharedCopy ? "community.visibility.makePrivate" : "community.visibility.makePublic")}
+            onPress={() => {
+              pendingDeleteRef.current = false;
+              setEntryMenuVisible(false);
+              changeVisibility(sharedCopy ? "private" : "group");
+            }}
+          />
+          <SheetMenuItem
             icon="trash-2"
+            showDivider
             title={t("common.delete")}
             tone="danger"
             onPress={() => {

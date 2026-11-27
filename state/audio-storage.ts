@@ -33,6 +33,7 @@ type DownloadResponse = { url: string; expiresAt: string };
 
 type DeleteRequest = { operation: "delete"; path: string };
 type CopyRequest = { operation: "copyForShare"; sourcePath: string; groupId: string; clipId: string };
+type CopyPrivateRequest = { operation: "copyForPrivate"; sourcePath: string; clipId: string };
 type CopyResponse = { path: string };
 
 type AudioRequest =
@@ -40,7 +41,8 @@ type AudioRequest =
   | FinalizeUploadRequest
   | DownloadRequest
   | DeleteRequest
-  | CopyRequest;
+  | CopyRequest
+  | CopyPrivateRequest;
 
 const audioCallable = httpsCallable<AudioRequest, unknown>(functions, "koinoAudio");
 const downloadTickets = new Map<string, { url: string; expiresAt: number }>();
@@ -141,6 +143,16 @@ export async function copyAudioForShare(clip: AudioClip, groupId: string): Promi
     operation: "copyForShare",
     sourcePath: clip.path,
     groupId,
+    clipId,
+  });
+  return { ...clip, id: clipId, path: copied.path, createdAt: new Date().toISOString() };
+}
+
+export async function copyAudioForPrivate(clip: AudioClip): Promise<AudioClip> {
+  const clipId = newAudioClipId();
+  const copied = await call<CopyResponse>({
+    operation: "copyForPrivate",
+    sourcePath: clip.path,
     clipId,
   });
   return { ...clip, id: clipId, path: copied.path, createdAt: new Date().toISOString() };

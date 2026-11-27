@@ -601,7 +601,7 @@ Ljud är alltså inte en kostnadsfråga i den här skalan. Det är därför vi k
 | `features/feed-detail-screen.tsx` | Spelare i detaljvyn |
 | `features/prayer-request-detail-screen.tsx` | Ljud på förfrågan + i uppmuntringar |
 | `features/home-prayer-flow-screen.tsx` | ”Skicka en röstbön” i slutsteget |
-| `ui/written-encouragement-composer.tsx` | Mikrofon, `onSend(body, replyId, audio?)` |
+| `ui/written-reply-composer.tsx` | Mikrofon, `onSend(body, replyId, audio?)` |
 | `features/me-prayers.tsx` | Indikator för mottagen röstbön (om `replyId` finns) |
 | `ui/translations/sv.ts`, `en.ts` | Nya nycklar |
 | `app.config.js` | iOS-mikrofontext; `recordAudioAndroid: true` |

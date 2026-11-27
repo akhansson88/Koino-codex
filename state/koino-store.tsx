@@ -1,4 +1,4 @@
-import { hydrateNotification } from "@/state/encryption/notifications";
+﻿import { hydrateNotification } from "@/state/encryption/notifications";
 import AsyncStorage from "@/state/encryption/local-storage";
 import * as FirebaseAuth from "@firebase/auth";
 import { httpsCallable } from "firebase/functions";
@@ -104,6 +104,7 @@ import {
   validPostContent,
   postSupportsTitle,
   prayerReactionId,
+  postReactionId,
   isMatchingPrayerReaction,
   prayerSessionFromReaction,
   isBibleHighlightColor,
@@ -125,8 +126,9 @@ import { displayableText } from "@/state/display-values";
 import { isPlaintextCheckIn, isPlaintextJournalEntry, isPlaintextPost, isPlaintextReply } from "@/state/content-values";
 import { normalizePrayerNotification, normalizePrayerNotifications } from "@/state/prayer-notifications";
 import { clearEncryptedImages } from "@/state/supabase-storage";
-import { clearAudioCache, copyAudioForShare, deleteAudioClip } from "@/state/audio-storage";
+import { clearAudioCache, copyAudioForPrivate, copyAudioForShare, deleteAudioClip } from "@/state/audio-storage";
 import { deleteFeedItemWithChildren } from "@/state/store/feed-operations";
+import { normalizePostKind } from "@/state/product";
 
 // Legacy records can still carry a retired encrypted object where an image URL
 // used to be. Native Image views crash on that shape, so only a real URL is
@@ -301,6 +303,25 @@ export async function runCommunityPostSubmission(
 
 function reportCommunitySubmission(request: CommunitySubmissionRequest, outcome: CommunitySubmissionOutcome) {
   try { request.report(outcome); } catch { /* A form callback must not change dispatch error behavior. */ }
+}
+
+export function journalEntryFromPost(post: Post, timestamp: string): JournalEntry {
+  const kind = normalizePostKind(post.kind);
+  return {
+    id: id("journal"),
+    userId: post.userId,
+    journalType: kind === "prayer_request" ? "prayer" : "reflection",
+    ...(post.title?.trim() ? { title: post.title.trim() } : {}),
+    body: post.body,
+    ...(post.audio ? { audio: post.audio } : {}),
+    source: "manual",
+    entryKind: kind,
+    isPrivate: true,
+    ...(post.verse ? { verse: post.verse } : {}),
+    ...(post.verses?.length ? { verses: post.verses } : {}),
+    createdAt: post.createdAt,
+    updatedAt: timestamp,
+  };
 }
 
 function resolveMentionIds(body: string, members: Membership[]) {
@@ -1602,11 +1623,216 @@ export function KoinoProvider({ children }: PropsWithChildren) {
         return displayableText(post?.title) ?? displayableText(post?.body)?.slice(0, 80);
       };
 
+      const upsertJournalEntry = (entry: JournalEntry) => {
+        setJournalEntries((current) => current.some((item) => item.id === entry.id)
+          ? current.map((item) => item.id === entry.id ? entry : item)
+          : [...current, entry]);
+        olderJournalEntriesRef.current = olderJournalEntriesRef.current.some((item) => item.id === entry.id)
+          ? olderJournalEntriesRef.current.map((item) => item.id === entry.id ? entry : item)
+          : [...olderJournalEntriesRef.current, entry];
+      };
+
+      const moveCheckInVisibility = async (checkInId: Id, visibility: "private" | "group") => {
+        if (!firebaseUser || !profile?.currentGroupId) return;
+        const uid = firebaseUser.uid;
+        const groupId = profile.currentGroupId;
+        const shared = checkIns.find((item) => item.id === checkInId && item.groupId === groupId && item.userId === uid);
+        const hidden = privateCheckIns.find((item) => item.id === checkInId && item.userId === uid);
+        const timestamp = now();
+
+        if (visibility === "private" && shared) {
+          const linkedEntry = journalEntries.find((entry) =>
+            entry.userId === uid &&
+            (entry.sharedCheckInId === shared.id || (entry.source === "private_check_in" && entry.createdAt === shared.createdAt)),
+          );
+          const entryBase = linkedEntry ? { ...linkedEntry } : undefined;
+          if (entryBase) delete entryBase.sharedCheckInId;
+          const entry: JournalEntry = entryBase
+            ? { ...entryBase, isPrivate: true, linkedCheckInId: shared.id, updatedAt: timestamp }
+            : {
+                id: id("journal"),
+                userId: uid,
+                journalType: "heart_checkin",
+                body: shared.reflectionText.trim() || "Private check-in",
+                source: "private_check_in",
+                entryKind: "post",
+                mood: shared.mood,
+                isPrivate: true,
+                linkedCheckInId: shared.id,
+                ...(shared.verse ? { verse: shared.verse } : {}),
+                ...(shared.verses?.length ? { verses: shared.verses } : {}),
+                createdAt: shared.createdAt,
+                updatedAt: timestamp,
+              };
+          const dayKey = shared.dayKey ?? localDayKey(shared.createdAt);
+          const extraWrites: Record<string, unknown> = {
+            [`journalEntries/${uid}/${entry.id}`]: entry,
+            [`privateCheckIns/${uid}/${shared.id}`]: { ...shared, visibility: "private" },
+            ...(dayKey ? { [`${checkInClaimPath(uid, groupId, dayKey)}/visibility`]: "private" } : {}),
+          };
+          await deleteFeedItemWithChildren(groupId, "check_in", shared.id, uid, extraWrites);
+          setCheckIns((current) => current.filter((item) => item.id !== shared.id));
+          olderCheckInsRef.current = olderCheckInsRef.current.filter((item) => item.id !== shared.id);
+          setPrivateCheckIns((current) => current.some((item) => item.id === shared.id)
+            ? current.map((item) => item.id === shared.id ? { ...shared, visibility: "private" } : item)
+            : [...current, { ...shared, visibility: "private" }]);
+          olderPrivateCheckInsRef.current = olderPrivateCheckInsRef.current.some((item) => item.id === shared.id)
+            ? olderPrivateCheckInsRef.current.map((item) => item.id === shared.id ? { ...shared, visibility: "private" } : item)
+            : [...olderPrivateCheckInsRef.current, { ...shared, visibility: "private" }];
+          upsertJournalEntry(entry);
+          return;
+        }
+
+        if (visibility === "group" && hidden) {
+          const sharedCheckIn: CheckIn = { ...hidden, visibility: "group" };
+          const linkedEntry = journalEntries.find((entry) =>
+            entry.userId === uid &&
+            (entry.linkedCheckInId === hidden.id || entry.sharedCheckInId === hidden.id ||
+              (entry.source === "private_check_in" && entry.createdAt === hidden.createdAt)),
+          );
+          const dayKey = hidden.dayKey ?? localDayKey(hidden.createdAt);
+          const writes: Record<string, unknown> = {
+            [`checkIns/${groupId}/${hidden.id}`]: sharedCheckIn,
+            [`privateCheckIns/${uid}/${hidden.id}`]: null,
+            ...(dayKey ? { [`${checkInClaimPath(uid, groupId, dayKey)}/visibility`]: "group" } : {}),
+          };
+          if (linkedEntry) {
+            writes[`journalEntries/${uid}/${linkedEntry.id}`] = {
+              ...linkedEntry,
+              isPrivate: false,
+              sharedCheckInId: hidden.id,
+              linkedCheckInId: hidden.id,
+              updatedAt: timestamp,
+            };
+          }
+          await update(ref(database), writes);
+          setPrivateCheckIns((current) => current.filter((item) => item.id !== hidden.id));
+          olderPrivateCheckInsRef.current = olderPrivateCheckInsRef.current.filter((item) => item.id !== hidden.id);
+          setCheckIns((current) => current.some((item) => item.id === hidden.id)
+            ? current.map((item) => item.id === hidden.id ? sharedCheckIn : item)
+            : [...current, sharedCheckIn]);
+          olderCheckInsRef.current = olderCheckInsRef.current.some((item) => item.id === hidden.id)
+            ? olderCheckInsRef.current.map((item) => item.id === hidden.id ? sharedCheckIn : item)
+            : [...olderCheckInsRef.current, sharedCheckIn];
+          if (linkedEntry) {
+            upsertJournalEntry({
+              ...linkedEntry,
+              isPrivate: false,
+              sharedCheckInId: hidden.id,
+              linkedCheckInId: hidden.id,
+              updatedAt: timestamp,
+            });
+          }
+          return;
+        }
+      };
+
+      const movePostToJournal = async (post: Post, journalEntryId?: Id) => {
+        if (!firebaseUser || !profile?.currentGroupId) return;
+        const uid = firebaseUser.uid;
+        const groupId = profile.currentGroupId;
+        const timestamp = now();
+        const linkedEntry = journalEntries.find((entry) => entry.userId === uid && entry.sharedPostId === post.id);
+        const needsPrivateAudio = Boolean(post.audio && post.audio.path.includes("/groups/"));
+        const privateAudio = needsPrivateAudio && post.audio ? await copyAudioForPrivate(post.audio) : post.audio;
+        if (!journalAccountIsCurrent()) throw new Error("The journal account changed.");
+        const entry: JournalEntry = linkedEntry
+          ? {
+              ...linkedEntry,
+              isPrivate: true,
+              sharedPostId: post.id,
+              ...(privateAudio ? { audio: privateAudio } : {}),
+              updatedAt: timestamp,
+            }
+          : {
+              ...journalEntryFromPost(post, timestamp),
+              ...(journalEntryId ? { id: journalEntryId } : {}),
+              sharedPostId: post.id,
+              ...(privateAudio ? { audio: privateAudio } : {}),
+            };
+        await deleteFeedItemWithChildren(groupId, "post", post.id, uid, {
+          [`journalEntries/${uid}/${entry.id}`]: entry,
+        });
+        setPosts((current) => current.filter((item) => item.id !== post.id));
+        olderPostsRef.current = olderPostsRef.current.filter((item) => item.id !== post.id);
+        upsertJournalEntry(entry);
+        if (needsPrivateAudio && post.audio && privateAudio && privateAudio.path !== post.audio.path) {
+          void deleteAudioClip(post.audio);
+        }
+      };
+
+      const publishJournalEntry = async (entry: JournalEntry) => {
+        if (!firebaseUser || !profile?.currentGroupId || !journalAccountIsCurrent()) return;
+        const uid = firebaseUser.uid;
+        const groupId = profile.currentGroupId;
+        const checkInId = entry.sharedCheckInId ?? entry.linkedCheckInId;
+        if (checkInId) {
+          await moveCheckInVisibility(checkInId, "group");
+          return;
+        }
+        if (entry.source === "private_check_in") {
+          const hidden = privateCheckIns.find((item) => item.userId === uid && item.createdAt === entry.createdAt);
+          if (hidden) await moveCheckInVisibility(hidden.id, "group");
+          return;
+        }
+        if (!canShareJournal(groupId)) throw new Error("The selected community is no longer available.");
+        const timestamp = now();
+        const external = posts.find((item) => item.id === entry.sharedPostId && item.groupId === groupId);
+        const needsSharedAudio = Boolean(entry.audio && entry.audio.path.includes("/users/"));
+        const sharedAudio = needsSharedAudio && entry.audio ? await copyAudioForShare(entry.audio, groupId) : external?.audio;
+        if (!journalAccountIsCurrent()) throw new Error("The journal account changed.");
+        const kind = normalizePostKind(entry.entryKind);
+        const post: Post = external
+          ? {
+              ...external,
+              kind,
+              ...(kind === "prayer_request" && entry.title?.trim() ? { title: entry.title.trim() } : {}),
+              body: entry.body,
+              ...(sharedAudio ? { audio: sharedAudio } : {}),
+              ...(entry.verse ? { verse: entry.verse } : {}),
+              ...(entry.verses?.length ? { verses: entry.verses } : {}),
+            }
+          : {
+              id: entry.sharedPostId ?? id("post"),
+              userId: uid,
+              groupId,
+              kind,
+              ...(kind === "prayer_request" && entry.title?.trim() ? { title: entry.title.trim() } : {}),
+              body: entry.body,
+              ...(sharedAudio ? { audio: sharedAudio } : {}),
+              ...(entry.verse ? { verse: entry.verse } : {}),
+              ...(entry.verses?.length ? { verses: entry.verses } : {}),
+              createdAt: entry.createdAt,
+            };
+        const updatedEntry: JournalEntry = {
+          ...entry,
+          isPrivate: false,
+          sharedPostId: post.id,
+          updatedAt: timestamp,
+        };
+        await update(ref(database), {
+          [`posts/${groupId}/${post.id}`]: post,
+          [`journalEntries/${uid}/${entry.id}`]: updatedEntry,
+        }, () => journalAccountIsCurrent());
+        setPosts((current) => current.some((item) => item.id === post.id)
+          ? current.map((item) => item.id === post.id ? post : item)
+          : [...current, post]);
+        olderPostsRef.current = olderPostsRef.current.some((item) => item.id === post.id)
+          ? olderPostsRef.current.map((item) => item.id === post.id ? post : item)
+          : [...olderPostsRef.current, post];
+        upsertJournalEntry(updatedEntry);
+        if (needsSharedAudio && entry.audio && sharedAudio && sharedAudio.path !== entry.audio.path) {
+          void deleteAudioClip(entry.audio);
+        }
+      };
+
+
       try {
         const groupMutationTypes: Action["type"][] = [
           "leaveGroup", "removeGroupMember", "transferGroupOwnership", "updateGroup", "uploadGroupImage", "deleteGroupImage", "deleteGroup",
           "submitCheckIn", "updateCheckIn", "deleteCheckIn", "createPost", "editPost", "deletePost", "markPrayerAnswered", "updatePrayerAnswer", "unmarkPrayerAnswered",
           "unpray", "togglePostReaction", "createReply", "deleteReply", "announceBiblePlan", "unannounceBiblePlan", "joinGroupBiblePlan", "setDiscussionFollow",
+          "setPostVisibility", "setCheckInVisibility", "setJournalVisibility",
           "createEvent", "updateEvent", "deleteEvent", "setEventRsvp",
           "setFastVisibility", "joinGroupFast", "leaveGroupFast", "removeGroupFast",
         ];
@@ -1706,7 +1932,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "requestPasswordReset": {
-              if (developmentMode) throw new Error("Password reset email is disabled in KOINO Dev. / E-post för lösenordsåterställning är avstängd i KOINO Dev.");
+              if (developmentMode) throw new Error("Password reset email is disabled in KOINO Dev. / E-post fÃ¶r lÃ¶senordsÃ¥terstÃ¤llning Ã¤r avstÃ¤ngd i KOINO Dev.");
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
 
@@ -2090,7 +2316,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                  id: id("post"),
                  userId: firebaseUser.uid,
                  groupId,
-                 kind: action.kind,
+                 kind: normalizePostKind(action.kind),
                  ...(postSupportsTitle(action.kind) && action.title?.trim() ? { title: action.title.trim() } : {}),
                  body: action.body.trim(),
                  ...(action.audio ? { audio: action.audio } : {}),
@@ -2108,7 +2334,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                if (!validPostContent(action.kind, action.body, verses, action.audio === null ? undefined : action.audio ?? post.audio)) return;
                await update(ref(database, `posts/${profile.currentGroupId}/${action.id}`), {
                  body: action.body.trim(),
-                 kind: action.kind,
+                 kind: normalizePostKind(action.kind),
                  ...(action.audio !== undefined ? { audio: action.audio } : {}),
                  ...(postSupportsTitle(action.kind) && action.title !== undefined ? { title: action.title.trim() || null } : {}),
                  verse: verses[0] ?? null,
@@ -2119,7 +2345,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                setPosts((current) => current.map((item) => item.id === action.id ? {
                  ...item,
                  body: action.body.trim(),
-                 kind: action.kind,
+                 kind: normalizePostKind(action.kind),
                  ...(postSupportsTitle(action.kind) ? { title: action.title?.trim() || undefined } : {}),
                  verse: verses[0],
                  verses: verses.length ? verses : undefined,
@@ -2127,7 +2353,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                olderPostsRef.current = olderPostsRef.current.map((item) => item.id === action.id ? {
                  ...item,
                  body: action.body.trim(),
-                 kind: action.kind,
+                 kind: normalizePostKind(action.kind),
                  ...(postSupportsTitle(action.kind) ? { title: action.title?.trim() || undefined } : {}),
                  verse: verses[0],
                  verses: verses.length ? verses : undefined,
@@ -2221,6 +2447,49 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               await Promise.all([deleteAudioClip(post.audio), ...replyAudio.map((audio) => deleteAudioClip(audio))]);
               setPosts((current) => current.filter((item) => item.id !== action.id));
               olderPostsRef.current = olderPostsRef.current.filter((item) => item.id !== action.id);
+              return;
+            }
+            case "setPostVisibility": {
+              if (!firebaseUser || !profile?.currentGroupId || action.visibility !== "private") return;
+              const post = posts.find((item) => item.id === action.id && item.groupId === profile.currentGroupId);
+              if (!post || post.userId !== firebaseUser.uid) return;
+              await movePostToJournal(post, action.journalEntryId);
+              return;
+            }
+            case "setCheckInVisibility": {
+              await moveCheckInVisibility(action.id, action.visibility);
+              return;
+            }
+            case "setJournalVisibility": {
+              if (!firebaseUser) return;
+              const entry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
+              if (!entry) return;
+              if (action.visibility === "group") {
+                await publishJournalEntry(entry);
+                return;
+              }
+              const checkInId = entry.sharedCheckInId ?? entry.linkedCheckInId;
+              if (checkInId) {
+                await moveCheckInVisibility(checkInId, "private");
+                return;
+              }
+              if (entry.source === "private_check_in") {
+                const hidden = privateCheckIns.find((item) => item.userId === firebaseUser.uid && item.createdAt === entry.createdAt);
+                if (hidden) await moveCheckInVisibility(hidden.id, "private");
+                return;
+              }
+              if (!entry.sharedPostId) return;
+              const post = posts.find((item) => item.id === entry.sharedPostId && item.groupId === profile?.currentGroupId);
+              if (post && post.userId === firebaseUser.uid) {
+                await movePostToJournal(post);
+                return;
+              }
+              const updated: JournalEntry = { ...entry, isPrivate: true, updatedAt: now() };
+              await update(ref(database, `journalEntries/${firebaseUser.uid}/${entry.id}`), {
+                isPrivate: true,
+                updatedAt: updated.updatedAt,
+              });
+              upsertJournalEntry(updated);
               return;
             }
             case "createEvent": {
@@ -2549,13 +2818,21 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 return;
               }
 
-              const reactionId = `${firebaseUser.uid}_${action.targetType}_${action.targetId}_${action.kind}`;
-              const reactionRef = ref(database, `postReactions/${profile.currentGroupId}/${reactionId}`);
-              if (postReactions.some((reaction) => reaction.id === reactionId && reaction.userId === firebaseUser.uid)) {
+              const reactionId = postReactionId(firebaseUser.uid, action.targetType, action.targetId);
+              const groupId = profile.currentGroupId;
+              const existingReactions = postReactions.filter((reaction) =>
+                reaction.userId === firebaseUser.uid &&
+                reaction.targetType === action.targetType &&
+                reaction.targetId === action.targetId,
+              );
+              if (existingReactions.length) {
                 if (action.mode === "ensure") return;
-                await remove(reactionRef);
-                setPostReactions((current) => current.filter((reaction) => reaction.id !== reactionId));
-                olderPostReactionsRef.current = olderPostReactionsRef.current.filter((reaction) => reaction.id !== reactionId);
+                await update(ref(database), Object.fromEntries(
+                  existingReactions.map((reaction) => [`postReactions/${groupId}/${reaction.id}`, null]),
+                ));
+                const removedIds = new Set(existingReactions.map((reaction) => reaction.id));
+                setPostReactions((current) => current.filter((reaction) => !removedIds.has(reaction.id)));
+                olderPostReactionsRef.current = olderPostReactionsRef.current.filter((reaction) => !removedIds.has(reaction.id));
                 return;
               }
 
@@ -2564,13 +2841,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 userId: firebaseUser.uid,
                 targetType: action.targetType,
                 targetId: action.targetId,
-                kind: action.kind,
+                kind: "like",
                 createdAt: now(),
               };
-              await set(reactionRef, reaction);
+              await set(ref(database, `postReactions/${groupId}/${reactionId}`), reaction);
               setPostReactions((current) => mergeFirebaseRecords(current, [reaction]));
               return;
             }
+
             case "createReply": {
               if (!firebaseUser || !profile?.currentGroupId || (!action.body.trim() && !action.audio)) return;
               const reply: Reply = {
@@ -2608,7 +2886,9 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               return;
             }
             case "createJournalEntry": {
-              if (!firebaseUser || (!action.body.trim() && !action.audio)) {
+              const journalVerses = actionVerses(action);
+              const verseOnlyPost = normalizePostKind(action.entryKind ?? "post") === "post" && journalVerses.length > 0;
+              if (!firebaseUser || (!action.body.trim() && !action.audio && !verseOnlyPost)) {
                 if (journalScope || sharedJournalMutation) throw new Error("The journal entry could not be saved.");
                 return;
               }
@@ -2625,11 +2905,11 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 id: id("journal"),
                 userId: firebaseUser.uid,
                 journalType: action.journalType ?? (action.entryKind === "prayer_request" || action.entryKind === "prayer_moment" ? "prayer" : action.entryKind === "praise" ? "answered_prayer" : action.entryKind === "scripture" ? "scripture_note" : "reflection"),
-                ...(action.title?.trim() ? { title: action.title.trim() } : {}),
+                ...(normalizePostKind(action.entryKind ?? "post") === "prayer_request" && action.title?.trim() ? { title: action.title.trim() } : {}),
                 body: action.body.trim(),
                 ...(action.audio ? { audio: action.audio } : {}),
                 source: "manual",
-                entryKind: action.entryKind ?? "reflection",
+                entryKind: normalizePostKind(action.entryKind ?? "post"),
                 ...(action.heartMood ? { heartMood: action.heartMood } : {}),
                 isPrivate: !postId,
                 ...(verses[0] ? { verse: verses[0], verses } : {}),
@@ -2638,7 +2918,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
                 updatedAt: timestamp,
               };
               if (postId && groupId) {
-                const postKind = action.entryKind ?? "reflection";
+                const postKind = normalizePostKind(action.entryKind ?? "post");
                 const post: Post = {
                   id: postId,
                   userId: firebaseUser.uid,
@@ -2668,14 +2948,14 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const previousEntry = journalEntries.find((item) => item.id === action.id && item.userId === firebaseUser.uid);
               await update(ref(database, `journalEntries/${firebaseUser.uid}/${action.id}`), {
                 body: action.body.trim(),
-                title: action.title?.trim() || null,
-                entryKind: action.entryKind ?? null,
+                title: normalizePostKind(action.entryKind ?? "post") === "prayer_request" ? action.title?.trim() || null : null,
+                entryKind: action.entryKind ? normalizePostKind(action.entryKind) : null,
                 journalType: action.journalType ?? null,
                 heartMood: action.heartMood ?? null,
                 verse: actionVerses(action)[0] ?? null,
                 verses: actionVerses(action).length ? actionVerses(action) : null,
                 ...(action.audio !== undefined ? { audio: action.audio } : {}),
-                ...(journalScope ? {} : { sharedPostId: action.sharedPostId ?? null }),
+                ...(journalScope ? {} : { sharedPostId: action.sharedPostId ?? null, sharedCheckInId: action.sharedCheckInId ?? null }),
                 images: null,
                 updatedAt,
               }, journalAccountIsCurrent);
@@ -4027,3 +4307,4 @@ export function useKoino() {
   }
   return context;
 }
+

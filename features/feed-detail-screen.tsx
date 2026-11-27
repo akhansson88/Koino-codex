@@ -1,6 +1,6 @@
 import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from "react-native";
@@ -12,9 +12,10 @@ import {
   entryKindIcon,
   feedItemKind,
   normalizeEntryKind,
+  normalizePostKind,
   visibility,
 } from "@/state/product";
-import type { BibleVerse, EntryKind, FeedItem, GroupImage, PostReactionKind } from "@/state/types";
+import type { BibleVerse, FeedItem, GroupImage, PostKind } from "@/state/types";
 import {
   AppScreen,
   Avatar,
@@ -32,14 +33,14 @@ import { useAppTranslation } from "@/ui/app-language";
 import type { TranslationKey } from "@/ui/localization";
 import { normalizeBibleVerses, primaryBibleVerse } from "@/features/bible-verse-utils";
 import {
-  communityActionLabel,
-  communityDefaultFeedTitle,
   communityFeedItemLabel,
-  communityPrayerMomentDisplayCopy,
   communityPrayerNoun,
 } from "@/ui/community-copy";
 import { LinkPreviewContent } from "@/ui/link-preview";
-import { CommunityCardAction, CommunityCheckInMood, CommunityContentTypeLabel } from "@/ui/post-card";
+import { CommunityCheckInMood, CommunityContentTypeLabel } from "@/ui/post-card";
+import { LikeButton } from "@/ui/like-button";
+import { VisibilityToggle } from "@/ui/visibility-toggle";
+import { VisibilityConfirmSheet } from "@/ui/visibility-confirm-sheet";
 import { AudioCard } from "@/features/audio/audio-card";
 import { PrayerActivity } from "@/ui/prayer-activity";
 import { PrayerMoment, type PrayerMomentTarget } from "@/ui/prayer-moment";
@@ -48,7 +49,7 @@ import { SharedComposer, type CommunityComposerSubmission } from "@/ui/shared-co
 import { Button } from "@/ui/shadcn/button";
 import { Separator } from "@/ui/shadcn/separator";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
-import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { WrittenReplyComposer } from "@/ui/written-reply-composer";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { DiscussionFollowButton } from "@/ui/discussion-follow-button";
 import { confirmAction } from "@/ui/confirm";
@@ -80,8 +81,13 @@ export function FeedDetailScreen() {
   const pendingOwnerAction = useRef<(() => void) | undefined>(undefined);  const [editingPost, setEditingPost] = useState(false);
   const [allowRemove, setAllowRemove] = useState(false);
   const [prayerTarget, setPrayerTarget] = useState<PrayerMomentTarget>();
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityConfirmVisible, setVisibilityConfirmVisible] = useState(false);
+  const [visibilityError, setVisibilityError] = useState<string>();
+  const [privateNotice, setPrivateNotice] = useState<{ id: string; kind: "post" | "check_in"; entryId?: string }>();
+
   const [reflectionComposerVisible, setReflectionComposerVisible] = useState(false);
-  const [reflectionKind, setReflectionKind] = useState<EntryKind>("reflection");
+  const [reflectionKind, setReflectionKind] = useState<PostKind>("post");
   const [reflectionVisibility, setReflectionVisibility] = useState<EntryVisibility>(visibility.private);
   const [reflectionTitle, setReflectionTitle] = useState("");
   const [reflectionBody, setReflectionBody] = useState("");
@@ -186,15 +192,12 @@ export function FeedDetailScreen() {
   }, [item, state.currentUserId, state.prayerReactions, t, targetType, userById, userImageById]);
   const reaction = useMemo(() => {
     if (!item || !targetType) return undefined;
-    const itemReactionKind = feedItemKind(item);
-    if (itemReactionKind === "prayer_request" || itemReactionKind === "prayer_moment") return undefined;
-    const kind = itemReactionKind as PostReactionKind;
-    const reactions = state.postReactions.filter((candidate) => candidate.targetType === targetType && candidate.targetId === item.id && candidate.kind === kind);
+    if (feedItemKind(item) === "prayer_request") return undefined;
+    const reactions = state.postReactions.filter((candidate) => candidate.targetType === targetType && candidate.targetId === item.id);
     const reactedByUserIds = [...new Set(reactions.map((candidate) => candidate.userId))];
     return {
-      reacted: reactions.some((candidate) => candidate.userId === state.currentUserId),
-      count: reactions.length,
-      kind,
+      reacted: reactedByUserIds.includes(state.currentUserId ?? ""),
+      count: reactedByUserIds.length,
       reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
     };
   }, [item, state.currentUserId, state.postReactions, t, targetType, userById, userImageById]);
@@ -215,6 +218,20 @@ export function FeedDetailScreen() {
   });
 
   if (!item || !targetType) {
+    if (privateNotice) {
+      return (
+        <AppScreen>
+          <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
+          <Card style={{ gap: 12 }}>
+            <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.visibility.savedPrivate")}</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Button onPress={undoPrivate} variant="outline">{t("community.visibility.undo")}</Button>
+              <Button onPress={() => router.back()}>{t("common.done")}</Button>
+            </View>
+          </Card>
+        </AppScreen>
+      );
+    }
     return (
       <AppScreen>
         <IconButton accessibilityLabel={t("common.back")} icon="arrow-left" onPress={() => router.back()} />
@@ -229,19 +246,62 @@ export function FeedDetailScreen() {
   const authorImage = userImageById.get(item.userId);
   const itemKind = feedItemKind(item);
   const isPrayerRequest = item.type === "post" && itemKind === "prayer_request";
-  const isPrayerMoment = item.type === "post" && itemKind === "prayer_moment";
-  const isPraise = item.type === "post" && itemKind === "praise";
-  const isScripture = item.type === "post" && itemKind === "scripture";
-  const isWrittenEncouragement = itemKind === "reflection" || itemKind === "praise" || itemKind === "prayer_request";
-  const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
+  const displayCopy = { body: item.body, title: item.type === "post" ? item.title : undefined };
   const hasPersonalNote = Boolean(displayCopy.body.trim());
   const prayerAnswered = isPrayerRequest && Boolean(item.answeredAt);
   const ownsItem = item.userId === state.currentUserId;
-  const actionPastLabel = communityActionLabel(itemKind, true, t);
-  const canReact = !isPrayerRequest && !isPrayerMoment;
-  const isExpandedFeedCard = item.type === "check_in" || itemKind === "reflection";
-  const usesAlignedDetailFrame = isExpandedFeedCard || isPraise || isScripture;
+  const canReact = !isPrayerRequest;
+  const isExpandedFeedCard = item.type === "check_in" || itemKind === "post";
+  const usesAlignedDetailFrame = isExpandedFeedCard;
   const group = state.groups.find((candidate) => candidate.id === state.currentGroupId);
+
+  async function movePrivate() {
+    if (!item || !ownsItem) return;
+    setVisibilityConfirmVisible(false);
+    setVisibilityBusy(true);
+    setVisibilityError(undefined);
+    const entryId = item.type === "post" ? `journal_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}` : undefined;
+    const notice = { id: item.id, kind: item.type === "post" ? "post" as const : "check_in" as const, entryId };
+    setPrivateNotice(notice);
+    try {
+      if (item.type === "post") {
+        await dispatch({ type: "setPostVisibility", id: item.id, visibility: "private", journalEntryId: entryId });
+      } else {
+        await dispatch({ type: "setCheckInVisibility", id: item.id, visibility: "private" });
+      }
+    } catch {
+      setPrivateNotice(undefined);
+      setVisibilityError(t("community.visibility.error"));
+    } finally {
+      setVisibilityBusy(false);
+      setVisibilityConfirmVisible(false);
+    }
+  }
+
+  function requestPrivate() {
+    if (!item || !ownsItem || visibilityBusy) return;
+    if ((reaction?.count ?? 0) > 0 || replies.length > 0) {
+      setVisibilityConfirmVisible(true);
+      return;
+    }
+    void movePrivate();
+  }
+
+  function undoPrivate() {
+    const notice = privateNotice;
+    setPrivateNotice(undefined);
+    if (!notice) return;
+    if (notice.entryId) {
+      void dispatch({ type: "setJournalVisibility", id: notice.entryId, visibility: "group" })
+        .then(() => router.back())
+        .catch(() => undefined);
+    } else {
+      void dispatch({ type: "setCheckInVisibility", id: notice.id, visibility: "group" })
+        .then(() => router.back())
+        .catch(() => undefined);
+    }
+  }
+
 
   async function sendReply() {
     const body = replyDraft.trim();
@@ -250,17 +310,8 @@ export function FeedDetailScreen() {
     setReplyDraft("");
   }
 
-  async function sendWrittenEncouragement(body: string, replyId: string, audio?: import("@/state/types").AudioClip) {
+  async function sendWrittenReply(body: string, replyId: string, audio?: import("@/state/types").AudioClip) {
     if (!item || !targetType || (!body.trim() && !audio)) return;
-    if (reaction) {
-      await dispatch({
-        type: "togglePostReaction",
-        targetType,
-        targetId: item.id,
-        kind: reaction.kind,
-        mode: "ensure",
-      });
-    }
     await dispatch({ type: "createReply", targetType, targetId: item.id, body, audio, replyId });
     setReplyDraft("");
   }
@@ -278,13 +329,12 @@ export function FeedDetailScreen() {
   }
 
   function toggleReaction() {
-    if (!item || !targetType || !canReact || !reaction) return;
+    if (!item || !targetType || !canReact) return;
     void dispatch({
       type: "togglePostReaction",
       targetType,
       targetId: item.id,
-      kind: reaction.kind,
-      mode: isWrittenEncouragement ? "ensure" : "toggle",
+      kind: "like",
     }).catch(() => undefined);
   }
 
@@ -314,19 +364,7 @@ export function FeedDetailScreen() {
     });
   }
 
-  function openScriptureReflection() {
-    if (!item || !beginReflectionSession()) return;
-    const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
-    setEditingPost(false);
-    setReflectionKind("reflection");
-    setReflectionVisibility(visibility.private);
-    setReflectionTitle(attachedVerses[0]?.reference ?? "");
-    setReflectionBody("");
-    setReflectionVerses(attachedVerses);
-    setReflectionComposerVisible(true);
-  }
-
-  function closeScriptureReflection() {
+  function closeEditor() {
     if (!reflectionIsCurrent() || reflectionScope?.inFlight) return;
     reflectionScopeRef.current = undefined;
     setReflectionComposerVisible(false);
@@ -338,22 +376,21 @@ export function FeedDetailScreen() {
     setReflectionVerses([]);
   }
 
-  async function submitScriptureReflection(audio: import("@/state/types").AudioClip | null) {
+  async function submitEditor(audio: import("@/state/types").AudioClip | null) {
     if (!reflectionIsCurrent() || !reflectionScope || reflectionScope.inFlight) return;
     const currentItem = item;
     if (editingPost && currentItem?.type === "post") {
-      const titleFreeKind = reflectionKind === "reflection" || reflectionKind === "praise" || reflectionKind === "scripture";
       await dispatch({
         type: "editPost",
         id: currentItem.id,
         kind: reflectionKind,
-        ...(titleFreeKind ? {} : { title: reflectionTitle }),
+        ...(reflectionKind === "prayer_request" ? { title: reflectionTitle } : {}),
         body: reflectionBody,
         verse: primaryBibleVerse(reflectionVerses),
         verses: reflectionVerses,
         audio,
       });
-      closeScriptureReflection();
+      closeEditor();
       return;
     }
     const userId = state.currentUserId;
@@ -386,7 +423,7 @@ export function FeedDetailScreen() {
       reflectionScope.inFlight = false;
     }
     if (!reflectionIsCurrent()) return;
-    closeScriptureReflection();
+    closeEditor();
   }
 
   function openPostEditor() {
@@ -394,7 +431,7 @@ export function FeedDetailScreen() {
     if (!currentItem || currentItem.type !== "post" || !ownsItem || !beginReflectionSession()) return;
     setOwnerMenuVisible(false);
     setEditingPost(true);
-    setReflectionKind(normalizeEntryKind(currentItem.kind));
+    setReflectionKind(normalizePostKind(currentItem.kind));
     setReflectionVisibility(visibility.room);
     setReflectionTitle(currentItem.title ?? "");
     setReflectionBody(currentItem.body);
@@ -462,37 +499,15 @@ export function FeedDetailScreen() {
     </Card>
   ) : null;
 
-  const encouragementInput = isWrittenEncouragement ? (
-    <WrittenEncouragementComposer
+  const encouragementInput = (
+    <WrittenReplyComposer
       communityName={group?.name}
       groupId={item?.groupId}
       onChangeText={setReplyDraft}
-      onSend={sendWrittenEncouragement}
-      placeholder={t("community.reply.encouragementPlaceholder")}
+      onSend={sendWrittenReply}
+      placeholder={t("community.reply.placeholder")}
       value={replyDraft}
     />
-  ) : (
-    <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
-      <TextInputField
-        value={replyDraft}
-        onChangeText={(value) => setReplyDraft(value.slice(0, MAX_REPLY_LENGTH))}
-        onSubmitEditing={sendReply}
-        placeholder={
-          itemKind === "update"
-            ? t("community.reply.responsePlaceholder")
-            : t("community.reply.encouragementPlaceholder")
-        }
-        returnKeyType="send"
-        style={{ flex: 1 }}
-      />
-      <Button
-        accessibilityLabel={t("community.reply.send")}
-        disabled={!replyDraft.trim()}
-        icon="send"
-        onPress={sendReply}
-        size="icon"
-      />
-    </View>
   );
 
   return (
@@ -541,11 +556,11 @@ export function FeedDetailScreen() {
             </View>
           </>
         )}
-        {!isScripture || hasPersonalNote || (item.type === "post" && Boolean(item.audio)) ? (
+        {hasPersonalNote || (item.type === "post" && Boolean(item.audio)) || displayCopy.title ? (
           <View style={{ gap: 12 }}>
-            {!isExpandedFeedCard && !isScripture && !isPraise ? (
+            {displayCopy.title ? (
               <Text style={[typography.heading, { color: colors.ink }]}>
-                {displayCopy.title || communityDefaultFeedTitle(item, t)}
+                {displayCopy.title}
               </Text>
             ) : null}
             {item.type === "post" && item.audio ? <AudioCard clip={item.audio} /> : null}
@@ -599,60 +614,19 @@ export function FeedDetailScreen() {
             </View>
           </Card>
         ) : null}
-        {isPraise ? (
-          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <CommunityCardAction
-              active={Boolean(reaction?.reacted)}
-              icon="star"
-              label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)}
+        {canReact ? (
+          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <LikeButton
+              count={reaction?.count ?? 0}
+              liked={Boolean(reaction?.reacted)}
               onPress={toggleReaction}
-              tone="praise"
+              size="large"
             />
           </View>
-        ) : isScripture ? (
-          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <CommunityCardAction
-              icon="book-open"
-              label={communityActionLabel(itemKind, false, t)}
-              onPress={openScriptureReflection}
-              tone="scripture"
-            />
-            <CommunityCardAction
-              active={Boolean(prayer?.prayed)}
-              icon="pray"
-              label={t(prayer?.prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
-              onPress={startPrayer}
-              tone="prayer"
-              variant="secondary"
-            />
-          </View>
-        ) : !isPrayerMoment && isExpandedFeedCard && canReact ? (
-          <View style={{ alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <CommunityCardAction
-              active={Boolean(reaction?.reacted)}
-              icon="heart"
-              label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)}
-              onPress={toggleReaction}
-              tone={item.type === "check_in" ? "check_in" : "reflection"}
-            />
-            <CommunityCardAction
-              active={Boolean(prayer?.prayed)}
-              icon="pray"
-              label={t(prayer?.prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
-              onPress={startPrayer}
-              tone="prayer"
-              variant="secondary"
-            />
-          </View>
-        ) : !isPrayerMoment ? (
-          <View style={{ gap: 10 }}>
-            <DetailPrayerButton onPress={startPrayer} prayed={Boolean(prayer?.prayed)} />
-            {canReact ? (
-              <DetailReactionButton active={Boolean(reaction?.reacted)} label={communityActionLabel(itemKind, Boolean(reaction?.reacted), t)} onPress={toggleReaction} />
-            ) : null}
-          </View>
-        ) : null}
-        {!isPrayerMoment && !isExpandedFeedCard && !isPraise && (!isScripture || (prayer?.count ?? 0) > 0) ? (
+        ) : (
+          <DetailPrayerButton onPress={startPrayer} prayed={Boolean(prayer?.prayed)} />
+        )}
+        {!isExpandedFeedCard && (prayer?.count ?? 0) > 0 ? (
           <View style={{ gap: 12 }}>
             <Text style={[typography.cardTitle, { color: colors.ink }]}>
               {t((prayer?.count ?? 0) === 1 ? "community.detail.prayerRecorded.one" : "community.detail.prayerRecorded.other", {
@@ -662,21 +636,32 @@ export function FeedDetailScreen() {
             {prayer?.prayedBy.length ? <AvatarStack users={prayer.prayedBy} /> : null}
           </View>
         ) : null}
-        {canReact && !isScripture && !isExpandedFeedCard && (!isPraise || (reaction?.count ?? 0) > 0) ? (
+        {ownsItem ? (
+          <Card style={{ gap: 12 }}>
+            <VisibilityToggle
+              value="group"
+              communityName={group?.name}
+              busy={visibilityBusy}
+              onChange={(next) => { if (next === "private") requestPrivate(); }}
+            />
+            {visibilityError ? (
+              <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{visibilityError}</Text>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {canReact && reaction && reaction.count > 0 ? (
           <View style={{ gap: 12 }}>
             <Text style={[typography.cardTitle, { color: colors.ink }]}>
-              {t((reaction?.count ?? 0) === 1 ? "community.detail.reactionSummary.one" : "community.detail.reactionSummary.other", {
-                action: actionPastLabel,
-                count: reaction?.count ?? 0,
-              })}
+              {t(reaction.count === 1 ? "community.like.count.one" : "community.like.count.other", { count: reaction.count })}
             </Text>
-            {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
+            {reaction.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
           </View>
         ) : null}
         {!isExpandedFeedCard && replies.length > 0 ? (
           <View style={{ gap: 12 }}>
             <SectionHeading>
-              {isPraise ? t("community.detail.encouragementsHeading", { count: replies.length }) : t("community.reply.heading")}
+              {t("community.reply.heading")}
             </SectionHeading>
             {replyList}
           </View>
@@ -684,9 +669,8 @@ export function FeedDetailScreen() {
         {isExpandedFeedCard && canReact ? (
           <View style={{ gap: 12 }}>
             <Text style={[typography.cardTitle, { color: colors.ink }]}>
-              {t("community.detail.encouragementsHeading", { count: reaction?.count ?? 0 })}
+              {t("community.reply.heading")}
             </Text>
-            {reaction?.reactedBy.length ? <AvatarStack users={reaction.reactedBy} /> : null}
             {replyList}
             {encouragementInput}
           </View>
@@ -704,7 +688,7 @@ export function FeedDetailScreen() {
             }
           />
         ) : null}
-        {!isPraise ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
+        {isPrayerRequest ? <PrayerActivity activity={prayer?.activity ?? []} /> : null}
       </AppScreen>
       <BottomSheet
         title={t("community.card.postOptions")}
@@ -728,8 +712,17 @@ export function FeedDetailScreen() {
             />
           ) : null}
           <SheetMenuItem
-            icon="trash-2"
+            icon="lock"
             showDivider={item.type === "post"}
+            title={t("community.visibility.makePrivate")}
+            onPress={() => {
+              pendingOwnerAction.current = requestPrivate;
+              setOwnerMenuVisible(false);
+            }}
+          />
+          <SheetMenuItem
+            icon="trash-2"
+            showDivider
             title={t("common.delete")}
             tone="danger"
             onPress={() => {
@@ -739,10 +732,20 @@ export function FeedDetailScreen() {
           />
         </SheetMenuGroup>
       </BottomSheet>
+      <VisibilityConfirmSheet
+        visible={visibilityConfirmVisible}
+        checkIn={item.type === "check_in"}
+        comments={replies.length}
+        likes={reaction?.count ?? 0}
+        busy={visibilityBusy}
+        onCancel={() => setVisibilityConfirmVisible(false)}
+        onConfirm={() => { void movePrivate(); }}
+      />
       <SharedComposer
         visible={reflectionComposerVisible && reflectionIsCurrent()}
         context={editingPost ? "room" : "journal"}
         editing={editingPost}
+        audienceLocked={editingPost}
         kind={reflectionKind}
         entryVisibility={reflectionVisibility}
         title={reflectionTitle}
@@ -751,13 +754,13 @@ export function FeedDetailScreen() {
         submission={reflectionSubmission}
         submissionFeedback={reflectionSubmission?.inFlight ? "me.journey.composer.saving" : reflectionError}
         communityAudienceAvailable={Boolean(shareGroupId)}
-        onKind={(value) => changeReflectionDraft(() => setReflectionKind(value))}
+        onKind={(value) => changeReflectionDraft(() => setReflectionKind(normalizePostKind(value)))}
         onVisibility={changeReflectionVisibility}
         onTitle={(value) => changeReflectionDraft(() => setReflectionTitle(value))}
         onBody={(value) => changeReflectionDraft(() => setReflectionBody(value))}
         onVerses={(value) => changeReflectionDraft(() => setReflectionVerses(value))}
-        onClose={closeScriptureReflection}
-        onSubmit={submitScriptureReflection}
+        onClose={closeEditor}
+        onSubmit={submitEditor}
         initialAudio={editingPost && item?.type === "post" ? item.audio : undefined}
         audioGroupId={state.currentGroupId ?? undefined}
         roomName={group?.name}
@@ -807,31 +810,6 @@ function DetailPrayerButton({ onPress, prayed }: { onPress: () => void; prayed: 
       <Text style={[typography.button, { color: prayed ? colors.ink : shadcn.primaryForeground }]}>
         {t(prayed ? "community.action.prayer.completed" : "community.action.prayer.default")}
       </Text>
-    </Pressable>
-  );
-}
-
-function DetailReactionButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        alignItems: "center",
-        backgroundColor: pressed ? shadcn.secondary : shadcn.card,
-        borderColor: shadcn.border,
-        borderCurve: "continuous",
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        flexDirection: "row",
-        gap: 9,
-        justifyContent: "center",
-        minHeight: 48,
-        paddingHorizontal: 18,
-      })}
-    >
-      <Ionicons name={active ? "heart" : "heart-outline"} size={19} color={active ? colors.ink : colors.muted} />
-      <Text style={[typography.button, { color: colors.ink }]}>{label}</Text>
     </Pressable>
   );
 }

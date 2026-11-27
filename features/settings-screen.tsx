@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+﻿import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -16,7 +16,7 @@ import { formatFastDate } from "@/features/fasting/format";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import type { Action, CommunitySubmissionOutcome, CommunitySubmissionRequest } from "@/state/store/types";
 import { prayerReactionsForTarget } from "@/state/prayer-reactions";
-import { EntryVisibility, feedItemKind, normalizeEntryKind, roomTabs, visibility } from "@/state/product";
+import { EntryVisibility, normalizePostKind, roomTabs, visibility } from "@/state/product";
 import {
   selectCommunityContent,
   selectCommunityPostById,
@@ -25,7 +25,7 @@ import {
 import type {
   AudioClip,
   BibleVerse,
-  EntryKind,
+  PostKind,
   FeedItem,
   HeartMood,
   Id,
@@ -69,7 +69,7 @@ import { SheetFormPanel } from "@/ui/sheet-menu";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { useTheme } from "@/ui/theme-provider";
 import { AmbientBackground } from "@/ui/ambient-background";
-import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { WrittenReplyComposer } from "@/ui/written-reply-composer";
 import {
   type RoomView,
   type RoomDetailTab,
@@ -119,7 +119,7 @@ import {
   CommunityFeedErrorState,
 } from "@/features/community/feed-components";
 
-const overviewTabs = roomTabs.filter((tab) => tab.value === "recent" || tab.value === "reflections");
+const overviewTabs = roomTabs.filter((tab) => tab.value === "recent");
 
 const COMMUNITY_SUBMISSION_CONFIRMATION_MS = 15_000;
 const COMMUNITY_PUBLICATION_FEEDBACK_MS = 8_000;
@@ -136,7 +136,7 @@ type CommunityPublicationReceipt = {
 // Recent in the existing overview instance, without changing its Back behavior.
 let pendingRecentPublicationNavigation: { token: string; owner: string; expiresAt: number } | undefined;
 type CommunityComposerDraft = {
-  kind: EntryKind;
+  kind: PostKind;
   title: string;
   body: string;
   verses: BibleVerse[];
@@ -177,9 +177,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const roomsFocused = useIsFocused();
   const { prayerMomentId, communityRecentRequest } = useLocalSearchParams<{ prayerMomentId?: string; communityRecentRequest?: string }>();
   const [roomView, setRoomView] = useState<RoomView>(routeRoomView);
-  const [activeDetailTab, setDetailTab] = useState<RoomDetailTab>("recent");
-  // Retained state from the former Prayer/Check-ins filters opens the mixed feed.
-  const detailTab = activeDetailTab === "reflections" ? "reflections" : "recent";
+  const [detailTab, setDetailTab] = useState<RoomDetailTab>("recent");
   const [prayerFilter, setPrayerFilter] = useState<PrayerFilter>("open");
   const [joinSheetVisible, setJoinSheetVisible] = useState(false);
   const joinForm = useCommunityJoinForm(state.currentUserId, joinSheetVisible);
@@ -193,7 +191,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   }, [state.currentGroupId, state.currentUserId]);
   const [composerVisible, setComposerVisible] = useState(false);
   const [composerContext, setComposerContext] = useState<ComposerContext>("room");
-  const [composerKind, setComposerKind] = useState<EntryKind>("reflection");
+  const [composerKind, setComposerKind] = useState<PostKind>("post");
   const [composerVisibility, setComposerVisibility] = useState<EntryVisibility>(visibility.room);
   const [composerTitle, setComposerTitle] = useState("");
   const [composerBody, setComposerBody] = useState("");
@@ -359,14 +357,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const [directPrayerResult, setDirectPrayerResult] = useState<DirectPrayerResult>();
   const [memberSelectVisible, setMemberSelectVisible] = useState(false);
   const directPrayerPersistencePendingRef = useRef(false);
-  const [feedEncouragementTarget, setFeedEncouragementTarget] = useState<FeedItem>();
-  const [feedEncouragementDraft, setFeedEncouragementDraft] = useState("");
-  const [feedEncouragementReduceMotion, setFeedEncouragementReduceMotion] = useState<boolean | undefined>(() => {
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    }
-    return undefined;
-  });
   const [checkInVisible, setCheckInVisible] = useState(false);
   const [checkInStep, setCheckInStep] = useState<CheckInStep>("choose");
   const [heartMood, setHeartMood] = useState<HeartMood>();
@@ -407,7 +397,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   const postReactionsByTarget = useMemo(() => {
     const byTarget = new Map<string, PostReaction[]>();
     state.postReactions.forEach((reaction) => {
-      const key = `${reaction.targetType}:${reaction.targetId}:${reaction.kind}`;
+      const key = `${reaction.targetType}:${reaction.targetId}`;
       const items = byTarget.get(key) ?? [];
       items.push(reaction);
       byTarget.set(key, items);
@@ -480,7 +470,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     : undefined;
   const publicationHiddenByFilter = publicationPost?.type === "post" && (roomView === "detail"
     ? filterCommunityFeedItems([publicationPost], detailTab).length === 0
-    : roomView === "prayer" && (normalizeEntryKind(publicationPost.kind) !== "prayer_request"
+    : roomView === "prayer" && (normalizePostKind(publicationPost.kind) !== "prayer_request"
       || (prayerFilter === "open" && Boolean(publicationPost.answeredAt))
       || (prayerFilter === "answered" && !publicationPost.answeredAt)));
   const offerViewRecent = Boolean(activePublicationReceipt && publicationHiddenByFilter && communityFeedReadyForGroup && !communityFeedError);
@@ -546,17 +536,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     }, []),
   );
 
-  useEffect(() => {
-    let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setFeedEncouragementReduceMotion(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setFeedEncouragementReduceMotion);
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     const currentTime = Date.now();
@@ -652,7 +631,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setComposerSubmission({ status: "idle", inFlight: false });
   }
 
-  function openComposer(kind: EntryKind = "reflection") {
+  function openComposer(kind: PostKind = "post") {
     if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
     if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
     if (resumeComposerAttempt()) return;
@@ -667,22 +646,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     setComposerVisible(true);
   }
 
-  function openScriptureReflection(item: Extract<FeedItem, { type: "post" }>) {
-    if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
-    if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
-    if (resumeComposerAttempt()) return;
-    beginComposerSession();
-    const attachedVerses = normalizeBibleVerses(item.verse, item.verses);
-    setEditingPost(undefined);
-    setComposerContext("journal");
-    setComposerKind("reflection");
-    setComposerVisibility(visibility.private);
-    setComposerTitle(attachedVerses[0]?.reference ?? "");
-    setComposerBody("");
-    setComposerVerses(attachedVerses);
-    setComposerVisible(true);
-  }
-
   function editPost(item: Extract<FeedItem, { type: "post" }>) {
     if (currentComposerOwnerRef.current !== composerOwner || renderedComposerVersion !== composerViewVersionRef.current) return;
     if (composerIsLocked() || (composerVisible && composerOwnerRef.current === composerOwner)) return;
@@ -690,7 +653,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     beginComposerSession();
     setComposerContext("room");
     setEditingPost(item);
-    setComposerKind(normalizeEntryKind(item.kind));
+    setComposerKind(normalizePostKind(item.kind));
     setComposerVisibility(visibility.room);
     setComposerTitle(item.title ?? "");
     setComposerBody(item.body);
@@ -712,20 +675,55 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
   async function submitComposer(audio: AudioClip | null) {
     if (!composerVisible || composerOwnerRef.current !== composerOwner || currentComposerOwnerRef.current !== composerOwner
       || renderedComposerVersion !== composerViewVersionRef.current) return;
-    const canSubmit = composerContext === "room" && composerKind === "scripture"
-      ? composerVerses.length > 0
-      : Boolean(composerBody.trim()) || Boolean(audio);
+    const canSubmit = Boolean(composerBody.trim()) || Boolean(audio) || (composerKind === "post" && composerVerses.length > 0);
     if (!canSubmit) return;
-    if (composerContext === "room" && !editingPost && composerKind === "update") return;
+    if (composerContext === "room" && !editingPost && composerVisibility === visibility.private) {
+      const userId = state.currentUserId;
+      if (!userId || journalPendingViewRef.current === renderedComposerVersion) return;
+      journalPendingViewRef.current = renderedComposerVersion;
+      setJournalSubmissionError(undefined);
+      setComposerSubmission({ status: "pending", inFlight: true });
+      try {
+        await dispatch({
+          type: "createJournalEntry",
+          entryKind: composerKind,
+          title: composerTitle,
+          body: composerBody,
+          verse: primaryBibleVerse(composerVerses),
+          verses: composerVerses,
+          ...(audio ? { audio } : {}),
+          shareWithGroup: false,
+          journalScope: { userId },
+        });
+      } catch {
+        if (composerMountedRef.current && currentComposerOwnerRef.current === composerOwner
+          && composerOwnerRef.current === composerOwner && composerViewVersionRef.current === renderedComposerVersion) {
+          setJournalSubmissionError("me.journey.composer.saveFailed");
+          setComposerSubmission({ status: "failure", inFlight: false });
+        }
+        return;
+      } finally {
+        if (journalPendingViewRef.current === renderedComposerVersion) journalPendingViewRef.current = undefined;
+      }
+      if (!composerMountedRef.current || currentComposerOwnerRef.current !== composerOwner
+        || composerOwnerRef.current !== composerOwner || composerViewVersionRef.current !== renderedComposerVersion) return;
+      composerViewVersionRef.current++;
+      setComposerSubmission({ status: "idle", inFlight: false });
+      setComposerVisible(false);
+      setComposerBody("");
+      setComposerTitle("");
+      setComposerVerses([]);
+      setEditingPost(undefined);
+      return;
+    }
     if (composerContext === "room") {
       let attempt = composerAttemptRef.current;
       if (attempt?.inFlight) return;
       if (!attempt) {
         const draft = JSON.parse(JSON.stringify({ kind: composerKind, title: composerTitle, body: composerBody, verses: composerVerses, audio, editingPost })) as CommunityComposerDraft;
-        const titleFreeKind = draft.kind === "reflection" || draft.kind === "praise" || draft.kind === "scripture";
         const content = {
           kind: draft.kind,
-          ...(titleFreeKind ? {} : { title: draft.title }),
+          ...(draft.kind === "prayer_request" ? { title: draft.title } : {}),
           body: draft.body,
           verse: primaryBibleVerse(draft.verses),
           verses: draft.verses,
@@ -791,8 +789,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
       }
       return;
     }
-    const titleFreeKind = composerKind === "reflection" || composerKind === "praise" || composerKind === "scripture";
-    const title = titleFreeKind ? {} : { title: composerTitle };
+    const title = composerKind === "prayer_request" ? { title: composerTitle } : {};
     if (editingPost) {
       await dispatch({ type: "editPost", id: editingPost.id, kind: composerKind, ...title, body: composerBody, verse: primaryBibleVerse(composerVerses), verses: composerVerses, audio });
     } else if (composerContext === "journal") {
@@ -917,7 +914,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function handleCommunityTabChange(tab: RoomDetailTab) {
     if (composerIsLocked()) return;
-    const nextTab = tab === "reflections" ? "reflections" : "recent";
+    const nextTab = "recent" as const;
     if (nextTab === detailTab) return;
     clearPublicationReceipt();
     if (group) {
@@ -983,14 +980,11 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function itemReactionState(item: FeedItem) {
     const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
-    const itemReactionKind = feedItemKind(item);
-    const kind = (itemReactionKind === "prayer_request" || itemReactionKind === "prayer_moment" ? "reflection" : itemReactionKind) as PostReactionKind;
-    const reactions = postReactionsByTarget.get(`${targetType}:${item.id}:${kind}`) ?? [];
+    const reactions = postReactionsByTarget.get(`${targetType}:${item.id}`) ?? [];
     const reactedByUserIds = [...new Set(reactions.map((reaction) => reaction.userId))];
     return {
-      reacted: reactions.some((reaction) => reaction.userId === state.currentUserId),
-      count: reactions.length,
-      kind,
+      reacted: reactedByUserIds.includes(state.currentUserId ?? ""),
+      count: reactedByUserIds.length,
       targetType,
       reactedBy: reactedByUserIds.map((userId) => ({ name: userById.get(userId) ?? t("common.someone"), image: userImageById.get(userId) })),
     };
@@ -1093,29 +1087,8 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
 
   function togglePostAction(item: FeedItem) {
     if (composerIsLocked()) return;
-    if (item.type === "post" && normalizeEntryKind(item.kind) === "scripture") {
-      openScriptureReflection(item);
-      return;
-    }
-    const reaction = itemReactionState(item);
-    const supportsOptionalMessage =
-      item.type === "check_in" ||
-      (item.type === "post" && (normalizeEntryKind(item.kind) === "reflection" || normalizeEntryKind(item.kind) === "praise"));
-
-    if (!supportsOptionalMessage) {
-      dispatch({ type: "togglePostReaction", targetType: reaction.targetType, targetId: item.id, kind: reaction.kind });
-      return;
-    }
-
-    void dispatch({
-      type: "togglePostReaction",
-      targetType: reaction.targetType,
-      targetId: item.id,
-      kind: reaction.kind,
-      mode: "ensure",
-    }).catch(() => undefined);
-    setFeedEncouragementDraft("");
-    setFeedEncouragementTarget(item);
+    const targetType: "post" | "check_in" = item.type === "post" ? "post" : "check_in";
+    dispatch({ type: "togglePostReaction", targetType, targetId: item.id, kind: "like" });
   }
 
   function itemPrayerActivity(item: FeedItem) {
@@ -1160,32 +1133,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     });
   }
 
-  function closeFeedEncouragement() {
-    setFeedEncouragementTarget(undefined);
-    setFeedEncouragementDraft("");
-  }
-
-  async function sendFeedEncouragement(body: string, replyId: string) {
-    const item = feedEncouragementTarget;
-    if (!item) return;
-
-    const reaction = itemReactionState(item);
-    await dispatch({
-      type: "togglePostReaction",
-      targetType: reaction.targetType,
-      targetId: item.id,
-      kind: reaction.kind,
-      mode: "ensure",
-    });
-    await dispatch({
-      type: "createReply",
-      targetType: reaction.targetType,
-      targetId: item.id,
-      body,
-      replyId,
-    });
-    closeFeedEncouragement();
-  }
 
   async function sendPrayerMomentEncouragement(body = prayerMomentEncouragementDraft, replyId?: string) {
     if (!selectedPrayerMoment) return;
@@ -1392,24 +1339,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
     <DirectPrayerResultSheet onDone={() => setDirectPrayerResult(undefined)} result={directPrayerResult} />
   );
 
-  const feedEncouragementSheet = feedEncouragementTarget ? (
-    <BottomSheet
-      title={t("community.encouragement.addMessageTitle")}
-      visible
-      onClose={closeFeedEncouragement}
-      reducedMotion={feedEncouragementReduceMotion !== false}
-    >
-      <BodyText muted>{t("community.encouragement.supportingCopy")}</BodyText>
-      <WrittenEncouragementComposer
-        autoFocus
-        onChangeText={setFeedEncouragementDraft}
-        onDismiss={closeFeedEncouragement}
-        onSend={sendFeedEncouragement}
-        value={feedEncouragementDraft}
-        variant="sheet"
-      />
-    </BottomSheet>
-  ) : null;
 
   function measurePublicationViewport(event: LayoutChangeEvent) {
     setPublicationViewportHeight(event.nativeEvent.layout.height);
@@ -1562,6 +1491,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
+          audienceLocked={Boolean(editingPost)}
           initialAudio={editingPost?.audio}
           audioGroupId={group.id}
           roomName={group.name}
@@ -1604,7 +1534,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           />
         </View>
         {communityCheckInModal}
-        {feedEncouragementSheet}
       </>
     );
   }
@@ -1677,7 +1606,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={[typography.title, { color: colors.ink }]}>{group.name}</Text>
                   <Text style={[typography.caption, { color: colors.muted }]}>
-                      {communityMemberCount(memberCount, t)} · {joinPolicySummary(group.joinPolicy === "open" ? "open" : "approval", group.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner", t)}
+                      {communityMemberCount(memberCount, t)} Â· {joinPolicySummary(group.joinPolicy === "open" ? "open" : "approval", group.joinApprovers === "owner_and_leaders" ? "owner_and_leaders" : "owner", t)}
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={17} color={colors.muted} />
@@ -1784,7 +1713,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("community.events.title")}</Text>
                   <Text numberOfLines={2} style={[typography.caption, { color: colors.muted }]}>
                     {nextEvent
-                      ? `${nextEvent.title} · ${formatEventDay(nextEvent.startAt, language, { month: "short", day: "numeric" })} ${formatEventTime(nextEvent.startAt, language)}`
+                      ? `${nextEvent.title} Â· ${formatEventDay(nextEvent.startAt, language, { month: "short", day: "numeric" })} ${formatEventTime(nextEvent.startAt, language)}`
                       : t("community.events.empty")}
                   </Text>
                 </View>
@@ -1825,7 +1754,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                   <Text style={[typography.cardTitle, { color: colors.ink }]}>{t("fasting.group.entry")}</Text>
                   <Text numberOfLines={2} style={[typography.caption, { color: colors.muted }]}>
                     {nextFast
-                      ? `${t(fastModeConfig(nextFast.mode).titleKey as never)} · ${formatFastDate(nextFast.startAt, language, { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${t("fasting.group.joinedCount", { count: participantCount(nextFast) })}`
+                      ? `${t(fastModeConfig(nextFast.mode).titleKey as never)} Â· ${formatFastDate(nextFast.startAt, language, { weekday: "short", hour: "2-digit", minute: "2-digit" })} Â· ${t("fasting.group.joinedCount", { count: participantCount(nextFast) })}`
                       : t("fasting.group.entryEmpty")}
                   </Text>
                 </View>
@@ -1838,16 +1767,18 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                     {detailTab === "recent" ? t("community.feed.recentActivity") : communityRoomTabLabel(detailTab, t)}
                   </SectionHeading>
                 </View>
-                <PrimaryButton icon="edit-3" onPress={() => openComposer("reflection")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
+                <PrimaryButton icon="edit-3" onPress={() => openComposer("post")} style={{ minHeight: 44, paddingHorizontal: 12 }}>
                   {t("community.feed.share")}
                 </PrimaryButton>
               </View>
 
-              <CommunityFilterChips
-                value={detailTab}
-                onChange={handleCommunityTabChange}
-                options={overviewTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
-              />
+              {overviewTabs.length > 1 ? (
+                <CommunityFilterChips
+                  value={detailTab}
+                  onChange={handleCommunityTabChange}
+                  options={overviewTabs.map((tab) => ({ label: communityRoomTabLabel(tab.value, t), value: tab.value }))}
+                />
+              ) : null}
             </View>
 
             <View style={{ gap: 12, marginBottom: 12 }}>
@@ -1858,11 +1789,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
                 <CommunityFeedErrorState />
               ) : visibleFeedItems.length === 0 ? (
                 <Card>
-                  <BodyText muted>
-                    {detailTab === "recent"
-                      ? t("community.empty.recent")
-                      : t("community.empty.reflections")}
-                  </BodyText>
+                  <BodyText muted>{t("community.empty.recent")}</BodyText>
                 </Card>
               ) : null}
             </View>
@@ -1889,6 +1816,7 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
           onClose={closeComposer}
           onSubmit={submitComposer}
           editing={Boolean(editingPost)}
+          audienceLocked={Boolean(editingPost)}
           initialAudio={editingPost?.audio}
           audioGroupId={group.id}
           roomName={group.name}
@@ -1897,7 +1825,6 @@ export function SettingsScreen({ roomView: routeRoomView = "detail" }: { roomVie
         {communityCheckInModal}
         {communityPrayerMemberModal}
         {directPrayerResultSheet}
-        {feedEncouragementSheet}
         <PrayerMoment
           target={prayerTarget}
           onClose={closePrayerMoment}
@@ -2135,3 +2062,4 @@ function CommunityRoomsLogout({ userId }: { userId: Id }) {
 export const CommunityScreen = SettingsScreen;
 
 export const RoomScreen = SettingsScreen;
+

@@ -1,4 +1,4 @@
-import type { EntryKind, FeedItem, HeartMood, JournalEntry, JournalEntryType } from "@/state/types";
+import type { EntryKind, FeedItem, HeartMood, JournalEntry, JournalEntryType, PostKind } from "@/state/types";
 
 export const tabs = ["Bible", "Today", "Me", "Community"] as const;
 
@@ -6,7 +6,6 @@ export const roomTabs = [
   { value: "recent", label: "Recent" },
   { value: "prayer", label: "Prayer" },
   { value: "checkins", label: "Check-ins" },
-  { value: "reflections", label: "Reflections" },
 ] as const;
 
 export const prayerStatuses = {
@@ -20,15 +19,15 @@ export const prayerFilters = [
   { value: "all", label: "All" },
 ] as const;
 
-export const postTypes: { value: Exclude<EntryKind, "prayer_moment">; label: string; composerLabel: string }[] = [
-  { value: "reflection", label: "Reflection", composerLabel: "Reflection" },
+// The two post types a member can choose. Everything else is a legacy value.
+export const communityPostTypes: { value: PostKind; label: string; composerLabel: string }[] = [
+  { value: "post", label: "Post", composerLabel: "Post" },
   { value: "prayer_request", label: "Prayer request", composerLabel: "Prayer" },
-  { value: "praise", label: "Praise", composerLabel: "Praise" },
-  { value: "update", label: "Update", composerLabel: "Update" },
-  { value: "scripture", label: "Scripture", composerLabel: "Scripture" },
 ];
 
-export const composerPostTypes = postTypes.filter((type) => type.value !== "update");
+export const postTypes = communityPostTypes;
+
+export const composerPostTypes = communityPostTypes;
 
 export const journalEntryTypes: { value: JournalEntryType; label: string; icon: "edit-3" | "heart" | "check-circle" | "sun" | "book-open" }[] = [
   { value: "reflection", label: "Reflection", icon: "edit-3" },
@@ -89,14 +88,10 @@ export function moodLabel(mood: number) {
   return moodOptionForValue(mood).label;
 }
 
-export const postTypeLabels: Record<EntryKind, string> = {
-  reflection: "Reflection",
+export const postTypeLabels: Record<PostKind, string> = {
+  post: "Post",
   prayer_request: "Prayer request",
-  prayer_moment: "Prayer made",
-  praise: "Praise",
-  update: "Update",
-  scripture: "Scripture",
-} as const;
+};
 
 export const visibility = {
   private: "private",
@@ -105,63 +100,38 @@ export const visibility = {
 
 export type EntryVisibility = (typeof visibility)[keyof typeof visibility];
 
-export const actionLabels: Record<EntryKind, string> = {
-  reflection: "Encourage",
-  prayer_request: "Pray",
-  prayer_moment: "Pray",
-  praise: "Amen",
-  update: "Respond",
-  scripture: "Reflect",
-};
-
-export const actionPastLabels: Record<EntryKind, string> = {
-  reflection: "Encouraged",
-  prayer_request: "Prayed",
-  prayer_moment: "Prayed",
-  praise: "Amen",
-  update: "Responded",
-  scripture: "Reflected",
-};
-
-export function normalizeEntryKind(kind: EntryKind | "post" | undefined): EntryKind {
-  if (kind === "prayer_request" || kind === "prayer_moment" || kind === "praise" || kind === "update" || kind === "scripture") return kind;
-  return "reflection";
+// Legacy values stay readable but always render and behave as a normal post.
+export function normalizePostKind(kind: EntryKind | "post" | undefined | null): PostKind {
+  return kind === "prayer_request" ? "prayer_request" : "post";
 }
+
+export const normalizeEntryKind = normalizePostKind;
 
 export function entryKindLabel(kind: EntryKind | "post" | undefined) {
-  return postTypeLabels[normalizeEntryKind(kind)];
+  return postTypeLabels[normalizePostKind(kind)];
 }
 
-export function entryKindComposerLabel(kind: EntryKind) {
-  return postTypes.find((item) => item.value === kind)?.composerLabel ?? postTypeLabels[kind];
+export function entryKindComposerLabel(kind: EntryKind | "post" | undefined) {
+  return postTypes.find((item) => item.value === normalizePostKind(kind))?.composerLabel ?? postTypeLabels[normalizePostKind(kind)];
 }
 
 export function entryKindIcon(kind: EntryKind | "post" | undefined) {
-  const normalized = normalizeEntryKind(kind);
-  if (normalized === "prayer_request" || normalized === "prayer_moment") return "heart" as const;
-  if (normalized === "praise") return "star" as const;
-  if (normalized === "update") return "send" as const;
-  if (normalized === "scripture") return "book-open" as const;
-  return "edit-3" as const;
+  return normalizePostKind(kind) === "prayer_request" ? ("heart" as const) : ("edit-3" as const);
 }
 
-export function feedItemKind(item: FeedItem): EntryKind {
-  if (item.type === "check_in") return "reflection";
-  return normalizeEntryKind(item.kind);
+export function feedItemKind(item: FeedItem): PostKind {
+  if (item.type === "check_in") return "post";
+  return normalizePostKind(item.kind);
 }
 
 export function feedItemLabel(item: FeedItem) {
   if (item.type === "check_in") return "Check-in";
-  return entryKindLabel(item.kind);
+  const kind = normalizePostKind(item.kind);
+  return kind === "prayer_request" ? "Prayer request" : "Post";
 }
 
 export function defaultFeedTitle(item: FeedItem, moodLabel: (mood: number) => string) {
   if (item.type === "check_in") return moodLabel(item.mood);
-  const kind = normalizeEntryKind(item.kind);
-  if (kind === "prayer_request") return "Please pray";
-  if (kind === "prayer_moment") return "Prayer made";
-  if (kind === "praise") return "Grateful for a new day";
-  if (kind === "update") return "A small update";
-  if (kind === "scripture") return "Shared Scripture";
-  return "Shared reflection";
+  if (normalizePostKind(item.kind) === "prayer_request") return "Please pray";
+  return "Shared post";
 }

@@ -682,11 +682,11 @@ function CommunityPreviewCard({
 
   const authorName = userById.get(item.userId) ?? t("common.someone");
   const displayCopy = item.type === "post" ? communityPrayerMomentDisplayCopy(item, t) : { body: item.body, title: undefined };
-  const isScripture = item.type === "post" && normalizeEntryKind(item.kind) === "scripture";
   const preview = shortPreview(displayCopy.body);
   const itemLabel = communityFeedItemLabel(item, t);
-  const displayTitle = displayCopy.title || communityDefaultFeedTitle(item, t);
-  const accessibilityTitle = isScripture && preview ? preview : displayTitle;
+  const isPrayer = item.type === "post" && normalizeEntryKind(item.kind) === "prayer_request";
+  const displayTitle = displayCopy.title || (isPrayer ? communityDefaultFeedTitle(item, t) : "");
+  const accessibilityTitle = displayTitle || preview || itemLabel;
   return (
     <Pressable
       accessibilityHint={t("home.communityPreview.openHint")}
@@ -710,14 +710,11 @@ function CommunityPreviewCard({
           <Avatar image={userImageById.get(item.userId)} name={authorName} size={36} tone="green" />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[typography.label, { color: colors.ink }]}>{authorName}</Text>
-            <Text style={[typography.caption, { color: colors.muted }]}>{itemLabel}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{isPrayer || item.type === "check_in" ? itemLabel : ""}</Text>
           </View>
         </View>
-        {!isScripture ? <Text style={[typography.bodyMedium, { color: colors.ink }]} numberOfLines={2}>{displayTitle}</Text> : null}
+        {displayTitle ? <Text style={[typography.bodyMedium, { color: colors.ink }]} numberOfLines={2}>{displayTitle}</Text> : null}
         {preview ? <Text style={[typography.body, { color: colors.muted }]} numberOfLines={2}>{preview}</Text> : null}
-        {isScripture ? (
-          <VersePreviewCard compact interactive={false} maxLines={2} showOpenIndicator={false} verse={item.verses?.[0] ?? item.verse} />
-        ) : null}
       </Card>
     </Pressable>
   );

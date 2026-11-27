@@ -1,4 +1,4 @@
-import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
+﻿import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { useRef, useState } from "react";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
@@ -288,7 +288,7 @@ export function CommunityPrayerMomentDetailScreen({
           value={encouragementDraft}
           onChangeText={(value) => onChangeEncouragement(value.slice(0, 500))}
           onSubmitEditing={() => onSendEncouragement()}
-          placeholder={t("community.reply.encouragementPlaceholder")}
+          placeholder={t("community.reply.placeholder")}
           returnKeyType="send"
           style={{ flex: 1 }}
         />
@@ -490,3 +490,4 @@ export function PrayerRequestCard({
     />
   );
 }
+

@@ -324,7 +324,10 @@ export type GroupBiblePlanParticipation = {
   updatedAt: string;
 };
 
-export type EntryKind = "reflection" | "prayer_request" | "prayer_moment" | "praise" | "update" | "scripture";
+export type PostKind = "post" | "prayer_request";
+export type LegacyPostKind = "reflection" | "prayer_moment" | "praise" | "update" | "scripture";
+export type StoredPostKind = PostKind | LegacyPostKind;
+export type EntryKind = StoredPostKind;
 export type JournalEntryType = "reflection" | "prayer" | "answered_prayer" | "heart_checkin" | "scripture_note";
 export type HeartMood = "peaceful" | "grateful" | "heavy" | "anxious" | "hopeful" | "tired";
 
@@ -376,7 +379,7 @@ export type Post = {
   id: Id;
   userId: Id;
   groupId: Id;
-  kind: EntryKind | "post";
+  kind: StoredPostKind | "post";
   title?: string;
   body: string;
   verse?: BibleVerse;
@@ -392,7 +395,7 @@ export type Post = {
 export type PrayerSessionTargetType = "post" | "check_in" | "journal_entry" | "reply" | "user";
 export type PrayerReactionTargetType = "post" | "check_in" | "reply";
 export type PostReactionTargetType = "post" | "check_in";
-export type PostReactionKind = Exclude<EntryKind, "prayer_request" | "prayer_moment">;
+export type PostReactionKind = "like";
 export type ReplyTargetType = "post" | "check_in";
 export type PrayerSession = {
   id: Id;
@@ -435,7 +438,7 @@ export type ActivityNotification = {
   targetType: ReplyTargetType;
   targetId: Id;
   replyId: Id;
-  contentLabel: "post" | "reflection" | "prayer request" | "prayer" | "praise" | "check-in" | "update" | "scripture reflection";
+  contentLabel: "post" | "prayer request" | "check-in";
   preview: string;
   createdAt: string;
   readAt?: string;
@@ -505,6 +508,8 @@ export type JournalEntry = {
   verses?: BibleVerse[];
   passage?: BiblePassageReference;
   sharedPostId?: Id;
+  sharedCheckInId?: Id;
+  linkedCheckInId?: Id;
   linkedPrayerRequestId?: Id;
   isPrivate?: boolean;
   createdAt: string;

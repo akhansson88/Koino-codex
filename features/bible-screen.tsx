@@ -57,7 +57,7 @@ import {
 import { displayBibleReference } from "@/features/bible-search";
 import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
-import { visibility, type EntryVisibility } from "@/state/product";
+import { normalizePostKind, visibility, type EntryVisibility } from "@/state/product";
 import { savedVerseIdentity } from "@/state/saved-verses";
 import type { Action } from "@/state/store/types";
 import type { BibleHighlightColor, BibleHighlightPaletteColor, BibleRibbon, BibleVerse, EntryKind, SavedVerse } from "@/state/types";
@@ -1989,9 +1989,8 @@ export function BibleScreen() {
   }
 
   async function submitScriptureComposer(audio: import("@/state/types").AudioClip | null) {
-    const canSubmit = scriptureComposerContext === "room" && scriptureComposerKind === "scripture"
-      ? scriptureComposerVerses.length > 0
-      : Boolean(scriptureComposerBody.trim()) || Boolean(audio);
+    const canSubmit = Boolean(scriptureComposerBody.trim()) || Boolean(audio)
+      || (normalizePostKind(scriptureComposerKind) === "post" && scriptureComposerVerses.length > 0);
     if (!canSubmit) return;
     const verse = scriptureComposerVerses[0];
     // A journal recording is owned by the user; a post shared to a community
@@ -2003,7 +2002,7 @@ export function BibleScreen() {
       ? {
         type: "createPost",
         body: scriptureComposerBody,
-        kind: scriptureComposerKind,
+        kind: normalizePostKind(scriptureComposerKind),
         ...(scriptureComposerKind === "prayer_request" ? { title: scriptureComposerTitle } : {}),
         verse,
         verses: scriptureComposerVerses,
@@ -2653,7 +2652,7 @@ export function BibleScreen() {
         bibleIntent={scriptureComposerIntent}
         visible={scriptureComposerVisible && (scriptureComposerContext === "room" || scriptureJournalIsCurrent())}
         context={scriptureComposerContext}
-        kind={scriptureComposerKind}
+        kind={normalizePostKind(scriptureComposerKind)}
         entryVisibility={scriptureComposerVisibility}
         title={scriptureComposerTitle}
         body={scriptureComposerBody}

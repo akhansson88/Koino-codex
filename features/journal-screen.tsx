@@ -9,10 +9,10 @@ import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { AppState, Pressable, Text, View } from "react-native";
 
-import { type EntryVisibility, visibility } from "@/state/product";
+import { type EntryVisibility, normalizePostKind, visibility } from "@/state/product";
 import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { localDayKey } from "@/state/store/helpers";
-import type { BibleVerse, EntryKind, JournalEntry, JournalEntryType, KoinoState } from "@/state/types";
+import type { BibleVerse, JournalEntry, JournalEntryType, KoinoState, PostKind } from "@/state/types";
 import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
@@ -22,11 +22,8 @@ import { Separator } from "@/ui/shadcn/separator";
 import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 import { useTheme } from "@/ui/theme-provider";
 
-function journalTypeForKind(kind: EntryKind): JournalEntryType {
-  if (kind === "prayer_request" || kind === "prayer_moment") return "prayer";
-  if (kind === "praise") return "answered_prayer";
-  if (kind === "scripture") return "scripture_note";
-  return "reflection";
+function journalTypeForKind(kind: PostKind): JournalEntryType {
+  return kind === "prayer_request" ? "prayer" : "reflection";
 }
 
 function useLocalJournalDay() {
@@ -88,7 +85,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     verseTranslation?: string;
   }>();
   const [draft, setDraft] = useState<symbol>();
-  const [entryKind, setEntryKind] = useState<EntryKind>("reflection");
+  const [entryKind, setEntryKind] = useState<PostKind>("post");
   const [audience, setAudience] = useState<DraftAudience>();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -142,7 +139,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     if (!state.currentUserId || pending.current) return;
     clearDraft();
     setSaved(undefined);
-    setEntryKind("reflection");
+    setEntryKind("post");
     const nextDraft = Symbol();
     draftRef.current = nextDraft;
     setDraft(nextDraft);
@@ -199,7 +196,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
     lastNewEntryParamRef.current = params.newEntry;
     beginEntry();
     const kind = params.composeKind;
-    if (kind === "scripture" || kind === "reflection" || kind === "prayer_request") setEntryKind(kind);
+    if (kind) setEntryKind(normalizePostKind(kind as never));
     if (params.composeTitle) setTitle(params.composeTitle);
     const chapter = Number(params.verseChapter);
     const startVerse = Number(params.verseStart);
@@ -316,7 +313,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
         verses={verses}
         submission={saving ? { status: "pending", inFlight: true } : feedback ? { status: "failure", inFlight: false } : undefined}
         submissionFeedback={saving ? "me.journey.composer.saving" : feedback}
-        onKind={setEntryKind}
+        onKind={(value) => setEntryKind(normalizePostKind(value))}
         onVisibility={changeAudience}
         onTitle={setTitle}
         onBody={setBody}

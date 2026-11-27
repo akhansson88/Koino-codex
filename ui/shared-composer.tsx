@@ -3,11 +3,12 @@ import { Feather } from "@expo/vector-icons";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EntryVisibility, composerPostTypes, postTypes, visibility } from "@/state/product";
+import { EntryVisibility, communityPostTypes, normalizePostKind, visibility } from "@/state/product";
+import type { PostKind } from "@/state/types";
 import { deleteAudioClip } from "@/state/audio-storage";
 import type { AudioPurpose, AudioScope } from "@/state/audio";
-import type { AudioClip, BibleVerse, EntryKind, GroupImage } from "@/state/types";
-import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, RoomImage, TextInputField } from "@/ui/app-components";
+import type { AudioClip, BibleVerse, GroupImage } from "@/state/types";
+import { AppScreen, Card, FilterChips, FullScreenModal, IconButton, PrimaryButton, TextInputField } from "@/ui/app-components";
 import { AmbientBackground } from "@/ui/ambient-background";
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
@@ -16,6 +17,7 @@ import { tabContentClearance } from "@/ui/navigation-layout";
 import { FieldLabel } from "@/ui/shadcn";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { VoiceNoteField } from "@/features/audio/voice-note-field";
+import { VisibilityToggle } from "@/ui/visibility-toggle";
 
 const MAX_BODY_LENGTH = 500;
 
@@ -48,29 +50,13 @@ export type CommunityComposerSubmission = {
   inFlight: boolean;
 };
 
-function primaryActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
+function primaryActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: PostKind) {
   if (editing) return "community.composer.action.updateEntry" as const;
-  if (context === "room" || entryVisibility === visibility.room) {
-    if (kind === "prayer_request") return "community.composer.action.sharePrayer" as const;
-    if (kind === "reflection") return "community.composer.action.shareReflection" as const;
-    if (kind === "praise") return "community.composer.action.sharePraise" as const;
-    if (kind === "scripture") return "community.composer.action.shareScripture" as const;
-    return "community.composer.action.share" as const;
+  if (entryVisibility === visibility.room) {
+    return kind === "prayer_request" ? "community.composer.action.sharePrayer" as const : "community.composer.action.sharePost" as const;
   }
-  if (context === "journal") {
-    if (kind === "prayer_request") return "community.composer.action.savePrayer" as const;
-    if (kind === "praise") return "community.composer.journal.action.savePraise" as const;
-    if (kind === "update") return "community.composer.journal.action.saveCheckIn" as const;
-    if (kind === "scripture") return "community.composer.action.saveScriptureNote" as const;
-    return "community.composer.action.saveReflection" as const;
-  }
-  return "community.composer.action.saveEntry" as const;
-}
-
-function headerActionKey(context: "journal" | "today" | "room", entryVisibility: EntryVisibility, editing: boolean, kind: EntryKind) {
-  if (editing) return "community.composer.action.updateShort" as const;
-  const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
-  return actionKey === "community.composer.action.saveEntry" ? "community.composer.action.saveShort" as const : actionKey;
+  if (context === "today") return "community.composer.action.saveEntry" as const;
+  return kind === "prayer_request" ? "community.composer.action.savePrayerPrivate" as const : "community.composer.action.savePostPrivate" as const;
 }
 
 function titleKey(context: "journal" | "today" | "room", editing: boolean, bibleIntent?: BibleComposerIntent) {
@@ -82,45 +68,29 @@ function titleKey(context: "journal" | "today" | "room", editing: boolean, bible
   return "community.composer.title.write" as const;
 }
 
-const composerTypeKeys = {
-  reflection: "community.composer.type.reflection",
+const composerTypeKeys: Record<PostKind, TranslationKey> = {
+  post: "community.composer.type.post",
   prayer_request: "community.composer.type.prayer",
-  praise: "community.composer.type.praise",
-  update: "community.composer.type.update",
-  scripture: "community.composer.type.scripture",
 } as const;
 
-const journalPostTypes = postTypes.filter((type) => type.value !== "scripture");
-const journalScripturePostTypes = postTypes.filter((type) => type.value !== "update");
-
-function composerTypeKey(context: "journal" | "today" | "room", kind: EntryKind) {
-  if (context === "room" && kind === "prayer_request") return "community.composer.share.type.prayerRequest" as const;
-  if (context === "journal" && kind === "update") return "community.contentType.checkIn" as const;
-  if (context === "journal" && kind === "praise") return "community.composer.journal.type.praise" as const;
-  if (kind === "prayer_moment") return "community.composer.type.prayer" as const;
-  return composerTypeKeys[kind];
-}
-
 function CommunityTypeSelector({
-  community = false,
   disabled = false,
   onChange,
   options,
   singleColumn = false,
   value,
 }: {
-  community?: boolean;
   disabled?: boolean;
-  onChange: (value: EntryKind) => void;
-  options: { label: string; value: EntryKind }[];
+  onChange: (value: PostKind) => void;
+  options: { label: string; value: PostKind }[];
   singleColumn?: boolean;
-  value: EntryKind;
+  value: PostKind;
 }) {
   const { t } = useAppTranslation();
-  const rows = singleColumn ? options.map((option) => [option]) : [options.slice(0, 2), options.slice(2, 4)];
+  const rows = singleColumn ? options.map((option) => [option]) : [options];
 
   return (
-    <View accessibilityRole={community ? "radiogroup" : undefined} accessibilityLabel={community ? t("community.composer.share.typeLabel") : undefined} style={{ gap: 8 }}>
+    <View accessibilityLabel={t("community.composer.share.typeLabel")} accessibilityRole="radiogroup" style={{ gap: 8 }}>
       {rows.map((row) => (
         <View key={row.map((option) => option.value).join("-")} style={{ flexDirection: "row", gap: 8 }}>
           {row.map((option) => {
@@ -128,8 +98,8 @@ function CommunityTypeSelector({
             return (
               <Pressable
                 accessibilityLabel={option.label}
-                accessibilityRole={community ? "radio" : "button"}
-                accessibilityState={community ? { checked: selected, disabled } : { selected, disabled }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected, disabled }}
                 disabled={disabled}
                 key={option.value}
                 onPress={() => { if (!disabled) onChange(option.value); }}
@@ -150,11 +120,9 @@ function CommunityTypeSelector({
                   paddingVertical: 10,
                 })}
               >
-                {selected ? (
-                  <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-                    <Feather name="check" size={14} color={shadcn.primaryForeground} />
-                  </View>
-                ) : null}
+                <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
+                  <Feather name={selected ? "check" : option.value === "prayer_request" ? "heart" : "edit-3"} size={14} color={selected ? shadcn.primaryForeground : colors.clay} />
+                </View>
                 <Text
                   style={[
                     typography.label,
@@ -218,10 +186,10 @@ export function SharedComposer({
   editing?: boolean;
   entryVisibility: EntryVisibility;
   initialAudio?: AudioClip;
-  kind: EntryKind;
+  kind: PostKind;
   onBody: (value: string) => void;
   onClose: () => void;
-  onKind: (kind: EntryKind) => void;
+  onKind: (kind: PostKind) => void;
   onOpenVerseInBible?: (verse: BibleVerse) => void;
   onSubmit: (audio: AudioClip | null) => void;
   onTitle: (value: string) => void;
@@ -237,7 +205,7 @@ export function SharedComposer({
 }) {
   const { t } = useAppTranslation();
   const { width: viewportWidth, fontScale } = useWindowDimensions();
-  const [attemptedKind, setAttemptedKind] = useState<EntryKind | undefined>(undefined);
+  const [attemptedKind, setAttemptedKind] = useState<PostKind | undefined>(undefined);
   const [audio, setAudio] = useState<AudioClip | undefined>(initialAudio);
   const audioRef = useRef<AudioClip | undefined>(audio);
   const initialAudioId = useRef<string | undefined>(initialAudio?.id);
@@ -251,43 +219,28 @@ export function SharedComposer({
       : submission?.status === "failure" ? "community.composer.submission.failure" : undefined);
   const bibleOrigin = Boolean(bibleIntent);
   const isCommunityShare = context === "room";
+  const normalizedKind = normalizePostKind(kind);
   // Do not briefly display or announce a new type's error while the reset
   // effect is clearing a previous Community validation attempt.
-  const submissionAttempted = attemptedKind !== undefined && (!isCommunityShare || attemptedKind === kind);
-  const showVisibility = context !== "room" && !audienceLocked && communityAudienceAvailable;
-  const titleFreeCommunityKind = kind === "reflection" || kind === "praise" || kind === "scripture";
-  const showTitle = !bibleOrigin && (!isCommunityShare || !titleFreeCommunityKind);
-  const scriptureRequired = isCommunityShare && kind === "scripture";
+  const submissionAttempted = attemptedKind !== undefined && (!isCommunityShare || attemptedKind === normalizedKind);
+  const showVisibility = !audienceLocked && communityAudienceAvailable;
+  const showTitle = !bibleOrigin && normalizedKind === "prayer_request";
   const roomAvailable = Boolean(roomName);
-  const hasRequiredContent = scriptureRequired ? verses.length > 0 : Boolean(body.trim()) || Boolean(audio);
+  const hasRequiredContent = Boolean(body.trim()) || Boolean(audio) || (normalizedKind === "post" && verses.length > 0);
   const audienceAvailable = editing || entryVisibility !== visibility.room || communityAudienceAvailable;
   const canSubmit = hasRequiredContent && audienceAvailable && (!isCommunityShare || roomAvailable);
-  const actionKey = primaryActionKey(context, entryVisibility, editing, kind);
+  const actionKey = primaryActionKey(context, entryVisibility, editing, normalizedKind);
   const actionLabel = t(actionKey);
   const activeRoomName = roomName ?? t("community.composer.communityFallback");
-  const communityDescriptionKey = kind === "prayer_request" ? "community.composer.share.description.prayer_request"
-    : kind === "reflection" ? "community.composer.share.description.reflection"
-      : kind === "praise" ? "community.composer.share.description.praise"
-        : kind === "scripture" ? "community.composer.share.description.scripture" : undefined;
-  const communityAudience = roomAvailable
-    ? t("community.composer.share.audience", { community: roomName! })
-    : t("community.rooms.noneSelected");
+  const communityDescriptionKey = normalizedKind === "prayer_request"
+    ? "community.composer.share.description.prayer_request"
+    : "community.composer.share.description.post";
   const journalUsesGrid = context === "journal" && viewportWidth < 360;
-  const journalUsesCompactPrivacy = context === "journal" && viewportWidth < 360;
-  const validationKey = submissionAttempted && !canSubmit
-    ? scriptureRequired ? "community.composer.validation.scriptureRequired" : "community.composer.validation.bodyRequired"
-    : undefined;
-  const announcementKey = visible ? isCommunityShare ? validationKey ?? feedbackKey : submissionFeedback : undefined;
-  const bodyLabelKey = kind === "prayer_request" ? "community.composer.share.field.prayer"
-    : kind === "praise" ? "community.composer.share.field.praise"
-      : kind === "scripture" ? "community.composer.share.field.note" : "community.composer.share.field.reflection";
+  const validationKey = submissionAttempted && !canSubmit ? "community.composer.validation.bodyRequired" : undefined;
+  const announcementKey = visible ? isCommunityShare ? validationKey ?? feedbackKey : feedbackKey : undefined;
+  const bodyLabelKey = normalizedKind === "prayer_request" ? "community.composer.share.field.prayer" : "community.composer.share.field.post";
   const Screen = isCommunityShare ? CommunityComposerScreen : AppScreen;
-  const typeOptions =
-    context === "journal"
-      ? bibleOrigin || kind === "scripture"
-        ? journalScripturePostTypes
-        : journalPostTypes
-      : composerPostTypes;
+  const typeOptions = communityPostTypes;
 
   useEffect(() => {
     setAttemptedKind(undefined);
@@ -325,14 +278,14 @@ export function SharedComposer({
     lastAnnouncement.current = message;
   }, [announcementKey, t]);
 
-  function changeKind(nextKind: EntryKind) {
+  function changeKind(nextKind: PostKind) {
     if (locked) return;
-    if (nextKind === kind) return;
+    if (nextKind === normalizedKind) return;
     onKind(nextKind);
   }
 
   function submit() {
-    setAttemptedKind(kind);
+    setAttemptedKind(normalizedKind);
     if (!canSubmit || submission?.inFlight) return;
     submittedAudioId.current = audio?.id;
     return onSubmit(audio ?? null);
@@ -358,13 +311,7 @@ export function SharedComposer({
       value={title}
       onChangeText={(value) => { if (!locked) onTitle(value); }}
       onSubmitEditing={isCommunityShare ? undefined : submit}
-      placeholder={kind === "prayer_request"
-        ? t("community.composer.placeholder.prayerTitle")
-        : kind === "praise"
-          ? t("community.composer.placeholder.praiseTitle")
-          : kind === "scripture"
-            ? t("community.composer.placeholder.scriptureTitle")
-            : t("community.composer.placeholder.title")}
+      placeholder={t("community.composer.placeholder.prayerTitle")}
       returnKeyType={isCommunityShare ? "done" : "send"}
     />
   );
@@ -382,13 +329,9 @@ export function SharedComposer({
         value={body}
         onChangeText={(value) => { if (!locked) onBody(value.slice(0, MAX_BODY_LENGTH)); }}
         onSubmitEditing={isCommunityShare ? undefined : submit}
-        placeholder={kind === "prayer_request"
+        placeholder={normalizedKind === "prayer_request"
           ? t(isCommunityShare ? "community.composer.share.prompt.prayer" : "community.composer.placeholder.prayerBody")
-          : kind === "praise"
-            ? t(isCommunityShare ? "community.composer.share.prompt.praise" : "community.composer.placeholder.praiseBody")
-            : kind === "scripture"
-              ? t(isCommunityShare ? "community.composer.placeholder.scriptureNote" : "community.composer.placeholder.scriptureBody")
-              : t(bibleOrigin ? "community.composer.placeholder.scriptureBody" : "community.composer.placeholder.body")}
+          : t(bibleOrigin ? "community.composer.placeholder.scriptureBody" : "community.composer.placeholder.body")}
         returnKeyType={isCommunityShare ? "default" : "send"}
         style={{ minHeight: 170 }}
         submitBehavior={isCommunityShare ? "newline" : "submit"}
@@ -396,8 +339,8 @@ export function SharedComposer({
       <Text accessibilityLabel={isCommunityShare ? t("community.composer.share.field.characterCount", { count: body.length, max: MAX_BODY_LENGTH }) : undefined} style={[typography.caption, { alignSelf: "flex-end", color: colors.muted }]}>
         {body.length}/{MAX_BODY_LENGTH}
       </Text>
-      {submissionAttempted && !scriptureRequired && !canSubmit ? (
-        <Text accessibilityLiveRegion={isCommunityShare && Platform.OS === "android" ? "polite" : undefined} style={[typography.caption, { color: colors.danger }]}>{t("community.composer.validation.bodyRequired")}</Text>
+      {validationKey ? (
+        <Text accessibilityLiveRegion={isCommunityShare && Platform.OS === "android" ? "polite" : undefined} style={[typography.caption, { color: colors.danger }]}>{t(validationKey)}</Text>
       ) : null}
     </View>
   );
@@ -415,16 +358,11 @@ export function SharedComposer({
         communityComposer={isCommunityShare || undefined}
         label={t(bibleOrigin && verses.length > 0
           ? "community.composer.scriptureAttached"
-          : scriptureRequired
-            ? "community.composer.scriptureRequired"
-            : "community.composer.scriptureOptional")}
+          : "community.composer.scriptureOptional")}
         verses={verses}
         onChange={(nextVerses) => { if (!locked) onVerses(nextVerses); }}
         onOpenInBible={onOpenVerseInBible ? (verse) => { if (!locked) onOpenVerseInBible(verse); } : undefined}
       />
-      {submissionAttempted && scriptureRequired && !canSubmit ? (
-        <Text accessibilityLiveRegion={Platform.OS === "android" ? "polite" : undefined} style={[typography.caption, { color: colors.danger }]}>{t("community.composer.validation.scriptureRequired")}</Text>
-      ) : null}
     </View>
   );
 
@@ -451,56 +389,40 @@ export function SharedComposer({
             </View>
           </View>
           {!isCommunityShare && context !== "journal" ? (
-            <Text style={[typography.caption, { color: colors.muted }]}>{t(headerActionKey(context, entryVisibility, editing, kind))}</Text>
+            <Text style={[typography.caption, { color: colors.muted }]}>{actionLabel}</Text>
           ) : null}
         </View>
 
         <View style={{ gap: 10 }}>
           <Text accessibilityRole={isCommunityShare ? "header" : undefined} style={[typography.screenTitle, { color: colors.ink }]}>{t(titleKey(context, editing, bibleIntent))}</Text>
-          {isCommunityShare ? (
+          {isCommunityShare || (context === "journal" && journalUsesGrid) ? (
             <CommunityTypeSelector
-              community
               disabled={locked}
               singleColumn={viewportWidth < 360 || fontScale >= 1.5}
-              value={kind}
+              value={normalizedKind}
               onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
-            />
-          ) : context === "journal" && journalUsesGrid ? (
-            <CommunityTypeSelector
-              value={kind}
-              onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
             />
           ) : context === "journal" ? (
             <FilterChips
               fit
               minHeight={40}
-              value={kind}
+              value={normalizedKind}
               onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
             />
           ) : (
             <FilterChips
               showSelectionIndicator
-              value={kind}
+              value={normalizedKind}
               onChange={changeKind}
-              options={typeOptions.map((type) => ({ label: t(composerTypeKey(context, type.value)), value: type.value }))}
+              options={typeOptions.map((type) => ({ label: t(composerTypeKeys[type.value]), value: type.value }))}
             />
           )}
-          {isCommunityShare && communityDescriptionKey ? (
+          {isCommunityShare ? (
             <Text style={[typography.caption, { color: colors.muted }]}>{t(communityDescriptionKey)}</Text>
           ) : null}
         </View>
-
-        {isCommunityShare ? (
-          <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-            <View accessibilityElementsHidden accessible={false} importantForAccessibility="no-hide-descendants">
-              <RoomImage image={roomImage} name={activeRoomName} size={34} />
-            </View>
-            <Text style={[typography.bodyMedium, { color: colors.ink, flex: 1, minWidth: 0 }]}>{communityAudience}</Text>
-          </Card>
-        ) : null}
 
         {context !== "today" ? (
           <VoiceNoteField
@@ -523,83 +445,26 @@ export function SharedComposer({
           </View>
         ) : titleField : null}
 
-        {scriptureRequired ? scriptureField : bodyField}
-        {scriptureRequired ? bodyField : scriptureField}
+        {bodyField}
+        {scriptureField}
 
-        {!isCommunityShare ? (
         <View style={{ gap: 8 }}>
-          <FieldLabel>
-            {t(context === "journal" ? "community.composer.journal.privacy" : "community.composer.shareWith")}
-          </FieldLabel>
           {audienceLocked ? (
-            <Text style={[typography.caption, { color: colors.muted }]}>{t("community.composer.checkInAudienceFixed")}</Text>
-          ) : context === "journal" && editing && !communityAudienceAvailable ? (
+            <Text style={[typography.caption, { color: colors.muted }]}>
+              {t(context === "journal" ? "me.journey.composer.editAudienceFixed" : "community.composer.editVisibilityHint")}
+            </Text>
+          ) : editing && !communityAudienceAvailable ? (
             <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.composer.editAudienceFixed")}</Text>
-          ) : null}
-          {showVisibility ? (
-            <FilterChips
-              fit={context === "journal"}
-              minHeight={context === "journal" ? 40 : undefined}
-              value={entryVisibility}
-              onChange={(nextVisibility) => { if (!locked) onVisibility(nextVisibility); }}
-              options={[
-                {
-                  label: t(
-                    context === "journal"
-                      ? journalUsesCompactPrivacy
-                        ? "community.composer.journal.visibility.privateCompact"
-                        : "community.composer.journal.visibility.private"
-                      : "community.composer.visibility.private"
-                  ),
-                  value: visibility.private,
-                },
-                {
-                  label: t(
-                    context === "journal"
-                      ? journalUsesCompactPrivacy
-                        ? "community.composer.journal.visibility.communityCompact"
-                        : "community.composer.journal.visibility.community"
-                      : "community.composer.visibility.community"
-                  ),
-                  value: visibility.room,
-                },
-              ]}
-            />
-          ) : null}
-          {context === "journal" && entryVisibility === visibility.private ? (
-            <View style={{ alignItems: "center", flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
-              <Feather name="lock" size={14} color={colors.muted} />
-              <Text style={[typography.caption, { color: colors.muted }]}>
-                {t("community.composer.journal.privateOnly")}
-              </Text>
-            </View>
-          ) : context === "journal" && editing && !communityAudienceAvailable ? (
-            <Text style={[typography.caption, { color: colors.muted }]}>{t("me.journey.preview.sharedCopy")}</Text>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              disabled={!showVisibility || locked}
-              onPress={() => { if (!locked) onVisibility(entryVisibility === visibility.private ? visibility.room : visibility.private); }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
-            >
-              <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                <RoomImage image={entryVisibility === visibility.room ? roomImage : undefined} name={entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")} size={34} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>
-                    {entryVisibility === visibility.room ? activeRoomName : t("community.composer.privateJournal")}
-                  </Text>
-                  <Text style={[typography.caption, { color: colors.muted }]}>
-                    {entryVisibility === visibility.room
-                      ? t("community.composer.sharedWithCommunity")
-                      : t("community.composer.privateOnly")}
-                  </Text>
-                </View>
-                {showVisibility ? <Feather name="chevron-down" size={18} color={colors.muted} /> : null}
-              </Card>
-            </Pressable>
+            <VisibilityToggle
+              value={entryVisibility === visibility.room ? "group" : "private"}
+              communityName={roomName}
+              disabled={!showVisibility && !(context === "room" && roomAvailable)}
+              busy={locked}
+              onChange={(next) => { if (!locked) onVisibility(next === "group" ? visibility.room : visibility.private); }}
+            />
           )}
         </View>
-        ) : null}
 
         {feedbackKey ? (
           <View

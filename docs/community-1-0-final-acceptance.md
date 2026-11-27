@@ -36,7 +36,7 @@ P2 Prayer lifecycle/history features, new social features, backend changes, stor
 ### Community navigation
 
 - Two equally sized destination cards open Prayer requests and Check-ins in one tap. Prayer uses a warm peach treatment; Check-ins uses the existing restrained outlined treatment.
-- Recent remains the mixed activity feed. Recent and Reflections are the only overview filters, with Share available on both.
+- Recent remains the mixed activity feed with Share available. Prayer and Check-ins are separate views; the former Reflections filter is gone because every classic post kind now renders as a normal post.
 - Redundant conditional Open buttons and the overview's duplicate Pray for someone launcher are removed. Personal prayer remains inside Prayer.
 - Existing mounted Community navigation, Back handling, selected filter and scroll restoration remain in place. Obsolete or unknown overview filters resolve to Recent.
 
@@ -96,7 +96,7 @@ The following commands were run successfully on the reviewed HEAD during this fi
 | `node --check scripts/validate-community-navigation.mjs` | PASS | Regression script syntax |
 | `git diff --check cd48f506ef534833cff1830043ce0de8c73fb783..HEAD` | PASS | Cumulative diff whitespace |
 
-The Community suite also checks loading, error, empty, populated, cached/offline and load-earlier behavior; shared-only Check-ins and blank-note cards; Encourage participation; English/Swedish labels; audience icons, selection announcements, button text and privacy reassurance; private/shared successful receipts; duplicate, failed and stale attempts; and reset/reopen consent through Home and Community.
+The Community suite also checks loading, error, empty, populated, cached/offline and load-earlier behavior; shared-only Check-ins and blank-note cards; the heart like toggle and its count; English/Swedish labels; the private/public visibility toggle, audience hints and confirmation before removing engagement; private/shared successful receipts; duplicate, failed and stale attempts; and reset/reopen consent through Home and Community.
 
 These are local tests. Native primitives, overlays and external-service boundaries are mocked where applicable; the Dwell UI itself is mocked. The actual Check-in modal and relevant screen handlers are executed. Mocked iOS/Android fixtures and translated text assertions do not establish native visual, accessibility or backend authorization acceptance. Temporary test harness bundling is not an application or EAS build.
 

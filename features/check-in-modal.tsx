@@ -19,6 +19,7 @@ import {
 import { BibleVerseField } from "@/ui/bible-verse-field";
 import { useAppTranslation } from "@/ui/app-language";
 import { FieldLabel } from "@/ui/shadcn";
+import { VisibilityToggle } from "@/ui/visibility-toggle";
 import { colors, radius, shadows, shadcn, typography } from "@/ui/theme";
 
 export type CheckInStep = "choose" | "details" | "thanks";
@@ -197,37 +198,12 @@ export function CheckInModal({
                 <Text accessibilityRole="header" style={[typography.heading, { color: colors.ink }]}>{t("community.checkIn.detailsTitle")}</Text>
                 <BodyText muted>{t("community.checkIn.detailsBody")}</BodyText>
               </View>
-              <View style={{ gap: 8 }}>
-                <Text style={[typography.label, { color: colors.ink }]}>{t("community.checkIn.shareWith")}</Text>
-                <Pressable
-                  accessibilityLabel={share
-                    ? t("community.checkIn.sharedNotice", { name: roomName })
-                    : `${t("community.checkIn.privateOnly")}. ${t("community.checkIn.shareOptionLabel", { name: roomName })}`}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: share, disabled: submitting }}
-                  disabled={submitting}
-                  onPress={() => onShare(!share)}
-                  style={({ pressed }) => ({ minHeight: 44, opacity: pressed ? 0.86 : 1 })}
-                >
-                  <Card style={{ alignItems: "center", flexDirection: "row", gap: 12, padding: 12 }}>
-                    <RoomImage image={share ? roomImage : undefined} name={share ? roomName : t("community.checkIn.privateJournal")} size={36} />
-                    <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={[typography.cardTitle, { color: colors.ink, fontSize: 14 }]}>{share ? roomName : t("community.checkIn.privateJournal")}</Text>
-                      <Text style={[typography.caption, { color: colors.muted }]}>
-                        {share ? t("community.checkIn.sharedNotice", { name: roomName }) : t("community.checkIn.privateOnly")}
-                      </Text>
-                    </View>
-                    <View
-                      accessibilityElementsHidden
-                      accessible={false}
-                      importantForAccessibility="no-hide-descendants"
-                      style={{ alignItems: "center", backgroundColor: shadcn.secondary, borderRadius: radius.md, height: 34, justifyContent: "center", width: 34 }}
-                    >
-                      <Feather name={share ? "users" : "lock"} size={16} color={colors.ink} />
-                    </View>
-                  </Card>
-                </Pressable>
-              </View>
+              <VisibilityToggle
+                value={share ? "group" : "private"}
+                communityName={roomName}
+                disabled={submitting}
+                onChange={(next) => onShare(next === "group")}
+              />
               <View style={{ gap: 6 }}>
                 <FieldLabel>{t("community.checkIn.noteOptional")}</FieldLabel>
                 <TextInputField

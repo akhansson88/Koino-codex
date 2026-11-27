@@ -1,6 +1,6 @@
 import { isCheckInJournalEntry } from "@/state/check-ins";
 import { heartMoods, journalEntryTypeFor, moodOptionForValue } from "@/state/product";
-import type { JournalEntry, JournalEntryType } from "@/state/types";
+import type { CheckIn, JournalEntry, JournalEntryType, Post } from "@/state/types";
 import { communityHeartMoodCopy, communityMoodScaleLabel } from "@/ui/community-copy";
 import type { TranslationFunction, TranslationKey } from "@/ui/localization";
 
@@ -37,8 +37,20 @@ export function presentedJournalEntryType(entry: JournalEntry) {
   return kindType === "reflection" ? journalEntryTypeFor(entry) : kindType;
 }
 
-export function journalEntryHasSharedCopy(entry: JournalEntry) {
-  return Boolean(entry.sharedPostId) || entry.isPrivate === false;
+export function journalEntryHasSharedCopy(
+  entry: JournalEntry,
+  copies?: { posts?: Post[]; checkIns?: CheckIn[] },
+) {
+  if (entry.isPrivate !== false) return false;
+  if (entry.sharedPostId) {
+    if (!copies?.posts) return true;
+    return copies.posts.some((post) => post.id === entry.sharedPostId);
+  }
+  if (entry.sharedCheckInId) {
+    if (!copies?.checkIns) return true;
+    return copies.checkIns.some((checkIn) => checkIn.id === entry.sharedCheckInId);
+  }
+  return true;
 }
 
 export function journalEntryPresentation(entry: JournalEntry, t: TranslationFunction) {

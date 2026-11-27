@@ -1,4 +1,4 @@
-import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
+﻿import { CommunityRemovalMenu } from "@/ui/community-removal-menu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useRef, useState } from "react";
@@ -33,7 +33,7 @@ import { formatRelativeTime } from "@/ui/relative-time";
 import { Separator } from "@/ui/shadcn/separator";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
-import { WrittenEncouragementComposer } from "@/ui/written-encouragement-composer";
+import { WrittenReplyComposer } from "@/ui/written-reply-composer";
 import { AudioCard } from "@/features/audio/audio-card";
 
 const MAX_ANSWERED_UPDATE_LENGTH = 280;
@@ -353,12 +353,12 @@ export function PrayerRequestDetailScreen({
           </Card>
         </View>
       ) : null}
-      <WrittenEncouragementComposer
+      <WrittenReplyComposer
         communityName={communityName}
         groupId={item.groupId}
         onChangeText={onChangeEncouragement}
         onSend={onSendEncouragement}
-        placeholder={t("community.reply.encouragementPlaceholder")}
+        placeholder={t("community.reply.placeholder")}
         value={encouragementDraft}
       />
       {showDiscussionFollow ? (
@@ -647,3 +647,5 @@ export function PrayerRequestDetailRouteScreen() {
     </>
   );
 }
+
+

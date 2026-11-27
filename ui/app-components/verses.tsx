@@ -283,7 +283,7 @@ export function VerseDetailSheet({
     await dispatch({
       type: "createPost",
       body: t("community.scripture.shareBody"),
-      kind: "scripture",
+      kind: "post",
       title: displayBibleReference(currentVerse.reference, bookLanguage),
       verse: currentVerse,
       verses: [currentVerse],
