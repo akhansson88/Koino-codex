@@ -1,8 +1,11 @@
 import { Feather } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Text, View, type TextStyle } from "react-native";
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { PanResponder, Text, View, type GestureResponderHandlers, type TextStyle } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import { bibleVerseLinks, type BibleFootnote, type BiblePosition, type BibleVersionId } from "@/features/bible-kjv";
-import { useChapterWindow } from "@/features/bible-reader/chapter-window";
+import { ChapterPager, type ChapterPagerHandle } from "@/features/bible-reader/chapter-pager";
+import { readerChapterKey } from "@/features/bible-reader/chapter-navigation";
+import { useChapterWindow, type ChapterPage } from "@/features/bible-reader/chapter-window";
 import { SplitPane, type SplitPaneHandle } from "@/features/bible-reader/split-pane";
 import {
   composeAnchor,
@@ -20,16 +23,23 @@ import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 const READING_LINE = 8;
 const MIN_RATIO = 0.35;
 const MAX_RATIO = 0.65;
+const NOOP = () => {};
+const NOOP_ANCHOR = () => {};
+const EMPTY_HIGHLIGHTS: Record<number, BibleHighlightColor> = {};
+const EMPTY_NUMBERS: number[] = [];
 
 export type SplitReaderProps = {
   audioAnchor?: { book: string; chapter: number; verse: number };
   bottomInset: number;
+  cursor: SharedValue<number>;
+  enabled: boolean;
   flowingParagraphText: boolean;
   highlightByVerse: (versionId: BibleVersionId) => Record<number, BibleHighlightColor>;
   layoutKey: string;
   mirrorAnchor?: { book: string; chapter: number; fraction: number; verse: number };
   navigationRevision: number;
   onChangeRatio: (ratio: number) => void;
+  onChapterCommit: (position: BiblePosition) => void;
   onShowVersionPicker: (slot: "primary" | "secondary") => void;
   onClose: () => void;
   onFootnotePress: (marker: string, footnote: BibleFootnote, verse: number, versionId: BibleVersionId) => void;
@@ -48,6 +58,7 @@ export type SplitReaderProps = {
   readerLineHeight: number;
   readerTextStyle: TextStyle;
   readingMarkersByVerse?: Record<number, ReadingMarker[]>;
+  reducedMotion: boolean;
   secondaryVersionId: BibleVersionId;
   selectedVerseNumbers: number[];
   selectedVersePosition?: BiblePosition;
@@ -55,8 +66,8 @@ export type SplitReaderProps = {
   spokenVerse?: number;
   sync: boolean;
   topInset: number;
+  width: number;
   onAnchorChange?: (anchor: VerseAnchor) => void;
-  onChapterStep: (direction: -1 | 1) => void;
 };
 
 function highlightMap(highlights: BibleHighlight[], book: string, chapter: number, translation: string) {
@@ -80,17 +91,48 @@ function clampFraction(value: number) {
   return Math.min(1, Math.max(0, value));
 }
 
-export function SplitReader({
+const SplitSeam = memo(function SplitSeam({ active, handlers, palette }: {
+  active: boolean;
+  handlers?: GestureResponderHandlers;
+  palette: ReaderPalette;
+}) {
+  const { t } = useAppTranslation();
+  return (
+    <View
+      {...(handlers ?? {})}
+      accessibilityLabel={active ? t("bible.compare.resize") : undefined}
+      accessibilityRole={active ? "adjustable" : undefined}
+      style={{ alignItems: "center", backgroundColor: palette.background, height: 22, justifyContent: "center", zIndex: 5 }}
+    >
+      <View style={{ backgroundColor: palette.line, height: 1, left: 0, position: "absolute", right: 0, top: 10 }} />
+      <View style={{ alignItems: "center", backgroundColor: palette.surface, borderColor: palette.line, borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 3, height: 16, justifyContent: "center", width: 52 }}>
+        <Feather name="minus" size={10} color={palette.muted} />
+        <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
+        <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
+        <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
+        <Feather name="minus" size={10} color={palette.muted} />
+      </View>
+    </View>
+  );
+});
+
+export type SplitReaderHandle = {
+  step: (direction: -1 | 1) => void;
+};
+
+export const SplitReader = forwardRef<SplitReaderHandle, SplitReaderProps>(function SplitReader({
   audioAnchor,
   bottomInset,
+  cursor,
+  enabled,
   flowingParagraphText,
   highlightByVerse,
   layoutKey,
   mirrorAnchor,
   navigationRevision,
   onChangeRatio,
+  onChapterCommit,
   onShowVersionPicker,
-  onChapterStep,
   onClose,
   onFootnotePress,
   onPositionChange,
@@ -108,6 +150,7 @@ export function SplitReader({
   readerLineHeight,
   readerTextStyle,
   readingMarkersByVerse,
+  reducedMotion,
   secondaryVersionId,
   selectedVerseNumbers,
   selectedVersePosition,
@@ -115,12 +158,15 @@ export function SplitReader({
   spokenVerse,
   sync,
   topInset,
+  width,
   onAnchorChange,
-}: SplitReaderProps) {
+}: SplitReaderProps, ref) {
   const { t } = useAppTranslation();
   const bookLanguage = useBibleBookLanguage(primaryVersionId);
   const primary = useChapterWindow({ ...position, verse: 1 }, primaryVersionId, true);
   const secondary = useChapterWindow({ ...position, verse: 1 }, secondaryVersionId, true);
+  const pagerRef = useRef<ChapterPagerHandle>(null);
+  useImperativeHandle(ref, () => ({ step: (direction) => pagerRef.current?.step(direction) }), []);
   const primaryPaneRef = useRef<SplitPaneHandle>(null);
   const secondaryPaneRef = useRef<SplitPaneHandle>(null);
   const driverRef = useRef<"primary" | "secondary">("primary");
@@ -211,8 +257,6 @@ export function SplitReader({
     const second = resolveAnchor(pivotToPrimary!, { fraction: first.fraction, verse: first.verse });
     return composeAnchor(first, () => second);
   }, [pivotToPrimary, position.chapter, primaryVersionId, pivotToPrimary, secondaryToPivot, secondaryVersionId]);
-
-  const chapterLabel = useCallback((chapter: number) => `${displayBibleBookName(position.book, bookLanguage)} ${chapter}`, [bookLanguage, position.book]);
 
   const updateHeaders = useCallback((primaryAnchor: VerseAnchor, secondaryAnchor: VerseAnchor | undefined, approximate = false) => {
     const signature = `${primaryAnchor.verse}|${secondaryAnchor?.verse ?? 0}:${approximate}`;
@@ -447,120 +491,143 @@ export function SplitReader({
     },
   }), [containerHeight, onChangeRatio, onUserScroll, reanchorAfterResize]);
 
-  const primaryChapter = primary.loadedChapter?.key === `${primaryVersionId}:${position.book}:${position.chapter}`
-    ? primary.loadedChapter.value
-    : undefined;
-  const secondaryKey = `${secondaryVersionId}:${position.book}:${position.chapter}`;
-  const secondaryChapter = secondary.loadedChapter?.key === secondaryKey ? secondary.loadedChapter.value : undefined;
-
-  const headerReference = useCallback((anchor: ResolvedAnchor | undefined, fallback: number) => {
-    if (!anchor) return `${displayBibleBookName(position.book, bookLanguage)} ${position.chapter}:${fallback}`;
-    return `${displayBibleBookName(position.book, bookLanguage)} ${position.chapter}:${anchor.verse}`;
-  }, [bookLanguage, position.book, position.chapter]);
-
   const primaryHeader = headers?.primary;
   const secondaryHeader = headers?.secondary;
   const primaryHighlights = useMemo(() => highlightByVerse(primaryVersionId), [highlightByVerse, primaryVersionId]);
   const secondaryHighlights = useMemo(() => highlightByVerse(secondaryVersionId), [highlightByVerse, secondaryVersionId]);
+  const secondaryPageByChapter = useMemo(() => {
+    const byChapter = new Map<string, ChapterPage>();
+    for (const page of secondary.pages) byChapter.set(`${page.position.book}:${page.position.chapter}`, page);
+    return byChapter;
+  }, [secondary.pages]);
+
+  const headerReference = useCallback((anchor: ResolvedAnchor | undefined, fallback: number, page: BiblePosition) => {
+    if (!anchor) return `${displayBibleBookName(page.book, bookLanguage)} ${page.chapter}:${fallback}`;
+    return `${displayBibleBookName(page.book, bookLanguage)} ${page.chapter}:${anchor.verse}`;
+  }, [bookLanguage]);
+
+  const primaryReference = headerReference(primaryHeader, position.verse, position);
+  const secondaryReference = headerReference(secondaryHeader, position.verse, position);
+  const chapterReference = useCallback((page: BiblePosition) =>
+    `${displayBibleBookName(page.book, bookLanguage)} ${page.chapter}:1`, [bookLanguage]);
+
+  const activePrimaryKey = readerChapterKey(primaryVersionId, position);
+  const activeSecondaryKey = readerChapterKey(secondaryVersionId, position);
+  const retryPrimary = useCallback(() => primary.retry(activePrimaryKey), [activePrimaryKey, primary.retry]);
+  const retrySecondary = useCallback(() => secondary.retry(activeSecondaryKey), [activeSecondaryKey, secondary.retry]);
 
   return (
-    <View onLayout={({ nativeEvent }) => setContainerHeight(nativeEvent.layout.height)} style={{ flex: 1, minHeight: 0, paddingTop: topInset }}>
-      <View style={{ flex: dragRatio, minHeight: 0 }}>
-        <SplitPane
-          active={driverRef.current === "primary"}
-          approximate={false}
-          bottomInset={bottomInset}
-          boundaryHint={primaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(position.book, bookLanguage)} ${primaryBoundary.chapter}:${primaryBoundary.verse}` }) : undefined}
-          chapter={primaryChapter}
-          chapterError={primary.chapterLoadError}
-          flowingParagraphText={flowingParagraphText}
-          headerReference={headerReference(primaryHeader, position.verse)}
-          highlightByVerse={primaryHighlights}
-          onAnchor={handlePrimaryAnchor}
-          onBoundaryPress={primaryBoundary ? () => onPositionChange({ book: position.book, chapter: primaryBoundary.chapter, verse: primaryBoundary.verse }, primaryVersionId) : undefined}
-          onChapterStep={onChapterStep}
-          onDragStart={() => handleDragStart("primary")}
-          onFootnotePress={(marker, footnote, verse) => onFootnotePress(marker, footnote, verse, primaryVersionId)}
-          onReadingMarkerPress={onReadingMarkerPress}
-          onRetry={() => primary.retry()}
-          onShowVersionPicker={() => onShowVersionPicker("primary")}
-          onToggleSync={onToggleSync}
-          onVerseCopy={(verse) => onVerseCopy(verse, primaryVersionId)}
-          onVerseLongPress={(verse) => onVerseLongPress(verse, primaryVersionId)}
-          onVersePress={(verse) => onVersePress(verse, primaryVersionId)}
-          onVersePressIn={onVersePressIn}
-          palette={palette}
-          position={position}
-          readerLineHeight={readerLineHeight}
-          readerTextStyle={readerTextStyle}
-          readingMarkersByVerse={readingMarkersByVerse}
-          ref={primaryPaneRef}
-          selectedVerseNumbers={selectedVerseNumbers}
-          selectedVersePosition={selectedVersePosition}
-          showFollowAgain={false}
-          showVerseNumbers={showVerseNumbers}
-          spokenVerse={spokenVerse}
-          syncEnabled={sync}
-          versionId={primaryVersionId}
-        />
-      </View>
+    <View style={{ flex: 1, minHeight: 0, paddingTop: topInset }}>
+      <ChapterPager
+        backgroundColor={palette.background}
+        currentKey={activePrimaryKey}
+        cursor={cursor}
+        enabled={enabled}
+        layoutKey={layoutKey}
+        navigationRevision={navigationRevision}
+        onCommit={(page) => onChapterCommit(page.position)}
+        onInteractionChange={(active) => { if (active) onUserScroll(); }}
+        onLayout={({ nativeEvent }) => setContainerHeight(nativeEvent.layout.height)}
+        onLoadError={NOOP}
+        onRetry={(key) => primary.retry(key)}
+        pages={primary.pages}
+        reducedMotion={reducedMotion}
+        ref={pagerRef}
+        renderPage={(page, active, pan) => {
+          const secondaryPage = secondaryPageByChapter.get(`${page.position.book}:${page.position.chapter}`);
+          const pageRatio = active ? dragRatio : ratio;
+          const primaryPageHighlights = active ? primaryHighlights : EMPTY_HIGHLIGHTS;
+          const secondaryPageHighlights = active ? secondaryHighlights : EMPTY_HIGHLIGHTS;
+          return (
+            <View style={{ backgroundColor: palette.background, flex: 1 }}>
+              <View style={{ flex: pageRatio, minHeight: 0 }}>
+                <SplitPane
+                  active={active && driverRef.current === "primary"}
+                  approximate={false}
+                  bottomInset={bottomInset}
+                  boundaryHint={active && primaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(position.book, bookLanguage)} ${primaryBoundary.chapter}:${primaryBoundary.verse}` }) : undefined}
+                  chapter={page.chapter}
+                  chapterError={Boolean(page.error)}
+                  flowingParagraphText={flowingParagraphText}
+                  headerReference={active ? primaryReference : chapterReference(page.position)}
+                  highlightByVerse={primaryPageHighlights}
+                  onAnchor={active ? handlePrimaryAnchor : NOOP_ANCHOR}
+                  onBoundaryPress={active && primaryBoundary ? () => onPositionChange({ book: position.book, chapter: primaryBoundary.chapter, verse: primaryBoundary.verse }, primaryVersionId) : undefined}
+                  onDragStart={active ? () => handleDragStart("primary") : NOOP}
+                  onFootnotePress={active ? (marker, footnote, verse) => onFootnotePress(marker, footnote, verse, primaryVersionId) : NOOP}
+                  onReadingMarkerPress={active ? onReadingMarkerPress : undefined}
+                  onRetry={active ? retryPrimary : NOOP}
+                  onShowVersionPicker={active ? () => onShowVersionPicker("primary") : NOOP}
+                  onToggleSync={active ? onToggleSync : NOOP}
+                  onVerseCopy={active ? (verse) => onVerseCopy(verse, primaryVersionId) : NOOP}
+                  onVerseLongPress={active ? (verse) => onVerseLongPress(verse, primaryVersionId) : NOOP}
+                  onVersePress={active ? (verse) => onVersePress(verse, primaryVersionId) : NOOP}
+                  onVersePressIn={active ? onVersePressIn : NOOP}
+                  palette={palette}
+                  pan={active ? pan : undefined}
+                  position={page.position}
+                  readerLineHeight={readerLineHeight}
+                  readerTextStyle={readerTextStyle}
+                  readingMarkersByVerse={active ? readingMarkersByVerse : undefined}
+                  selectedVerseNumbers={active ? selectedVerseNumbers : EMPTY_NUMBERS}
+                  selectedVersePosition={active ? selectedVersePosition : undefined}
+                  showFollowAgain={false}
+                  showVerseNumbers={showVerseNumbers}
+                  spokenVerse={active ? spokenVerse : undefined}
+                  syncEnabled={sync}
+                  versionId={primaryVersionId}
+                />
+              </View>
 
-      <View
-        {...panResponder.panHandlers}
-        accessibilityLabel={t("bible.compare.resize")}
-        accessibilityRole="adjustable"
-        style={{ alignItems: "center", backgroundColor: palette.background, height: 22, justifyContent: "center", zIndex: 5 }}
-      >
-        <View style={{ backgroundColor: palette.line, height: 1, left: 0, position: "absolute", right: 0, top: 10 }} />
-        <View style={{ alignItems: "center", backgroundColor: palette.surface, borderColor: palette.line, borderRadius: 999, borderWidth: 1, flexDirection: "row", gap: 3, height: 16, justifyContent: "center", width: 52 }}>
-          <Feather name="minus" size={10} color={palette.muted} />
-          <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
-          <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
-          <View style={{ backgroundColor: palette.muted, borderRadius: 999, height: 3, width: 3 }} />
-          <Feather name="minus" size={10} color={palette.muted} />
-        </View>
-      </View>
+              <SplitSeam active={active} handlers={active ? panResponder.panHandlers : undefined} palette={palette} />
 
-      <View style={{ flex: 1 - dragRatio, minHeight: 0 }}>
-        <SplitPane
-          active={driverRef.current === "secondary"}
-          approximate={Boolean(secondaryHeader?.approximate)}
-          bottomInset={bottomInset}
-          boundaryHint={secondaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(position.book, bookLanguage)} ${secondaryBoundary.chapter}:${secondaryBoundary.verse}` }) : undefined}
-          chapter={secondaryChapter}
-          chapterError={secondary.chapterLoadError}
-          flowingParagraphText={flowingParagraphText}
-          headerReference={headerReference(secondaryHeader, position.verse)}
-          highlightByVerse={secondaryHighlights}
-          onAnchor={handleSecondaryAnchor}
-          onBoundaryPress={secondaryBoundary ? () => onPositionChange({ book: position.book, chapter: secondaryBoundary.chapter, verse: secondaryBoundary.verse }, secondaryVersionId) : undefined}
-          onClose={onClose}
-          onChapterStep={onChapterStep}
-          onDragStart={() => handleDragStart("secondary")}
-          onFollowAgain={onToggleSync}
-          onFootnotePress={(marker, footnote, verse) => onFootnotePress(marker, footnote, verse, secondaryVersionId)}
-          onReadingMarkerPress={onReadingMarkerPress}
-          onRetry={() => secondary.retry()}
-          onShowVersionPicker={() => onShowVersionPicker("secondary")}
-          onToggleSync={onToggleSync}
-          onVerseCopy={(verse) => onVerseCopy(verse, secondaryVersionId)}
-          onVerseLongPress={(verse) => onVerseLongPress(verse, secondaryVersionId)}
-          onVersePress={(verse) => onVersePress(verse, secondaryVersionId)}
-          onVersePressIn={onVersePressIn}
-          palette={palette}
-          position={position}
-          readerLineHeight={readerLineHeight}
-          readerTextStyle={readerTextStyle}
-          ref={secondaryPaneRef}
-          selectedVerseNumbers={selectedVerseNumbers}
-          selectedVersePosition={selectedVersePosition}
-          showFollowAgain={!sync}
-          showVerseNumbers={showVerseNumbers}
-          spokenVerse={spokenVerse}
-          syncEnabled={sync}
-          versionId={secondaryVersionId}
-        />
-      </View>
+              <View style={{ flex: 1 - pageRatio, minHeight: 0 }}>
+                <SplitPane
+                  active={active && driverRef.current === "secondary"}
+                  approximate={active ? Boolean(secondaryHeader?.approximate) : false}
+                  bottomInset={bottomInset}
+                  boundaryHint={active && secondaryBoundary ? t("bible.compare.continueAt", { reference: `${displayBibleBookName(position.book, bookLanguage)} ${secondaryBoundary.chapter}:${secondaryBoundary.verse}` }) : undefined}
+                  chapter={secondaryPage?.chapter}
+                  chapterError={Boolean(secondaryPage?.error)}
+                  flowingParagraphText={flowingParagraphText}
+                  headerReference={active ? secondaryReference : chapterReference(secondaryPage?.position ?? page.position)}
+                  highlightByVerse={secondaryPageHighlights}
+                  onAnchor={active ? handleSecondaryAnchor : NOOP_ANCHOR}
+                  onBoundaryPress={active && secondaryBoundary ? () => onPositionChange({ book: position.book, chapter: secondaryBoundary.chapter, verse: secondaryBoundary.verse }, secondaryVersionId) : undefined}
+                  onClose={active ? onClose : undefined}
+                  onDragStart={active ? () => handleDragStart("secondary") : NOOP}
+                  onFollowAgain={active && !sync ? onToggleSync : undefined}
+                  onFootnotePress={active ? (marker, footnote, verse) => onFootnotePress(marker, footnote, verse, secondaryVersionId) : NOOP}
+                  onReadingMarkerPress={active ? onReadingMarkerPress : undefined}
+                  onRetry={active ? retrySecondary : NOOP}
+                  onShowVersionPicker={active ? () => onShowVersionPicker("secondary") : NOOP}
+                  onToggleSync={active ? onToggleSync : NOOP}
+                  onVerseCopy={active ? (verse) => onVerseCopy(verse, secondaryVersionId) : NOOP}
+                  onVerseLongPress={active ? (verse) => onVerseLongPress(verse, secondaryVersionId) : NOOP}
+                  onVersePress={active ? (verse) => onVersePress(verse, secondaryVersionId) : NOOP}
+                  onVersePressIn={active ? onVersePressIn : NOOP}
+                  palette={palette}
+                  pan={active ? pan : undefined}
+                  position={secondaryPage?.position ?? page.position}
+                  readerLineHeight={readerLineHeight}
+                  readerTextStyle={readerTextStyle}
+                  readingMarkersByVerse={active ? readingMarkersByVerse : undefined}
+                  selectedVerseNumbers={active ? selectedVerseNumbers : EMPTY_NUMBERS}
+                  selectedVersePosition={active ? selectedVersePosition : undefined}
+                  showFollowAgain={active && !sync}
+                  showVerseNumbers={showVerseNumbers}
+                  spokenVerse={active ? spokenVerse : undefined}
+                  syncEnabled={sync}
+                  versionId={secondaryVersionId}
+                />
+              </View>
+            </View>
+          );
+        }}
+        viewportRef={undefined}
+        width={width}
+        wrapNativeGesture={false}
+      />
     </View>
   );
-}
+});

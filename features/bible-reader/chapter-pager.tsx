@@ -31,24 +31,33 @@ type PagerProps = {
   reducedMotion: boolean;
   enabled: boolean;
   backgroundColor: string;
-  viewportRef: RefObject<View | null>;
+  viewportRef?: RefObject<View | null>;
   onLayout: (event: LayoutChangeEvent) => void;
   onCommit: (page: ChapterPage) => void;
   onInteractionChange: (active: boolean) => void;
   onLoadError: () => void;
   onRetry: (key: string) => void;
-  renderPage: (page: ChapterPage, active: boolean) => ReactElement;
+  renderPage: (page: ChapterPage, active: boolean, pan: ReturnType<typeof Gesture.Pan>) => ReactElement;
+  /**
+   * The single reader lets the pager own a native-scroll gesture around each
+   * whole page. Split mode has two ScrollViews per page, so each pane wraps
+   * its own ScrollView with the same pan instead.
+   */
+  wrapNativeGesture?: boolean;
 };
 
 type PageRequest = { epoch: number; source: string; target: string; direction: ChapterStep; phase: "waiting" | "animating" | "handoff" };
 
-const PagerCell = memo(function PagerCell({ page, active, cursor, width, reducedMotion, pan, layoutKey, onReady, children }: {
+const PagerCell = memo(function PagerCell({ page, active, cursor, width, reducedMotion, pan, wrapNativeGesture, layoutKey, onReady, children }: {
   page: ChapterPage; active: boolean; cursor: SharedValue<number>; width: number; reducedMotion: boolean;
-  pan: ReturnType<typeof Gesture.Pan>; layoutKey: string; onReady: (key: string) => void; children: ReactElement;
+  pan: ReturnType<typeof Gesture.Pan>; wrapNativeGesture: boolean; layoutKey: string; onReady: (key: string) => void; children: ReactElement;
 }) {
   const measured = useRef(false);
   const index = page.index;
-  const nativeScroll = useMemo(() => Gesture.Native().requireExternalGestureToFail(pan), [pan]);
+  const nativeScroll = useMemo(
+    () => wrapNativeGesture ? Gesture.Native().requireExternalGestureToFail(pan) : undefined,
+    [pan, wrapNativeGesture],
+  );
   const style = useAnimatedStyle(() => {
     const distance = index - cursor.value;
     return reducedMotion
@@ -72,7 +81,9 @@ const PagerCell = memo(function PagerCell({ page, active, cursor, width, reduced
     }}
     style={[{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }, style]}
   >
-    <GestureDetector gesture={nativeScroll}>{children}</GestureDetector>
+    {nativeScroll
+      ? <GestureDetector gesture={nativeScroll}>{children}</GestureDetector>
+      : children}
   </Animated.View>;
 });
 
@@ -261,8 +272,8 @@ export const ChapterPager = forwardRef<ChapterPagerHandle, PagerProps>(function 
   return <GestureDetector gesture={pan}>
     <View ref={props.viewportRef} collapsable={false} onLayout={props.onLayout} style={{ flex: 1, overflow: "hidden", backgroundColor: props.backgroundColor }}>
       {pages.map(page => <PagerCell key={page.key} page={page} active={page.key === currentKey} cursor={cursor} width={width}
-        reducedMotion={reducedMotion} pan={pan} layoutKey={layoutKey} onReady={markReady}>
-        {props.renderPage(page, page.key === currentKey)}
+        reducedMotion={reducedMotion} pan={pan} wrapNativeGesture={props.wrapNativeGesture ?? true} layoutKey={layoutKey} onReady={markReady}>
+        {props.renderPage(page, page.key === currentKey, pan)}
       </PagerCell>)}
     </View>
   </GestureDetector>;

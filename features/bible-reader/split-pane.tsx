@@ -10,6 +10,7 @@ import {
   type TextStyle,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { BibleText, type ReadingMarker } from "@/features/bible-reader/chapter-text";
 import type { BibleChapter, BibleFootnote, BiblePosition, BibleVersionId } from "@/features/bible-kjv";
 import { bibleVersionShortLabel } from "@/features/bible-reader/verse-helpers";
@@ -39,7 +40,6 @@ type Props = {
   highlightByVerse: Record<number, BibleHighlightColor>;
   onAnchor: (anchor: VerseAnchor) => void;
   onBoundaryPress?: () => void;
-  onChapterStep: (direction: -1 | 1) => void;
   onClose?: () => void;
   onDragStart: () => void;
   onFollowAgain?: () => void;
@@ -53,6 +53,7 @@ type Props = {
   onVersePress: (verse: number) => void;
   onVersePressIn: () => void;
   palette: ReaderPalette;
+  pan?: ReturnType<typeof Gesture.Pan>;
   position: BiblePosition;
   readerLineHeight: number;
   readerTextStyle: TextStyle;
@@ -85,7 +86,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   highlightByVerse,
   onAnchor,
   onBoundaryPress,
-  onChapterStep,
   onClose,
   onDragStart,
   onFollowAgain,
@@ -99,6 +99,7 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   onVersePress,
   onVersePressIn,
   palette,
+  pan,
   position,
   readerLineHeight,
   readerTextStyle,
@@ -122,7 +123,6 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   const programmaticRef = useRef(false);
   const programmaticYRef = useRef(0);
   const userDraggingRef = useRef(false);
-  const touchStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const dragEndTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const programmaticTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const callbacksRef = useRef({
@@ -312,6 +312,71 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
   }), [markProgrammatic, scrollToAnchor]);
 
   const versionLabel = bibleVersionShortLabel(versionId);
+  const nativeScroll = useMemo(
+    () => pan ? Gesture.Native().requireExternalGestureToFail(pan) : undefined,
+    [pan],
+  );
+
+  const scrollView = (
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: bottomInset, paddingHorizontal: 16, paddingTop: 8 }}
+        keyboardShouldPersistTaps="handled"
+        onLayout={({ nativeEvent }) => setViewportHeight(nativeEvent.layout.height)}
+        onMomentumScrollBegin={handleMomentumBegin}
+        onMomentumScrollEnd={handleMomentumEnd}
+        onScroll={onScroll}
+        onScrollBeginDrag={handleBeginDrag}
+        onScrollEndDrag={handleEndDrag}
+        ref={scrollRef}
+        removeClippedSubviews={false}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, minHeight: 0 }}
+      >
+        <View
+          onLayout={({ nativeEvent }) => {
+            const next = nativeEvent.layout.y;
+            setContentOrigin((current) => Math.abs(current - next) < 0.5 ? current : next);
+          }}
+        >
+          {chapter ? (
+            <BibleText
+              key={contentKey}
+              chapterHeading={chapter.heading}
+              chapterHighlightByVerse={highlightByVerse}
+              copyLabel={t("bible.actions.copy")}
+              flowingParagraphText={flowingParagraphText}
+              onFootnotePress={handleFootnote}
+              onReadingMarkerPress={handleMarkerPress}
+              onVerseCopy={handleCopy}
+              onVerseLayout={handleVerseLayout}
+              onVerseLongPress={handleLongPress}
+              onVersePress={handlePress}
+              onVersePressIn={handlePressIn}
+              onVerseRef={noopVerseRef}
+              palette={palette}
+              planMarkers={EMPTY_MARKERS}
+              position={textPosition}
+              readingMarkersByVerse={readingMarkersByVerse}
+              readerLineHeight={readerLineHeight}
+              readerTextStyle={readerTextStyle}
+              selectedVerseNumbers={selectedVerseNumbers}
+              selectedVersePosition={selectedVersePosition}
+              showVerseNumbers={showVerseNumbers}
+              spokenVerse={spokenVerse}
+              subtitles={chapter.subtitles}
+              verses={chapter.verses}
+            />
+          ) : chapterError ? (
+            <Pressable accessibilityRole="button" onPress={onRetry} style={{ alignItems: "center", justifyContent: "center", minHeight: 160 }}>
+              <Text style={{ color: palette.text, textAlign: "center" }}>{t("bible.compare.chapterError")}</Text>
+            </Pressable>
+          ) : (
+            <ActivityIndicator color={palette.text} style={{ minHeight: 160 }} />
+          )}
+        </View>
+      </ScrollView>
+  );
 
   return (
     <View style={{ backgroundColor: palette.background, flex: 1, minHeight: 0 }}>
@@ -375,80 +440,9 @@ export const SplitPane = memo(forwardRef<SplitPaneHandle, Props>(function SplitP
           <Text numberOfLines={1} style={{ color: palette.accent, flex: 1, fontSize: 10, fontWeight: "800" }}>{boundaryHint}</Text>
         </Pressable>
       ) : null}
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: bottomInset, paddingHorizontal: 16, paddingTop: 8 }}
-        keyboardShouldPersistTaps="handled"
-        onLayout={({ nativeEvent }) => setViewportHeight(nativeEvent.layout.height)}
-        onMomentumScrollBegin={handleMomentumBegin}
-        onMomentumScrollEnd={handleMomentumEnd}
-        onScroll={onScroll}
-        onScrollBeginDrag={handleBeginDrag}
-        onScrollEndDrag={handleEndDrag}
-        onTouchCancel={() => { touchStartRef.current = undefined; }}
-        onTouchEnd={(event) => {
-          const start = touchStartRef.current;
-          touchStartRef.current = undefined;
-          if (!start) return;
-          const touch = event.nativeEvent.changedTouches?.[0] ?? event.nativeEvent.touches?.[0];
-          if (!touch) return;
-          const dx = touch.pageX - start.x;
-          const dy = touch.pageY - start.y;
-          if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.2) onChapterStep(dx < 0 ? 1 : -1);
-        }}
-        onTouchStart={(event) => {
-          const touch = event.nativeEvent.touches?.[0];
-          if (!touch) return;
-          touchStartRef.current = { x: touch.pageX, y: touch.pageY };
-        }}
-        ref={scrollRef}
-        removeClippedSubviews={false}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1, minHeight: 0 }}
-      >
-        <View
-          onLayout={({ nativeEvent }) => {
-            const next = nativeEvent.layout.y;
-            setContentOrigin((current) => Math.abs(current - next) < 0.5 ? current : next);
-          }}
-        >
-          {chapter ? (
-            <BibleText
-              key={contentKey}
-              chapterHeading={chapter.heading}
-              chapterHighlightByVerse={highlightByVerse}
-              copyLabel={t("bible.actions.copy")}
-              flowingParagraphText={flowingParagraphText}
-              onFootnotePress={handleFootnote}
-              onReadingMarkerPress={handleMarkerPress}
-              onVerseCopy={handleCopy}
-              onVerseLayout={handleVerseLayout}
-              onVerseLongPress={handleLongPress}
-              onVersePress={handlePress}
-              onVersePressIn={handlePressIn}
-              onVerseRef={noopVerseRef}
-              palette={palette}
-              planMarkers={EMPTY_MARKERS}
-              position={textPosition}
-              readingMarkersByVerse={readingMarkersByVerse}
-              readerLineHeight={readerLineHeight}
-              readerTextStyle={readerTextStyle}
-              selectedVerseNumbers={selectedVerseNumbers}
-              selectedVersePosition={selectedVersePosition}
-              showVerseNumbers={showVerseNumbers}
-              spokenVerse={spokenVerse}
-              subtitles={chapter.subtitles}
-              verses={chapter.verses}
-            />
-          ) : chapterError ? (
-            <Pressable accessibilityRole="button" onPress={onRetry} style={{ alignItems: "center", justifyContent: "center", minHeight: 160 }}>
-              <Text style={{ color: palette.text, textAlign: "center" }}>{t("bible.compare.chapterError")}</Text>
-            </Pressable>
-          ) : (
-            <ActivityIndicator color={palette.text} style={{ minHeight: 160 }} />
-          )}
-        </View>
-      </ScrollView>
+      {nativeScroll
+        ? <GestureDetector gesture={nativeScroll}>{scrollView}</GestureDetector>
+        : scrollView}
 
     </View>
   );

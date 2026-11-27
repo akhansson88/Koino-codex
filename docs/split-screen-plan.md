@@ -10,6 +10,13 @@ AAB/store build is the remaining release step.
 
 Implementation notes:
 
+- Split mode uses the same `ChapterPager` as the single reader: three split pages
+  (previous/current/next, both translations each) are mounted side by side, the pan
+  drags them with the same resistance, the settle spring and `chapterSelectionHaptic()`
+  fire at the same moment, and the header title crossfades through `chapterCursor`.
+  Each pane wraps its own `ScrollView` in `Gesture.Native().requireExternalGestureToFail(pan)`
+  so vertical scrolling still wins; the pager skips its whole-page native wrapper
+  (`wrapNativeGesture={false}`).
 - The Bible asset is now `assets/bible/koino-bible-v5.db` (62.8 MB) with all four
   translations and 186,886 cross-translation links.
 - The alignment is **verse-level structural**, not word-level: merges, splits,
@@ -129,9 +136,11 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
   the version sheet **for that pane only**.
 - **Main header:** the existing header, with the translation pill replaced by a
   `Jämför` chip showing `NKJV / SFB15`. The chapter title stays.
-- **Bottom controls:** previous/next chapter, shared by both panes. In split mode the
-  horizontal chapter pager is suspended (two competing pagers would fight); chapter
-  changes happen through the header, the bottom bar, the chapter picker and search.
+- **Bottom controls:** previous/next chapter, shared by both panes. Both readers use the
+  same chapter pager: a horizontal swipe in either pane drags the whole split page (both
+  translations together) and springs to the next chapter with the same animation, header
+  crossfade and haptic tick as the single reader. The bottom controls call the split
+  pager's `step()` rather than jumping, so buttons and swipes behave identically.
 - **Exit:** `×` on the secondary pane header, or the menu row again. The primary pane
   remains where it is, single-pane.
 
@@ -149,9 +158,11 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
 - **Long-press / highlight / copy / save / share:** unchanged, applied to the tapped
   pane's translation. The sheet subtitle names the translation when the two differ.
 - **Chapter change:** both panes load the mapped chapter (same number for all four
-  shipped translations). No automatic chapter advance at the end of a chapter; a
-  `Nästa kapitel` chip appears when the driver reaches the bottom. This avoids the
-  follower pane flipping chapter while the driver is still finishing a paragraph.
+  shipped translations). Swiping horizontally in either pane pages both panes together
+  through the shared `ChapterPager`; a short drag springs back and does not turn the
+  page. No automatic chapter advance at the end of a chapter; a `Nästa kapitel` chip
+  appears when the driver reaches the bottom. This avoids the follower pane flipping
+  chapter while the driver is still finishing a paragraph.
 - **Audio:** the spoken verse drives both panes. The audio player's translation is the
   primary pane; the secondary pane follows the mapped anchor.
 - **Sync off:** the link icon toggles. The driver pane scrolls alone; the other stays
@@ -160,8 +171,8 @@ Working name **Jämför** (EN: *Compare*). One reader, two panes.
 - **Search / history / plans / cross-references:** jump the primary pane and then
   align the secondary. Deep links may add `&compare=sfb15`.
 - **Reduce motion:** no easing; instant set. Seam drag still works.
-- **Haptics:** one light tick when sync direction changes (driver switch), nothing
-  per frame.
+- **Haptics:** one light tick when a chapter turn settles (identical timing to the
+  single reader) and when the sync direction changes (driver switch), nothing per frame.
 
 ### 2.3 Entry points
 

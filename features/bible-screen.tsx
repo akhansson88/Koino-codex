@@ -141,7 +141,7 @@ import { ReaderToastMessage } from "@/features/bible-reader/toast";
 import { HighlightColorManagerSheet } from "@/features/bible-reader/highlight-colors";
 import { ReadingSettingsSheet } from "@/features/bible-reader/reading-settings";
 import { BibleVersionSheet } from "@/features/bible-reader/version-sheet";
-import { SplitReader } from "@/features/bible-reader/split-reader";
+import { SplitReader, type SplitReaderHandle } from "@/features/bible-reader/split-reader";
 import type { VerseAnchor } from "@/features/bible-reader/split-anchor";
 import { CrossReferenceSheet, FootnoteSheet } from "@/features/bible-reader/reference-sheets";
 import { BibleDrawer } from "@/features/bible-reader/drawer";
@@ -203,6 +203,7 @@ export function BibleScreen() {
   const lastScrollCommitRef = useRef(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pagerRef = useRef<ChapterPagerHandle>(null);
+  const splitPagerRef = useRef<SplitReaderHandle>(null);
   const pagerInteractingRef = useRef(false);
   const verseLongPressActiveRef = useRef(false);
 
@@ -1106,7 +1107,12 @@ export function BibleScreen() {
       if (shouldScroll) {
         const request = readerScrollIntent.current.request(readerChapterKey(fromAudio ? "reformationsbibeln2026" : bibleVersionId, normalized),
           intent === "chapter" ? { kind: "top" } : { kind: "verse", verse: normalized.verse });
-        if (haptic && intent === "chapter") chapterFeedbackRevisionRef.current = request.revision;
+        if (haptic && intent === "chapter") {
+          // Split mode has no single-reader pager to tick when the chapter
+          // lands, so the shared chapter controls tick here instead.
+          if (splitMode) chapterSelectionHaptic();
+          else chapterFeedbackRevisionRef.current = request.revision;
+        }
         if (sameChapter && intent === "verse") {
           requestAnimationFrame(() => tryScrollToVerse(normalized.verse, !reducedMotion, request));
         }
@@ -1119,7 +1125,7 @@ export function BibleScreen() {
         showTemporaryHighlight(normalized);
       }
     },
-    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader, mirrorPaused, mirrorSession],
+    [bibleVersionId, showTemporaryHighlight, tryScrollToVerse, cancelAudioSelection, reducedMotion, revealReaderHeader, mirrorPaused, mirrorSession, splitMode],
   );
 
   const followReader = useCallback((entry: ReadingEntry) => {
@@ -2087,10 +2093,10 @@ export function BibleScreen() {
         palette={readerPalette}
         title={chapterLabel(position, bookLanguage)}
         compactTitle={compactChapterLabel(position, bookLanguage)}
-        chapterIndex={showSplit ? undefined : chapterIndex(position)}
-        chapterCursor={showSplit ? undefined : chapterCursor}
-        previousChapterTitle={showSplit ? undefined : previousChapter ? compactChapterLabel(previousChapter, bookLanguage) : undefined}
-        nextChapterTitle={showSplit ? undefined : nextChapter ? compactChapterLabel(nextChapter, bookLanguage) : undefined}
+        chapterIndex={chapterIndex(position)}
+        chapterCursor={chapterCursor}
+        previousChapterTitle={previousChapter ? compactChapterLabel(previousChapter, bookLanguage) : undefined}
+        nextChapterTitle={nextChapter ? compactChapterLabel(nextChapter, bookLanguage) : undefined}
         translationLabel={splitMode
           ? `${bibleVersionShortLabel(bibleVersionId)}\u00b7${bibleVersionShortLabel(splitSecondaryVersionId)}`
           : bibleVersionShortLabel(bibleVersionId)}
@@ -2130,7 +2136,10 @@ export function BibleScreen() {
         <SplitReader
           audioAnchor={activelyFollowingAudio && audioChapter ? { book: audioChapter.book, chapter: audioChapter.chapter, verse: spokenVerse ?? 1 } : undefined}
           bottomInset={insets.bottom + 96}
+          cursor={chapterCursor}
+          enabled={readerInteractionsEnabled && !mirrorSession}
           flowingParagraphText={flowingParagraphText}
+          ref={splitPagerRef}
           highlightByVerse={splitHighlightByVerse}
           layoutKey={`${fontId}:${fontSize}:${showVerseNumbers}:${flowingParagraphText}`}
           mirrorAnchor={mirrorSession && !mirrorPaused && mirror.record?.mode === "split"
@@ -2138,6 +2147,7 @@ export function BibleScreen() {
             : undefined}
           navigationRevision={navigationRevision}
           onChangeRatio={setSplitRatio}
+          onChapterCommit={(next) => jumpToPosition(next, { intent: "chapter", haptic: false })}
           onClose={closeSplit}
           onFootnotePress={(marker, footnote, verse, versionId) => {
             setActionVersionId(versionId);
@@ -2167,6 +2177,7 @@ export function BibleScreen() {
           readerLineHeight={readerLineHeight}
           readerTextStyle={readerTextStyle}
           readingMarkersByVerse={readingMarkersByVerse}
+          reducedMotion={reducedMotion}
           secondaryVersionId={splitSecondaryVersionId}
           selectedVerseNumbers={selectedVerseNumbers}
           selectedVersePosition={selectedVersePosition}
@@ -2174,15 +2185,10 @@ export function BibleScreen() {
           spokenVerse={spokenVerse}
           sync={splitSyncEnabled}
           topInset={readerHeaderHeight + 10}
+          width={width}
           onAnchorChange={(anchor) => {
             splitAnchorRef.current = anchor;
             lastReaderActivityRef.current = Date.now();
-          }}
-          onChapterStep={(direction) => {
-            const next = direction > 0
-              ? nextBibleChapter(position.book, position.chapter)
-              : previousBibleChapter(position.book, position.chapter);
-            if (next) jumpToPosition(next, { intent: "chapter" });
           }}
         />
       ) : (
@@ -2328,13 +2334,11 @@ export function BibleScreen() {
           nextChapter={nextChapter}
           onHeightChange={setChapterControlsHeight}
           onNext={() => {
-            const next = nextBibleChapter(position.book, position.chapter);
-            if (showSplit && next) jumpToPosition(next, { intent: "chapter" });
+            if (showSplit) splitPagerRef.current?.step(1);
             else pagerRef.current?.step(1);
           }}
           onPrevious={() => {
-            const previous = previousBibleChapter(position.book, position.chapter);
-            if (showSplit && previous) jumpToPosition(previous, { intent: "chapter" });
+            if (showSplit) splitPagerRef.current?.step(-1);
             else pagerRef.current?.step(-1);
           }}
           palette={readerPalette}

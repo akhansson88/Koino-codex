@@ -6,7 +6,7 @@ import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const test = globalThis.__chapterNavigationTest = { animations: [], haptics: [], requests: [], os: "android" };
+const test = globalThis.__chapterNavigationTest = { animations: [], haptics: [], requests: [], os: "android", renderPans: [] };
 const frames = new Map();
 let frameId = 0;
 const originalFrame = globalThis.requestAnimationFrame, originalCancel = globalThis.cancelAnimationFrame;
@@ -149,12 +149,12 @@ try {
     await flushFrames();
   };
   const mount = async (overrides = {}) => {
-    test.animations = []; test.haptics = []; commits = []; errors = 0;
+    test.animations = []; test.haptics = []; commits = []; errors = 0; test.renderPans = [];
     pagerProps = { pages, currentKey: pages[1].key, width: 390, layoutKey: "verse:20", navigationRevision: 0, reducedMotion: false,
       enabled: true, backgroundColor: "white", viewportRef: React.createRef(), onLayout() {}, onInteractionChange() {},
       onRetry() {}, onLoadError() { errors++; },
       onCommit(page) { commits.push(page.key); pagerProps = { ...pagerProps, currentKey: page.key, navigationRevision: pagerProps.navigationRevision + 1 }; renderer.update(React.createElement(Harness)); },
-      renderPage: (page, active) => React.createElement("PageContent", { chapter: page.chapter, active }), ...overrides };
+      renderPage: (page, active, pan) => { test.renderPans.push(pan); return React.createElement("PageContent", { chapter: page.chapter, active }); }, ...overrides };
     await act(async () => { renderer = create(React.createElement(Harness)); });
     await act(async () => { renderer.root.findAllByType("AnimatedView").forEach(node => node.props.onLayout({ nativeEvent: { layout: { width: 390, height: 700 } } })); });
     await flushFrames();
@@ -184,6 +184,8 @@ try {
   assert.equal(inactive.length, 2);
   assert.ok(inactive.every(node => node.props.pointerEvents === "none"));
   assert.equal(renderer.root.findAllByType("Detector")[1].props.gesture.config.waitFor, pan(), "Native scrolling waits only until horizontal intent is classified");
+  assert.ok(test.renderPans.length >= 3);
+  assert.ok(test.renderPans.every(item => item === pan()), "Every rendered page shares the pager's pan, so split panes can wait on the same gesture");
   const vertical = await drag(3, 40);
   assert.equal(vertical.failed, true); assert.equal(vertical.activated, false);
   await drag(-50); await finishAnimations();
@@ -226,6 +228,12 @@ try {
   await finishAnimations();
   assert.deepEqual(commits, [pages[2].key, pages[1].key], "The retained gesture reads the newly active chapter and available directions");
   assert.equal(test.haptics.length, 2);
+  await unmount();
+
+  await mount({ wrapNativeGesture: false });
+  assert.equal(renderer.root.findAllByType("Detector").length, 1, "Split panes own their native scroll gestures instead of wrapping the whole page");
+  assert.ok(test.renderPans.length >= 3);
+  assert.ok(test.renderPans.every(item => item === pan()), "Split pages still receive the shared pan for their own scroll views");
   await unmount();
 
   await mount({ reducedMotion: true });
