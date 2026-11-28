@@ -125,6 +125,8 @@ const brandTerms = [
   "KJV",
   "SFB15",
   "SRB26",
+  "%LINK%",
+  "%EMAIL%",
 ];
 
 const tokenPattern = /⟦(\d+)⟧/g;

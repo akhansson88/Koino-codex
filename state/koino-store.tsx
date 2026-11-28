@@ -1936,7 +1936,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
               const resetEmail = action.email.trim();
               if (!resetEmail.includes("@")) throw new Error("Enter the email address for your account.");
 
-              await httpsCallable(functions, "koinoSendPasswordReset")({ email: resetEmail });
+              await httpsCallable(functions, "koinoSendPasswordReset")({ email: resetEmail, language: action.language ?? "en" });
               return;
             }
             case "sendEmailVerification": {

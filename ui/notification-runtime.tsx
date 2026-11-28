@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
 import { useKoinoActions, useKoinoSelector } from "@/state/koino-store";
+import { useAppTranslation } from "@/ui/app-language";
 import { setNotificationRegistrationState, useNotificationRegistrationRetryVersion } from "@/ui/notification-registration";
 import { navigateThenMarkRead } from "@/ui/notification-navigation";
 
@@ -44,6 +45,7 @@ function validTargetType(value: unknown): value is "post" | "check_in" {
 }
 
 export function NotificationRuntime() {
+  const { language, t } = useAppTranslation();
   const currentUserId = useKoinoSelector((state) => state.currentUserId);
   const activityNotifications = useKoinoSelector((state) => state.activityNotifications);
   const prayerNotifications = useKoinoSelector((state) => state.prayerNotifications);
@@ -86,25 +88,25 @@ export function NotificationRuntime() {
         setNotificationRegistrationState({ status: "checking" });
         if (Platform.OS === "android") {
           await Notifications.setNotificationChannelAsync("comments", {
-            name: "Comments",
+            name: t("notifications.channel.comments"),
             importance: Notifications.AndroidImportance.HIGH,
           });
           await Notifications.setNotificationChannelAsync("mentions", {
-            name: "Mentions",
+            name: t("notifications.channel.mentions"),
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 150, 250],
           });
           await Notifications.setNotificationChannelAsync("prayer-activity", {
-            name: "Prayer activity",
+            name: t("notifications.channel.prayerActivity"),
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 150, 250],
           });
           await Notifications.setNotificationChannelAsync("event-reminders", {
-            name: "Event reminders",
+            name: t("notifications.channel.eventReminders"),
             importance: Notifications.AndroidImportance.HIGH,
           });
           await Notifications.setNotificationChannelAsync("fasting-complete", {
-            name: "Fasting",
+            name: t("notifications.channel.fasting"),
             importance: Notifications.AndroidImportance.MAX,
             sound: "default",
             vibrationPattern: [0, 500, 250, 500],
@@ -153,7 +155,7 @@ export function NotificationRuntime() {
       active = false;
       tokenSubscription.remove();
     };
-  }, [retryVersion, currentUserId]);
+  }, [language, retryVersion, currentUserId]);
 
   useEffect(() => {
     if (!Notifications || !currentUserId || Platform.OS === "web") return;

@@ -4,7 +4,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { adminApp } from "./firebase-admin";
 import { buildEventPushMessage } from "./notification-messages";
-import { pushAllowed, sendExpoPush } from "./push-delivery";
+import { pushAllowed, recipientLanguage, sendExpoPush } from "./push-delivery";
 
 type GroupEvent = {
   endAt?: string;
@@ -68,6 +68,7 @@ export const sendEventReminders = onSchedule(
               const deliveryRef = database.ref(`eventReminderDeliveries/${groupId}/${eventId}/${userId}/${offset}`);
               if ((await deliveryRef.get()).exists()) continue;
               if (!(await pushAllowed(database, userId, "eventReminders"))) continue;
+              const language = await recipientLanguage(database, userId);
               await sendExpoPush(
                 database,
                 userId,
@@ -75,6 +76,7 @@ export const sendEventReminders = onSchedule(
                 buildEventPushMessage({
                   eventId,
                   groupId,
+                  language,
                   minutes: offset,
                   startAt: event.startAt,
                   timeZone: event.timeZone,

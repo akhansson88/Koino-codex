@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-messages";
+import { buildCommentPushMessage, buildEventPushMessage, buildPrayerPushMessage } from "./notification-messages";
 import { currentHistoryGeneration } from "./notification-policy";
 import { activityUnreadCount, isDeviceNotRegistered, preferenceAllows } from "./push-delivery";
+import { serviceLanguage } from "./service-language";
 import type { Database } from "firebase-admin/database";
 
 test("badge query counts only unread notification children", async () => {
@@ -90,8 +91,32 @@ test("prayer messages use the prayer channel", () => {
   assert.deepEqual(direct.data, { prayerNotificationId: "prayer-2" });
 });
 
-test("new records without a generation are current, an explicit old one is stale", () => {
-  assert.equal(currentHistoryGeneration(undefined, { historyGeneration: 1 }), true);
+test("push messages follow the member's saved language", () => {
+  const base = {
+    actorName: "Sam",
+    body: "",
+    groupId: "group-1",
+    label: "post",
+    notificationId: "reply-1",
+    targetId: "post-1",
+    targetType: "post" as const,
+    badge: 1,
+  };
+  assert.equal(buildPrayerPushMessage({ actorName: "Sam", language: "sv", notificationId: "p", targetType: "post" }).body, "Sam bad för din bönbegäran");
+  assert.match(buildCommentPushMessage({ ...base, reason: "owner", language: "ar" }).body, /نشاط/);
+  assert.match(buildEventPushMessage({
+    eventId: "event-1",
+    groupId: "group-1",
+    language: "de",
+    minutes: 90,
+    startAt: "2026-11-29T18:00:00.000Z",
+    title: "Gebetsabend",
+  }).body, /^In 2 Stunden/);
+  assert.equal(serviceLanguage("xx"), "en");
+  assert.equal(serviceLanguage(undefined), "en");
+});
+
+test("new records without a generation are current, an explicit old one is stale", () => {  assert.equal(currentHistoryGeneration(undefined, { historyGeneration: 1 }), true);
   assert.equal(currentHistoryGeneration(1, { historyGeneration: 1 }), true);
   assert.equal(currentHistoryGeneration(2, { historyGeneration: 1 }), false);
   assert.equal(currentHistoryGeneration(undefined, { sharedWritesFrozen: true }), false);

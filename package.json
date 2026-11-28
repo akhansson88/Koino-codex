@@ -107,8 +107,9 @@
     "migrate:posts-likes": "node scripts/migrate-posts-likes.mjs",
     "restore:posts-likes": "node scripts/restore-posts-likes.mjs",
     "i18n:sync": "node scripts/i18n/sync.mjs",
-    "i18n:check": "node scripts/i18n/sync.mjs --check && node scripts/i18n/plan-library.mjs --check",
+    "i18n:check": "node scripts/i18n/sync.mjs --check && node scripts/i18n/plan-library.mjs --check && node scripts/i18n/server-copy.mjs --check",
     "i18n:sync:plans": "node scripts/i18n/plan-library.mjs",
+    "i18n:sync:server": "node scripts/i18n/server-copy.mjs",
     "validate:i18n": "npm run i18n:check"
   },
   "dependencies": {

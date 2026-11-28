@@ -8,7 +8,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { adminApp } from "./firebase-admin";
 import { buildCommentPushMessage, buildPrayerPushMessage } from "./notification-messages";
 import { currentHistoryGeneration } from "./notification-policy";
-import { activityUnreadCount, prayerUnreadCount, processExpoReceipts, pushAllowed, sendExpoPush, type PushCategory } from "./push-delivery";
+import { activityUnreadCount, prayerUnreadCount, processExpoReceipts, pushAllowed, recipientLanguage, sendExpoPush, type PushCategory } from "./push-delivery";
 
 type Reply = {
   historyGeneration?: number;
@@ -130,12 +130,14 @@ export const createCommentNotification = onValueCreated(
     await Promise.all(createdRecipients.map(async ([recipientUserId, reason]) => {
       const notificationRef = database.ref(`encryptedData/activityNotifications/${recipientUserId}/${replyId}`);
       if (!(await notificationRef.get()).exists() || !(await pushAllowed(database, recipientUserId, categoryForReason(reason)))) return;
+      const language = await recipientLanguage(database, recipientUserId);
       await sendExpoPush(database, recipientUserId, `comment:${replyId}`, buildCommentPushMessage({
         actorName: membersById[reply.userId]?.name ?? "",
         body: "",
         hasAudio: Boolean(reply.audio?.path),
         groupId,
         label: "",
+        language,
         notificationId: replyId,
         reason,
         targetId: reply.targetId,
@@ -159,14 +161,16 @@ export const sendPrayerNotification = onValueCreated(
     if (!(await database.ref(`encryptedData/prayerNotifications/${recipientUserId}/${notificationId}`).get()).exists()) return;
     if ((await database.ref(`e2eeMigrations/user/${recipientUserId}/importedEventIds/${notificationId}`).get()).exists()) return;
     if (!(await pushAllowed(database, recipientUserId, "prayerActivity"))) return;
-    const [actorSnapshot, activityUnread, prayerUnread] = await Promise.all([
+    const [actorSnapshot, activityUnread, prayerUnread, language] = await Promise.all([
       database.ref(`encryptedData/profiles/${notification.userId}/name`).get(),
       activityUnreadCount(database, recipientUserId),
       prayerUnreadCount(database, recipientUserId),
+      recipientLanguage(database, recipientUserId),
     ]);
     const actorName = typeof actorSnapshot.val() === "string" ? actorSnapshot.val() : "";
     await sendExpoPush(database, recipientUserId, `prayer:${notificationId}`, buildPrayerPushMessage({
       actorName,
+      language,
       notificationId,
       targetType: typeof notification.targetType === "string" ? notification.targetType : undefined,
       targetId: typeof notification.targetId === "string" ? notification.targetId : undefined,

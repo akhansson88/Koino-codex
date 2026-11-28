@@ -147,7 +147,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
     }
 
     try {
-      await dispatch({ type: "requestPasswordReset", email: state.authEmail });
+      await dispatch({ type: "requestPasswordReset", email: state.authEmail, language });
       setSecurityMessage(t("identity.security.resetSent"));
     } catch {
       setSecurityMessage(t("identity.security.error"));

@@ -104,7 +104,7 @@ export function OnboardingScreen() {
 
 function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
   const { dispatch } = useKoinoActions();
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -136,7 +136,7 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
     setPending(resetting ? "reset" : "auth");
     try {
       if (resetting) {
-        await dispatch({ type: "requestPasswordReset", email: address });
+        await dispatch({ type: "requestPasswordReset", email: address, language });
         setResetEmail(address);
       } else {
         await dispatch(signingUp ? { type: "signUp", email: address, password, name } : { type: "signIn", email: address, password });

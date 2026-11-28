@@ -7,6 +7,8 @@ import nodemailer from "nodemailer";
 
 import { adminApp } from "./firebase-admin";
 import { passwordResetHtml } from "./emails/passwordResetHtml.generated";
+import { passwordResetCopy, type PasswordResetCopy } from "./emails/password-reset-copy.generated";
+import { serviceLanguage, type ServiceLanguage } from "./service-language";
 
 // Sending-only mailbox on the product domain. Firebase's own mailer refuses
 // template changes on this project, so the branded messages go out through it.
@@ -19,26 +21,36 @@ const CONTINUE_URL = process.env.RESET_CONTINUE_URL ?? "https://koino-codex.fire
 const RESET_LINK_BASE = process.env.RESET_LINK_BASE ?? "https://koinolabs.com/reset/";
 const THROTTLE_MS = 60_000;
 
-const text = `Hi,
-
-We received a request to reset the password for your KOINO account.
-
-Choose a new password:
-%LINK%
-
-The link can be used once and expires in one hour. If you didn't ask for this, you can ignore this email - your password stays as it is.
-
-KOINO`;
-
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const fill = (template: string, link: string, email: string) =>
-  template.replaceAll("%LINK%", escapeHtml(link)).replaceAll("%EMAIL%", escapeHtml(email));
+
+export function passwordResetEmail(language: ServiceLanguage, copy: PasswordResetCopy, link: string, email: string) {
+  const safeEmail = escapeHtml(email);
+  const introHtml = copy.intro.replaceAll("%EMAIL%", `<span style="color:#14120F;">${safeEmail}</span>`);
+  const reasonHtml = copy.reason.replaceAll("%EMAIL%", safeEmail);
+  const html = passwordResetHtml
+    .replaceAll("{{LANG}}", language)
+    .replaceAll("{{DIR}}", language === "ar" ? "rtl" : "ltr")
+    .replaceAll("{{SUBJECT}}", escapeHtml(copy.subject))
+    .replaceAll("{{PREVIEW}}", escapeHtml(copy.preview))
+    .replaceAll("{{HEADING}}", escapeHtml(copy.heading))
+    .replaceAll("{{INTRO_HTML}}", introHtml)
+    .replaceAll("{{INTRO2}}", escapeHtml(copy.intro2))
+    .replaceAll("{{BUTTON}}", escapeHtml(copy.button))
+    .replaceAll("{{LINK_HINT}}", escapeHtml(copy.linkHint))
+    .replaceAll("{{IGNORE}}", escapeHtml(copy.ignore))
+    .replaceAll("{{BRAND}}", escapeHtml(copy.brand))
+    .replaceAll("{{REASON_HTML}}", reasonHtml)
+    .replaceAll("%LINK%", escapeHtml(link));
+  return { html, text: copy.text.replaceAll("%LINK%", link) };
+}
 
 export const koinoSendPasswordReset = onCall(
   { region: "europe-west1", timeoutSeconds: 30, secrets: [smtpPassword] },
   async (request) => {
-    const raw = typeof (request.data as { email?: unknown })?.email === "string" ? (request.data as { email: string }).email.trim().toLowerCase() : "";
+    const data = (request.data ?? {}) as { email?: unknown; language?: unknown };
+    const raw = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) throw new HttpsError("invalid-argument", "Enter the email address for your account.");
+    const language: ServiceLanguage = serviceLanguage(data.language);
 
     const key = createHash("sha256").update(raw).digest("hex");
     const throttle = getDatabase(adminApp).ref(`passwordResetRequests/${key}`);
@@ -68,13 +80,15 @@ export const koinoSendPasswordReset = onCall(
       auth: { user: SMTP_USER, pass: smtpPassword.value() },
     });
     try {
+      const copy = passwordResetCopy[language];
+      const { html, text } = passwordResetEmail(language, copy, link, raw);
       await transport.sendMail({
         from: FROM,
         to: raw,
         replyTo: "no-reply@koinolabs.com",
-        subject: "Reset your KOINO password",
-        text: text.replaceAll("%LINK%", link),
-        html: fill(passwordResetHtml, link, raw),
+        subject: copy.subject,
+        text,
+        html,
         headers: { "X-Auto-Response-Suppress": "All", "Auto-Submitted": "auto-generated" },
       });
     } catch (error) {

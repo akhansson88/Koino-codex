@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { Database } from "firebase-admin/database";
 import { logger } from "firebase-functions";
 import { productionExternalServicesEnabled } from "./production-external-services";
+import { serviceLanguage, type ServiceLanguage } from "./service-language";
 
 const EXPO_SEND_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -93,6 +94,14 @@ async function recordDeliveryError(
 export async function pushAllowed(database: Database, recipientUserId: string, category: PushCategory) {
   const snapshot = await database.ref(`encryptedData/notificationPreferences/${recipientUserId}`).get();
   return preferenceAllows((snapshot.val() ?? {}) as NotificationPreferences, category);
+}
+
+/** The language saved by the member's app, read from the same preference node. */
+export async function recipientLanguage(database: Database, recipientUserId: string): Promise<ServiceLanguage> {
+  const current = await database.ref(`notificationPreferences/${recipientUserId}/language`).get();
+  if (current.exists()) return serviceLanguage(current.val());
+  const legacy = await database.ref(`encryptedData/notificationPreferences/${recipientUserId}/language`).get();
+  return serviceLanguage(legacy.val());
 }
 
 export async function activityUnreadCount(database: Database, recipientUserId: string) {

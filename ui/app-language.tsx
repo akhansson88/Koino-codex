@@ -1,6 +1,10 @@
 import AsyncStorage from "@/state/encryption/local-storage";
+import { onAuthStateChanged } from "firebase/auth";
+import { ref, update } from "firebase/database";
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { I18nManager, Platform } from "react-native";
+
+import { auth, database } from "@/state/store/firebase";
 
 import {
   translateMessage,
@@ -60,6 +64,20 @@ export function AppLanguageProvider({ children }: PropsWithChildren) {
     setLanguageState(nextLanguage);
     void AsyncStorage.setItem(appLanguageStorageKey, nextLanguage).catch(() => undefined);
   }, []);
+
+  // Cloud Functions read this field when they build a push or an email, so the
+  // server speaks the same language as the app on this member's devices.
+  useEffect(() => {
+    if (!ready) return;
+    const writeLanguage = (userId: string) => {
+      void update(ref(database, `notificationPreferences/${userId}`), { language })
+        .catch(() => undefined);
+    };
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) writeLanguage(user.uid);
+    });
+    return unsubscribe;
+  }, [language, ready]);
 
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {
