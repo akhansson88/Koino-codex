@@ -1800,17 +1800,17 @@ export function BibleScreen() {
     const selectedVerses = selectedPassages;
 
     if (selectedVerses.length === 0) {
-      setReaderToast({ detail: "Try selecting the verses again.", message: "Could not highlight selection", tone: "error" });
+      setReaderToast({ detail: t("bible.highlight.selectionRetry"), message: t("bible.highlight.selectionFailed"), tone: "error" });
       return;
     }
 
     setSelectedVerseNumbers([]);
     setReaderToast(undefined);
     await performHighlightMutation({ type: "highlightVerses", color, colorId, verses: selectedVerses }, {
-      detail: selectedVerses.length === 1 ? "Highlight saved to this Bible." : "Highlights saved to this Bible.",
-      message: selectedVerses.length === 1 ? "Verse highlighted" : "Verses highlighted",
+      detail: t(selectedVerses.length === 1 ? "bible.highlight.savedDetail.one" : "bible.highlight.savedDetail.many"),
+      message: t(selectedVerses.length === 1 ? "bible.highlight.savedTitle.one" : "bible.highlight.savedTitle.many"),
     });
-  }, [performHighlightMutation, selectedPassages, selectedVerseRanges.length, selectionSaving]);
+  }, [performHighlightMutation, selectedPassages, selectedVerseRanges.length, selectionSaving, t]);
 
   const handleHighlightWithPaletteColor = useCallback(
     (paletteColor: BibleHighlightPaletteColor) => {
@@ -1825,10 +1825,10 @@ export function BibleScreen() {
     setSelectedVerseNumbers([]);
     setReaderToast(undefined);
     await performHighlightMutation({ type: "removeBibleHighlights", ids: selectedHighlightIds }, {
-      detail: selectedHighlightIds.length === 1 ? "Highlight removed from this Bible." : "Highlights removed from this Bible.",
-      message: selectedHighlightIds.length === 1 ? "Highlight deleted" : "Highlights deleted",
+      detail: t(selectedHighlightIds.length === 1 ? "bible.highlight.removedDetail.one" : "bible.highlight.removedDetail.many"),
+      message: t(selectedHighlightIds.length === 1 ? "bible.highlight.deletedTitle.one" : "bible.highlight.deletedTitle.many"),
     });
-  }, [performHighlightMutation, selectedHighlightIds, selectionSaving]);
+  }, [performHighlightMutation, selectedHighlightIds, selectionSaving, t]);
 
   const openScriptureComposer = useCallback((intent: BibleComposerIntent, context: "journal" | "room", kind: EntryKind, verse: BibleVerse) => {
     const userId = liveScriptureJournal.current.userId;
