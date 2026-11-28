@@ -117,7 +117,9 @@ function writeType(file, typeName, record, importLine) {
   ];
   for (const key of Object.keys(record.en)) lines.push(`  ${key}: string;`);
   lines.push("};", "", `export const ${typeName.charAt(0).toLowerCase()}${typeName.slice(1)}: Record<ServiceLanguage, ${typeName}> = {`);
-  for (const [language, copy] of Object.entries(record)) {
+  for (const language of ["en", ...languages]) {
+    const copy = record[language];
+    if (!copy) continue;
     lines.push(`  ${language}: {`);
     for (const [key, value] of Object.entries(copy)) lines.push(`    ${key}: ${JSON.stringify(value)},`);
     lines.push("  },");
