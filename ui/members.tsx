@@ -7,6 +7,7 @@ import { approveGroupMember, listGroupJoinRequests, rejectGroupJoinRequest } fro
 import { useAppTranslation } from "@/ui/app-language";
 import { BodyText, Card, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { colors, typography } from "@/ui/theme";
+import { localeFor } from "@/ui/localization";
 
 type PendingRequest = { userId: string; name: string; requestedAt: number };
 
@@ -57,7 +58,7 @@ export default function MembersScreen() {
       {(requests ?? []).map((request) => <View key={request.userId} style={{ gap: 8 }}>
         <View style={{ gap: 2 }}>
           <Text style={[typography.cardTitle, { color: colors.ink }]}>{request.name}</Text>
-          <BodyText muted>{new Date(request.requestedAt).toLocaleDateString(language === "sv" ? "sv-SE" : "en-US")}</BodyText>
+          <BodyText muted>{new Date(request.requestedAt).toLocaleDateString(localeFor(language))}</BodyText>
         </View>
         <View style={{ flexDirection: "row", gap: 10 }}>
           <PrimaryButton disabled={Boolean(busy)} onPress={() => void decide(request.userId, true)}>{t("community.rooms.requestApproved")}</PrimaryButton>

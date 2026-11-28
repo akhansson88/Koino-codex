@@ -6,6 +6,27 @@ import {
 } from "@/features/bible-canon";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange, BiblePlanStatus } from "@/state/types";
 import { addPlanDays, nextUnreadPlanDay, scheduledPlanDate, todayPlanDay } from "@/state/bible-plan-schedule";
+import type { AppLanguage } from "@/ui/localization";
+
+// Kept local and dependency-free so the validation script can load this file
+// on its own with esbuild.
+const planLocales: Record<AppLanguage, string> = {
+  en: "en-GB",
+  sv: "sv-SE",
+  de: "de-DE",
+  es: "es-ES",
+  fr: "fr-FR",
+  fi: "fi-FI",
+  nb: "nb-NO",
+  da: "da-DK",
+  is: "is-IS",
+  pt: "pt-PT",
+  ms: "ms-MY",
+  ar: "ar-SA",
+  ja: "ja-JP",
+  it: "it-IT",
+  pl: "pl-PL",
+};
 
 type ChapterKey = `${string} ${number}`;
 
@@ -195,10 +216,10 @@ export function planDayMinutes(day?: BiblePlanDay) {
   return Math.max(1, Math.round(verses / 8));
 }
 
-export function formatPlanDate(value: string, language: "sv" | "en", options?: Intl.DateTimeFormatOptions) {
+export function formatPlanDate(value: string, language: AppLanguage, options?: Intl.DateTimeFormatOptions) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", options ?? { month: "short", day: "numeric", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(planLocales[language], options ?? { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
 export type BiblePlanPace = {

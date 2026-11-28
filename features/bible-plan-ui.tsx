@@ -18,6 +18,7 @@ import { biblePlanCover } from "@/features/bible-plan-images";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import type { BiblePlan, BiblePlanDay } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
+import { localeFor, type AppLanguage } from "@/ui/localization";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
 export function PlanCoverImage({
@@ -170,10 +171,10 @@ export function PlanProgressBar({ percent }: { percent: number }) {
   );
 }
 
-const weekdayLabels = {
-  en: ["M", "T", "W", "T", "F", "S", "S"],
-  sv: ["M", "T", "O", "T", "F", "L", "S"],
-} as const;
+const weekdayLabels = (language: Parameters<typeof formatPlanDate>[1], dates: string[]) => {
+  const formatter = new Intl.DateTimeFormat(localeFor(language), { weekday: "narrow" });
+  return dates.map((date) => formatter.format(new Date(`${date}T12:00:00`)));
+};
 
 export function PlanWeekStrip({
   date = todayDateKey(),
@@ -184,12 +185,12 @@ export function PlanWeekStrip({
   onSelectDay?: (dayNumber: number) => void;
   plan: Pick<BiblePlan, "days" | "startDate" | "pausedAt">;
 }) {
-  const { language } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const week = planWeek(plan, date);
-  const labels = weekdayLabels[language];
+  const labels = weekdayLabels(language, week.map((entry) => entry.date));
 
   return (
-    <View accessibilityLabel={language === "sv" ? "Den här veckan" : "This week"} style={{ flexDirection: "row", gap: 6 }}>
+    <View accessibilityLabel={t("bible.plans.week")} style={{ flexDirection: "row", gap: 6 }}>
       {week.map((entry, index) => (
         <WeekDay
           key={entry.date}
@@ -203,7 +204,7 @@ export function PlanWeekStrip({
 }
 
 function WeekDay({ entry, label, onPress }: { entry: PlanWeekDay; label: string; onPress?: () => void }) {
-  const { language } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const done = entry.status === "done";
   const today = entry.status === "today";
   const missed = entry.status === "missed";
@@ -213,9 +214,9 @@ function WeekDay({ entry, label, onPress }: { entry: PlanWeekDay; label: string;
   const contentColor = done ? "#FFFFFF" : missed ? colors.danger : empty ? colors.disabledText : colors.muted;
   const description = entry.day
     ? `${formatPlanDate(entry.date, language, { weekday: "long", month: "long", day: "numeric" })} · ${
-        done ? (language === "sv" ? "läst" : "read") : today ? (language === "sv" ? "idag" : "today") : missed ? (language === "sv" ? "missad" : "missed") : (language === "sv" ? "kommande" : "upcoming")
+        done ? t("bible.plans.plan.read") : today ? t("bible.plans.today") : missed ? t("bible.plans.dayStatus.missed") : t("bible.plans.dayStatus.upcoming")
       }`
-    : `${formatPlanDate(entry.date, language, { weekday: "long", month: "long", day: "numeric" })} · ${language === "sv" ? "ingen läsning" : "no reading"}`;
+    : `${formatPlanDate(entry.date, language, { weekday: "long", month: "long", day: "numeric" })} · ${t("bible.plans.dayStatus.noReading")}`;
 
   return (
     <Pressable
@@ -259,17 +260,17 @@ export function PlanMetaRow({
   dayCount: number;
   minutes: number;
 }) {
-  const { language } = useAppTranslation();
+  const { t } = useAppTranslation();
   return (
     <Text style={[typography.caption, { color: colors.muted }]}>
-      {[category, language === "sv" ? `${dayCount} dagar` : `${dayCount} days`, language === "sv" ? `ca ${minutes} min/dag` : `about ${minutes} min/day`]
+      {[category, dayCount === 1 ? t("bible.plans.day.single") : t("bible.plans.library.days", { count: dayCount }), t("bible.plans.library.minutes", { minutes })]
         .filter(Boolean)
         .join("  ·  ")}
     </Text>
   );
 }
 
-export function planReferencesLabel(day: BiblePlanDay | undefined, bookLanguage: "en" | "sv") {
+export function planReferencesLabel(day: BiblePlanDay | undefined, bookLanguage: AppLanguage) {
   if (!day?.ranges.length) return "";
   let previousBook = "";
   return day.ranges
@@ -303,12 +304,12 @@ export function PlanDayReference({ day, style }: { day?: BiblePlanDay; style?: S
 }
 
 export function PlanDayMinutes({ day }: { day?: BiblePlanDay }) {
-  const { language } = useAppTranslation();
+  const { t } = useAppTranslation();
   const minutes = planDayMinutes(day);
   if (!minutes) return null;
   return (
     <Text style={[typography.caption, { color: colors.muted }]}>
-      {language === "sv" ? `ca ${minutes} min` : `about ${minutes} min`}
+      {t("bible.plans.library.minutesShort", { minutes })}
     </Text>
   );
 }
@@ -323,7 +324,7 @@ export function StartDateChoice({
   onChange,
   value,
 }: {
-  language: "en" | "sv";
+  language: AppLanguage;
   onChange: (value: string) => void;
   value: string;
 }) {

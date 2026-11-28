@@ -1,6 +1,7 @@
 import type { englishTranslations } from "@/ui/translations/en";
 
-export type AppLanguage = "en" | "sv";
+export type { AppLanguage, AppLanguageInfo } from "@/ui/translations/languages";
+export { appLanguageInfo, appLanguages, detectDeviceLanguage, isAppLanguage, isRtlLanguage, localeFor } from "@/ui/translations/languages";
 
 export type TranslationKey = keyof typeof englishTranslations;
 

@@ -2,6 +2,7 @@ import { developmentMode } from "@/state/store/firebase";
 import { formatEventTime } from "@/state/events";
 import type { EventRsvp, GroupEvent } from "@/state/types";
 import type { TranslationFunction } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -24,7 +25,7 @@ export async function syncEventReminders({
   userId,
 }: {
   events: GroupEvent[];
-  language: "en" | "sv";
+  language: AppLanguage;
   pushEnabled: boolean;
   rsvps: EventRsvp[];
   t: TranslationFunction;

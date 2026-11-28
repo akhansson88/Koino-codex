@@ -4,9 +4,11 @@ import {
 } from "@/features/bible-plans";
 import { verseCountForChapter } from "@/features/bible-canon";
 import type { BiblePlan, BiblePlanDay, BiblePlanRange } from "@/state/types";
+import type { AppLanguage } from "@/ui/localization";
+import { planLibraryTranslations } from "@/ui/translations/plan-library";
 
-export type PlanLocale = "en" | "sv";
-export type LocalizedPlanText = Record<PlanLocale, string>;
+export type PlanLocale = AppLanguage;
+export type LocalizedPlanText = { en: string; sv: string } & Partial<Record<AppLanguage, string>>;
 export type BiblePlanCategory =
   | "start"
   | "whole"
@@ -626,17 +628,23 @@ export function planTemplateRanges(template: BiblePlanTemplate): BiblePlanRange[
 }
 
 export function localizedPlanText(value: LocalizedPlanText, language: PlanLocale) {
-  return value[language];
+  return value[language] ?? value.en;
+}
+
+function templateCopy(template: BiblePlanTemplate, language: PlanLocale) {
+  return planLibraryTranslations[language]?.[template.id];
 }
 
 export function displayPlanTitle(plan: Pick<BiblePlan, "templateId" | "title">, language: PlanLocale) {
   const template = planTemplateById(plan.templateId);
-  return template ? template.title[language] : plan.title;
+  if (!template) return plan.title;
+  return templateCopy(template, language)?.title ?? template.title[language] ?? template.title.en;
 }
 
 export function displayPlanDescription(plan: Pick<BiblePlan, "templateId">, language: PlanLocale) {
   const template = planTemplateById(plan.templateId);
-  return template ? template.description[language] : undefined;
+  if (!template) return undefined;
+  return templateCopy(template, language)?.description ?? template.description[language] ?? template.description.en;
 }
 
 export function planCoverKey(plan: Pick<BiblePlan, "coverKey" | "templateId">) {
@@ -648,7 +656,7 @@ export function displayAnnouncementTitle(
   language: PlanLocale,
 ) {
   const template = planTemplateById(announcement.templateId);
-  return template ? template.title[language] : announcement.title;
+  return template ? displayPlanTitle({ templateId: template.id, title: announcement.title }, language) : announcement.title;
 }
 
 export function announcementCoverKey(announcement: { coverKey?: string; templateId?: string }) {
@@ -682,11 +690,16 @@ export const planCategoryTranslationKeys = {
 export function matchesPlanSearch(template: BiblePlanTemplate, query: string) {
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return true;
+  const translations = Object.values(planLibraryTranslations).flatMap((catalog) => {
+    const copy = catalog?.[template.id];
+    return copy ? [copy.title, copy.description] : [];
+  });
   return [
     template.title.en,
     template.title.sv,
     template.description.en,
     template.description.sv,
+    ...translations,
     ...template.tags,
   ].some((value) => value.toLocaleLowerCase().includes(normalized));
 }

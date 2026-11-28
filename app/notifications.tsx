@@ -6,14 +6,15 @@ import { useKoino } from "@/state/koino-store";
 import type { ActivityNotification, PrayerNotification } from "@/state/types";
 import { AppScreen, Avatar, IconButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { type TranslationKey } from "@/ui/localization";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { navigateThenMarkRead } from "@/ui/notification-navigation";
 import { colors, radius, typography } from "@/ui/theme";
 
-const swedishContentLabels: Record<ActivityNotification["contentLabel"], string> = {
-  post: "inlägg",
-  "prayer request": "böneämne",
-  "check-in": "incheckning",
+const contentLabelKeys: Record<ActivityNotification["contentLabel"], TranslationKey> = {
+  post: "notifications.content.post",
+  "prayer request": "notifications.content.prayerRequest",
+  "check-in": "notifications.content.checkIn",
 };
 
 type NotificationRow =
@@ -161,7 +162,7 @@ export default function NotificationsScreen() {
               const notification = row.activity;
               const actor = state.users.find((user) => user.id === notification.actorUserId);
               const name = actor?.name ?? notification.actorName ?? t("common.someone");
-              const content = language === "sv" ? swedishContentLabels[notification.contentLabel] : notification.contentLabel;
+              const content = t(contentLabelKeys[notification.contentLabel]);
               const isUnread = !notification.readAt;
               return (
                 <Pressable

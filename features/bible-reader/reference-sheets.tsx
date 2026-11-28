@@ -108,6 +108,7 @@ export function CrossReferenceSheet({
   visible: boolean;
 }) {
   const bookLanguage = useBibleBookLanguage();
+  const { t } = useAppTranslation();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
@@ -125,10 +126,10 @@ export function CrossReferenceSheet({
           <BibleSheetTop bordered  palette={palette}>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 12, width: "100%" }}>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>Korsreferenser</Text>
+                <Text style={{ color: palette.text, fontSize: 20, fontWeight: "900" }}>{t("bible.actions.crossReferences")}</Text>
                 <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{referenceLabel(position, bookLanguage)}</Text>
               </View>
-              <ReaderCircleButton accessibilityLabel="Close cross references" icon="x" onPress={() => closeWithAnimation()} palette={palette} />
+              <ReaderCircleButton accessibilityLabel={t("bible.references.close")} icon="x" onPress={() => closeWithAnimation()} palette={palette} />
             </View>
           </BibleSheetTop>
 
@@ -165,7 +166,7 @@ export function CrossReferenceSheet({
               ))
             ) : (
               <View style={{ backgroundColor: palette.input, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 16 }}>
-                <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>Inga korsreferenser för denna vers ännu</Text>
+                <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.actions.crossReferencesEmpty")}</Text>
               </View>
             )}
           </SheetScrollView>

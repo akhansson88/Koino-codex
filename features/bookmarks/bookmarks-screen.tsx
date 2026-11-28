@@ -39,7 +39,7 @@ import { useTheme } from "@/ui/theme-provider";
 type CollectionFilter = string | null | undefined;
 
 export function BookmarksScreen() {
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const bookLanguage = useBibleBookLanguage();
   const { dispatch } = useKoinoActions();
   const state = useKoinoFields(["bookmarkCollections", "bookmarkOutboxCount", "bibleRibbons", "bookmarksLoaded", "currentGroupId", "currentUserId", "savedVerses"]);
@@ -567,12 +567,12 @@ export function BookmarksScreen() {
         }}
         onMarkdown={() => {
           setExportVisible(false);
-          void Clipboard.setStringAsync(formatBookmarkMarkdown(bookmarks, collections))
+          void Clipboard.setStringAsync(formatBookmarkMarkdown(bookmarks, collections, new Date(), language))
             .then(() => setToast(t("bookmarks.export.copied")));
         }}
         onShare={() => {
           setExportVisible(false);
-          void Share.share({ message: formatBookmarkMarkdown(bookmarks, collections) });
+          void Share.share({ message: formatBookmarkMarkdown(bookmarks, collections, new Date(), language) });
         }}
         visible={exportVisible}
       />

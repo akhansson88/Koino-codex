@@ -1,0 +1,23 @@
+{
+  "common.back": "Retour",
+  "common.cancel": "Annuler",
+  "common.close": "Fermer",
+  "common.delete": "Supprimer",
+  "common.done": "Terminé",
+  "common.edit": "Modifier",
+  "common.logOut": "Se déconnecter",
+  "common.or": "ou",
+  "common.private": "Privé",
+  "common.someone": "Quelqu'un",
+  "common.viewMore": "Voir plus",
+  "common.you": "Vous",
+  "common.save": "Enregistrer",
+  "tabs.home": "Accueil",
+  "tabs.me": "Moi",
+  "tabs.bible": "Bible",
+  "tabs.community": "Communauté",
+  "onboarding.account.signIn": "Se connecter",
+  "onboarding.account.signUp": "Créer un compte",
+  "donation.amount.oneTime": "Une fois",
+  "donation.amount.monthly": "Chaque mois"
+}

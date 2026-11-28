@@ -45,8 +45,9 @@ import {
   SecondaryButton,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import type { TranslationKey } from "@/ui/localization";
+import { localeFor, type TranslationKey } from "@/ui/localization";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import type { AppLanguage } from "@/ui/localization";
 
 const fastingFields = ["fasts", "fastsReady", "groupFasts", "groupFastsReady", "groups", "currentGroupId", "currentUserId", "users"] as const;
 
@@ -493,7 +494,7 @@ function FastStart({
   fasts: Fast[];
   groupFast?: ReturnType<typeof nextGroupFast>;
   groupName?: string;
-  language: "en" | "sv";
+  language: AppLanguage;
   now: number;
   onChooseMode: (mode: FastMode) => void;
   onJoin: () => void;
@@ -721,7 +722,7 @@ function FastDashboard({
   fast: Fast;
   groupName?: string;
   hostName?: string;
-  language: "en" | "sv";
+  language: AppLanguage;
   now: number;
   onEdit: () => void;
   onEnableAlerts: () => void;
@@ -795,7 +796,7 @@ function FastDashboard({
     : t("fasting.dashboard.plan", { days: fast.durationDays });
 
   const weekdays = fast.schedule.kind === "weekly"
-    ? fast.schedule.weekdays.map((value) => new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en-GB", { weekday: "short" }).format(new Date(2026, 10, 2 + (value === 0 ? 6 : value - 1)))).join(" · ")
+    ? fast.schedule.weekdays.map((value) => new Intl.DateTimeFormat(localeFor(language), { weekday: "short" }).format(new Date(2026, 10, 2 + (value === 0 ? 6 : value - 1)))).join(" · ")
     : undefined;
 
   return (
@@ -848,12 +849,12 @@ function FastDashboard({
         ) : (
           <View style={{ gap: 8 }}>
             <Text style={[typography.label, { color: colors.muted }]}>{countdownLabel}</Text>
-            <Text style={[typography.title, { color: colors.ink }]}>{formatCountdown(remaining, language)}</Text>
+            <Text style={[typography.title, { color: colors.ink }]}>{formatCountdown(remaining, t)}</Text>
             {window ? (
               <Text style={[typography.caption, { color: colors.muted }]}>
                 {t("fasting.dashboard.window", {
-                  start: new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(window.start)),
-                  end: new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(window.end)),
+                  start: new Intl.DateTimeFormat(localeFor(language), { hour: "2-digit", minute: "2-digit" }).format(new Date(window.start)),
+                  end: new Intl.DateTimeFormat(localeFor(language), { hour: "2-digit", minute: "2-digit" }).format(new Date(window.end)),
                 })}
               </Text>
             ) : null}

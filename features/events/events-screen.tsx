@@ -13,6 +13,7 @@ import type { GroupEvent } from "@/state/types";
 import { AppScreen, BodyText, Card, IconButton, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { localeFor } from "@/ui/localization";
 
 const eventScreenFields = ["currentGroupId", "currentUserId", "eventRsvps", "groupEvents", "groupEventsReady", "groups"] as const;
 
@@ -171,7 +172,7 @@ export function EventsScreen() {
 
             <View style={{ gap: 10 }}>
               <Text style={[typography.sectionLabel, { color: colors.muted }]}>
-                {new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { weekday: "long", month: "long", day: "numeric" })
+                {new Intl.DateTimeFormat(localeFor(language), { weekday: "long", month: "long", day: "numeric" })
                   .format(new Date(`${selectedDay}T12:00:00`))}
               </Text>
               {selectedEvents.length ? selectedEvents.map((event) => (

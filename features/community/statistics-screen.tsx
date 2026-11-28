@@ -11,6 +11,8 @@ import { communityMoodScaleLabel } from "@/ui/community-copy";
 import { formatRelativeTime } from "@/ui/relative-time";
 import { colors, shadcn, typography } from "@/ui/theme";
 import { canViewGroupStatistics, groupRoleFor, groupRoleLabelKey, groupRoleTone } from "@/features/community/roles";
+import { localeFor } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 
 const rangeOptions: { labelKey: "community.statistics.range.7" | "community.statistics.range.30" | "community.statistics.range.90"; value: "7" | "30" | "90" }[] = [
   { labelKey: "community.statistics.range.7", value: "7" },
@@ -61,15 +63,15 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-function trendLabel(start: string, bucket: "day" | "week", language: "en" | "sv") {
+function trendLabel(start: string, bucket: "day" | "week", language: AppLanguage) {
   const date = new Date(`${start}T12:00:00`);
   if (Number.isNaN(date.getTime())) return start;
-  return new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", bucket === "day"
+  return new Intl.DateTimeFormat(localeFor(language), bucket === "day"
     ? { weekday: "short" }
     : { day: "numeric", month: "short" }).format(date);
 }
 
-function TrendChart({ data, language }: { data: GroupStatistics; language: "en" | "sv" }) {
+function TrendChart({ data, language }: { data: GroupStatistics; language: AppLanguage }) {
   const { t } = useAppTranslation();
   const maximum = Math.max(
     1,
@@ -207,7 +209,7 @@ export function CommunityStatisticsScreen() {
   }
 
   const updatedTime = data
-    ? new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { hour: "2-digit", minute: "2-digit" }).format(new Date(data.generatedAt))
+    ? new Intl.DateTimeFormat(localeFor(language), { hour: "2-digit", minute: "2-digit" }).format(new Date(data.generatedAt))
     : "";
 
   return (

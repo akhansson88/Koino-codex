@@ -55,11 +55,11 @@ export function FastingCard() {
   const title = !shown
     ? t("me.fasting.start")
     : window?.phase === "fasting"
-      ? t("me.fasting.remaining", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), language) })
+      ? t("me.fasting.remaining", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), t) })
       : window?.phase === "eating"
         ? t("fasting.status.eating")
         : phase === "scheduled"
-          ? t("me.fasting.startsIn", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), language) })
+          ? t("me.fasting.startsIn", { time: formatCountdown(fastPlanRemainingMinutes(shown, now), t) })
           : phase === "ended"
             ? t("me.fasting.ended")
             : t("me.fasting.complete");

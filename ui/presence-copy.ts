@@ -1,5 +1,5 @@
 import type { PresenceInfo, PresenceStatus } from "@/state/presence-model";
-import type { TranslationFunction } from "@/ui/localization";
+import { localeFor, type TranslationFunction } from "@/ui/localization";
 import type { AppLanguage } from "@/ui/translations/types";
 import { colors } from "@/ui/theme";
 
@@ -17,14 +17,14 @@ export function presenceDotColor(status: PresenceStatus) {
 }
 
 function formatTime(timestamp: number, language: AppLanguage) {
-  return new Date(timestamp).toLocaleTimeString(language === "sv" ? "sv-SE" : "en-US", {
+  return new Date(timestamp).toLocaleTimeString(localeFor(language), {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
 function formatDate(timestamp: number, language: AppLanguage) {
-  return new Date(timestamp).toLocaleDateString(language === "sv" ? "sv-SE" : "en-US", {
+  return new Date(timestamp).toLocaleDateString(localeFor(language), {
     day: "numeric",
     month: "short",
   });

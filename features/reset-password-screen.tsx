@@ -3,6 +3,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
+import { useAppTranslation } from "@/ui/app-language";
 import { Body, Card, PasswordField, PillButton, Screen, Title } from "@/ui/components";
 import { FieldLabel } from "@/ui/shadcn";
 import { colors, typography } from "@/ui/theme";
@@ -31,6 +32,7 @@ function resetParam(params: QueryParams, key: string) {
 
 export function ResetPasswordScreen() {
   const { state, dispatch } = useKoino();
+  const { t } = useAppTranslation();
   const params = useLocalSearchParams() as QueryParams;
   const resetCode = resetParam(params, "oobCode") ?? resetParam(params, "oobcode");
   const mode = resetParam(params, "mode");
@@ -53,7 +55,7 @@ export function ResetPasswordScreen() {
       await dispatch({ type: "confirmPasswordReset", oobCode: resetCode, newPassword });
       setNewPassword("");
       setConfirmPassword("");
-      setMessage("Your password has been reset. You can sign in with the new password.");
+      setMessage(t("reset.success"));
     } catch {
       setMessage("");
     } finally {
@@ -66,22 +68,22 @@ export function ResetPasswordScreen() {
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: 16, padding: 22, paddingTop: 72 }}>
           <View style={{ gap: 8 }}>
-            <Text style={[typography.sectionLabel, { color: colors.muted, letterSpacing: 2 }]}>KOINO PASSWORD RESET</Text>
-            <Title>Choose a new password.</Title>
-            <Body muted>Use the reset link from your email to set a fresh password for the KOINO app.</Body>
+            <Text style={[typography.sectionLabel, { color: colors.muted, letterSpacing: 2 }]}>{t("reset.section")}</Text>
+            <Title>{t("reset.title")}</Title>
+            <Body muted>{t("reset.intro")}</Body>
           </View>
 
           <Card>
             {hasResetCode ? (
               <>
-                <Body>Enter your new password below.</Body>
+                <Body>{t("reset.enterNew")}</Body>
                 <View style={{ gap: 6 }}>
-                  <FieldLabel>New password</FieldLabel>
+                  <FieldLabel>{t("reset.newPassword")}</FieldLabel>
                   <PasswordField
                     value={newPassword}
                     onChangeText={setNewPassword}
                     onSubmitEditing={handleResetPassword}
-                    placeholder="New password"
+                    placeholder={t("reset.newPassword")}
                     autoCapitalize="none"
                     autoComplete="new-password"
                     autoCorrect={false}
@@ -90,12 +92,12 @@ export function ResetPasswordScreen() {
                   />
                 </View>
                 <View style={{ gap: 6 }}>
-                  <FieldLabel>Confirm new password</FieldLabel>
+                  <FieldLabel>{t("reset.confirmPassword")}</FieldLabel>
                   <PasswordField
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     onSubmitEditing={handleResetPassword}
-                    placeholder="Confirm new password"
+                    placeholder={t("reset.confirmPassword")}
                     autoCapitalize="none"
                     autoComplete="new-password"
                     autoCorrect={false}
@@ -103,27 +105,27 @@ export function ResetPasswordScreen() {
                     textContentType="newPassword"
                   />
                 </View>
-                {newPassword && newPassword.length < 6 ? <Text style={[typography.caption, { color: colors.danger }]}>Use at least 6 characters.</Text> : null}
-                {!passwordsMatch ? <Text style={[typography.caption, { color: colors.danger }]}>The new passwords do not match.</Text> : null}
+                {newPassword && newPassword.length < 6 ? <Text style={[typography.caption, { color: colors.danger }]}>{t("reset.minLength")}</Text> : null}
+                {!passwordsMatch ? <Text style={[typography.caption, { color: colors.danger }]}>{t("reset.mismatch")}</Text> : null}
                 {hasSubmitted && state.authError ? <Text style={[typography.caption, { color: colors.danger }]}>{state.authError}</Text> : null}
                 {message ? <Text style={[typography.caption, { color: colors.ink }]}>{message}</Text> : null}
               </>
             ) : (
               <>
-                <Body>This reset link is missing its confirmation code.</Body>
-                <Body muted>Request a new password reset email from the sign-in screen, then open the latest link.</Body>
+                <Body>{t("reset.missingCode")}</Body>
+                <Body muted>{t("reset.requestNew")}</Body>
               </>
             )}
           </Card>
 
           {hasResetCode && !message ? (
             <PillButton disabled={!canSubmit} onPress={handleResetPassword}>
-              {isSubmitting ? "Resetting..." : "Reset password"}
+              {isSubmitting ? t("reset.submitting") : t("reset.submit")}
             </PillButton>
           ) : null}
 
           <PillButton variant="ghost" onPress={() => router.replace("/")}>
-            Back to sign in
+            {t("reset.back")}
           </PillButton>
         </ScrollView>
       </KeyboardAvoidingView>

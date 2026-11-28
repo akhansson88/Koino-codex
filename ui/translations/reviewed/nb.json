@@ -1,0 +1,23 @@
+{
+  "common.back": "Tilbake",
+  "common.cancel": "Avbryt",
+  "common.close": "Lukk",
+  "common.delete": "Slett",
+  "common.done": "Ferdig",
+  "common.edit": "Rediger",
+  "common.logOut": "Logg ut",
+  "common.or": "eller",
+  "common.private": "Privat",
+  "common.someone": "Noen",
+  "common.viewMore": "Vis mer",
+  "common.you": "Deg",
+  "common.save": "Lagre",
+  "tabs.home": "Hjem",
+  "tabs.me": "Meg",
+  "tabs.bible": "Bibelen",
+  "tabs.community": "Fellesskap",
+  "onboarding.account.signIn": "Logg inn",
+  "onboarding.account.signUp": "Opprett konto",
+  "donation.amount.oneTime": "Én gang",
+  "donation.amount.monthly": "Hver måned"
+}

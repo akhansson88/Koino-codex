@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BibleHighlightColor, BibleHighlightPaletteColor } from "@/state/types";
+import { useAppTranslation } from "@/ui/app-language";
 import { PrimaryButton, TextInputField } from "@/ui/app-components";
 import { confirmAction } from "@/ui/confirm";
 import { colors, radius } from "@/ui/theme";
@@ -54,6 +55,7 @@ export function HighlightColorManagerSheet({
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation();
   const { height } = useWindowDimensions();
   const sheetHeight = Math.min(Math.round(height * 0.78), 680);
   const sheetRef = useRef<AppSheetHandle>(null);
@@ -106,9 +108,9 @@ export function HighlightColorManagerSheet({
   function deleteColor(color: BibleHighlightPaletteColor) {
     if (busy) return;
     confirmAction({
-      title: "Delete highlight color?",
-      message: "This removes the color and deletes highlights that use it.",
-      confirmText: "Delete",
+      title: t("bible.highlights.deleteTitle"),
+      message: t("bible.highlights.deleteBody"),
+      confirmText: t("common.delete"),
       destructive: true,
       onConfirm: () => {
         setBusy(true);
@@ -129,20 +131,20 @@ export function HighlightColorManagerSheet({
             >
               <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
                 <ReaderCircleButton
-                  accessibilityLabel={pickerVisible ? "Back to highlight colors" : "Close highlight colors"}
+                  accessibilityLabel={pickerVisible ? t("bible.highlights.back") : t("bible.highlights.close")}
                   icon={pickerVisible ? "arrow-left" : "x"}
                   onPress={pickerVisible ? () => setPickerVisible(false) : () => closeWithAnimation()}
                   palette={palette}
                 />
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ color: palette.text, fontSize: 21, fontWeight: "900" }}>{pickerVisible ? (editingColor ? "Edit color" : "Add color") : "Highlight colors"}</Text>
+                  <Text style={{ color: palette.text, fontSize: 21, fontWeight: "900" }}>{pickerVisible ? (editingColor ? t("bible.highlights.editTitle") : t("bible.highlights.addTitle")) : t("bible.highlights.managerTitle")}</Text>
                   <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "700" }}>
-                    {pickerVisible ? "Choose a color for your Bible highlights." : "Manage your saved highlight palette."}
+                    {pickerVisible ? t("bible.highlights.chooserIntro") : t("bible.highlights.managerIntro")}
                   </Text>
                 </View>
                 {!pickerVisible ? (
                   <Pressable
-                    accessibilityLabel="Add highlight color"
+                    accessibilityLabel={t("bible.highlights.add")}
                     accessibilityRole="button"
                     onPress={openCreate}
                     style={{
@@ -164,16 +166,16 @@ export function HighlightColorManagerSheet({
               {pickerVisible ? (
                 <View style={{ gap: 14 }}>
                   <HighlightColorWheel color={normalizedDraftHex} onChange={setDraftHex} palette={palette} />
-                  <TextInputField autoCapitalize="words" onChangeText={setDraftLabel} placeholder="Color name" value={draftLabel} />
+                  <TextInputField autoCapitalize="words" onChangeText={setDraftLabel} placeholder={t("bible.highlights.name")} value={draftLabel} />
                   <PrimaryButton disabled={busy} icon="check" onPress={saveDraft}>
-                    {busy ? "Saving..." : "Save color"}
+                    {busy ? t("bible.highlights.saving") : t("bible.highlights.save")}
                   </PrimaryButton>
                 </View>
               ) : (
                 <View style={{ gap: 10 }}>
                   {highlightColors.length === 0 ? (
                     <View style={{ backgroundColor: palette.surface, borderColor: palette.line, borderRadius: radius.lg, borderWidth: 1, padding: 14 }}>
-                      <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>No highlight colors yet.</Text>
+                      <Text style={{ color: palette.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 }}>{t("bible.highlights.empty")}</Text>
                     </View>
                   ) : (
                     highlightColors.map((color) => (
@@ -224,6 +226,7 @@ function HighlightColorWheel({
   onChange: (color: BibleHighlightColor) => void;
   palette: ReaderPalette;
 }) {
+  const { t } = useAppTranslation();
   const wheelSize = 252;
   const swatchSize = 42;
   const center = wheelSize / 2;
@@ -277,11 +280,11 @@ function HighlightColorWheel({
           }}
         >
           <View style={{ backgroundColor: "rgba(255, 255, 255, 0.72)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
-            <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>Selected</Text>
+            <Text style={{ color: colors.ink, fontSize: 12, fontWeight: "900" }}>{t("bible.highlights.selected")}</Text>
           </View>
         </View>
       </View>
-      <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>Tap the wheel to choose a highlight color.</Text>
+      <Text style={{ color: palette.muted, fontSize: 12, fontWeight: "800" }}>{t("bible.highlights.wheelHint")}</Text>
     </View>
   );
 }

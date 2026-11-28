@@ -10,7 +10,7 @@ import { useAppTranslation } from "@/ui/app-language";
 import { AmbientBackground } from "@/ui/ambient-background";
 import { Field, PasswordField } from "@/ui/components";
 import { KoinoLogo } from "@/ui/koino-logo";
-import { type TranslationKey } from "@/ui/localization";
+import { appLanguageInfo, appLanguages, type TranslationKey } from "@/ui/localization";
 import { FieldLabel } from "@/ui/shadcn";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 
@@ -42,7 +42,7 @@ function accountError(error: unknown, resetting: boolean): TranslationKey {
 }
 
 export function OnboardingScreen() {
-  const { language, setLanguage, t } = useAppTranslation();
+  const { language, rtlRestartRequired, setLanguage, t } = useAppTranslation();
   const [mode, setMode] = useState<AuthMode>();
 
   useEffect(() => {
@@ -70,28 +70,31 @@ export function OnboardingScreen() {
           <View style={{ alignItems: "center", gap: 4 }}>
             <Text style={[typography.caption, { color: colors.muted }]}>{t("onboarding.language")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>
-              {(["en", "sv"] as const).map((option) => (
+              {appLanguages.map((option) => (
                 <Pressable
                   key={option}
                   accessibilityRole="button"
-                  accessibilityLanguage={option === "sv" ? "sv-SE" : "en"}
+                  accessibilityLanguage={appLanguageInfo[option].locale}
                   accessibilityState={{ selected: language === option }}
                   onPress={() => setLanguage(option)}
                   style={{
                     alignItems: "center",
                     justifyContent: "center",
                     minHeight: 40,
-                    paddingHorizontal: 16,
+                    paddingHorizontal: 14,
                     borderRadius: radius.md,
                     borderWidth: 1,
                     borderColor: language === option ? shadcn.primary : shadcn.border,
                     backgroundColor: language === option ? shadcn.primary : shadcn.card,
                   }}
                 >
-                  <Text style={[typography.label, { color: language === option ? shadcn.primaryForeground : colors.clay }]}>{option === "sv" ? "Svenska" : "English"}</Text>
+                  <Text style={[typography.label, { color: language === option ? shadcn.primaryForeground : colors.clay }]}>{appLanguageInfo[option].label}</Text>
                 </Pressable>
               ))}
             </View>
+            {rtlRestartRequired ? (
+              <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>{t("settings.language.rtlRestart")}</Text>
+            ) : null}
           </View>
         </>
       )}

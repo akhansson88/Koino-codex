@@ -1,15 +1,19 @@
 import { translateMessage, type AppLanguage } from "@/ui/localization";
+import { localeFor } from "@/ui/translations/languages";
 
-const formatters: Record<AppLanguage, { date: Intl.DateTimeFormat; time: Intl.DateTimeFormat }> = {
-  en: {
-    date: new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }),
-    time: new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }),
-  },
-  sv: {
-    date: new Intl.DateTimeFormat("sv-SE", { month: "short", day: "numeric" }),
-    time: new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit" }),
-  },
-};
+const formatterCache = new Map<AppLanguage, { date: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
+
+function formatters(language: AppLanguage) {
+  const cached = formatterCache.get(language);
+  if (cached) return cached;
+  const locale = localeFor(language);
+  const next = {
+    date: new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }),
+    time: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
+  };
+  formatterCache.set(language, next);
+  return next;
+}
 
 function localStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -24,7 +28,7 @@ export function formatRelativeTime(value: string, language?: AppLanguage, curren
 export function formatRelativeTime(value: string, languageOrCurrentDate: AppLanguage | Date = "en", suppliedCurrentDate?: Date) {
   const language = languageOrCurrentDate instanceof Date ? "en" : languageOrCurrentDate;
   const currentDate = languageOrCurrentDate instanceof Date ? languageOrCurrentDate : suppliedCurrentDate ?? new Date();
-  const { date: dateFormatter, time: timeFormatter } = formatters[language];
+  const { date: dateFormatter, time: timeFormatter } = formatters(language);
   const date = new Date(value);
   const created = date.getTime();
   if (Number.isNaN(created)) return "";

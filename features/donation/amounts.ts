@@ -23,6 +23,6 @@ export function parseAmount(value: unknown) {
   return cleaned || "100";
 }
 
-export function amountLine(amount: string, frequency: DonationFrequency) {
-  return frequency === "monthly" ? `${amount} kr / månad` : `${amount} kr`;
+export function amountLine(amount: string, frequency: DonationFrequency, perMonth = "/ månad") {
+  return frequency === "monthly" ? `${amount} kr ${perMonth}` : `${amount} kr`;
 }

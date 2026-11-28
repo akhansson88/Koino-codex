@@ -9,6 +9,7 @@ import {
   verifyDonation,
   type DonationFrequency,
 } from "@/features/donation-api";
+import { useAppTranslation } from "@/ui/app-language";
 import { typography } from "@/ui/theme";
 import { donationColors } from "@/features/donation/colors";
 import { CircleIcon, DonationThankYouHero } from "@/features/donation/illustrations";
@@ -23,6 +24,7 @@ import {
 } from "@/features/donation/layout";
 
 function DonationStatusPill({ frequency }: { frequency: DonationFrequency }) {
+  const { t } = useAppTranslation();
   const monthly = frequency === "monthly";
   return (
     <View
@@ -33,12 +35,13 @@ function DonationStatusPill({ frequency }: { frequency: DonationFrequency }) {
         paddingVertical: 7,
       }}
     >
-      <Text style={[typography.label, { color: donationColors.mutedNavy, fontSize: 12, lineHeight: 17 }]}>{monthly ? "aktiv" : "mottagen"}</Text>
+      <Text style={[typography.label, { color: donationColors.mutedNavy, fontSize: 12, lineHeight: 17 }]}>{monthly ? t("donation.thankyou.statusActive") : t("donation.thankyou.statusReceived")}</Text>
     </View>
   );
 }
 
 function DonationReceiptCard({ amount, frequency }: { amount: string; frequency: DonationFrequency }) {
+  const { t } = useAppTranslation();
   return (
     <View
       style={{
@@ -55,7 +58,7 @@ function DonationReceiptCard({ amount, frequency }: { amount: string; frequency:
     >
       <CircleIcon backgroundColor={donationColors.lavenderTint} color={donationColors.deepNavy} icon="feather" size={52} />
       <Text style={[typography.heading, { color: donationColors.deepNavy, flex: 1, fontSize: 20, lineHeight: 26, textAlign: "center" }]}>
-        {amountLine(amount, frequency)}
+        {amountLine(amount, frequency, t("donation.amount.perMonth"))}
       </Text>
       <DonationStatusPill frequency={frequency} />
     </View>
@@ -102,6 +105,7 @@ export function DonationActionRow({
 
 export function DonationThankYouScreen() {
   const { state, getAuthToken } = useKoino();
+  const { t } = useAppTranslation();
   const params = useLocalSearchParams<{ session_id?: string }>();
   const sessionId = Array.isArray(params.session_id) ? params.session_id[0] : params.session_id;
   const [verification, setVerification] = useState<{ amountSek: number; frequency: DonationFrequency }>();
@@ -116,19 +120,19 @@ export function DonationThankYouScreen() {
   useEffect(() => {
     let active = true;
     if (!sessionId) {
-      setVerificationError("Ingen betalning kunde verifieras.");
+      setVerificationError(t("donation.thankyou.verifyError"));
       return () => { active = false; };
     }
     void (async () => {
       try {
         const result = await verifyDonation(await getAuthToken(), sessionId);
-        if (!result.paid) throw new Error("Betalningen är ännu inte slutförd.");
+        if (!result.paid) throw new Error(t("donation.thankyou.notCompleted"));
         if (active) {
           if (state.currentUserId) primeDonationStatus(state.currentUserId, result.frequency);
           setVerification({ amountSek: result.amountSek, frequency: result.frequency });
         }
       } catch (error) {
-        if (active) setVerificationError(error instanceof Error ? error.message : "Betalningen kunde inte verifieras.");
+        if (active) setVerificationError(error instanceof Error ? error.message : t("donation.thankyou.verifyFailed"));
       }
     })();
     return () => { active = false; };
@@ -141,7 +145,7 @@ export function DonationThankYouScreen() {
     try {
       await openDonationPortal(await getAuthToken());
     } catch (error) {
-      setPortalError(error instanceof Error ? error.message : "Kunde inte öppna gåvohanteringen.");
+      setPortalError(error instanceof Error ? error.message : t("donation.manage.openError"));
     } finally {
       setPortalPending(false);
     }
@@ -161,19 +165,19 @@ export function DonationThankYouScreen() {
   if (!verification) {
     return (
       <DonationScreenFrame>
-        <DonationHeader title="Verifierar gåva" />
+        <DonationHeader title={t("donation.thankyou.verifyingTitle")} />
         {verificationError ? (
           <>
-            <DonationTrustNote icon="alert-circle">{verificationError} Kontrollera betalningen eller försök igen.</DonationTrustNote>
+            <DonationTrustNote icon="alert-circle">{t("donation.thankyou.verifyFailed")} {t("donation.retry")}</DonationTrustNote>
             <DonationPrimaryButton onPress={() => { setVerificationError(undefined); setVerificationAttempt((value) => value + 1); }} tone="navy">
-              Kontrollera igen
+              {t("donation.thankyou.checkAgain")}
             </DonationPrimaryButton>
-            <DonationPrimaryButton onPress={returnToMeTab} tone="warm">Tillbaka till Du</DonationPrimaryButton>
+            <DonationPrimaryButton onPress={returnToMeTab} tone="warm">{t("donation.thankyou.backToMe")}</DonationPrimaryButton>
           </>
         ) : (
           <View style={{ alignItems: "center", gap: 14, paddingVertical: 48 }}>
             <ActivityIndicator color={donationColors.deepNavy} size="large" />
-            <Text style={[typography.body, { color: donationColors.stone }]}>Kontrollerar betalningen säkert med Stripe…</Text>
+            <Text style={[typography.body, { color: donationColors.stone }]}>{t("donation.thankyou.checking")}</Text>
           </View>
         )}
       </DonationScreenFrame>
@@ -182,19 +186,19 @@ export function DonationThankYouScreen() {
 
   return (
     <DonationScreenFrame>
-      <DonationHeader title="Tack" />
+      <DonationHeader title={t("donation.thankyou.heading")} />
       <DonationThankYouHero />
       <View style={{ alignItems: "center", gap: 12 }}>
         <Text style={[typography.screenTitle, { color: donationColors.deepNavy, fontSize: 26, lineHeight: 32, textAlign: "center" }]}>
-          Tack för att du stöttar KOINO
+          {t("donation.thankyou.title")}
         </Text>
         <Text style={[typography.body, { color: donationColors.stone, fontSize: 16, lineHeight: 24, textAlign: "center" }]}>
-          Din gåva hjälper oss bygga en plats för bön, Ordet och verklig gemenskap.
+          {t("donation.thankyou.body")}
         </Text>
       </View>
       <DonationReceiptCard amount={amount} frequency={frequency} />
       <View style={{ gap: 12 }}>
-        <SectionTitle>Hantera givande</SectionTitle>
+        <SectionTitle>{t("donation.thankyou.manage")}</SectionTitle>
         <View
           style={{
             backgroundColor: donationColors.surfaceWhite,
@@ -208,12 +212,23 @@ export function DonationThankYouScreen() {
             <DonationActionRow
               icon="repeat"
               onPress={handleDonationPortal}
-              subtitle="Ändra betalningsmetod eller avsluta"
-              title="Hantera månadsvis gåva"
+              subtitle={t("donation.thankyou.manageMonthlySubtitle")}
+              title={t("donation.thankyou.manageMonthly")}
             />
           ) : null}
-          <DonationActionRow icon="file-text" onPress={handleDonationPortal} showDivider={monthly} subtitle="Se och ladda ner dina kvitton" title="Gåvokvitton" />
-          <DonationActionRow icon="help-circle" showDivider subtitle="Vanliga frågor och kontakt" title="Hjälp kring givande" />
+          <DonationActionRow
+            icon="file-text"
+            onPress={handleDonationPortal}
+            showDivider={monthly}
+            subtitle={t("donation.thankyou.receiptsSubtitle")}
+            title={t("donation.thankyou.receipts")}
+          />
+          <DonationActionRow
+            icon="help-circle"
+            showDivider
+            subtitle={t("donation.thankyou.helpSubtitle")}
+            title={t("donation.thankyou.help")}
+          />
         </View>
       </View>
       {portalPending ? <ActivityIndicator color={donationColors.deepNavy} /> : null}
@@ -232,12 +247,12 @@ export function DonationThankYouScreen() {
           iconBackground={donationColors.warmTintStrong}
           iconColor={donationColors.deepNavy}
           onPress={handlePrayForKoino}
-          subtitle="Stå med oss i bön för visionen och människorna"
-          title="Be för KOINO"
+          subtitle={t("donation.thankyou.praySubtitle")}
+          title={t("donation.thankyou.pray")}
         />
       </View>
       <DonationPrimaryButton onPress={returnToMeTab} tone="warm">
-        Tillbaka till Du
+        {t("donation.thankyou.backToMe")}
       </DonationPrimaryButton>
     </DonationScreenFrame>
   );

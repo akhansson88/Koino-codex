@@ -5,6 +5,7 @@ import { eventKindKey, formatEventDay, formatEventTimeRange, formatEventDateShor
 import type { EventRsvpStatus, GroupEvent } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { localeFor } from "@/ui/localization";
 
 export function EventCard({
   event,
@@ -19,9 +20,9 @@ export function EventCard({
 }) {
   const { t, language } = useAppTranslation();
   const date = new Date(event.startAt);
-  const weekday = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { weekday: "short" }).format(date).replace(".", "");
+  const weekday = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(localeFor(language), { weekday: "short" }).format(date).replace(".", "");
   const day = Number.isNaN(date.getTime()) ? "" : String(date.getDate());
-  const month = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { month: "short" }).format(date).replace(".", "");
+  const month = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(localeFor(language), { month: "short" }).format(date).replace(".", "");
 
   return (
     <Pressable

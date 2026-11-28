@@ -1,4 +1,25 @@
 import type { EventRsvp, EventRsvpStatus, GroupEvent, GroupEventKind, Id } from "@/state/types";
+import type { AppLanguage, TranslationFunction } from "@/ui/localization";
+
+// Kept local and dependency-free so the validation scripts can load this file
+// on its own with esbuild.
+const eventLocales: Record<AppLanguage, string> = {
+  en: "en-GB",
+  sv: "sv-SE",
+  de: "de-DE",
+  es: "es-ES",
+  fr: "fr-FR",
+  fi: "fi-FI",
+  nb: "nb-NO",
+  da: "da-DK",
+  is: "is-IS",
+  pt: "pt-PT",
+  ms: "ms-MY",
+  ar: "ar-SA",
+  ja: "ja-JP",
+  it: "it-IT",
+  pl: "pl-PL",
+};
 
 export const eventKinds: GroupEventKind[] = ["prayer_meeting", "bible_study", "community_event", "other"];
 
@@ -111,41 +132,36 @@ export function eventKindKey(kind: GroupEventKind) {
   return `events.kind.${kind}` as const;
 }
 
-function localeFor(language: "en" | "sv") {
-  return language === "sv" ? "sv-SE" : "en";
+function localeForEvent(language: AppLanguage) {
+  return eventLocales[language];
 }
 
-export function formatEventDay(value: string, language: "en" | "sv", options?: Intl.DateTimeFormatOptions) {
+export function formatEventDay(value: string, language: AppLanguage, options?: Intl.DateTimeFormatOptions) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(localeFor(language), options ?? { weekday: "long", month: "long", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(localeForEvent(language), options ?? { weekday: "long", month: "long", day: "numeric" }).format(date);
 }
 
-export function formatEventDateShort(value: string, language: "en" | "sv") {
+export function formatEventDateShort(value: string, language: AppLanguage) {
   return formatEventDay(value, language, { month: "short", day: "numeric" });
 }
 
-export function formatEventTime(value: string, language: "en" | "sv") {
+export function formatEventTime(value: string, language: AppLanguage) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(localeFor(language), { hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(localeForEvent(language), { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-export function formatEventTimeRange(event: Pick<GroupEvent, "startAt" | "endAt">, language: "en" | "sv") {
+export function formatEventTimeRange(event: Pick<GroupEvent, "startAt" | "endAt">, language: AppLanguage) {
   return `${formatEventTime(event.startAt, language)}–${formatEventTime(event.endAt, language)}`;
 }
 
-export function formatDuration(minutes: number, language: "en" | "sv") {
+export function formatDuration(minutes: number, t: TranslationFunction) {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  if (language === "sv") {
-    if (hours && rest) return `${hours} tim ${rest} min`;
-    if (hours) return `${hours} tim`;
-    return `${rest} min`;
-  }
-  if (hours && rest) return `${hours} hr ${rest} min`;
-  if (hours) return `${hours} hr`;
-  return `${rest} min`;
+  if (hours && rest) return t("common.duration.hm", { hours, minutes: rest });
+  if (hours) return t("common.duration.h", { hours });
+  return t("common.duration.m", { minutes: rest });
 }
 
 // Google Calendar expects UTC basic format: 20261125T170000Z.

@@ -1,3 +1,5 @@
+import { localeFor } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 export type CalendarCell = {
   date: Date;
   dayKey: string;
@@ -38,12 +40,12 @@ export function monthGrid(year: number, month: number): CalendarCell[] {
   });
 }
 
-export function monthLabel(date: Date, language: "en" | "sv") {
-  return new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { month: "long", year: "numeric" }).format(date);
+export function monthLabel(date: Date, language: AppLanguage) {
+  return new Intl.DateTimeFormat(localeFor(language), { month: "long", year: "numeric" }).format(date);
 }
 
-export function weekdayLabels(language: "en" | "sv") {
-  const formatter = new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { weekday: "short" });
+export function weekdayLabels(language: AppLanguage) {
+  const formatter = new Intl.DateTimeFormat(localeFor(language), { weekday: "short" });
   const monday = new Date(2024, 0, 1, 12, 0, 0, 0);
   return Array.from({ length: 7 }, (_, index) => formatter.format(addDays(monday, index)).replace(".", ""));
 }

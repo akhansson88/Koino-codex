@@ -10,8 +10,8 @@ import { readOnboardingProgress, writeOnboardingProgress, type OnboardingProgres
 import { OnboardingProgressContext } from "@/ui/onboarding-progress";
 
 function useWords() {
-  const { language } = useAppTranslation();
-  return (english: string, swedish: string) => language === "sv" ? swedish : english;
+  const { t } = useAppTranslation();
+  return t;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.cream },
@@ -32,7 +32,7 @@ type ActiveOnboarding = {
 // signed-in account's one-time conversion from the retired vault and exposes
 // onboarding progress to the rest of the app.
 export function EncryptionBoundary({ children }: PropsWithChildren) {
-  const w = useWords();
+  const t = useWords();
   const authRevision = useRef(0);
   const [phase, setPhase] = useState<"loading" | "signedOut" | "migrating" | "ready" | "error">("loading");
   const [progress, setProgress] = useState("");
@@ -106,7 +106,7 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
   }
   if (phase === "error") return <View style={[styles.screen, styles.content]}>
     <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
-    <Text accessibilityRole="alert" style={styles.body}>{error || w("Your account could not be prepared. Try again.", "Ditt konto kunde inte f├Ârberedas. F├Ârs├Âk igen.")}</Text>
+    <Text accessibilityRole="alert" style={styles.body}>{error || t("encryption.error.prepare")}</Text>
     <Pressable accessibilityRole="button" style={styles.button} onPress={() => {
       const user = auth.currentUser;
       if (!user) { setPhase("signedOut"); return; }
@@ -115,13 +115,13 @@ export function EncryptionBoundary({ children }: PropsWithChildren) {
       setPhase("loading");
       void finish(user, () => authRevision.current === revision && auth.currentUser?.uid === user.uid)
         .catch((problem: Error) => { setError(problem.message); setPhase("error"); });
-    }}><Text style={styles.buttonText}>{w("Try again", "F├Ârs├Âk igen")}</Text></Pressable>
+    }}><Text style={styles.buttonText}>{t("encryption.retry")}</Text></Pressable>
   </View>;
   return <View style={[styles.screen, styles.content]}>
     <Text accessibilityRole="header" style={styles.title}>KOINO</Text>
-    <ActivityIndicator accessibilityLabel={w("Opening KOINO", "├ûppnar KOINO")} color={colors.ink} />
+    <ActivityIndicator accessibilityLabel={t("onboarding.loading")} color={colors.ink} />
     {phase === "migrating" ? <>
-      <Text style={styles.body}>{w("Preparing your account. Keep the app open.", "F├Ârbereder ditt konto. H├Ñll appen ├Âppen.")}</Text>
+      <Text style={styles.body}>{t("encryption.preparing")}</Text>
       {progress ? <Text style={styles.body}>{progress}</Text> : null}
     </> : null}
   </View>;

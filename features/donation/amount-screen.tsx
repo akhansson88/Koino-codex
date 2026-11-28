@@ -3,6 +3,7 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { type DonationFrequency } from "@/features/donation-api";
+import { useAppTranslation } from "@/ui/app-language";
 import { typography } from "@/ui/theme";
 import { donationColors } from "@/features/donation/colors";
 import { type DonationAmountOption } from "@/features/donation/types";
@@ -22,6 +23,7 @@ function DonationFrequencySelector({
   frequency: DonationFrequency;
   onChange: (value: DonationFrequency) => void;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ gap: 10 }}>
       <View
@@ -35,8 +37,8 @@ function DonationFrequencySelector({
         }}
       >
         {[
-          { label: "En gång", value: "one_time" as const },
-          { label: "Varje månad", value: "monthly" as const },
+          { label: t("donation.amount.oneTime"), value: "one_time" as const },
+          { label: t("donation.amount.monthly"), value: "monthly" as const },
         ].map((option) => {
           const selected = option.value === frequency;
           return (
@@ -74,7 +76,7 @@ function DonationFrequencySelector({
       {frequency === "monthly" ? (
         <View style={{ alignItems: "center", alignSelf: "flex-end", flexDirection: "row", gap: 8, paddingRight: 10 }}>
           <Feather name="feather" size={18} color={donationColors.lavenderHaze} />
-          <Text style={[typography.body, { color: donationColors.stone }]}>Bäst för långsiktigt stöd</Text>
+          <Text style={[typography.body, { color: donationColors.stone }]}>{t("donation.amount.bestForOngoing")}</Text>
         </View>
       ) : null}
     </View>
@@ -92,6 +94,7 @@ function DonationAmountGrid({
   onSelect: (value: DonationAmountOption) => void;
   selectedAmount: DonationAmountOption;
 }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ gap: 12 }}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
@@ -128,7 +131,7 @@ function DonationAmountGrid({
                   },
                 ]}
               >
-                {option.label}
+                {option.value === "custom" ? t("donation.amount.custom") : option.label}
               </Text>
             </Pressable>
           );
@@ -152,7 +155,7 @@ function DonationAmountGrid({
           keyboardType="number-pad"
           onChangeText={(value) => onCustomAmountChange(cleanAmount(value))}
           onFocus={() => onSelect("custom")}
-          placeholder="Ange valfritt belopp"
+          placeholder={t("donation.amount.customPlaceholder")}
           placeholderTextColor={donationColors.stone}
           returnKeyType="done"
           style={[typography.body, { color: donationColors.deepNavy, flex: 1, fontSize: 16, minHeight: 58 }]}
@@ -165,6 +168,7 @@ function DonationAmountGrid({
 }
 
 export function DonationAmountScreen() {
+  const { t } = useAppTranslation();
   const [frequency, setFrequency] = useState<DonationFrequency>("one_time");
   const [selectedAmount, setSelectedAmount] = useState<DonationAmountOption>("100");
   const [customAmount, setCustomAmount] = useState("");
@@ -184,9 +188,9 @@ export function DonationAmountScreen() {
     <DonationScreenFrame>
       <DonationHeader title="KOINO" wordmark />
       <View style={{ gap: 12 }}>
-        <Text style={[typography.screenTitle, { color: donationColors.deepNavy }]}>Välj gåva</Text>
+        <Text style={[typography.screenTitle, { color: donationColors.deepNavy }]}>{t("donation.amount.title")}</Text>
         <Text style={[typography.body, { color: donationColors.mutedNavy, fontSize: 16, lineHeight: 24 }]}>
-          Välj ett belopp som känns rätt för dig.{"\n"}Varje gåva är frivillig.
+          {t("donation.amount.intro")}
         </Text>
       </View>
       <ReturningDonorManagement />
@@ -198,7 +202,7 @@ export function DonationAmountScreen() {
         selectedAmount={selectedAmount}
       />
       <DonationTrustNote icon="shield" iconBackground={donationColors.warmPersika} iconColor={donationColors.surfaceWhite}>
-        Frivillig gåva. Inga extra funktioner, status eller förmåner ingår.
+        {t("donation.amount.optionalNote")}
       </DonationTrustNote>
       {frequency === "monthly" ? (
         <DonationTrustNote
@@ -208,14 +212,14 @@ export function DonationAmountScreen() {
           iconBackground={donationColors.surfaceWhite}
           iconColor={donationColors.lavenderHaze}
         >
-          Du kan avsluta en månadsvis gåva när som helst.
+          {t("donation.amount.cancelAnytime")}
         </DonationTrustNote>
       ) : null}
       <DonationPrimaryButton disabled={!canContinue} onPress={continueToConfirm}>
-        Fortsätt
+        {t("donation.amount.continue")}
       </DonationPrimaryButton>
       {selectedAmount === "custom" && customAmount && !canContinue ? (
-        <Text style={[typography.body, { color: donationColors.stone, textAlign: "center" }]}>Ange mellan 10 och 100 000 kr.</Text>
+        <Text style={[typography.body, { color: donationColors.stone, textAlign: "center" }]}>{t("donation.amount.rangeError")}</Text>
       ) : null}
     </DonationScreenFrame>
   );

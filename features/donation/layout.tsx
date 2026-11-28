@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type DonationFrequency } from "@/features/donation-api";
 import { typography } from "@/ui/theme";
 import { AmbientBackground } from "@/ui/ambient-background";
+import { useAppTranslation } from "@/ui/app-language";
 import { donationColors } from "@/features/donation/colors";
 import { type FeatherName } from "@/features/donation/types";
 import { CircleIcon } from "@/features/donation/illustrations";
@@ -34,9 +35,10 @@ export function DonationScreenFrame({ children }: PropsWithChildren) {
 }
 
 function DonationBackButton({ onPress = () => router.back() }: { onPress?: () => void }) {
+  const { t } = useAppTranslation();
   return (
     <Pressable
-      accessibilityLabel="Gå tillbaka"
+      accessibilityLabel={t("donation.back")}
       accessibilityRole="button"
       hitSlop={8}
       onPress={onPress}
@@ -102,11 +104,12 @@ export function DonationHeader({ title, wordmark = false }: { title: string; wor
 }
 
 export function DonationAmountLine({ amount, frequency }: { amount: string; frequency: DonationFrequency }) {
+  const { t } = useAppTranslation();
   return (
     <View style={{ alignItems: "baseline", flexDirection: "row", flexWrap: "wrap", columnGap: 7 }}>
       <Text style={[typography.display, { color: donationColors.deepNavy, fontSize: 28, lineHeight: 34 }]}>{amount} kr</Text>
       {frequency === "monthly" ? (
-        <Text style={[typography.body, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>/ månad</Text>
+        <Text style={[typography.body, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>{t("donation.amount.perMonth")}</Text>
       ) : null}
     </View>
   );

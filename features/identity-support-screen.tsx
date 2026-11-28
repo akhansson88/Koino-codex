@@ -19,6 +19,7 @@ import {
   SecondaryButton,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { appLanguageInfo, appLanguages } from "@/ui/localization";
 import { EmailVerificationBanner } from "@/ui/email-verification-banner";
 import { confirmAction } from "@/ui/confirm";
 import { RoomImageCropper, type RoomImageCropSource } from "@/ui/room-image-cropper";
@@ -44,7 +45,7 @@ function IdentityRouteSheet({ children, onDismiss, sheetRef }: PropsWithChildren
 
 export function IdentitySupportScreen({ presentation = "screen" }: { presentation?: IdentityPresentation } = {}) {
   const { state, dispatch } = useKoino();
-  const { language, setLanguage, t } = useAppTranslation();
+  const { language, rtlRestartRequired, setLanguage, t } = useAppTranslation();
   const { preference, setPreference } = useTheme();
   const openFeedback = useOpenFeedback("identity");
   const identitySheetRef = useRef<AppSheetHandle>(null);
@@ -185,7 +186,7 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
           icon="globe"
           title={t("settings.language.title")}
           subtitle={t("settings.language.subtitle")}
-          value={language === "en" ? t("settings.language.option.english") : t("settings.language.option.swedish")}
+          value={appLanguageInfo[language].label}
           onPress={() => setActiveSheet("language")}
           showDivider
         />
@@ -303,20 +304,18 @@ export function IdentitySupportScreen({ presentation = "screen" }: { presentatio
         onClose={() => setActiveSheet(undefined)}
       >
         <BodyText muted>{t("settings.language.description")}</BodyText>
+        {rtlRestartRequired ? <BodyText muted>{t("settings.language.rtlRestart")}</BodyText> : null}
         <SettingsSection label={t("settings.language.options")}>
-          <SettingsRow
-            icon="globe"
-            title={t("settings.language.option.english")}
-            value={language === "en" ? t("settings.language.selected") : undefined}
-            onPress={() => setLanguage("en")}
-          />
-          <SettingsRow
-            icon="globe"
-            title={t("settings.language.option.swedish")}
-            value={language === "sv" ? t("settings.language.selected") : undefined}
-            onPress={() => setLanguage("sv")}
-            showDivider
-          />
+          {appLanguages.map((option, index) => (
+            <SettingsRow
+              key={option}
+              icon="globe"
+              title={appLanguageInfo[option].label}
+              value={language === option ? t("settings.language.selected") : undefined}
+              onPress={() => setLanguage(option)}
+              showDivider={index < appLanguages.length - 1}
+            />
+          ))}
         </SettingsSection>
       </BottomSheet>
 

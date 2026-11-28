@@ -1,9 +1,5 @@
 import type { Fast } from "@/state/types";
-import type { AppLanguage } from "@/ui/localization";
-
-function localeFor(language: AppLanguage) {
-  return language === "sv" ? "sv-SE" : "en-GB";
-}
+import { localeFor, type AppLanguage, type TranslationFunction } from "@/ui/localization";
 
 export function formatFastDate(value: string | Date, language: AppLanguage, options?: Intl.DateTimeFormatOptions) {
   const date = value instanceof Date ? value : new Date(value);
@@ -40,16 +36,22 @@ export function splitFastMinutes(totalMinutes: number) {
   };
 }
 
-export function formatFastDuration(minutes: number, language: AppLanguage) {
-  const { days, hours, minutes: mins } = splitFastMinutes(minutes);
-  if (language === "sv") return `${days} d ${hours} h ${mins} min`;
-  return `${days}d ${hours}h ${mins}m`;
+export function formatDurationParts(days: number, hours: number, minutes: number, t: TranslationFunction) {
+  if (days && hours && minutes) return t("common.duration.dhm", { days, hours, minutes });
+  if (days && hours) return t("common.duration.dh", { days, hours });
+  if (days && minutes) return t("common.duration.dm", { days, minutes });
+  if (days) return t("common.duration.d", { days });
+  if (hours && minutes) return t("common.duration.hm", { hours, minutes });
+  if (hours) return t("common.duration.h", { hours });
+  return t("common.duration.m", { minutes });
 }
 
-export function formatCountdown(minutes: number, language: AppLanguage) {
-  const { days, hours, minutes: mins } = splitFastMinutes(minutes);
-  if (language === "sv") {
-    return days > 0 ? `${days} d ${hours} tim ${mins} min` : `${hours} tim ${mins} min`;
-  }
-  return days > 0 ? `${days}d ${hours}h ${mins}m` : `${hours}h ${mins}m`;
+export function formatFastDuration(minutes: number, t: TranslationFunction) {
+  const parts = splitFastMinutes(minutes);
+  return formatDurationParts(parts.days, parts.hours, parts.minutes, t);
+}
+
+export function formatCountdown(minutes: number, t: TranslationFunction) {
+  const parts = splitFastMinutes(minutes);
+  return formatDurationParts(parts.days, parts.hours, parts.minutes, t);
 }

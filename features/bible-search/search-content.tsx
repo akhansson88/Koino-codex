@@ -20,6 +20,7 @@ import { useKoinoActions, useKoinoFields } from "@/state/koino-store";
 import { bookmarkMatchesQuery, sortBookmarks } from "@/state/bookmarks";
 import { savedVerseIdentity } from "@/state/saved-verses";
 import { SheetTextInput } from "@/ui/app-sheet";
+import type { AppLanguage } from "@/ui/localization";
 
 const topics = ["anxiety", "hope", "forgiveness", "identity", "loneliness", "purpose", "prayer"] as const;
 const noAudioResults: ScriptureSearchResult[] = [];
@@ -153,7 +154,7 @@ export function defaultScriptureSearchPalette(): ReaderPalette {
     peach: colors.warmSoft, shadow: colors.ink, sheet: colors.paper, surface: colors.paper, text: colors.ink };
 }
 
-function useSearchDefinition(versionId: BibleVersionId, language: "en" | "sv", title: string, sessionId: string | undefined, results: ScriptureSearchResult[]) {
+function useSearchDefinition(versionId: BibleVersionId, language: AppLanguage, title: string, sessionId: string | undefined, results: ScriptureSearchResult[]) {
   const cache = useRef<{ versionId: BibleVersionId; language: string; title: string; sessionId?: string; count: number; first?: string; last?: string; prefix: string; hash: number; definition: TopicDefinition } | undefined>(undefined);
   return useMemo(() => {
     const previous = cache.current;

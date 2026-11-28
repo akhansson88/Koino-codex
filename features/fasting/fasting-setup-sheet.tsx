@@ -9,7 +9,7 @@ import { formatFastDateTime } from "@/features/fasting/format";
 import { AppSheet } from "@/ui/app-sheet";
 import { BodyText, PrimaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import type { TranslationKey } from "@/ui/localization";
+import { localeFor, type TranslationKey } from "@/ui/localization";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { localDayKey } from "@/state/store/helpers";
 
@@ -171,7 +171,7 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
   }
 
   const weekdayLabels = useMemo(() => {
-    const locale = language === "sv" ? "sv-SE" : "en-GB";
+    const locale = localeFor(language);
     return [1, 2, 3, 4, 5, 6, 0].map((value) => ({
       value,
       label: new Intl.DateTimeFormat(locale, { weekday: "short" }).format(new Date(2026, 10, 2 + (value === 0 ? 6 : value - 1))),
@@ -260,7 +260,7 @@ export function FastingSetupSheet({ visible, mode, initial, saving, error, group
           </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[typography.bodyMedium, { color: colors.ink, textAlign: "center" }]}>
-              {new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en-GB", { day: "numeric", month: "long", weekday: "long" }).format(new Date(`${startDate}T12:00:00`))}
+              {new Intl.DateTimeFormat(localeFor(language), { day: "numeric", month: "long", weekday: "long" }).format(new Date(`${startDate}T12:00:00`))}
             </Text>
             {startDate === today ? <Text style={[typography.caption, { color: colors.muted, textAlign: "center" }]}>{t("fasting.setup.today")}</Text> : null}
           </View>

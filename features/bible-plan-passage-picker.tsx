@@ -11,6 +11,8 @@ import type { BiblePlanRange } from "@/state/types";
 import { FullScreenModal, PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import { localeFor } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 
 const OLD_TESTAMENT_BOOKS = 39;
 
@@ -47,10 +49,10 @@ export function PlanPassagePicker({
 
   const book = bookName ? kjvBooks.find((item) => item.name === bookName) : undefined;
   const filteredBooks = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase(language === "sv" ? "sv-SE" : "en");
+    const normalized = query.trim().toLocaleLowerCase(localeFor(language));
     if (!normalized) return kjvBooks;
     return kjvBooks.filter((item) => {
-      const localized = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(language === "sv" ? "sv-SE" : "en");
+      const localized = displayBibleBookName(item.name, bookLanguage).toLocaleLowerCase(localeFor(language));
       return localized.includes(normalized) || item.name.toLowerCase().includes(normalized);
     });
   }, [bookLanguage, language, query]);
@@ -269,7 +271,7 @@ function BookSection({
   label,
   onSelect,
 }: {
-  bookLanguage: "en" | "sv";
+  bookLanguage: AppLanguage;
   books: typeof kjvBooks;
   label: string;
   onSelect: (name: string) => void;

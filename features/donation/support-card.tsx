@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { platformShadow, typography } from "@/ui/theme";
+import { useAppTranslation } from "@/ui/app-language";
 import { usePersistentDonationStatus } from "@/features/donation/use-donation-status";
 import { DonationManagementPanel, DonationStatusRetry } from "@/features/donation/management";
 import { donationColors } from "@/features/donation/colors";
@@ -8,6 +9,7 @@ import { DonationEntryIllustration } from "@/features/donation/illustrations";
 
 export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
   const { error, pending, refresh, status } = usePersistentDonationStatus();
+  const { t } = useAppTranslation();
 
   if (status?.hasCompletedDonation) {
     return (
@@ -43,11 +45,11 @@ export function SupportKoinoCard({ onPress }: { onPress: () => void }) {
         <View style={{ alignItems: "flex-start", flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1, gap: 12, minWidth: 0, paddingRight: 2 }}>
             <View style={{ gap: 8 }}>
-              <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>Stötta KOINO</Text>
-              <Text style={[typography.body, { color: donationColors.deepNavy, lineHeight: 22 }]}>Hjälp oss bygga en lugn plats för bön, Ordet och verklig gemenskap.</Text>
+              <Text style={[typography.heading, { color: donationColors.deepNavy, fontSize: 18, lineHeight: 24 }]}>{t("donation.support.title")}</Text>
+              <Text style={[typography.body, { color: donationColors.deepNavy, lineHeight: 22 }]}>{t("donation.support.body")}</Text>
             </View>
             <View style={{ alignItems: "center", alignSelf: "flex-start", backgroundColor: donationColors.warmTintStrong, borderRadius: 14, flexDirection: "row", gap: 9, minHeight: 48, paddingHorizontal: 16 }}>
-              <Text style={[typography.button, { color: donationColors.deepNavy }]}>Ge en gåva</Text>
+              <Text style={[typography.button, { color: donationColors.deepNavy }]}>{t("donation.support.cta")}</Text>
               {pending ? <ActivityIndicator color={donationColors.deepNavy} size="small" /> : <Feather name="heart" size={18} color={donationColors.deepNavy} />}
             </View>
           </View>

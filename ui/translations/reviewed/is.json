@@ -1,0 +1,23 @@
+{
+  "common.back": "Til baka",
+  "common.cancel": "Hætta við",
+  "common.close": "Loka",
+  "common.delete": "Eyða",
+  "common.done": "Búið",
+  "common.edit": "Breyta",
+  "common.logOut": "Skrá út",
+  "common.or": "eða",
+  "common.private": "Einkarekið",
+  "common.someone": "Einhver",
+  "common.viewMore": "Sjá meira",
+  "common.you": "Þú",
+  "common.save": "Vista",
+  "tabs.home": "Heim",
+  "tabs.me": "Ég",
+  "tabs.bible": "Biblían",
+  "tabs.community": "Samfélag",
+  "onboarding.account.signIn": "Skrá inn",
+  "onboarding.account.signUp": "Stofna aðgang",
+  "donation.amount.oneTime": "Einu sinni",
+  "donation.amount.monthly": "Á hverjum mánuði"
+}

@@ -1,0 +1,23 @@
+{
+  "common.back": "戻る",
+  "common.cancel": "キャンセル",
+  "common.close": "閉じる",
+  "common.delete": "削除",
+  "common.done": "完了",
+  "common.edit": "編集",
+  "common.logOut": "ログアウト",
+  "common.or": "または",
+  "common.private": "非公開",
+  "common.someone": "誰か",
+  "common.viewMore": "もっと見る",
+  "common.you": "あなた",
+  "common.save": "保存",
+  "tabs.home": "ホーム",
+  "tabs.me": "自分",
+  "tabs.bible": "聖書",
+  "tabs.community": "コミュニティ",
+  "onboarding.account.signIn": "サインイン",
+  "onboarding.account.signUp": "アカウントを作成",
+  "donation.amount.oneTime": "1回",
+  "donation.amount.monthly": "毎月"
+}

@@ -1,4 +1,5 @@
 import type { BookmarkCollection, BookmarkCollectionColor, BibleRibbon, Id, SavedVerse } from "@/state/types";
+import { localeFor, translateMessage, type AppLanguage } from "@/ui/localization";
 
 export type BookmarkSort = "recent" | "canonical" | "opened";
 
@@ -115,7 +116,13 @@ export function sortRibbons(ribbons: BibleRibbon[]) {
     Date.parse(right.lastOpenedAt ?? right.updatedAt) - Date.parse(left.lastOpenedAt ?? left.updatedAt));
 }
 
-export function formatBookmarkMarkdown(verses: SavedVerse[], collections: BookmarkCollection[], exportedAt = new Date()) {
+export function formatBookmarkMarkdown(
+  verses: SavedVerse[],
+  collections: BookmarkCollection[],
+  exportedAt = new Date(),
+  language: AppLanguage = "sv",
+) {
+  const locale = localeFor(language);
   const groups = new Map<string, SavedVerse[]>();
   const knownCollections = new Set(collections.map((collection) => collection.id));
   for (const verse of verses) {
@@ -126,12 +133,14 @@ export function formatBookmarkMarkdown(verses: SavedVerse[], collections: Bookma
   }
   const order = [
     ...sortBookmarkCollections(collections).map((collection) => ({ id: collection.id, name: collection.name })),
-    { id: "", name: "Ogrupperade" },
+    { id: "", name: translateMessage(language, "bookmarks.export.ungrouped") },
   ];
   const lines = [
-    "# Mina bokmärken — KOINO",
+    `# ${translateMessage(language, "bookmarks.markdown.title")}`,
     "",
-    `Exporterat ${exportedAt.toLocaleDateString("sv-SE", { day: "numeric", month: "long", year: "numeric" })}`,
+    translateMessage(language, "bookmarks.export.exported", {
+      date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(exportedAt),
+    }),
     "",
   ];
   for (const group of order) {
@@ -141,10 +150,12 @@ export function formatBookmarkMarkdown(verses: SavedVerse[], collections: Bookma
     for (const verse of sortBookmarks(items, "canonical")) {
       lines.push(`### ${verse.reference}`, "");
       lines.push(`> ${verse.text.replace(/\n/g, "\n> ")}`, "");
-      if (verse.note?.trim()) lines.push(`**Anteckning:** ${verse.note.trim()}`, "");
+      if (verse.note?.trim()) lines.push(`**${translateMessage(language, "bookmarks.export.note")}** ${verse.note.trim()}`, "");
       const saved = new Date(verse.savedAt);
-      const date = Number.isNaN(saved.getTime()) ? verse.savedAt : saved.toLocaleDateString("sv-SE");
-      lines.push(`Sparad ${date}${verse.translation ? ` · ${verse.translation}` : ""}`, "");
+      const date = Number.isNaN(saved.getTime())
+        ? verse.savedAt
+        : new Intl.DateTimeFormat(locale).format(saved);
+      lines.push(translateMessage(language, "bookmarks.export.saved", { date }) + (verse.translation ? ` · ${verse.translation}` : ""), "");
     }
   }
   return `${lines.join("\n").trim()}\n`;

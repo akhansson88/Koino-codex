@@ -134,7 +134,7 @@ export function BiblePlansScreen() {
     const days = planTemplateDays(template);
     await dispatch({
       type: "createBiblePlan",
-      title: template.title[language],
+      title: localizedPlanText(template.title, language),
       ranges: planTemplateRanges(template),
       dayCount: template.dayCount,
       startDate,
@@ -142,7 +142,7 @@ export function BiblePlansScreen() {
       coverKey: template.coverKey,
       templateId: template.id,
     });
-    setBanner(t("bible.plans.library.started", { title: template.title[language] }));
+    setBanner(t("bible.plans.library.started", { title: localizedPlanText(template.title, language) }));
     setTab("today");
   }
 
@@ -356,7 +356,7 @@ export function BiblePlansScreen() {
                       minutes: template.minutesPerDay,
                     })}
                     onPress={() => setSelectedTemplate(template)}
-                    title={template.title[language]}
+                    title={localizedPlanText(template.title, language)}
                   />
                 ))}
               </ScrollView>

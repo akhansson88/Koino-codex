@@ -1,0 +1,23 @@
+{
+  "common.back": "Takaisin",
+  "common.cancel": "Peruuta",
+  "common.close": "Sulje",
+  "common.delete": "Poista",
+  "common.done": "Valmis",
+  "common.edit": "Muokkaa",
+  "common.logOut": "Kirjaudu ulos",
+  "common.or": "tai",
+  "common.private": "Yksityinen",
+  "common.someone": "Joku",
+  "common.viewMore": "Näytä lisää",
+  "common.you": "Sinä",
+  "common.save": "Tallenna",
+  "tabs.home": "Etusivu",
+  "tabs.me": "Minä",
+  "tabs.bible": "Raamattu",
+  "tabs.community": "Yhteisö",
+  "onboarding.account.signIn": "Kirjaudu sisään",
+  "onboarding.account.signUp": "Luo tili",
+  "donation.amount.oneTime": "Kerran",
+  "donation.amount.monthly": "Joka kuukausi"
+}

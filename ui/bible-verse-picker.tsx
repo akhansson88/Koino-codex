@@ -27,6 +27,8 @@ import type { BibleVerse } from "@/state/types";
 import { IconButton, PrimaryButton, TextInputField } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, typography } from "@/ui/theme";
+import { localeFor } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 
 const OLD_TESTAMENT_BOOK_COUNT = 39;
 
@@ -74,7 +76,7 @@ function BibleVersePickerContent({ bibleVersionId, onBack, onSelect, visible }: 
   const isShowingSearch = scriptureQuery.trim().length > 0;
 
   const filteredBooks = useMemo(() => {
-    const locale = language === "sv" ? "sv" : "en";
+    const locale = localeFor(language);
     const query = bookQuery.trim().toLocaleLowerCase(locale);
     if (!query) return kjvBooks;
     return kjvBooks.filter((item) => {
@@ -334,7 +336,7 @@ function TrailButton({ active, label, onPress }: { active: boolean; label: strin
 function BookBrowser({ bookQuery, books, language, onBookQuery, onSelect, t }: {
   bookQuery: string;
   books: typeof kjvBooks;
-  language: "en" | "sv";
+  language: AppLanguage;
   onBookQuery: (value: string) => void;
   onSelect: (book: string) => void;
   t: ReturnType<typeof useAppTranslation>["t"];
@@ -366,7 +368,7 @@ function BookBrowser({ bookQuery, books, language, onBookQuery, onSelect, t }: {
 function BookSection({ books, label, language, onSelect }: {
   books: typeof kjvBooks;
   label: string;
-  language: "en" | "sv";
+  language: AppLanguage;
   onSelect: (book: string) => void;
 }) {
   const bookLanguage = useBibleBookLanguage();

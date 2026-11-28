@@ -5,7 +5,7 @@ import { subscribeJoinRequestChanges } from "@/state/community-join-requests";
 import { communityJoinFingerprint, listCommunityJoinRequests } from "@/state/encryption/session";
 import { BodyText, Card, SecondaryButton } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
-import type { TranslationKey } from "@/ui/localization";
+import { localeFor, type TranslationKey } from "@/ui/localization";
 import { colors, typography } from "@/ui/theme";
 
 const statusCopy: Record<CommunityJoinRequest["status"], TranslationKey> = {
@@ -100,7 +100,7 @@ export function CommunityJoinRequests({ userId, active }: { userId?: string; act
           <Text style={[typography.bodyMedium, { color: colors.ink }]}>{t(statusCopy[request.status])}</Text>
           <BodyText muted>
             {request.inviteHint ? `${t("community.rooms.requestInviteHint", { hint: request.inviteHint })} · ` : ""}
-            {new Date(request.updatedAt).toLocaleDateString(language === "sv" ? "sv-SE" : "en-US")}
+            {new Date(request.updatedAt).toLocaleDateString(localeFor(language))}
           </BodyText>
         </View>
       ))}

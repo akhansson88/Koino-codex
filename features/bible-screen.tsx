@@ -1786,13 +1786,13 @@ export function BibleScreen() {
       if (highlightFeedbackRef.current === feedback && feedback.active && revision >= feedback.reported) {
         feedback.reported = revision;
         setReaderToast({
-          message: language === "sv" ? "Markeringen kunde inte sparas" : "Could not save highlight",
-          detail: language === "sv" ? "Ändringen har återställts. Försök igen." : "The change was reverted. Please try again.",
+          message: t("bible.toast.highlightSaveFailed"),
+          detail: t("bible.toast.highlightSaveReverted"),
           tone: "error",
         });
       }
     }
-  }, [dispatch, language]);
+  }, [dispatch, language, t]);
 
   const handleHighlightSelectedVerses = useCallback(async (color: BibleHighlightColor, colorId?: string) => {
     if (selectionSaving || selectedVerseRanges.length === 0) return;
@@ -2309,7 +2309,7 @@ export function BibleScreen() {
         onCommit={(page) => jumpToPosition(page.position, { intent: "chapter", haptic: false })}
         onInteractionChange={handlePagerInteraction}
         onRetry={retryChapter}
-        onLoadError={() => setReaderToast({ tone: "error", message: language === "sv" ? "Kapitlet kunde inte läsas in. Försök igen." : "Could not load chapter. Please try again." })}
+        onLoadError={() => setReaderToast({ tone: "error", message: t("bible.error.chapterLoad") })}
         renderPage={(page, active) => <ChapterPageScrollView
           active={active}
           pageKey={page.key}
@@ -2362,7 +2362,7 @@ export function BibleScreen() {
             subtitles={page.chapter.subtitles}
             verses={page.chapter.verses}
           /> : page.error ? <Pressable accessibilityRole="button" onPress={() => retryChapter(page.key)} style={{ alignItems: "center", justifyContent: "center", minHeight: 180 }}>
-            <Text style={{ color: readerPalette.text }}>{language === "sv" ? "Kapitlet kunde inte läsas in. Tryck för att försöka igen." : "Could not load chapter. Tap to try again."}</Text>
+            <Text style={{ color: readerPalette.text }}>{t("bible.error.chapterLoadTap")}</Text>
           </Pressable> : <ActivityIndicator color={readerPalette.text} style={{ minHeight: 180 }} />}
         </ChapterPageScrollView>}
       />

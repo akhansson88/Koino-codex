@@ -20,11 +20,13 @@ import { AppScreen, BodyText, FullScreenModal, IconButton, PrimaryButton, Second
 import { useAppTranslation } from "@/ui/app-language";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
 import { addDays, combineLocalDateAndTime, dateFromDayKey, dayKeyFor, localTimeValue } from "@/features/events/calendar";
+import { localeFor } from "@/ui/localization";
+import type { AppLanguage } from "@/ui/localization";
 
 type EventFormScreenProps = {
   event?: GroupEvent;
   groupName: string;
-  language: "en" | "sv";
+  language: AppLanguage;
   onClose: () => void;
   onSubmit: (draft: EventDraft) => Promise<void> | void;
   saving: boolean;
@@ -227,7 +229,7 @@ export function EventFormScreen({ event, groupName, language, onClose, onSubmit,
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={[typography.bodyMedium, { color: colors.ink, textAlign: "center" }]}>
-                {new Intl.DateTimeFormat(language === "sv" ? "sv-SE" : "en", { weekday: "long", month: "long", day: "numeric" }).format(date)}
+                {new Intl.DateTimeFormat(localeFor(language), { weekday: "long", month: "long", day: "numeric" }).format(date)}
               </Text>
             </View>
             <Pressable accessibilityLabel={t("events.form.nextDay")} accessibilityRole="button" onPress={() => setDayKey(dayKeyFor(addDays(date, 1)))} style={styles.stepperButton}>
@@ -266,7 +268,7 @@ export function EventFormScreen({ event, groupName, language, onClose, onSubmit,
                       paddingVertical: 7,
                     }}
                   >
-                    <Text style={[typography.caption, { color: colors.ink }]}>{formatDuration(minutes, language)}</Text>
+                    <Text style={[typography.caption, { color: colors.ink }]}>{formatDuration(minutes, t)}</Text>
                   </Pressable>
                 );
               })}

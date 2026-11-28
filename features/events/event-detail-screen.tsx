@@ -199,7 +199,7 @@ export function EventDetailScreen() {
                 {formatEventDay(event.startAt, language)}
               </Text>
               <Text style={[typography.body, { color: colors.muted }]}>
-                {formatEventTimeRange(event, language)} · {formatDuration(eventDurationMinutes(event), language)}
+                {formatEventTimeRange(event, language)} · {formatDuration(eventDurationMinutes(event), t)}
               </Text>
             </View>
           </View>

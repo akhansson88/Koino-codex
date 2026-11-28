@@ -1,0 +1,23 @@
+{
+  "common.back": "رجوع",
+  "common.cancel": "إلغاء",
+  "common.close": "إغلاق",
+  "common.delete": "حذف",
+  "common.done": "تم",
+  "common.edit": "تعديل",
+  "common.logOut": "تسجيل الخروج",
+  "common.or": "أو",
+  "common.private": "خاص",
+  "common.someone": "شخص ما",
+  "common.viewMore": "عرض المزيد",
+  "common.you": "أنت",
+  "common.save": "حفظ",
+  "tabs.home": "الرئيسية",
+  "tabs.me": "أنا",
+  "tabs.bible": "الكتاب المقدس",
+  "tabs.community": "المجتمع",
+  "onboarding.account.signIn": "تسجيل الدخول",
+  "onboarding.account.signUp": "إنشاء حساب",
+  "donation.amount.oneTime": "مرة واحدة",
+  "donation.amount.monthly": "كل شهر"
+}

@@ -36,6 +36,7 @@ import { scheduledPlanDate } from "@/state/bible-plan-schedule";
 import { useAppTranslation } from "@/ui/app-language";
 import { BodyText, FullScreenModal, PrimaryButton, SecondaryButton } from "@/ui/app-components";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
+import type { AppLanguage } from "@/ui/localization";
 
 export function PlanTemplateModal({
   onClose,
@@ -471,7 +472,7 @@ function PlanDayRow({
 }: {
   day: BiblePlanDay;
   disabled: boolean;
-  language: "en" | "sv";
+  language: AppLanguage;
   onOpen: () => void;
   onToggle: () => void;
   plan: BiblePlan;

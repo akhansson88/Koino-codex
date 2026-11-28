@@ -1,0 +1,23 @@
+{
+  "common.back": "Kembali",
+  "common.cancel": "Batal",
+  "common.close": "Tutup",
+  "common.delete": "Padam",
+  "common.done": "Selesai",
+  "common.edit": "Edit",
+  "common.logOut": "Log keluar",
+  "common.or": "atau",
+  "common.private": "Peribadi",
+  "common.someone": "Seseorang",
+  "common.viewMore": "Lihat lagi",
+  "common.you": "Anda",
+  "common.save": "Simpan",
+  "tabs.home": "Utama",
+  "tabs.me": "Saya",
+  "tabs.bible": "Alkitab",
+  "tabs.community": "Komuniti",
+  "onboarding.account.signIn": "Log masuk",
+  "onboarding.account.signUp": "Cipta akaun",
+  "donation.amount.oneTime": "Sekali",
+  "donation.amount.monthly": "Setiap bulan"
+}

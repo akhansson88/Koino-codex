@@ -1,0 +1,57 @@
+name: Translations
+
+on:
+  pull_request:
+    paths:
+      - "ui/translations/en.ts"
+      - "ui/translations/reviewed/**"
+      - "features/bible-plan-library.ts"
+  push:
+    branches: [main]
+    paths:
+      - "ui/translations/en.ts"
+      - "features/bible-plan-library.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check every language has the same keys and placeholders
+        run: npm run i18n:check
+
+  sync:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Translate new and changed copy
+        run: |
+          npm run i18n:sync
+          npm run i18n:sync:plans
+      - name: Commit updated dictionaries
+        run: |
+          if git diff --quiet; then
+            echo "Translations already in sync."
+            exit 0
+          fi
+          git config user.name "koino-translations[bot]"
+          git config user.email "koino-translations[bot]@users.noreply.github.com"
+          git add ui/translations scripts/i18n
+          git commit -m "chore(i18n): sync translations"
+          git push
