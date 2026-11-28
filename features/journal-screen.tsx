@@ -16,6 +16,7 @@ import type { BibleVerse, JournalEntry, JournalEntryType, KoinoState, PostKind }
 import { AppScreen, BodyText, Card } from "@/ui/app-components";
 import { primaryBibleVerse } from "@/features/bible-verse-utils";
 import { useAppTranslation } from "@/ui/app-language";
+import { translatedSystemError } from "@/ui/system-error";
 import { SharedComposer } from "@/ui/shared-composer";
 import { Button } from "@/ui/shadcn/button";
 import { Separator } from "@/ui/shadcn/separator";
@@ -298,7 +299,7 @@ function JournalContent({ state }: { state: Pick<KoinoState, typeof journalField
 
       {state.authError ? (
         <Card>
-          <BodyText muted>{state.authError}</BodyText>
+          <BodyText muted>{translatedSystemError(state.authError, t)}</BodyText>
         </Card>
       ) : null}
 

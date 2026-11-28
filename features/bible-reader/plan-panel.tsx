@@ -17,6 +17,7 @@ import { nextUnreadPlanDay, todayPlanDay } from "@/state/bible-plan-schedule";
 import { useKoinoSelector } from "@/state/koino-store";
 import type { BiblePlan } from "@/state/types";
 import { useAppTranslation } from "@/ui/app-language";
+import { translatedSystemError } from "@/ui/system-error";
 import { useBibleBookLanguage } from "@/features/use-bible-book-language";
 import { colors, radius } from "@/ui/theme";
 import { type ReaderPalette } from "@/features/bible-reader/types";
@@ -258,7 +259,7 @@ export function BiblePlanReaderPanel({
             </Pressable>
           ) : null}
 
-          {authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{authError}</Text> : null}
+          {authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{translatedSystemError(authError, t)}</Text> : null}
         </View>
       ) : null}
     </View>

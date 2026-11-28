@@ -57,6 +57,7 @@ import {
   TextInputField,
 } from "@/ui/app-components";
 import { useAppTranslation } from "@/ui/app-language";
+import { translatedSystemError } from "@/ui/system-error";
 import { confirmAction } from "@/ui/confirm";
 import { SheetMenuGroup, SheetMenuItem } from "@/ui/sheet-menu";
 import { colors, radius, shadcn, typography } from "@/ui/theme";
@@ -264,7 +265,7 @@ export function BiblePlansScreen() {
       ) : null}
 
       <FilterChips options={tabOptions} value={tab} onChange={setTab} />
-      {state.authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{state.authError}</Text> : null}
+      {state.authError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{translatedSystemError(state.authError, t)}</Text> : null}
 
       {tab === "today" ? (
         <TodayTab

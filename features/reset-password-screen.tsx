@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 
 import { useKoino } from "@/state/koino-store";
 import { useAppTranslation } from "@/ui/app-language";
+import { translatedSystemError } from "@/ui/system-error";
 import { Body, Card, PasswordField, PillButton, Screen, Title } from "@/ui/components";
 import { FieldLabel } from "@/ui/shadcn";
 import { colors, typography } from "@/ui/theme";
@@ -107,7 +108,7 @@ export function ResetPasswordScreen() {
                 </View>
                 {newPassword && newPassword.length < 6 ? <Text style={[typography.caption, { color: colors.danger }]}>{t("reset.minLength")}</Text> : null}
                 {!passwordsMatch ? <Text style={[typography.caption, { color: colors.danger }]}>{t("reset.mismatch")}</Text> : null}
-                {hasSubmitted && state.authError ? <Text style={[typography.caption, { color: colors.danger }]}>{state.authError}</Text> : null}
+                {hasSubmitted && state.authError ? <Text style={[typography.caption, { color: colors.danger }]}>{translatedSystemError(state.authError, t)}</Text> : null}
                 {message ? <Text style={[typography.caption, { color: colors.ink }]}>{message}</Text> : null}
               </>
             ) : (
