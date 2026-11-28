@@ -93,6 +93,7 @@ import { auth, database, developmentMode, functions } from "@/state/store/fireba
 import { ensureProfile, createGroupForUser, joinGroupByInvite } from "@/state/store/profile-operations";
 import { announceJoinRequestChange } from "@/state/community-join-requests";
 import { readOnboardingProgress, registerForOnboarding, signInToKoino, writeOnboardingProgress } from "@/state/onboarding-progress";
+import { sendVerificationEmail } from "@/state/send-verification-email";
 import {
   authMessage,
   asArray,
@@ -1867,7 +1868,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "signUp": {
               authActionPending.current = true;
               try {
-                if (action.type === "signUp") await registerForOnboarding(action.email, action.password, action.name);
+                if (action.type === "signUp") await registerForOnboarding(action.email, action.password, action.name, action.language);
                 else await signInToKoino(action.email, action.password);
               } finally {
                 authActionPending.current = false;
@@ -1942,7 +1943,7 @@ export function KoinoProvider({ children }: PropsWithChildren) {
             case "sendEmailVerification": {
               const current = auth.currentUser;
               if (!current) throw new Error("Sign in again before requesting a verification email.");
-              await FirebaseAuth.sendEmailVerification(current);
+              await sendVerificationEmail(action.language);
               return;
             }
             case "refreshEmailVerification": {

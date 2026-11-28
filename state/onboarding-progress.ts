@@ -1,6 +1,7 @@
 import * as FirebaseAuth from "@firebase/auth";
 
 import storage from "@/state/encryption/local-storage";
+import { sendVerificationEmail } from "@/state/send-verification-email";
 import { auth } from "@/state/store/firebase";
 
 export type OnboardingChoice = "private" | "join" | "joinApproved" | "create";
@@ -62,7 +63,7 @@ export function writeOnboardingProgress(uid: string, progress: OnboardingProgres
   });
 }
 
-export async function registerForOnboarding(email: string, password: string, name: string): Promise<void> {
+export async function registerForOnboarding(email: string, password: string, name: string, language?: string): Promise<void> {
   if (auth.currentUser) throw new Error("Sign out before creating an account.");
 
   const trimmedEmail = email.trim();
@@ -79,10 +80,10 @@ export async function registerForOnboarding(email: string, password: string, nam
     interruptedRegistrations.delete(key);
   });
   try {
-    const credential = await FirebaseAuth.createUserWithEmailAndPassword(auth, trimmedEmail, password);
+    await FirebaseAuth.createUserWithEmailAndPassword(auth, trimmedEmail, password);
     // A failed verification email must never fail the signup itself; the app
     // shows a resend banner for as long as the address is unverified.
-    await FirebaseAuth.sendEmailVerification(credential.user).catch(() => undefined);
+    await sendVerificationEmail(language).catch(() => undefined);
   } finally {
     unsubscribe();
   }

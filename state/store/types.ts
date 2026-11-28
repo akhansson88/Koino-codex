@@ -31,11 +31,11 @@ export type CommunitySubmissionRequest = {
 
 export type Action =
   | { type: "signIn"; email: string; password: string }
-  | { type: "signUp"; email: string; password: string; name: string }
+  | { type: "signUp"; email: string; password: string; name: string; language?: string }
   | { type: "signOut"; expectedUserId?: Id }
   | { type: "accountDeleted" }
   | { type: "requestPasswordReset"; email: string; language?: string }
-  | { type: "sendEmailVerification" }
+  | { type: "sendEmailVerification"; language?: string }
   | { type: "refreshEmailVerification"; report?: (verified: boolean) => void }
   | { type: "confirmPasswordReset"; oobCode: string; newPassword: string }
   | { type: "changePassword"; currentPassword: string; newPassword: string }

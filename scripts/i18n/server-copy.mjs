@@ -6,6 +6,7 @@ import { mapWithConcurrency, projectRoot, translateTexts } from "./lib.mjs";
 
 const pushCopyFile = path.join(projectRoot, "functions", "src", "push-copy.generated.ts");
 const emailCopyFile = path.join(projectRoot, "functions", "src", "emails", "password-reset-copy.generated.ts");
+const verifyCopyFile = path.join(projectRoot, "functions", "src", "emails", "verify-email-copy.generated.ts");
 const languages = ["sv", "de", "es", "fr", "fi", "nb", "da", "is", "pt", "ms", "ar", "ja", "it", "pl"];
 
 export const pushCopyEn = {
@@ -50,6 +51,28 @@ KOINO`,
 
 const check = process.argv.includes("--check");
 
+export const verifyEmailCopyEn = {
+  subject: "Confirm your email for KOINO",
+  text: `Hi,
+
+Confirm your email address for KOINO:
+%LINK%
+
+The link can be used once. If you didn't create a KOINO account, you can ignore this email.
+
+KOINO`,
+  title: "Confirm your email for KOINO",
+  preview: "One tap confirms your email and finishes setting up your KOINO account.",
+  heading: "Welcome to KOINO",
+  intro: "Confirm %EMAIL% to finish setting up your account.",
+  intro2: "Then everything is ready: Scripture, prayer and reflection, in one quiet place.",
+  button: "Confirm my email",
+  linkHint: "Button not working? Paste this link into your browser:",
+  ignore: "If you didn’t create a KOINO account, you can ignore this email.",
+  brand: "KOINO · a quiet place for Scripture, prayer and reflection.",
+  reason: "You are receiving this because an account was created for %EMAIL%.",
+};
+
 function generatedLooksComplete(file, keys) {
   if (!fs.existsSync(file)) return false;
   const source = fs.readFileSync(file, "utf8");
@@ -60,7 +83,8 @@ function generatedLooksComplete(file, keys) {
 if (check) {
   const okPush = generatedLooksComplete(pushCopyFile, Object.keys(pushCopyEn));
   const okEmail = generatedLooksComplete(emailCopyFile, Object.keys(emailCopyEn));
-  if (!okPush || !okEmail) {
+  const okVerify = generatedLooksComplete(verifyCopyFile, Object.keys(verifyEmailCopyEn));
+  if (!okPush || !okEmail || !okVerify) {
     console.error("Server copy is out of date. Run npm run i18n:sync:server.");
     process.exit(1);
   }
@@ -76,9 +100,11 @@ async function translateRecord(source, language) {
 
 const push = { en: pushCopyEn };
 const email = { en: emailCopyEn };
+const verify = { en: verifyEmailCopyEn };
 await mapWithConcurrency(languages, 2, async (language) => {
   push[language] = await translateRecord(pushCopyEn, language);
   email[language] = await translateRecord(emailCopyEn, language);
+  verify[language] = await translateRecord(verifyEmailCopyEn, language);
   console.log(`${language}: push + email copy`);
 });
 
@@ -103,4 +129,5 @@ function writeType(file, typeName, record, importLine) {
 
 writeType(pushCopyFile, "PushCopy", push, 'import type { ServiceLanguage } from "./service-language";');
 writeType(emailCopyFile, "PasswordResetCopy", email, 'import type { ServiceLanguage } from "../service-language";');
-console.log(`Wrote ${path.relative(projectRoot, pushCopyFile)} and ${path.relative(projectRoot, emailCopyFile)}.`);
+writeType(verifyCopyFile, "VerifyEmailCopy", verify, 'import type { ServiceLanguage } from "../service-language";');
+console.log(`Wrote ${path.relative(projectRoot, pushCopyFile)}, ${path.relative(projectRoot, emailCopyFile)} and ${path.relative(projectRoot, verifyCopyFile)}.`);

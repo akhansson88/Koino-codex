@@ -13,7 +13,7 @@ const RESEND_SECONDS = 60;
 export function EmailVerificationBanner() {
   const { authEmail, emailVerified } = useKoinoFields(["authEmail", "emailVerified"] as const);
   const { dispatch } = useKoinoActions();
-  const { t } = useAppTranslation();
+  const { language, t } = useAppTranslation();
   const [pending, setPending] = useState<"send" | "check" | null>(null);
   const [message, setMessage] = useState<TranslationKey>();
   const [cooldown, setCooldown] = useState(0);
@@ -49,7 +49,7 @@ export function EmailVerificationBanner() {
     setPending("send");
     setMessage(undefined);
     try {
-      await dispatch({ type: "sendEmailVerification" });
+      await dispatch({ type: "sendEmailVerification", language });
       setMessage("emailVerification.sent");
       setCooldown(RESEND_SECONDS);
     } catch {

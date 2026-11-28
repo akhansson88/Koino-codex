@@ -139,7 +139,7 @@ function AccountForm({ mode, onBack }: { mode: AuthMode; onBack: () => void }) {
         await dispatch({ type: "requestPasswordReset", email: address, language });
         setResetEmail(address);
       } else {
-        await dispatch(signingUp ? { type: "signUp", email: address, password, name } : { type: "signIn", email: address, password });
+        await dispatch(signingUp ? { type: "signUp", email: address, password, name, language } : { type: "signIn", email: address, password });
       }
     } catch (problem) {
       setError(accountError(problem, resetting));
